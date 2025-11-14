@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Yuzu Protocol</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --bg: #04060d;
+      --surface: rgba(15, 17, 24, 0.75);
+      --text-primary: #f5f7fa;
+      --text-secondary: #c4cad5;
+      --accent: #f3bf2b;
+      --accent-secondary: #ff8f3f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(243, 191, 43, 0.18), transparent 45%),
+        radial-gradient(circle at 80% 0%, rgba(109, 142, 255, 0.2), transparent 40%),
+        linear-gradient(180deg, #03040a 0%, #050308 100%);
+    }
+
+    main {
+      position: relative;
+      z-index: 0;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 140px 10% 120px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 32px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background:
+        radial-gradient(120% 120% at 10% 20%, rgba(243, 191, 43, 0.22), transparent 60%),
+        linear-gradient(135deg, rgba(5, 7, 14, 0.95) 0%, rgba(11, 14, 24, 0.85) 100%);
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 80% 20%, rgba(99, 123, 255, 0.28), transparent 50%);
+      z-index: -1;
+    }
+
+    .hero-content {
+      flex: none;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: rgba(243, 191, 43, 0.12);
+      border: 1px solid rgba(243, 191, 43, 0.4);
+      color: var(--accent);
+      padding: 8px 16px;
+      border-radius: 999px;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: clamp(40px, 8vw, 68px);
+      font-weight: 700;
+      line-height: 1.1;
+      margin: 0 0 24px;
+      background: linear-gradient(90deg, #f9d14c 0%, #ff9a3c 42%, #6cd9ff 90%);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+    }
+
+    .hero p {
+      font-size: 19px;
+      color: var(--text-secondary);
+      margin-bottom: 36px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 16px 32px;
+      border-radius: 999px;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      color: #0b0c10;
+      background: linear-gradient(120deg, #f3bf2b, #ff8f3f);
+      border: none;
+      box-shadow: 0 20px 45px rgba(243, 191, 43, 0.25);
+      transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
+    }
+
+    .cta-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 25px 60px rgba(243, 191, 43, 0.35);
+    }
+
+    .cta-btn.ghost {
+      background: transparent;
+      color: var(--text-primary);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow: none;
+    }
+
+    .cta-btn.ghost:hover {
+      border-color: rgba(255, 255, 255, 0.6);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .stat-grid {
+      margin-top: 48px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+    }
+
+    .stat-card {
+      padding: 18px 20px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(18px);
+    }
+
+    .stat-card span {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(245, 247, 250, 0.7);
+    }
+
+    .stat-card strong {
+      display: block;
+      font-size: 24px;
+      margin-top: 6px;
+    }
+
+    /* Removed hero visual and floating cards */
+
+    .section {
+      padding: 120px 10%;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .highlight {
+      background: linear-gradient(180deg, rgba(18, 21, 35, 0.9), rgba(7, 9, 16, 0.9));
+    }
+
+    .section-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-heading {
+      max-width: 720px;
+      margin-bottom: 56px;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(245, 247, 250, 0.7);
+      margin-bottom: 12px;
+    }
+
+    .section h2 {
+      font-size: clamp(32px, 5vw, 48px);
+      margin: 0 0 18px;
+    }
+
+    .section-subtitle {
+      color: var(--text-secondary);
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .columns {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 32px;
+    }
+
+    .col {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .col::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top right, rgba(243, 191, 43, 0.18), transparent 60%);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      pointer-events: none;
+    }
+
+    .col:hover::after {
+      opacity: 1;
+    }
+
+    .col-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: rgba(243, 191, 43, 0.18);
+      border: 1px solid rgba(243, 191, 43, 0.3);
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+      margin-bottom: 20px;
+    }
+
+    .col h3 {
+      margin: 0 0 12px;
+      font-size: 22px;
+    }
+
+    .col p {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+
+    .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 28px;
+    }
+
+    .pillar-card {
+      padding: 28px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(14, 17, 30, 0.75);
+      box-shadow: 0 18px 40px rgba(2, 4, 11, 0.35);
+    }
+
+    .pillar-card h3 {
+      margin: 0 0 14px;
+      font-size: 20px;
+    }
+
+    .pillar-card p {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+
+    .cta-panel {
+      padding: 56px;
+      border-radius: 28px;
+      background: radial-gradient(circle at 20% 20%, rgba(243, 191, 43, 0.25), transparent 60%),
+        rgba(15, 16, 26, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 40px 80px rgba(5, 7, 14, 0.45);
+    }
+
+    .cta-panel h2 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: clamp(30px, 4vw, 44px);
+    }
+
+    .cta-panel p {
+      margin: 0 0 28px;
+      color: var(--text-secondary);
+    }
+
+    .cta-panel-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .cta-panel input {
+      flex: 1 1 260px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(8, 10, 19, 0.8);
+      padding: 16px 22px;
+      font-size: 16px;
+      color: var(--text-primary);
+      outline: none;
+      transition: border 0.25s ease;
+    }
+
+    .cta-panel input:focus {
+      border-color: rgba(243, 191, 43, 0.6);
+    }
+
+    .cta-panel button {
+      border: none;
+      border-radius: 999px;
+      padding: 16px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #0b0c10;
+      cursor: pointer;
+      background: linear-gradient(120deg, #f3bf2b, #ff8f3f);
+      box-shadow: 0 20px 40px rgba(243, 191, 43, 0.3);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .cta-panel button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 30px 60px rgba(243, 191, 43, 0.35);
+    }
+
+    .footer {
+      padding: 48px 10%;
+      text-align: center;
+      color: var(--text-secondary);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(5, 7, 12, 0.9);
+      font-size: 14px;
+    }
+
+    @media (max-width: 960px) {
+      .hero {
+        padding: 120px 6% 100px;
+        gap: 48px;
+      }
+
+      .floating-card {
+        position: relative;
+        transform: none !important;
+        margin-bottom: 24px;
+      }
+
+      .hero-visual {
+        width: 100%;
+        min-height: auto;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .hero-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .cta-panel {
+        padding: 40px 32px;
+      }
+
+      .cta-panel-actions {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <div class="hero-content">
+        <!-- <span class="pill">Live on Solana mainnet</span> -->
+        <h1>Yuzu Markets</h1>
+        <p>Sell covered calls or cash-secured puts, earn upfront premiums, and keep collateral locked with zero liquidation risk</p>
+        <div class="hero-actions">
+          <a href="#request-access-section" class="cta-btn">Request access</a>
+          <a href="#" id="view-docs" class="cta-btn ghost">View Docs</a>
+        </div>
+        <!--
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span>Quote latency</span>
+            <strong>&lt; 800 ms</strong>
+          </div>
+          <div class="stat-card">
+            <span>Committed liquidity</span>
+            <strong>$420M+</strong>
+          </div>
+          <div class="stat-card">
+            <span>Contracts cleared</span>
+            <strong>1.8M</strong>
+          </div>
+          <div class="stat-card">
+            <span>Hedging venues</span>
+            <strong>Perps · CEX · RFQ</strong>
+          </div>
+        </div>
+        -->
+      </div>
+    </header>
+
+    <section class="section" id="request-access-section">
+      <div class="section-inner">
+        <div class="section-heading">
+          <h2>Who is it for</h2>
+          <p class="section-subtitle">One RFQ flow for users, desks, and treasuries to source covered calls and cash-secured puts.</p>
+        </div>
+        <div class="columns">
+          <article class="col">
+            <h3>Users</h3>
+            <p>Choose strikes and expiries, sell covered calls or cash-secured puts on the assets you hold, and receive premiums instantly while collateral stays on-chain.</p>
+          </article>
+          <article class="col">
+            <h3>Market Makers</h3>
+            <p>Quote RFQs across SOL, LSTs, and protocol tokens with deterministic settlement. Capture volatility P&amp;L and hedge across perps, CEXs, or lending books.</p>
+          </article>
+          <article class="col">
+            <h3>Protocols &amp; Treasuries</h3>
+            <p>Embed a programmable options layer into emissions or buyback plans, route premiums to treasury, and hedge distribution risk without building new infra.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section highlight">
+      <div class="section-inner">
+        <div class="section-heading">
+          <h2>Composable building blocks</h2>
+          <p class="section-subtitle">Everything needed to offer fully-collateralized RFQ options on Solana.</p>
+        </div>
+        <div class="pillars-grid">
+          <article class="pillar-card">
+            <h3>Upfront premiums</h3>
+            <p>Premiums route to wallets the moment an RFQ is filled, so strategies generate yield instantly without waiting for expiry.</p>
+          </article>
+          <article class="pillar-card">
+            <h3>Flexible strikes & expiries</h3>
+            <p>Pick any strike, maturity, and size to match treasury mandates or user intents — all handled by the same RFQ rail.</p>
+          </article>
+          <article class="pillar-card">
+            <h3>Multi-asset support</h3>
+            <p>Quote SOL, LSTs, LRTs, or program tokens in one venue, keeping liquidity concentrated while respecting collateral limits.</p>
+          </article>
+          <article class="pillar-card">
+            <h3>Transparent execution</h3>
+            <p>Every quote, fill, and collateral movement is on-chain with no rehypothecation, eliminating counterparty risk.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-inner">
+        <div class="cta-panel">
+          <h2>Bring volatility yield to your stack in days.</h2>
+          <p>Request early access for integration docs, RFQ desk support, and co-marketing with Solana&apos;s fully-collateralized options layer.</p>
+          <div class="cta-panel-actions">
+            <input type="email" placeholder="name@team.com" aria-label="Work email" />
+            <button type="button">Request access</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    © 2025 Yuzu Protocol · Options layer for Solana
+  </footer>
+</body>
+</html>
