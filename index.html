@@ -565,7 +565,7 @@
       <div class="section-inner">
         <div class="section-heading">
           <h2>Who is it for</h2>
-          <p class="section-subtitle">One RFQ flow for users, desks, and treasuries to source covered calls and cash-secured puts</p>
+          <p class="section-subtitle">One flow for users, desks, and treasuries </p>
         </div>
         <div class="columns">
           <article class="col">
@@ -587,8 +587,8 @@
     <section class="section highlight">
       <div class="section-inner">
         <div class="section-heading">
-          <h2>Composable building blocks</h2>
-          <p class="section-subtitle">Everything needed to offer fully-collateralized RFQ options on Solana</p>
+          <h2>How it works</h2>
+          <p class="section-subtitle">A complete layer for collateralized options on Solana</p>
         </div>
         <div class="pillars-grid">
           <article class="pillar-card">
@@ -614,8 +614,8 @@
     <section class="section">
       <div class="section-inner">
         <div class="cta-panel">
-          <h2>Bring volatility yield to your stack in days</h2>
-          <p>Request early access for integration docs, RFQ desk support, and co-marketing with Solana&apos;s fully-collateralized options layer.</p>
+          <h2>Yuzu is coming</h2>
+          <p>Request early access for integration docs, RFQ desk support, and OG benefits</p>
           <div class="cta-panel-actions">
             <input type="email" placeholder="name@team.com" aria-label="Work email" />
             <button type="button">Join waitlist</button>
@@ -629,39 +629,7 @@
     © 2025 Yuzu Protocol · Options layer for Solana
   </footer>
   <script>
-    (function () {
-      const hero = document.querySelector('.hero');
-      if (!hero) return;
-      const glow = hero.querySelector('.hero-glow');
-      const matrix = hero.querySelector('.hero-matrix');
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (prefersReducedMotion) return;
-
-      let ticking = false;
-      const updateParallax = () => {
-        const rect = hero.getBoundingClientRect();
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-        const progress = Math.min(1, Math.max(0, (viewportHeight - rect.top) / (viewportHeight + rect.height)));
-
-        if (glow) {
-          glow.style.transform = `translate(-50%, calc(-50% + ${progress * 8}px))`;
-        }
-        if (matrix) {
-          matrix.style.transform = `translate3d(${progress * 3}%, ${progress * 10}px, 0)`;
-        }
-        ticking = false;
-      };
-
-      const onScroll = () => {
-        if (!ticking) {
-          window.requestAnimationFrame(updateParallax);
-          ticking = true;
-        }
-      };
-
-      updateParallax();
-      window.addEventListener('scroll', onScroll, { passive: true });
-    })();
+    // Parallax removed for a calmer hero background.
   </script>
 </body>
 </html>
