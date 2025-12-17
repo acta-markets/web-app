@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #e6e6e6;
+    background-image: radial-gradient(#000000 1px, transparent 1px);
+    background-size: 20px 20px;
+    overflow-x: hidden;
+  }
+}
+
+@layer utilities {
+  .glitch-header:hover {
+    text-shadow: 2px 2px 0px #ff00e5, -2px -2px 0px #ccff00;
+  }
+
+  .neo-input {
+    border: 3px solid black;
+    outline: none;
+    transition: all 0.2s;
+  }
+
+  .neo-input:focus {
+    box-shadow: 4px 4px 0px 0px #ccff00;
+    transform: translate(-2px, -2px);
+  }
+
+  .marquee-container {
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .marquee-content {
+    display: inline-block;
+    animation: marquee 20s linear infinite;
+  }
+
+  .dashed-connector::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: -2rem;
+    width: 2rem;
+    height: 4px;
+    background: repeating-linear-gradient(
+      90deg,
+      black,
+      black 10px,
+      transparent 10px,
+      transparent 20px
+    );
+    z-index: 0;
+  }
+
+  @media (max-width: 768px) {
+    .dashed-connector::after {
+      top: auto;
+      bottom: -2rem;
+      right: 50%;
+      width: 4px;
+      height: 2rem;
+      transform: translateX(50%);
+      background: repeating-linear-gradient(
+        180deg,
+        black,
+        black 10px,
+        transparent 10px,
+        transparent 20px
+      );
+    }
+  }
+}
+
+
