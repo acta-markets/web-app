@@ -1,0 +1,153 @@
+import { PYTH_PRICE_IDS } from "@/lib/pyth-ids";
+
+export type MarketType = "call" | "csp";
+
+export type Market = {
+  asset: string;
+  type: MarketType;
+  minApr: number;
+  maxApr: number;
+  capFilledPct: number; // 0..100
+  spotPrice: number;
+  pythId?: string;
+  // price options are the "I’m ok to sell/buy at" prices
+  priceOptions: number[];
+};
+
+export const MARKETS: Market[] = [
+  {
+    asset: "jitoSOL",
+    type: "call",
+    minApr: 12,
+    maxApr: 34,
+    capFilledPct: 54,
+    spotPrice: 236.42,
+    pythId: PYTH_PRICE_IDS.JITOSOL,
+    priceOptions: [250, 270, 295]
+  },
+  {
+    asset: "jitoSOL",
+    type: "csp",
+    minApr: 10,
+    maxApr: 29,
+    capFilledPct: 61,
+    spotPrice: 236.42,
+    pythId: PYTH_PRICE_IDS.JITOSOL,
+    priceOptions: [225, 210, 195]
+  },
+  {
+    asset: "JLP",
+    type: "call",
+    minApr: 14,
+    maxApr: 42,
+    capFilledPct: 33,
+    spotPrice: 1.53,
+    pythId: PYTH_PRICE_IDS.JLP,
+    priceOptions: [1.6, 1.75, 2.0]
+  },
+  {
+    asset: "JLP",
+    type: "csp",
+    minApr: 12,
+    maxApr: 38,
+    capFilledPct: 48,
+    spotPrice: 1.53,
+    pythId: PYTH_PRICE_IDS.JLP,
+    priceOptions: [1.45, 1.35, 1.2]
+  },
+  {
+    asset: "ETH",
+    type: "call",
+    minApr: 10,
+    maxApr: 36,
+    capFilledPct: 28,
+    spotPrice: 3925.12,
+    pythId: PYTH_PRICE_IDS.ETH,
+    priceOptions: [4100, 4300, 4600]
+  },
+  {
+    asset: "ETH",
+    type: "csp",
+    minApr: 9,
+    maxApr: 33,
+    capFilledPct: 71,
+    spotPrice: 3925.12,
+    pythId: PYTH_PRICE_IDS.ETH,
+    priceOptions: [3800, 3600, 3400]
+  },
+  {
+    asset: "zBTC",
+    type: "call",
+    minApr: 8,
+    maxApr: 22,
+    capFilledPct: 19,
+    spotPrice: 98000,
+    pythId: PYTH_PRICE_IDS.ZBTC,
+    priceOptions: [102000, 108000, 115000]
+  },
+  {
+    asset: "zBTC",
+    type: "csp",
+    minApr: 7,
+    maxApr: 19,
+    capFilledPct: 41,
+    spotPrice: 98000,
+    pythId: PYTH_PRICE_IDS.ZBTC,
+    priceOptions: [95000, 90000, 82000]
+  },
+  {
+    asset: "PUMP",
+    type: "call",
+    minApr: 45,
+    maxApr: 180,
+    capFilledPct: 22,
+    spotPrice: 0.0124,
+    pythId: PYTH_PRICE_IDS.PUMP,
+    priceOptions: [0.014, 0.016, 0.02, 0.03]
+  },
+  {
+    asset: "PUMP",
+    type: "csp",
+    minApr: 38,
+    maxApr: 140,
+    capFilledPct: 47,
+    spotPrice: 0.0124,
+    pythId: PYTH_PRICE_IDS.PUMP,
+    priceOptions: [0.011, 0.0095, 0.008, 0.006]
+  },
+  {
+    asset: "BONK",
+    type: "call",
+    minApr: 22,
+    maxApr: 95,
+    capFilledPct: 35,
+    spotPrice: 0.000031,
+    pythId: PYTH_PRICE_IDS.BONK,
+    priceOptions: [0.000034, 0.000038, 0.000045]
+  },
+  {
+    asset: "BONK",
+    type: "csp",
+    minApr: 18,
+    maxApr: 74,
+    capFilledPct: 58,
+    spotPrice: 0.000031,
+    pythId: PYTH_PRICE_IDS.BONK,
+    priceOptions: [0.000029, 0.000026, 0.000022]
+  }
+];
+
+export function getMarket(asset: string, type: MarketType): Market | undefined {
+  const a = asset.toUpperCase();
+  return MARKETS.find((m) => m.asset.toUpperCase() === a && m.type === type);
+}
+
+export function formatPct(n: number) {
+  return `${Math.round(n)}%`;
+}
+
+export function formatUsd(n: number) {
+  return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+
+

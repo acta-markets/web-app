@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
+import { ThemeScript } from "@/components/theme-script";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -22,7 +23,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={spaceGrotesk.variable}>
-      <body className="font-space text-black antialiased selection:bg-black selection:text-yuzu-main">
+      <head>
+        <ThemeScript />
+      </head>
+      <body className="font-space antialiased selection:bg-black selection:text-yuzu-main text-black dark:text-white">
         {children}
       </body>
     </html>

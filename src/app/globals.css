@@ -4,14 +4,44 @@
 
 @layer base {
   body {
-    background-color: #e6e6e6;
-    background-image: radial-gradient(#000000 1px, transparent 1px);
-    background-size: 20px 20px;
+    background-color: #f4f4f4;
     overflow-x: hidden;
   }
 }
 
 @layer utilities {
+  .yuzu-dots {
+    background-color: #e6e6e6;
+    background-image: radial-gradient(#000000 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  .dark body {
+    background-color: #0b0b0b;
+    color: #ffffff;
+  }
+
+  .dark .yuzu-dots {
+    background-color: #0b0b0b;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Lightweight app theme helpers (used only in the (app) route group) */
+  .app-bg {
+    background:
+      radial-gradient(1200px 600px at 20% 0%, rgba(204, 255, 0, 0.16), transparent 55%),
+      radial-gradient(900px 500px at 80% 0%, rgba(204, 255, 0, 0.10), transparent 55%),
+      #ffffff;
+  }
+
+  .dark .app-bg {
+    background:
+      radial-gradient(1200px 600px at 20% 0%, rgba(204, 255, 0, 0.18), transparent 60%),
+      radial-gradient(900px 500px at 80% 0%, rgba(204, 255, 0, 0.10), transparent 60%),
+      #0b0b0b;
+  }
+
   .glitch-header:hover {
     text-shadow: 2px 2px 0px #ff00e5, -2px -2px 0px #ccff00;
   }

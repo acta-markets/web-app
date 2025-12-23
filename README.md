@@ -13,7 +13,7 @@ npm run dev
 
 The whitelist form posts to `POST /api/whitelist` and stores submissions in MongoDB.
 
-See `ENV_SETUP.md` to set `MONGODB_URI` / `MONGODB_DB` in your local `.env.local`.
+See `ENV_SETUP.md` to set `MONGODB_URI` / `MONGODB_DB` and `NEXT_PUBLIC_PRIVY_APP_ID` in your local `.env.local`.
 
 ## Where things live
 
