@@ -150,4 +150,48 @@ export function formatUsd(n: number) {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
+/**
+ * Smart USD formatting for token prices:
+ * - Avoid thousands grouping for large prices (e.g. zBTC) to reduce visual noise.
+ * - Show more decimals for very small prices (e.g. PUMP at 0.0017).
+ */
+export function formatUsdSmart(n: number) {
+  const abs = Math.abs(n);
+
+  // For large ticket assets (e.g. zBTC), decimals are mostly noise.
+  // Keep grouping so the magnitude is readable in locales that group with spaces.
+  if (abs >= 1000) {
+    return n.toLocaleString(undefined, {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+      useGrouping: true
+    });
+  }
+
+  const useGrouping = true;
+
+  let max = 2;
+  if (abs >= 1) {
+    max = 2;
+  } else if (abs >= 0.1) {
+    max = 4;
+  } else if (abs >= 0.01) {
+    max = 5;
+  } else if (abs >= 0.001) {
+    max = 6;
+  } else {
+    max = 8;
+  }
+
+  return n.toLocaleString(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: max,
+    minimumFractionDigits: abs >= 1 ? 2 : 0,
+    useGrouping
+  });
+}
+
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppButton } from "@/components/app-ui/app-button";
-import { formatUsd } from "@/lib/markets";
+import { formatUsdSmart } from "@/lib/markets";
 
 type Point = { t: number; v: number };
 type Range = "1w" | "1m" | "3m";
@@ -263,7 +263,7 @@ export function MarketChart({
         <div className="min-w-0">
           <div className="text-xs font-semibold text-white/50">Price</div>
           <div className="mt-1 flex items-center gap-2">
-            <div className="truncate text-2xl font-semibold text-white">{formatUsd(last)}</div>
+            <div className="truncate text-2xl font-semibold text-white">{formatUsdSmart(last)}</div>
             <div
               className={[
                 "rounded-lg px-2 py-1 text-xs font-semibold",
@@ -344,7 +344,7 @@ export function MarketChart({
               fontSize="10"
               fontFamily="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
             >
-              Strike {formatUsd(strikePrice)} {svg.strikeOff === "above" ? "↑" : svg.strikeOff === "below" ? "↓" : ""}
+              Strike {formatUsdSmart(strikePrice)} {svg.strikeOff === "above" ? "↑" : svg.strikeOff === "below" ? "↓" : ""}
             </text>
           </g>
 

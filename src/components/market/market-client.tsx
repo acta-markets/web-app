@@ -13,7 +13,7 @@ import {
   getMarket,
   type MarketType,
   formatPct,
-  formatUsd
+  formatUsdSmart
 } from "@/lib/markets";
 
 type PythLatestResponse =
@@ -298,7 +298,7 @@ export function MarketClient({ asset }: { asset: string }) {
               </div>
 
               <div className="text-sm font-semibold text-white/70">
-                Spot <span className="text-white">{formatUsd(spot)}</span>
+                Spot <span className="text-white">{formatUsdSmart(spot)}</span>
                 <span className="mx-2 text-white/25">·</span>
                 Cap <span className="text-white">{formatPct(capFilled)}</span>
                 <span className="mx-2 text-white/25">·</span>
@@ -313,7 +313,7 @@ export function MarketClient({ asset }: { asset: string }) {
             </div>
 
             <p className="mt-2 text-sm text-black/60 dark:text-white/60">
-              Pick an expiry and a price you’re comfortable with. We’ll show an estimated APR and outcomes.
+            Manage your risks by choosing expiry date and price            
             </p>
           </div>
 
@@ -398,28 +398,48 @@ export function MarketClient({ asset }: { asset: string }) {
 
             <div className="mt-5">
               <div
-                className="mx-auto grid w-full max-w-4xl gap-4"
-                style={{
-                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))"
-                }}
+                className="mx-auto grid w-full max-w-4xl grid-cols-2 gap-3 sm:[grid-template-columns:repeat(auto-fit,minmax(180px,1fr))] sm:gap-4"
               >
                 {priceOptions.map((p, idx) => {
                   const active = idx === priceIdx;
+                  const priceText = formatUsdSmart(p);
+                  const absPrice = Math.abs(p);
+                  // Mobile typography: keep big numbers (e.g. zBTC) from dominating the card.
+                  const mobilePriceClass =
+                    absPrice >= 10000
+                      ? "text-[20px]"
+                      : absPrice >= 1000
+                        ? "text-2xl"
+                        : priceText.length >= 14
+                          ? "text-xl"
+                          : "text-2xl";
+
+                  // Desktop typography can stay bigger, but still clamp extreme lengths.
+                  const desktopPriceClass =
+                    priceText.length >= 16 ? "sm:text-2xl" : absPrice >= 10000 ? "sm:text-[28px]" : "sm:text-3xl";
                   const aprForIdx =
                     market.maxApr - (market.maxApr - market.minApr) * (n <= 1 ? 0 : idx / (n - 1));
                   return (
                     <button key={p} type="button" onClick={() => setPriceIdx(idx)} className="text-left">
                       <AppCard
                         className={[
-                          "px-6 py-6 text-center transition-all",
+                          "px-4 py-4 text-center transition-all sm:px-6 sm:py-6",
                           "hover:-translate-y-0.5 hover:shadow-md dark:hover:shadow-black/30",
                           active
                             ? "border-yuzu-main/60 bg-yuzu-main/10 ring-2 ring-yuzu-main/40"
                             : "border-white/10 bg-white/5 hover:bg-white/10"
                         ].join(" ")}
                       >
-                        <div className="text-3xl font-semibold text-white">{formatUsd(p)}</div>
-                        <div className="mt-2 text-xs font-semibold text-white/55">
+                        <div
+                          className={[
+                            "whitespace-nowrap font-semibold leading-tight text-white tabular-nums tracking-tight",
+                            mobilePriceClass,
+                            desktopPriceClass
+                          ].join(" ")}
+                        >
+                          {priceText}
+                        </div>
+                        <div className="mt-2 text-[11px] font-semibold text-white/55 sm:text-xs">
                           <span className="text-white/85">{formatPct(aprForIdx)}</span> APR
                         </div>
                       </AppCard>
@@ -431,11 +451,11 @@ export function MarketClient({ asset }: { asset: string }) {
           </div>
 
           <AppCard className="p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div className="text-xs font-semibold text-white/50">
                 Deposit {type === "call" ? market.asset : "USDC"}
               </div>
-              <div className="flex items-center gap-2 self-start sm:self-auto">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setDeposit(String(maxPresetNum / 2))}
@@ -519,13 +539,13 @@ export function MarketClient({ asset }: { asset: string }) {
             <div className="grid gap-0 md:grid-cols-2">
               <div className="border-white/10 p-5 md:border-r">
                 <div className="text-xs font-semibold text-white/60">
-                  If spot {type === "call" ? "below" : "below"} {formatUsd(selectedPrice)}
+                  If spot {type === "call" ? "below" : "below"} {formatUsdSmart(selectedPrice)}
                 </div>
                 <div className="mt-3 text-lg font-semibold text-white">
                   {depositOk
                     ? type === "call"
                       ? `Get ${depositNum.toLocaleString()} ${market.asset} back`
-                      : `Buy ${market.asset} at ${formatUsd(selectedPrice)}`
+                      : `Buy ${market.asset} at ${formatUsdSmart(selectedPrice)}`
                     : "—"}
                 </div>
                 <div className="mt-2 text-sm text-white/60">
@@ -537,7 +557,7 @@ export function MarketClient({ asset }: { asset: string }) {
 
               <div className="p-5">
                 <div className="text-xs font-semibold text-white/60">
-                  If spot {type === "call" ? "above" : "above"} {formatUsd(selectedPrice)}
+                  If spot {type === "call" ? "above" : "above"} {formatUsdSmart(selectedPrice)}
                 </div>
                 <div className="mt-3 text-lg font-semibold text-white">
                   {depositOk

@@ -6,8 +6,10 @@ const COINGECKO_IDS: Record<string, string> = {
   ETH: "ethereum",
   ZBTC: "bitcoin",
   BTC: "bitcoin",
-  BONK: "bonk"
-  // JLP / jitoSOL / PUMP may not be reliably available on CoinGecko; we’ll gracefully fallback.
+  BONK: "bonk",
+  JITOSOL: "jito-staked-sol",
+  JLP: "jupiter-perpetuals-liquidity-provider-token",
+  PUMP: "pump-fun"
 };
 
 function normalizeSymbol(symbol: string) {
