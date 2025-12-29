@@ -10,12 +10,14 @@ export function AppSegmented<T extends string>({
   value,
   onChange,
   options,
-  className
+  className,
+  size = "sm"
 }: {
   value: T;
   onChange: (value: T) => void;
   options: Array<AppSegmentedOption<T>>;
   className?: string;
+  size?: "sm" | "lg";
 }) {
   const idx = Math.max(
     0,
@@ -23,10 +25,18 @@ export function AppSegmented<T extends string>({
   );
   const count = Math.max(1, options.length);
 
+  const wrap = size === "lg"
+    ? "relative inline-flex select-none items-center rounded-full border border-white/10 bg-white/5 p-1.5"
+    : "relative inline-flex select-none items-center rounded-full border border-white/10 bg-white/5 p-1";
+
+  const btn = size === "lg"
+    ? "relative z-10 min-w-0 flex flex-1 items-center justify-center whitespace-nowrap rounded-full px-5 py-2.5 text-sm font-semibold leading-none transition-colors"
+    : "relative z-10 min-w-0 flex flex-1 items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold leading-none transition-colors sm:px-3.5 sm:py-2 sm:text-xs";
+
   return (
     <div
       className={cn(
-        "relative inline-flex w-full select-none items-center rounded-full border border-white/10 bg-white/5 p-1 sm:w-auto",
+        wrap,
         className
       )}
       style={
@@ -59,7 +69,7 @@ export function AppSegmented<T extends string>({
             onClick={() => onChange(o.value)}
             className={cn(
               // Keep it lightweight + prevent label wrapping (e.g. "Deposit USDC")
-              "relative z-10 min-w-0 flex-1 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold leading-none transition-colors sm:px-3.5 sm:py-2 sm:text-xs",
+              btn,
               active ? "text-black" : "text-white/70 hover:text-white"
             )}
           >
