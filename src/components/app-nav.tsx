@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AppPill } from "@/components/app-ui/app-pill";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { PrivyConnectButton } from "@/components/wallet/privy-connect-button";
 
@@ -23,9 +22,8 @@ export function AppNav() {
     <nav className="sticky top-0 z-50 flex w-full items-center justify-between border-b border-black/10 bg-white/70 px-6 py-4 backdrop-blur dark:border-white/10 dark:bg-black/40">
       <div className="flex items-center gap-3">
         <Link href="/earn" className="text-lg font-semibold tracking-tight dark:text-white">
-          Yuzu
+          Acta
         </Link>
-        <AppPill>beta</AppPill>
       </div>
 
       {/* Desktop nav */}

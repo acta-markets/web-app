@@ -3,7 +3,7 @@ const TEXT =
 
 export function Marquee() {
   return (
-    <div className="overflow-hidden border-y-4 border-black bg-yuzu-accent py-4 text-3xl font-black uppercase text-white">
+    <div className="overflow-hidden border-y border-white/10 bg-black/30 py-4 text-2xl font-semibold uppercase text-yuzu-main">
       <div className="marquee-container">
         <div className="marquee-content">{TEXT.repeat(8)}</div>
       </div>

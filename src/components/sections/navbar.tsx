@@ -1,36 +1,36 @@
-import { ButtonLink } from "@/components/ui/button";
+import { AppButtonLink } from "@/components/app-ui/app-button";
 
 export function Navbar() {
   return (
-    <nav className="fixed left-0 top-0 z-50 flex w-full items-center justify-between border-b-4 border-black bg-yuzu-main px-6 py-4 shadow-neo-sm">
-      <div className="text-3xl font-black italic uppercase tracking-tighter">
-        Yuzu<span className="bg-black px-1 not-italic text-white">Markets</span>
+    <nav className="sticky top-0 z-50 flex w-full items-center justify-between border-b border-white/10 bg-black/40 px-6 py-4 backdrop-blur">
+      <div className="flex items-center gap-3">
+        <div className="text-lg font-semibold tracking-tight text-white">Acta</div>
       </div>
 
-      <div className="hidden gap-8 text-lg font-bold md:flex">
+      <div className="hidden items-center gap-6 text-sm font-semibold md:flex">
         <a
           href="#how-it-works"
-          className="hover:underline decoration-4 decoration-black underline-offset-4"
+          className="text-white/70 hover:text-white"
         >
           How it Works
         </a>
         <a
           href="#solution"
-          className="hover:underline decoration-4 decoration-black underline-offset-4"
+          className="text-white/70 hover:text-white"
         >
           The Solution
         </a>
         <a
           href="#team"
-          className="hover:underline decoration-4 decoration-black underline-offset-4"
+          className="text-white/70 hover:text-white"
         >
           Team
         </a>
       </div>
 
-      <ButtonLink href="#whitelist" variant="secondary">
+      <AppButtonLink href="#whitelist" variant="secondary">
         Join Beta
-      </ButtonLink>
+      </AppButtonLink>
     </nav>
   );
 }

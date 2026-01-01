@@ -1,8 +1,8 @@
  "use client";
 
 import { useMemo, useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { AppCard } from "@/components/app-ui/app-card";
+import { AppButton } from "@/components/app-ui/app-button";
 
 export function Whitelist() {
   const [email, setEmail] = useState("");
@@ -45,64 +45,62 @@ export function Whitelist() {
   return (
     <section
       id="whitelist"
-      className="relative border-y-4 border-black bg-yuzu-main bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] px-4 py-24"
+      className="relative px-4 py-24"
     >
       <div className="relative z-10 mx-auto max-w-3xl">
-        <Card className="bg-white p-8 shadow-[12px_12px_0px_0px_#000] md:p-12">
-          <div className="mb-8 flex items-start justify-between border-b-4 border-black pb-4">
+        <AppCard className="border-white/10 bg-white/5 p-8 md:p-10">
+          <div className="mb-8 flex items-start justify-between border-b border-white/10 pb-4">
             <div>
-              <h2 className="text-4xl font-black uppercase tracking-tighter md:text-5xl">
+              <h2 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
                 Get Access
               </h2>
-              <p className="mt-2 font-bold text-gray-500">
-                SECURE YOUR SPOT IN THE CLOSED BETA.
+              <p className="mt-2 text-sm font-semibold text-white/55">
+                Secure your spot on the whitelist.
               </p>
             </div>
-            <div className="hidden rotate-2 bg-black px-4 py-2 font-mono text-white md:block">
-              BATCH #01
+            <div className="hidden rounded-full border border-white/10 bg-black/30 px-4 py-2 text-xs font-semibold text-white/70 md:block">
+              Batch #01
             </div>
           </div>
 
           <form className="space-y-6" onSubmit={onSubmit}>
             <div>
-              <label className="mb-2 block text-lg font-black uppercase">
+              <label className="mb-2 block text-sm font-semibold text-white/70">
                 Email Address
               </label>
-              <Input
+              <input
                 type="email"
                 placeholder="whale@solana.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={disabled}
                 required
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-yuzu-main/40 disabled:opacity-70"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-lg font-black uppercase">
+              <label className="mb-2 block text-sm font-semibold text-white/70">
                 Solana Wallet
               </label>
-              <Input
+              <input
                 type="text"
                 placeholder="Connect or Paste Address"
                 value={wallet}
                 onChange={(e) => setWallet(e.target.value)}
                 disabled={disabled}
                 required
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-yuzu-main/40 disabled:opacity-70"
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={disabled}
-              className="mt-4 w-full border-4 border-black bg-black py-6 text-2xl font-black text-yuzu-main shadow-[6px_6px_0px_0px_#888] transition-all hover:bg-yuzu-accent hover:text-white active:translate-x-1 active:translate-y-1 active:shadow-none disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {status.state === "submitting" ? "SUBMITTING..." : "JOIN WHITELIST ->"}
-            </button>
+            <AppButton type="submit" disabled={disabled} className="mt-2 w-full">
+              {status.state === "submitting" ? "Submitting…" : "Join whitelist →"}
+            </AppButton>
           </form>
 
           {status.state === "success" && (
-            <div className="mt-4 border-4 border-black bg-off-white p-4 text-center font-bold">
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-center text-sm font-semibold text-white/80">
               {status.already
                 ? "You’re already on the list. See you soon."
                 : "You’re in. We’ll reach out with access."}
@@ -110,15 +108,15 @@ export function Whitelist() {
           )}
 
           {status.state === "error" && (
-            <div className="mt-4 border-4 border-black bg-white p-4 text-center font-bold text-black">
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-center text-sm font-semibold text-red-300">
               {status.message}
             </div>
           )}
 
-          <div className="mt-6 text-center font-mono text-sm opacity-60">
+          <div className="mt-6 text-center text-xs font-semibold text-white/45">
             * Limited spots available for the alpha squad.
           </div>
-        </Card>
+        </AppCard>
       </div>
     </section>
   );

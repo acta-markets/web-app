@@ -11,7 +11,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Yuzu Markets | Neobrutalist DeFi",
+  title: "Acta | Neobrutalist DeFi",
   description:
     "Upfront premiums with up to 180% APY. Trustless settlement with zero liquidation risk."
 };

@@ -121,7 +121,7 @@ export function EarnClient() {
         </div>
       </header>
 
-      <AppModal open={howOpen} onClose={() => setHowOpen(false)} title="Yuzu Earn">
+      <AppModal open={howOpen} onClose={() => setHowOpen(false)} title="Acta Earn">
         <div className="space-y-3 text-sm text-white/80">
           <div className="rounded-xl border border-white/10 bg-white/5 p-4">
             <div className="text-sm font-semibold text-white">1) Choose strategy</div>

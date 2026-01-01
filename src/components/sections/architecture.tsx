@@ -1,6 +1,6 @@
-import { Card } from "@/components/ui/card";
 import { Container } from "@/components/ui/container";
 import type { ReactNode } from "react";
+import { AppCard } from "@/components/app-ui/app-card";
 
 type Step = {
   number: string;
@@ -74,8 +74,8 @@ export function Architecture() {
   return (
     <section id="how-it-works" className="px-4 py-24">
       <Container className="px-0 sm:px-6">
-        <h2 className="mb-16 text-center text-5xl font-black uppercase md:text-7xl">
-          The Yuzu <span className="bg-black px-2 text-white">Architecture</span>
+        <h2 className="mb-16 text-center text-4xl font-semibold tracking-tight text-white md:text-5xl">
+          The Acta <span className="text-yuzu-main">Architecture</span>
         </h2>
 
         <div className="relative grid gap-12 md:grid-cols-3">
@@ -91,20 +91,18 @@ export function Architecture() {
 
             return (
               <div key={s.number} className={wrapperClass}>
-                <Card className={`flex h-full flex-col ${cardBg}`}>
-                  <div
-                    className={`flex items-center justify-between border-b-4 border-black bg-black p-4 ${headerText}`}
-                  >
-                    <span className="text-4xl font-black">{s.number}</span>
-                    <span className="font-bold uppercase tracking-widest">
+                <AppCard className="flex h-full flex-col border-white/10 bg-white/5">
+                  <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                    <span className="text-2xl font-semibold text-white tabular-nums">{s.number}</span>
+                    <span className="text-xs font-semibold uppercase tracking-widest text-white/60">
                       {s.label}
                     </span>
                   </div>
-                  <div className="flex-grow p-6">
-                    <h3 className="mb-4 text-2xl font-bold uppercase">{s.title}</h3>
+                  <div className="flex-grow p-6 text-white/75">
+                    <h3 className="mb-3 text-lg font-semibold text-white">{s.title}</h3>
                     {s.body}
                   </div>
-                </Card>
+                </AppCard>
               </div>
             );
           })}
