@@ -7,12 +7,10 @@ export function Input({ className, ...props }: InputProps) {
   return (
     <input
       className={cn(
-        "neo-input w-full bg-off-white p-4 text-xl font-bold placeholder-gray-400",
+        "neo-input w-full bg-bg-tertiary p-4 text-xl font-bold text-content-primary placeholder-content-tertiary",
         className
       )}
       {...props}
     />
   );
 }
-
-

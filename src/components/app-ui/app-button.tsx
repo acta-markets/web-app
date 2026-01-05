@@ -6,13 +6,13 @@ type Variant = "primary" | "secondary" | "ghost";
 type Size = "sm" | "md";
 
 const base =
-  "inline-flex items-center justify-center rounded-xl font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-yuzu-main/40 disabled:opacity-60 disabled:cursor-not-allowed";
+  "inline-flex items-center justify-center rounded-xl font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 disabled:opacity-60 disabled:cursor-not-allowed";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-yuzu-main text-black hover:bg-yuzu-main/80",
+  primary: "bg-accent-primary text-bg-primary hover:bg-accent-deep",
   secondary:
-    "bg-white/70 text-black border border-black/10 hover:bg-yuzu-main/40 dark:bg-white/10 dark:text-white dark:border-white/10 dark:hover:bg-yuzu-main/35",
-  ghost: "bg-transparent text-black hover:bg-yuzu-main/15 dark:text-white dark:hover:bg-yuzu-main/15"
+    "bg-action-primary/70 text-content-primary hover:bg-accent-primary/40",
+  ghost: "bg-transparent text-content-primary hover:bg-accent-primary/15"
 };
 
 const sizes: Record<Size, string> = {
@@ -55,5 +55,3 @@ export function AppButtonLink({
     />
   );
 }
-
-

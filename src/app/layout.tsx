@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk } from "next/font/google";
+import { Space_Grotesk, Syne } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { ThemeScript } from "@/components/theme-script";
@@ -7,6 +7,12 @@ import { ThemeScript } from "@/components/theme-script";
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-space-grotesk",
+  display: "swap"
+});
+
+const syne = Syne({
+  subsets: ["latin"],
+  variable: "--font-syne",
   display: "swap"
 });
 
@@ -22,15 +28,13 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="en" className={spaceGrotesk.variable}>
+    <html lang="en" className={`${spaceGrotesk.variable} ${syne.variable}`}>
       <head>
         <ThemeScript />
       </head>
-      <body className="font-space antialiased selection:bg-black selection:text-yuzu-main text-black dark:text-white">
+      <body className="font-space antialiased selection:bg-accent-primary selection:text-bg-primary text-content-primary">
         {children}
       </body>
     </html>
   );
 }
-
-

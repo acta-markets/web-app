@@ -50,7 +50,7 @@ export function AppSegmented<T extends string>({
     >
       <div className="pointer-events-none absolute inset-1">
         <div
-          className="h-full rounded-full bg-yuzu-main transition-transform duration-200 ease-out"
+          className="h-full rounded-full bg-accent-primary transition-transform duration-200 ease-out"
           style={{
             width: "calc(100% / var(--seg-count))",
             transform: "translateX(calc(100% * var(--seg-index)))"
@@ -68,9 +68,8 @@ export function AppSegmented<T extends string>({
             aria-selected={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              // Keep it lightweight + prevent label wrapping (e.g. "Deposit USDC")
               btn,
-              active ? "text-black" : "text-white/70 hover:text-white"
+              active ? "text-bg-primary" : "text-content-secondary hover:text-content-primary"
             )}
           >
             {o.label}
@@ -80,5 +79,3 @@ export function AppSegmented<T extends string>({
     </div>
   );
 }
-
-

@@ -7,12 +7,10 @@ export function Badge({ className, ...props }: BadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-2 border-2 border-black px-4 py-2 font-bold shadow-neo-sm",
+        "inline-flex items-center gap-2 border-2 border-bg-border bg-bg-tertiary px-4 py-2 font-bold text-content-primary shadow-neo-sm",
         className
       )}
       {...props}
     />
   );
 }
-
-

@@ -8,12 +8,10 @@ export function AppPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border border-black/10 bg-yuzu-main/20 px-2.5 py-1 text-xs font-semibold text-black/80 dark:border-white/10 dark:bg-yuzu-main/15 dark:text-white/80",
+        "inline-flex items-center rounded-full bg-accent-primary/20 px-2.5 py-1 text-xs font-semibold text-content-primary",
         className
       )}
       {...props}
     />
   );
 }
-
-

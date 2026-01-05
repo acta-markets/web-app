@@ -3,59 +3,180 @@
 @tailwind utilities;
 
 @layer base {
+  /* Light theme (default for :root, used when no .dark class) */
+  :root {
+    /* Background */
+    --bg-primary: #F7F7F7;
+    --bg-secondary: #FBFBFB;
+    --bg-tertiary: #FEFEFF;
+    --bg-border: #CCCCCC;
+    --bg-border-active: #888888;
+
+    /* Content/Text */
+    --content-primary: #1B1B1B;
+    --content-secondary: #616161;
+    --content-tertiary: #8C8C8C;
+
+    /* Accent (brand green) */
+    --accent-primary: #98EC2D;
+    --accent-primary-rgb: 152 236 45;
+    --accent-secondary: #E0F9C0;
+    --accent-primary-deep: #8FDA23;
+
+    /* Action surfaces */
+    --action-primary: #EFEFEF;
+    --action-secondary: #FAFAFA;
+    --action-tertiary: #F5F5F5;
+
+    /* Constants */
+    --constant-black: #000000;
+    --constant-white: #F5F5F5;
+
+    /* Additional: Red */
+    --additional-red-primary: #FF2B44;
+    --additional-red-primary-deep: #CF1322;
+    --additional-red-secondary: #FFF1F0;
+
+    /* Additional: Orange */
+    --additional-orange-primary: #FF9D34;
+    --additional-orange-primary-deep: #D46B08;
+    --additional-orange-secondary: #FFF7E6;
+
+    /* Additional: Gold */
+    --additional-gold-primary: #FAAD14;
+    --additional-gold-primary-deep: #D48806;
+    --additional-gold-secondary: #FFFBE6;
+
+    /* Additional: Green */
+    --additional-green-primary: #68CC37;
+    --additional-green-primary-deep: #389E0D;
+    --additional-green-secondary: #EBFFD7;
+
+    /* Additional: Blue */
+    --additional-blue-primary: #69C0FF;
+    --additional-blue-primary-deep: #096DD9;
+    --additional-blue-secondary: #E6F7FF;
+
+    /* Additional: Violet */
+    --additional-violet-primary: #977DFF;
+    --additional-violet-primary-deep: #6843FF;
+    --additional-violet-secondary: #E7E0FF;
+  }
+
+  /* Dark theme */
+  .dark {
+    /* Background */
+    --bg-primary: #181819;
+    --bg-secondary: #151516;
+    --bg-tertiary: #131314;
+    --bg-border: #38383C;
+    --bg-border-active: #8C8C8C;
+
+    /* Content/Text */
+    --content-primary: #D3D3D3;
+    --content-secondary: #8D8D8D;
+    --content-tertiary: #656565;
+
+    /* Accent (brand green) */
+    --accent-primary: #61DE2A;
+    --accent-primary-rgb: 97 222 42;
+    --accent-secondary: #2C511C;
+    --accent-primary-deep: #61BC39;
+
+    /* Action surfaces */
+    --action-primary: #202021;
+    --action-secondary: #181818;
+    --action-tertiary: #1C1C1D;
+
+    /* Constants */
+    --constant-black: #000000;
+    --constant-white: #F5F5F5;
+
+    /* Additional: Red */
+    --additional-red-primary: #FF3347;
+    --additional-red-primary-deep: #E84749;
+    --additional-red-secondary: #2A1215;
+
+    /* Additional: Orange */
+    --additional-orange-primary: #D87A16;
+    --additional-orange-primary-deep: #E89A3C;
+    --additional-orange-secondary: #2B1D11;
+
+    /* Additional: Gold */
+    --additional-gold-primary: #D89614;
+    --additional-gold-primary-deep: #E8B339;
+    --additional-gold-secondary: #2B2111;
+
+    /* Additional: Green */
+    --additional-green-primary: #49AA19;
+    --additional-green-primary-deep: #6ABE39;
+    --additional-green-secondary: #1C2C17;
+
+    /* Additional: Blue */
+    --additional-blue-primary: #2E9AFF;
+    --additional-blue-primary-deep: #3C9AE8;
+    --additional-blue-secondary: #111D2C;
+
+    /* Additional: Violet */
+    --additional-violet-primary: #7251F7;
+    --additional-violet-primary-deep: #B7A8F1;
+    --additional-violet-secondary: #1C1145;
+  }
+
   body {
-    background-color: #f4f4f4;
+    background-color: var(--bg-primary);
+    color: var(--content-primary);
     overflow-x: hidden;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-syne), system-ui, sans-serif;
+    letter-spacing: 0.01em;
+  }
+
+  .logo {
+    font-family: var(--font-syne), system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  .outcome-positive {
+    background: linear-gradient(135deg, rgba(73, 170, 25, 0.12) 0%, transparent 60%);
+  }
+
+  .outcome-negative {
+    background: linear-gradient(225deg, rgba(255, 51, 71, 0.12) 0%, transparent 60%);
   }
 }
 
 @layer utilities {
   .yuzu-dots {
-    background-color: #e6e6e6;
-    background-image: radial-gradient(#000000 1px, transparent 1px);
-    background-size: 20px 20px;
-  }
-
-  .dark body {
-    background-color: #0b0b0b;
-    color: #ffffff;
-  }
-
-  .dark .yuzu-dots {
-    background-color: #0b0b0b;
-    background-image: radial-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+    background-color: var(--bg-secondary);
+    background-image: radial-gradient(var(--bg-border) 1px, transparent 1px);
     background-size: 20px 20px;
   }
 
   /* Lightweight app theme helpers (used only in the (app) route group) */
   .app-bg {
     background:
-      radial-gradient(1200px 600px at 18% 0%, rgba(204, 255, 0, 0.20), transparent 60%),
-      radial-gradient(900px 520px at 82% 0%, rgba(204, 255, 0, 0.12), transparent 64%),
-      radial-gradient(700px 420px at 55% 18%, rgba(204, 255, 0, 0.08), transparent 70%),
-      #ffffff;
-  }
-
-  .dark .app-bg {
-    background:
-      radial-gradient(1200px 600px at 18% 0%, rgba(204, 255, 0, 0.22), transparent 64%),
-      radial-gradient(900px 520px at 82% 0%, rgba(204, 255, 0, 0.14), transparent 68%),
-      radial-gradient(700px 420px at 55% 18%, rgba(204, 255, 0, 0.10), transparent 72%),
-      #0f0f10;
+      radial-gradient(1200px 600px at 18% 0%, color-mix(in srgb, var(--accent-primary) 20%, transparent), transparent 60%),
+      radial-gradient(900px 520px at 82% 0%, color-mix(in srgb, var(--accent-primary) 12%, transparent), transparent 64%),
+      radial-gradient(700px 420px at 55% 18%, color-mix(in srgb, var(--accent-primary) 8%, transparent), transparent 70%),
+      var(--bg-primary);
   }
 
   .glitch-header:hover {
-    text-shadow: 2px 2px 0px #ff00e5, -2px -2px 0px #ccff00;
+    text-shadow: 2px 2px 0px var(--additional-violet-primary), -2px -2px 0px var(--accent-primary);
   }
 
   .neo-input {
-    border: 3px solid black;
+    border: 3px solid var(--bg-border);
     outline: none;
     transition: all 0.2s;
   }
 
   .neo-input:focus {
-    box-shadow: 4px 4px 0px 0px #ccff00;
+    box-shadow: 4px 4px 0px 0px var(--accent-primary);
     transform: translate(-2px, -2px);
   }
 
@@ -78,8 +199,8 @@
     height: 4px;
     background: repeating-linear-gradient(
       90deg,
-      black,
-      black 10px,
+      var(--bg-border),
+      var(--bg-border) 10px,
       transparent 10px,
       transparent 20px
     );
@@ -96,13 +217,11 @@
       transform: translateX(50%);
       background: repeating-linear-gradient(
         180deg,
-        black,
-        black 10px,
+        var(--bg-border),
+        var(--bg-border) 10px,
         transparent 10px,
         transparent 20px
       );
     }
   }
 }
-
-

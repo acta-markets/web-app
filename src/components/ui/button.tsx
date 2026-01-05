@@ -15,12 +15,12 @@ export type ButtonLinkProps = React.AnchorHTMLAttributes<HTMLAnchorElement> & {
 };
 
 const base =
-  "inline-flex items-center justify-center border-[3px] border-black font-bold uppercase transition-all duration-100 select-none active:translate-x-1 active:translate-y-1 active:shadow-none";
+  "inline-flex items-center justify-center border-[3px] border-bg-border font-bold uppercase transition-all duration-100 select-none active:translate-x-1 active:translate-y-1 active:shadow-none text-content-primary";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-yuzu-main hover:bg-yuzu-accent hover:text-white shadow-neo",
-  secondary: "bg-white hover:bg-black hover:text-white shadow-neo",
-  ghost: "bg-transparent hover:bg-black hover:text-white shadow-neo-sm"
+  primary: "bg-accent-primary hover:bg-accent-deep shadow-neo",
+  secondary: "bg-action-primary hover:bg-action-tertiary shadow-neo",
+  ghost: "bg-transparent hover:bg-action-primary shadow-neo-sm"
 };
 
 const sizes: Record<ButtonSize, string> = {
@@ -55,5 +55,3 @@ export function ButtonLink({
 }: ButtonLinkProps) {
   return <a className={getButtonClassName(variant, size, className)} {...props} />;
 }
-
-

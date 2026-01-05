@@ -20,7 +20,7 @@ export function Segmented<T extends string>({
   return (
     <div
       className={cn(
-        "inline-flex items-center border-4 border-black bg-white shadow-neo-sm",
+        "inline-flex items-center border-4 border-bg-border bg-bg-tertiary shadow-neo-sm",
         className
       )}
       role="tablist"
@@ -37,8 +37,8 @@ export function Segmented<T extends string>({
             onClick={() => onChange(opt.value)}
             className={cn(
               "px-5 py-3 text-sm font-black uppercase tracking-wide transition-colors",
-              "border-r-4 border-black last:border-r-0",
-              active ? "bg-black text-yuzu-main" : "bg-white text-black hover:bg-off-white"
+              "border-r-4 border-bg-border last:border-r-0",
+              active ? "bg-action-primary text-accent-primary" : "bg-bg-tertiary text-content-primary hover:bg-action-secondary"
             )}
           >
             {opt.label}
@@ -48,6 +48,3 @@ export function Segmented<T extends string>({
     </div>
   );
 }
-
-
-

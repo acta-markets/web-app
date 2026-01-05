@@ -537,7 +537,7 @@ export function MarketClient({ asset }: { asset: string }) {
               On {formatDate(expiryDate)}
             </div>
             <div className="grid gap-0 md:grid-cols-2">
-              <div className="border-white/10 p-5 md:border-r">
+              <div className="outcome-positive border-white/10 p-5 md:border-r">
                 <div className="text-xs font-semibold text-white/60">
                   If spot {type === "call" ? "below" : "below"} {formatUsdSmart(selectedPrice)}
                 </div>
@@ -555,7 +555,7 @@ export function MarketClient({ asset }: { asset: string }) {
                 </div>
               </div>
 
-              <div className="p-5">
+              <div className="outcome-negative p-5">
                 <div className="text-xs font-semibold text-white/60">
                   If spot {type === "call" ? "above" : "above"} {formatUsdSmart(selectedPrice)}
                 </div>

@@ -4,12 +4,12 @@ export function Hero() {
   return (
     <header className="relative flex min-h-[calc(100vh-72px)] flex-col items-center justify-center px-6 pb-12 pt-16 text-center">
       <div className="relative z-10 w-full max-w-3xl">
-        <h1 className="glitch-header cursor-default text-5xl font-semibold leading-[0.95] tracking-tight text-white md:text-7xl">
-          OPTIONS MADE 
-          <span className="text-yuzu-main"> RIGHT</span>
+        <h1 className="glitch-header cursor-default text-5xl font-semibold leading-[0.95] tracking-tight text-content-primary md:text-7xl">
+          OPTIONS MADE
+          <span className="text-accent-primary"> RIGHT</span>
         </h1>
 
-        <p className="mx-auto mt-6 max-w-2xl text-sm font-semibold text-white/65 md:text-base">
+        <p className="mx-auto mt-6 max-w-2xl text-sm font-semibold text-content-secondary md:text-base">
           Earn upfront yield with up to 180% APY. <br />
           Trustless settlement with zero liquidation risk.
         </p>
@@ -26,5 +26,3 @@ export function Hero() {
     </header>
   );
 }
-
-

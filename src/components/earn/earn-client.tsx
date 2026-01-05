@@ -48,12 +48,12 @@ export function EarnClient() {
       <header className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-start">
         <div className="space-y-3">
           <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">Earn</h1>
-          <p className="max-w-2xl text-sm text-black/60 dark:text-white/60">
+          <p className="max-w-2xl text-sm text-content-secondary">
             Get instant yield on your assets.{" "}
             <button
               type="button"
               onClick={() => setHowOpen(true)}
-              className="font-semibold text-yuzu-main hover:underline underline-offset-4"
+              className="font-semibold text-accent-primary hover:underline underline-offset-4"
             >
               How it works
             </button>
@@ -69,19 +69,19 @@ export function EarnClient() {
             <AppCard
               className={[
                 "p-5 transition-all",
-                "hover:-translate-y-0.5 hover:shadow-md dark:hover:shadow-black/30",
+                "hover:-translate-y-0.5 hover:shadow-md",
                 type === "call"
-                  ? "border-yuzu-main/60 bg-yuzu-main/10 ring-2 ring-yuzu-main/50"
-                  : "border-white/10 bg-black/20 ring-0 hover:bg-white/5"
+                  ? "!border-yuzu-main/60 !bg-yuzu-main/10"
+                  : "hover:bg-white/10"
               ].join(" ")}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2 text-base font-semibold">
-                    <span className="text-yuzu-main">📈</span>
+                    <span className="text-accent-primary">📈</span>
                     Calls
                   </div>
-                  <div className="mt-2 text-sm text-white/60">
+                  <div className="mt-2 text-sm text-content-secondary">
                     Deposit the asset and earn premium. If spot finishes above your selected price, you
                     sell there, otherwise you keep your asset
                   </div>
@@ -98,19 +98,19 @@ export function EarnClient() {
             <AppCard
               className={[
                 "p-5 transition-all",
-                "hover:-translate-y-0.5 hover:shadow-md dark:hover:shadow-black/30",
+                "hover:-translate-y-0.5 hover:shadow-md",
                 type === "csp"
-                  ? "border-yuzu-main/60 bg-yuzu-main/10 ring-2 ring-yuzu-main/50"
-                  : "border-white/10 bg-black/20 ring-0 hover:bg-white/5"
+                  ? "!border-yuzu-main/60 !bg-yuzu-main/10"
+                  : "hover:bg-white/10"
               ].join(" ")}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2 text-base font-semibold">
-                    <span className="text-yuzu-main">📉</span>
+                    <span className="text-accent-primary">📉</span>
                     Puts
                   </div>
-                  <div className="mt-2 text-sm text-white/60">
+                  <div className="mt-2 text-sm text-content-secondary">
                     Deposit USDC and earn premium. If spot finishes below your selected price, you buy
                     the asset there, otherwise you keep your USDC
                   </div>
@@ -122,44 +122,44 @@ export function EarnClient() {
       </header>
 
       <AppModal open={howOpen} onClose={() => setHowOpen(false)} title="Acta Earn">
-        <div className="space-y-3 text-sm text-white/80">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <div className="text-sm font-semibold text-white">1) Choose strategy</div>
-            <div className="mt-2 text-white/70">
-              Pick <span className="font-semibold text-yuzu-main">📈 Calls</span> or{" "}
-              <span className="font-semibold text-yuzu-main">📉 Puts</span>.
+        <div className="space-y-3 text-sm text-content-secondary">
+          <div className="rounded-xl bg-action-primary/10 p-4">
+            <div className="text-sm font-semibold text-content-primary">1) Choose strategy</div>
+            <div className="mt-2 text-content-secondary">
+              Pick <span className="font-semibold text-accent-primary">📈 Calls</span> or{" "}
+              <span className="font-semibold text-accent-primary">📉 Puts</span>.
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <div className="text-sm font-semibold text-white">2) Pick a market</div>
-            <div className="mt-2 text-white/70">
-              Choose an asset (e.g. JLP, jitoSOL, zBTC) and pick the expiry and price you’re comfortable with.
+          <div className="rounded-xl bg-action-primary/10 p-4">
+            <div className="text-sm font-semibold text-content-primary">2) Pick a market</div>
+            <div className="mt-2 text-content-secondary">
+              Choose an asset (e.g. JLP, jitoSOL, zBTC) and pick the expiry and price you&apos;re comfortable with.
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <div className="text-sm font-semibold text-white">3) Deposit</div>
-            <div className="mt-2 text-white/70">
+          <div className="rounded-xl bg-action-primary/10 p-4">
+            <div className="text-sm font-semibold text-content-primary">3) Deposit</div>
+            <div className="mt-2 text-content-secondary">
               Deposit collateral (asset for calls, USDC for puts). You earn upfront premium right after deposit.
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <div className="text-sm font-semibold text-white">4) Settlement at expiry</div>
-            <div className="mt-2 text-white/70">
+          <div className="rounded-xl bg-action-primary/10 p-4">
+            <div className="text-sm font-semibold text-content-primary">4) Settlement at expiry</div>
+            <div className="mt-2 text-content-secondary">
               <ul className="list-disc space-y-1 pl-5">
                 <li>
-                  <span className="font-semibold text-white">Calls</span>: if spot &gt; your price, your asset is sold at that price (you receive USDC). Otherwise, you keep the asset.
+                  <span className="font-semibold text-content-primary">Calls</span>: if spot &gt; your price, your asset is sold at that price (you receive USDC). Otherwise, you keep the asset.
                 </li>
                 <li>
-                  <span className="font-semibold text-white">Puts</span>: if spot &lt; your price, your USDC buys the asset at that price. Otherwise, you keep the USDC.
+                  <span className="font-semibold text-content-primary">Puts</span>: if spot &lt; your price, your USDC buys the asset at that price. Otherwise, you keep the USDC.
                 </li>
               </ul>
             </div>
           </div>
 
-          <div className="text-xs text-white/50">
+          <div className="text-xs text-content-tertiary">
             Note: This is a UI prototype; final mechanics (fees/oracles/settlement) will be documented.
           </div>
         </div>
@@ -167,7 +167,7 @@ export function EarnClient() {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-black/70 dark:text-white/70">Popular</div>
+          <div className="text-sm font-semibold text-content-secondary">Popular</div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -178,7 +178,7 @@ export function EarnClient() {
               className="group block"
             >
               <AppCard
-                className="relative overflow-hidden p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:hover:shadow-black/30"
+                className="relative overflow-hidden p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 style={
                   {
                     ["--brand-a" as any]: getTokenBrand(m.asset).a,
@@ -205,7 +205,7 @@ export function EarnClient() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div
-                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-black/10 bg-white/60 p-1 dark:border-white/10 dark:bg-black/30"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-action-primary/60 p-1"
                       style={{
                         boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.04)"
                       }}
@@ -223,20 +223,20 @@ export function EarnClient() {
                   </div>
                 </div>
 
-                <div className="mt-4 text-sm text-black/60 dark:text-white/60">
+                <div className="mt-4 text-sm text-content-secondary">
                   APR range
                 </div>
                 <div className="mt-1 text-2xl font-semibold">
                   {formatPct(m.minApr)}–{formatPct(m.maxApr)}
                 </div>
 
-                <div className="mt-4 text-xs text-black/50 dark:text-white/50">
+                <div className="mt-4 text-xs text-content-tertiary">
                   Cap filled:{" "}
-                  <span className="font-semibold text-black/70 dark:text-white/70">
+                  <span className="font-semibold text-content-secondary">
                     {formatPct(m.capFilledPct)}
                   </span>
                 </div>
-                <div className="mt-2 h-2 w-full rounded-full bg-black/5 dark:bg-white/10">
+                <div className="mt-2 h-2 w-full rounded-full bg-action-primary/20">
                   <div
                     className="h-2 rounded-full"
                     style={{
@@ -256,12 +256,12 @@ export function EarnClient() {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-black/70 dark:text-white/70">All markets</div>
+          <div className="text-sm font-semibold text-content-secondary">All markets</div>
         </div>
 
-        <AppTable>
+        <AppTable className="border border-white/10 bg-white/5">
           <thead>
-            <tr className="border-b border-black/10">
+            <tr className="border-b border-white/10">
               <AppTh>Asset</AppTh>
               <AppTh>Type</AppTh>
               <AppTh className="text-right">
@@ -277,7 +277,7 @@ export function EarnClient() {
                   }
                 >
                   Min APR
-                  <span className="inline-flex w-4 justify-end text-black/40 dark:text-white/40">
+                  <span className="inline-flex w-4 justify-end text-content-tertiary">
                     {sort?.key === "minApr" ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}
                   </span>
                 </button>
@@ -295,7 +295,7 @@ export function EarnClient() {
                   }
                 >
                   Max APR
-                  <span className="inline-flex w-4 justify-end text-black/40 dark:text-white/40">
+                  <span className="inline-flex w-4 justify-end text-content-tertiary">
                     {sort?.key === "maxApr" ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}
                   </span>
                 </button>
@@ -310,7 +310,7 @@ export function EarnClient() {
               return (
               <tr
                 key={`${m.asset}:${m.type}`}
-                className="cursor-pointer border-b border-black/5 hover:bg-yuzu-main/10 dark:border-white/10 dark:hover:bg-yuzu-main/10 last:border-b-0"
+                className="cursor-pointer border-b border-white/5 last:border-b-0 hover:bg-yuzu-main/15"
                 role="link"
                 tabIndex={0}
                 onClick={() => router.push(href)}
@@ -321,16 +321,16 @@ export function EarnClient() {
                   }
                 }}
               >
-                <AppTd className="font-semibold text-black">{m.asset}</AppTd>
+                <AppTd className="font-semibold text-content-primary">{m.asset}</AppTd>
                 <AppTd>
-                  <span className="text-sm font-semibold text-black/70 dark:text-white/70">
+                  <span className="text-sm font-semibold text-content-secondary">
                     {typeShort(m.type)}
                   </span>
                 </AppTd>
                 <AppTd className="text-right">{formatPct(m.minApr)}</AppTd>
                 <AppTd className="text-right">{formatPct(m.maxApr)}</AppTd>
                 <AppTd className="text-right">{formatPct(m.capFilledPct)}</AppTd>
-                <AppTd className="text-right text-yuzu-main">→</AppTd>
+                <AppTd className="text-right text-content-tertiary">→</AppTd>
               </tr>
             )})}
           </tbody>
@@ -339,5 +339,3 @@ export function EarnClient() {
     </div>
   );
 }
-
-

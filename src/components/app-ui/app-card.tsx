@@ -8,12 +8,10 @@ export function AppCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-black/10 bg-white/80 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-white/10 dark:bg-black/40 dark:supports-[backdrop-filter]:bg-black/30",
+        "rounded-2xl border border-white/10 bg-white/5 shadow-sm backdrop-blur",
         className
       )}
       {...props}
     />
   );
 }
-
-
