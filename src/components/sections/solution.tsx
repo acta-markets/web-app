@@ -63,7 +63,7 @@ export function Solution() {
               </div>
               <div className="my-2 flex justify-center text-2xl font-semibold text-content-tertiary">↓</div>
               <div className="flex items-end justify-between rounded-xl border border-accent-primary/40 bg-accent-primary/15 p-4 text-content-primary">
-                <span className="font-semibold">ACTA jitoSOL</span>
+                <span className="font-semibold">Acta jitoSOL</span>
                 <span className="text-xl font-semibold">UP TO 180% APY</span>
               </div>
             </AppCard>

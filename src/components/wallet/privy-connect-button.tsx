@@ -67,7 +67,7 @@ export function PrivyConnectButton() {
     return (
       <AppButton
         type="button"
-        variant="secondary"
+        variant="primary"
         onClick={() => connectWallet({ walletChainType: "solana-only" })}
         disabled={disabled}
         title={disabledTitle}

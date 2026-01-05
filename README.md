@@ -1,6 +1,6 @@
 # Acta Web (Next.js + Tailwind)
 
-This repo ports the original `index.html` landing page into a **Next.js (App Router) + Tailwind + TypeScript** project and extracts a small **design system** out of the repeated neobrutalist patterns.
+This repo ports the original `index.html` landing page into a **Next.js (App Router) + Tailwind + TypeScript** project and extracts a small **design system** out of the repeated design patterns.
 
 ## Run locally
 

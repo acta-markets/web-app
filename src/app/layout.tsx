@@ -17,9 +17,12 @@ const syne = Syne({
 });
 
 export const metadata: Metadata = {
-  title: "Acta | Neobrutalist DeFi",
+  title: {
+    default: "Acta",
+    template: "%s | Acta"
+  },
   description:
-    "Upfront premiums with up to 180% APY. Trustless settlement with zero liquidation risk."
+    "Earn upfront yield with up to 180% APY. Trustless on-chain options with zero liquidation risk."
 };
 
 export default function RootLayout({

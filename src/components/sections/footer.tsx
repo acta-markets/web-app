@@ -25,7 +25,7 @@ export function Footer() {
             ))}
           </nav>
           <div className="text-xs text-content-tertiary">
-            © 2026 ACTA
+            © 2026 Acta
           </div>
         </div>
       </Container>

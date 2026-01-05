@@ -39,7 +39,7 @@ export function AppModal({
 
       <div
         className={cn(
-          "relative w-full max-w-2xl rounded-2xl bg-bg-secondary/70 p-6 shadow-2xl backdrop-blur",
+          "relative w-full max-w-2xl rounded-2xl border border-bg-border bg-bg-secondary p-6 shadow-2xl",
           "text-content-primary"
         )}
       >

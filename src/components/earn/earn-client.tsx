@@ -122,33 +122,33 @@ export function EarnClient() {
       </header>
 
       <AppModal open={howOpen} onClose={() => setHowOpen(false)} title="Acta Earn">
-        <div className="space-y-3 text-sm text-content-secondary">
-          <div className="rounded-xl bg-action-primary/10 p-4">
-            <div className="text-sm font-semibold text-content-primary">1) Choose strategy</div>
-            <div className="mt-2 text-content-secondary">
+        <div className="space-y-3 text-[15px]">
+          <div className="rounded-xl border border-bg-border bg-action-primary/30 p-4">
+            <div className="font-semibold text-content-primary">1) Choose strategy</div>
+            <div className="mt-2 text-content-primary/80">
               Pick <span className="font-semibold text-accent-primary">📈 Calls</span> or{" "}
               <span className="font-semibold text-accent-primary">📉 Puts</span>.
             </div>
           </div>
 
-          <div className="rounded-xl bg-action-primary/10 p-4">
-            <div className="text-sm font-semibold text-content-primary">2) Pick a market</div>
-            <div className="mt-2 text-content-secondary">
+          <div className="rounded-xl border border-bg-border bg-action-primary/30 p-4">
+            <div className="font-semibold text-content-primary">2) Pick a market</div>
+            <div className="mt-2 text-content-primary/80">
               Choose an asset (e.g. JLP, jitoSOL, zBTC) and pick the expiry and price you&apos;re comfortable with.
             </div>
           </div>
 
-          <div className="rounded-xl bg-action-primary/10 p-4">
-            <div className="text-sm font-semibold text-content-primary">3) Deposit</div>
-            <div className="mt-2 text-content-secondary">
+          <div className="rounded-xl border border-bg-border bg-action-primary/30 p-4">
+            <div className="font-semibold text-content-primary">3) Deposit</div>
+            <div className="mt-2 text-content-primary/80">
               Deposit collateral (asset for calls, USDC for puts). You earn upfront premium right after deposit.
             </div>
           </div>
 
-          <div className="rounded-xl bg-action-primary/10 p-4">
-            <div className="text-sm font-semibold text-content-primary">4) Settlement at expiry</div>
-            <div className="mt-2 text-content-secondary">
-              <ul className="list-disc space-y-1 pl-5">
+          <div className="rounded-xl border border-bg-border bg-action-primary/30 p-4">
+            <div className="font-semibold text-content-primary">4) Settlement at expiry</div>
+            <div className="mt-2 text-content-primary/80">
+              <ul className="list-disc space-y-2 pl-5">
                 <li>
                   <span className="font-semibold text-content-primary">Calls</span>: if spot &gt; your price, your asset is sold at that price (you receive USDC). Otherwise, you keep the asset.
                 </li>
@@ -159,7 +159,7 @@ export function EarnClient() {
             </div>
           </div>
 
-          <div className="text-xs text-content-tertiary">
+          <div className="text-sm text-content-secondary">
             Note: This is a UI prototype; final mechanics (fees/oracles/settlement) will be documented.
           </div>
         </div>
