@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
-import { PrivyConnectButton } from "@/components/wallet/privy-connect-button";
+import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 
 export function AppNav() {
   const pathname = usePathname();
@@ -49,7 +49,7 @@ export function AppNav() {
             className="bg-action-primary/40"
           />
         </div>
-        <PrivyConnectButton />
+        <SolanaConnectButton />
       </div>
     </nav>
   );

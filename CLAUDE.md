@@ -9,6 +9,8 @@ npm run dev      # Start development server
 npm run build    # Production build
 npm run start    # Start production server
 npm run lint     # Run ESLint
+npm test         # Run tests
+npm run test:watch  # Run tests in watch mode
 ```
 
 ## Environment Setup
@@ -19,6 +21,8 @@ MONGODB_URI="<connection_string>"
 MONGODB_DB="yuzu"
 NEXT_PUBLIC_PRIVY_APP_ID="<privy_app_id>"
 NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
+NEXT_PUBLIC_RFQ_WS_URL="ws://78.46.77.51:8080"  # RFQ infrastructure WebSocket
+NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "devnet" - controls token mints
 ```
 
 ## Architecture
@@ -29,7 +33,10 @@ NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
 
 **Middleware** (`middleware.ts`) gates app routes based on `NEXT_PUBLIC_APP_ENABLED`. When disabled, app routes redirect to landing but `/api/whitelist` remains accessible.
 
-**Auth**: Privy (`@privy-io/react-auth`) wraps the `(app)` layout via `PrivyAppProvider`.
+**Wallet**: Solana Wallet Standard via `@wallet-standard/react`:
+- `src/components/solana/solana-wallet-provider.tsx` - Wallet context provider
+- `src/components/solana/solana-connect-button.tsx` - Connect button component
+- Supports Phantom, Solflare, and other Wallet Standard wallets
 
 **Price Feeds**: Pyth Network oracle integration:
 - `src/lib/pyth-ids.ts` - Price feed IDs for supported assets
@@ -38,7 +45,20 @@ NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
 
 **Markets**: Static market definitions in `src/lib/markets.ts` with call/CSP (cash-secured put) types, APR ranges, and price options.
 
+**Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
+- Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)
+- Pyth price feed IDs
+- Token metadata (decimals, logos)
+- Helper functions: `getToken()`, `getTokenMint()`, `getTokenLogo()`, `getTokenPythId()`
+
 **Database**: MongoDB via `src/lib/mongodb.ts` with global connection caching for dev HMR.
+
+**RFQ Infrastructure**: WebSocket client using `yuzu-ts-sdk@0.0.8-beta`:
+- `src/lib/rfq-client.ts` - Thin wrapper around SDK's `YuzuWsClient`
+- `src/lib/use-rfq.ts` - React hook for component integration
+- Connects via `NEXT_PUBLIC_RFQ_WS_URL` env variable
+- Auth flow: `connectAnonymous()` → user clicks connect → `authenticate(walletAuthProvider)`
+- Challenge is human-readable text signed as UTF-8 bytes
 
 ## Key Conventions
 
