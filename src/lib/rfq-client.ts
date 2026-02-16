@@ -1,7 +1,7 @@
 /**
- * RFQ Client - Thin wrapper around yuzu-ts-sdk
+ * RFQ Client - Thin wrapper around @acta-markets/ts-sdk
  *
- * Uses the official SDK (0.0.8-beta) for WebSocket communication with the RFQ server.
+ * Uses the official SDK for WebSocket communication with the RFQ server.
  * 
  * Auth flow:
  * 1. Server sends `AuthRequest { challenge: <human-readable text> }`
@@ -10,23 +10,23 @@
  */
 
 // Re-export SDK client and types
-export { YuzuClient } from "yuzu-ts-sdk";
-export { 
-  YuzuWsClient, 
+export { ActaClient } from "@acta-markets/ts-sdk";
+export {
+  ActaWsClient,
   WalletAuthProvider,
   type WalletLike,
   type ConnectionState,
-  type YuzuWsClientOptions,
-} from "yuzu-ts-sdk/ws";
+  type ActaWsClientOptions,
+} from "@acta-markets/ts-sdk/ws";
 
 export type { 
   MarketInfo, 
   PositionInfo, 
   QuoteReceivedMessage,
   IndicativePricesMessage,
-} from "yuzu-ts-sdk/ws";
+} from "@acta-markets/ts-sdk/ws";
 
-import { YuzuWsClient, WalletAuthProvider, type WalletLike } from "yuzu-ts-sdk/ws";
+import { ActaWsClient, WalletAuthProvider, type WalletLike } from "@acta-markets/ts-sdk/ws";
 
 // ============================================================================
 // Configuration
@@ -39,21 +39,98 @@ export interface CreateClientOptions {
   debug?: boolean;
 }
 
+function createRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function patchQueryMessagesForServer(client: ActaWsClient): void {
+  const c = client as unknown as {
+    send: (message: unknown) => void;
+    getMarkets: () => void;
+    getPositions: () => void;
+    getMyActiveRfqs: () => void;
+    getOrderStatus: (orderIdHex: string) => void;
+    getMarketDescriptors: (args?: { active_only?: boolean }) => void;
+    getExpiries: (args?: {
+      underlying_mint?: string;
+      quote_mint?: string;
+      is_put?: boolean | null;
+    }) => void;
+    getTokens: (args?: { active_only?: boolean }) => void;
+    getIndicativePrices: (req: { market: string; position_type: "covered_call" | "cash_secured_put" }) => void;
+  };
+
+  // Server on oracle-update branch requires `request_id` in query-style messages.
+  c.getMarkets = () => {
+    c.send({ type: "GetMarkets", data: { request_id: createRequestId() } });
+  };
+  c.getPositions = () => {
+    c.send({ type: "GetPositions", data: { request_id: createRequestId() } });
+  };
+  c.getMyActiveRfqs = () => {
+    c.send({ type: "GetMyActiveRfqs", data: { request_id: createRequestId() } });
+  };
+  c.getOrderStatus = (orderIdHex: string) => {
+    c.send({
+      type: "GetOrderStatus",
+      data: { request_id: createRequestId(), order_id: orderIdHex },
+    });
+  };
+  c.getMarketDescriptors = (args?: { active_only?: boolean }) => {
+    c.send({
+      type: "GetMarketDescriptors",
+      data: { request_id: createRequestId(), active_only: args?.active_only ?? true },
+    });
+  };
+  c.getExpiries = (args?: {
+    underlying_mint?: string;
+    quote_mint?: string;
+    is_put?: boolean | null;
+  }) => {
+    c.send({
+      type: "GetExpiries",
+      data: {
+        request_id: createRequestId(),
+        underlying_mint: args?.underlying_mint,
+        quote_mint: args?.quote_mint,
+        is_put: args?.is_put ?? null,
+      },
+    });
+  };
+  c.getTokens = (args?: { active_only?: boolean }) => {
+    c.send({
+      type: "GetTokens",
+      data: { request_id: createRequestId(), active_only: args?.active_only ?? true },
+    });
+  };
+  c.getIndicativePrices = (req: { market: string; position_type: "covered_call" | "cash_secured_put" }) => {
+    c.send({
+      type: "GetIndicativePrices",
+      data: { request_id: createRequestId(), ...req },
+    });
+  };
+}
+
 // ============================================================================
 // Factory function for creating client
 // ============================================================================
 
-export function createRfqClient(options?: CreateClientOptions): YuzuWsClient {
+export function createRfqClient(options?: CreateClientOptions): ActaWsClient {
   const url = options?.url || RFQ_WS_URL;
-  console.log("[RFQ] Creating YuzuWsClient with URL:", url);
+  console.log("[RFQ] Creating ActaWsClient with URL:", url);
   console.log("[RFQ] Options:", { role: "taker", autoReconnect: true, debug: true });
   
-  const client = new YuzuWsClient({
+  const client = new ActaWsClient({
     url, 
     role: "taker",
     autoReconnect: true,
     debug: true,
   });
+
+  patchQueryMessagesForServer(client);
   
   console.log("[RFQ] Client created:", client);
   return client;
@@ -77,16 +154,23 @@ export function createWalletAuthProvider(wallet: WalletAdapter): WalletAuthProvi
     signMessage: async (message: Uint8Array): Promise<Uint8Array> => {
       console.log("[WalletAuthProvider] Signing message:");
       console.log("  Length:", message.length, "bytes");
-      
-      // The SDK now sends human-readable text challenges
+      const mutableMessage = new Uint8Array(message);
+      let challengeText: string | null = null;
+
+      // The SDK sends human-readable challenge text as UTF-8.
       try {
-        const text = new TextDecoder().decode(message);
-        console.log("  Challenge text:", text.slice(0, 200));
+        challengeText = new TextDecoder().decode(mutableMessage);
+        console.log("  Challenge text:", challengeText.slice(0, 200));
       } catch {
         console.log("  (raw bytes, not UTF-8)");
       }
-      
-      return wallet.signMessage(message);
+
+      // Prevent blank/invalid wallet popups when challenge is empty.
+      if (challengeText != null && challengeText.trim().length === 0) {
+        throw new Error("RFQ auth challenge is empty. Please retry in a few seconds.");
+      }
+
+      return wallet.signMessage(mutableMessage);
     },
   };
   
@@ -97,9 +181,9 @@ export function createWalletAuthProvider(wallet: WalletAdapter): WalletAuthProvi
 // Singleton instance (optional, for simple use cases)
 // ============================================================================
 
-let clientInstance: YuzuWsClient | null = null;
+let clientInstance: ActaWsClient | null = null;
 
-export function getRfqClient(): YuzuWsClient {
+export function getRfqClient(): ActaWsClient {
   if (!clientInstance) {
     clientInstance = createRfqClient();
   }

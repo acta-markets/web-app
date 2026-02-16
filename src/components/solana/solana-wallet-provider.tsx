@@ -225,13 +225,39 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     if (!account) {
       throw new Error("Account not found in wallet");
     }
+
+    // Some wallet implementations require a mutable message buffer.
+    const mutableMessage = new Uint8Array(message);
     
-    console.log("[SolanaProvider] Calling signMessage...");
+    const isPhantomWallet = selectedWallet.name.toLowerCase().includes("phantom");
+    if (isPhantomWallet && typeof window !== "undefined") {
+      const maybeWindow = window as unknown as {
+        phantom?: { solana?: { signMessage?: (msg: Uint8Array, display?: string) => Promise<{ signature: Uint8Array } | Uint8Array> } };
+        solana?: { isPhantom?: boolean; signMessage?: (msg: Uint8Array, display?: string) => Promise<{ signature: Uint8Array } | Uint8Array> };
+      };
+      const phantomProvider =
+        maybeWindow.phantom?.solana ??
+        (maybeWindow.solana?.isPhantom ? maybeWindow.solana : undefined);
+
+      if (phantomProvider?.signMessage) {
+        try {
+          console.log("[SolanaProvider] Using Phantom injected signMessage...");
+          const signed = await phantomProvider.signMessage(mutableMessage, "utf8");
+          const signature = signed instanceof Uint8Array ? signed : signed.signature;
+          console.log("[SolanaProvider] Got Phantom signature, length:", signature.length);
+          return signature;
+        } catch (err) {
+          console.warn("[SolanaProvider] Phantom injected signMessage failed, falling back to Wallet Standard:", err);
+        }
+      }
+    }
+
+    console.log("[SolanaProvider] Calling Wallet Standard signMessage...");
     const results = await signMessageFeature.signMessage({
       account,
-      message,
+      message: mutableMessage,
     });
-    
+
     console.log("[SolanaProvider] Got signature, length:", results[0].signature.length);
     return results[0].signature;
   }, [selectedWallet, selectedAccount]);
@@ -269,12 +295,34 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
       throw new Error("Account not found in wallet");
     }
     
+    const isPhantomWallet = selectedWallet.name.toLowerCase().includes("phantom");
+    if (isPhantomWallet && typeof window !== "undefined") {
+      const maybeWindow = window as unknown as {
+        phantom?: { solana?: { signTransaction?: (tx: unknown) => Promise<unknown> } };
+        solana?: { isPhantom?: boolean; signTransaction?: (tx: unknown) => Promise<unknown> };
+      };
+      const phantomProvider =
+        maybeWindow.phantom?.solana ??
+        (maybeWindow.solana?.isPhantom ? maybeWindow.solana : undefined);
+
+      if (phantomProvider?.signTransaction) {
+        try {
+          console.log("[SolanaProvider] Using Phantom injected signTransaction...");
+          const signedTx = await phantomProvider.signTransaction(transaction as unknown);
+          console.log("[SolanaProvider] Phantom signTransaction succeeded");
+          return signedTx as T;
+        } catch (err) {
+          console.warn("[SolanaProvider] Phantom injected signTransaction failed, falling back to Wallet Standard:", err);
+        }
+      }
+    }
+
     // Serialize the transaction to bytes
     const serializedTx = transaction.serialize();
     console.log("[SolanaProvider] Transaction bytes length:", serializedTx.length);
     
-    // Call signTransaction with the serialized transaction
-    console.log("[SolanaProvider] Calling signTransaction...");
+    // Wallet Standard fallback
+    console.log("[SolanaProvider] Calling Wallet Standard signTransaction...");
     const results = await signTransactionFeature.signTransaction({
       account,
       transaction: serializedTx,

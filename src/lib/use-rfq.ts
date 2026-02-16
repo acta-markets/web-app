@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Address } from "@solana/addresses";
 import {
-  YuzuWsClient,
+  ActaWsClient,
   createRfqClient,
   createWalletAuthProvider,
   type MarketInfo,
@@ -63,11 +63,46 @@ interface UseRfqReturn {
   /** Submit signed transaction */
   submitSignedTx: (orderIdHex: string, txBase64: string) => void;
   /** Get the underlying client */
-  getClient: () => YuzuWsClient | null;
+  getClient: () => ActaWsClient | null;
+}
+
+function clearPendingAuthState(client: ActaWsClient) {
+  const internal = client as unknown as {
+    authRequested?: boolean;
+    authProvider?: unknown;
+    startAuthSent?: boolean;
+  };
+  internal.authRequested = false;
+  internal.authProvider = null;
+  internal.startAuthSent = false;
+}
+
+function isAuthFailureMessage(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes("user rejected") || lower.includes("auth timeout");
+}
+
+function isRecoverableRfqBusinessError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("quote_not_found") ||
+    lower.includes("quote_expired") ||
+    lower.includes("quote_refresh_required") ||
+    lower.includes("rfq_expired") ||
+    lower.includes("rfq_closed")
+  );
+}
+
+function resetToAnonymous(client: ActaWsClient) {
+  clearPendingAuthState(client);
+  client.disconnect();
+  window.setTimeout(() => {
+    client.connectAnonymous();
+  }, 250);
 }
 
 export function useRfq(options: UseRfqOptions = {}): UseRfqReturn {
-  const clientRef = useRef<YuzuWsClient | null>(null);
+  const clientRef = useRef<ActaWsClient | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [markets, setMarkets] = useState<MarketInfo[]>([]);
   const [positions, setPositions] = useState<PositionInfo[]>([]);
@@ -110,8 +145,14 @@ export function useRfq(options: UseRfqOptions = {}): UseRfqReturn {
 
     client.on("error", (err) => {
       console.error("[useRfq] Error:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      if (isAuthFailureMessage(message)) {
+        resetToAnonymous(client);
+      }
       setError(err instanceof Error ? err : new Error(String(err)));
-      setConnectionState("error");
+      if (!isRecoverableRfqBusinessError(message)) {
+        setConnectionState("error");
+      }
     });
 
     // Data events
@@ -195,6 +236,10 @@ export function useRfq(options: UseRfqOptions = {}): UseRfqReturn {
         await client.authenticate(authProvider);
       } catch (err) {
         console.error("[useRfq] Authentication failed:", err);
+        const message = err instanceof Error ? err.message : String(err);
+        if (isAuthFailureMessage(message)) {
+          resetToAnonymous(client);
+        }
         setError(err instanceof Error ? err : new Error(String(err)));
         throw err;
       }

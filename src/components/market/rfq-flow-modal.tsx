@@ -11,7 +11,6 @@ type PositionType = "covered_call" | "cash_secured_put";
 
 type FlowStep = 
   | "idle"
-  | "authenticating"
   | "requesting_quote"
   | "quote_received"
   | "accepting_quote"
@@ -64,7 +63,6 @@ export function RfqFlowModal({
     isAuthenticated,
     currentQuote,
     error: rfqError,
-    authenticate,
     submitRfq,
     acceptQuote,
     submitSignedTx,
@@ -74,6 +72,7 @@ export function RfqFlowModal({
   const [step, setStep] = useState<FlowStep>("idle");
   const [error, setError] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteReceivedMessage | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [txSignature, setTxSignature] = useState<string | null>(null);
   const [positionPda, setPositionPda] = useState<string | null>(null);
@@ -84,6 +83,7 @@ export function RfqFlowModal({
       setStep("idle");
       setError(null);
       setQuote(null);
+      setRetryCount(0);
       setOrderId(null);
       setTxSignature(null);
       setPositionPda(null);
@@ -98,17 +98,51 @@ export function RfqFlowModal({
     }
   }, [currentQuote, step]);
 
+  const requestFreshQuote = useCallback(() => {
+    if (!marketPda) {
+      setError("No market available");
+      setStep("failed");
+      return;
+    }
+    setStep("requesting_quote");
+    submitRfq({
+      market: marketPda,
+      positionType,
+      strike,
+      quantity,
+      timeoutSeconds: 30,
+    });
+  }, [marketPda, positionType, strike, quantity, submitRfq]);
+
   // Handle RFQ errors
   useEffect(() => {
-    if (rfqError && step !== "idle" && step !== "confirmed") {
-      setError(rfqError.message);
-      setStep("failed");
+    if (!rfqError || step === "idle" || step === "confirmed") {
+      return;
     }
-  }, [rfqError, step]);
+
+    const message = rfqError.message;
+    const lower = message.toLowerCase();
+    const isRecoverableQuoteError =
+      lower.includes("quote_not_found") ||
+      lower.includes("quote_expired") ||
+      lower.includes("quote_refresh_required");
+
+    if (isRecoverableQuoteError && retryCount < 2) {
+      setRetryCount((c) => c + 1);
+      setQuote(null);
+      setError("Quote expired while accepting. Requesting a fresh quote...");
+      requestFreshQuote();
+      return;
+    }
+
+    setError(message);
+    setStep("failed");
+  }, [rfqError, step, retryCount, requestFreshQuote]);
 
   // Start the flow: authenticate if not already
+  // Authentication is handled outside this modal (after wallet connect).
   const startFlow = useCallback(async () => {
-    if (!walletPublicKey || !signMessage) {
+    if (!walletPublicKey) {
       setError("Please connect your wallet first");
       setStep("failed");
       return;
@@ -126,54 +160,18 @@ export function RfqFlowModal({
       return;
     }
 
-    setError(null);
-    
-    // If already authenticated, skip to requesting quote
-    if (isAuthenticated) {
-      setStep("requesting_quote");
-      const rfqParams = {
-        market: marketPda,
-        positionType,
-        strike,
-        quantity,
-        timeoutSeconds: 30,
-      };
-      console.log("[RFQ] Already authenticated, submitting RFQ:", rfqParams);
-      submitRfq(rfqParams);
+    if (!isAuthenticated) {
+      setError("Wallet is not authenticated with RFQ yet. Please reconnect wallet and approve auth.");
+      setStep("failed");
       return;
     }
-    
-    // Need to authenticate first
-    setStep("authenticating");
-    try {
-      await authenticate(walletPublicKey, signMessage);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed");
-      setStep("failed");
-    }
-  }, [walletPublicKey, signMessage, marketPda, isConnected, isAuthenticated, authenticate, submitRfq, positionType, strike, quantity]);
 
-  // When authenticated, proceed to request quote
-  useEffect(() => {
-    if (isAuthenticated && step === "authenticating") {
-      if (!marketPda) {
-        setError("No market available");
-        setStep("failed");
-        return;
-      }
-      
-      setStep("requesting_quote");
-      const rfqParams = {
-        market: marketPda,
-        positionType,
-        strike,
-        quantity,
-        timeoutSeconds: 30,
-      };
-      console.log("[RFQ] Authenticated, submitting RFQ:", rfqParams);
-      submitRfq(rfqParams);
-    }
-  }, [isAuthenticated, step, marketPda, positionType, strike, quantity, submitRfq]);
+    setError(null);
+
+    setRetryCount(0);
+    console.log("[RFQ] Submitting RFQ");
+    requestFreshQuote();
+  }, [walletPublicKey, marketPda, isConnected, isAuthenticated, requestFreshQuote]);
 
   // Handle accepting quote
   const handleAcceptQuote = useCallback(async () => {
@@ -320,28 +318,23 @@ export function RfqFlowModal({
         {/* Flow Steps */}
         <div className="space-y-3">
           <FlowStepRow
-            label="Authenticate wallet"
-            status={getStepStatus(step, ["authenticating"], [])}
-            isActive={step === "authenticating"}
-          />
-          <FlowStepRow
             label="Request quote from market makers"
-            status={getStepStatus(step, ["requesting_quote"], ["authenticating"])}
+            status={getStepStatus(step, ["requesting_quote"], [])}
             isActive={step === "requesting_quote"}
           />
           <FlowStepRow
             label="Review & accept quote"
-            status={getStepStatus(step, ["quote_received", "accepting_quote"], ["authenticating", "requesting_quote"])}
+            status={getStepStatus(step, ["quote_received", "accepting_quote"], ["requesting_quote"])}
             isActive={step === "quote_received" || step === "accepting_quote"}
           />
           <FlowStepRow
             label="Sign transaction"
-            status={getStepStatus(step, ["signing"], ["authenticating", "requesting_quote", "quote_received", "accepting_quote"])}
+            status={getStepStatus(step, ["signing"], ["requesting_quote", "quote_received", "accepting_quote"])}
             isActive={step === "signing"}
           />
           <FlowStepRow
             label="Submit to blockchain"
-            status={getStepStatus(step, ["submitting", "confirmed"], ["authenticating", "requesting_quote", "quote_received", "accepting_quote", "signing"])}
+            status={getStepStatus(step, ["submitting", "confirmed"], ["requesting_quote", "quote_received", "accepting_quote", "signing"])}
             isActive={step === "submitting"}
           />
         </div>
@@ -425,7 +418,7 @@ export function RfqFlowModal({
             </>
           )}
 
-          {(step === "authenticating" || step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting") && (
+          {(step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting") && (
             <AppButton className="w-full" disabled>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Processing...
@@ -502,7 +495,6 @@ function getStepStatus(
   
   const allStepsOrder: FlowStep[] = [
     "idle",
-    "authenticating",
     "requesting_quote",
     "quote_received",
     "accepting_quote",

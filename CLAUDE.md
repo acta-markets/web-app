@@ -53,8 +53,8 @@ NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "devnet" - controls token m
 
 **Database**: MongoDB via `src/lib/mongodb.ts` with global connection caching for dev HMR.
 
-**RFQ Infrastructure**: WebSocket client using `yuzu-ts-sdk@0.0.8-beta`:
-- `src/lib/rfq-client.ts` - Thin wrapper around SDK's `YuzuWsClient`
+**RFQ Infrastructure**: WebSocket client using `@acta-markets/ts-sdk@0.0.1-beta`:
+- `src/lib/rfq-client.ts` - Thin wrapper around SDK's `ActaWsClient`
 - `src/lib/use-rfq.ts` - React hook for component integration
 - Connects via `NEXT_PUBLIC_RFQ_WS_URL` env variable
 - Auth flow: `connectAnonymous()` → user clicks connect → `authenticate(walletAuthProvider)`

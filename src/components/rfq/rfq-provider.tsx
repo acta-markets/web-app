@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import {
-  YuzuWsClient,
+  ActaWsClient,
   createRfqClient,
   createWalletAuthProvider,
   type MarketInfo,
@@ -50,7 +50,7 @@ interface RfqContextValue {
   /** Submit signed transaction */
   submitSignedTx: (orderIdHex: string, txBase64: string) => void;
   /** Get the underlying client */
-  getClient: () => YuzuWsClient | null;
+  getClient: () => ActaWsClient | null;
 }
 
 const RfqContext = createContext<RfqContextValue | null>(null);
@@ -67,8 +67,44 @@ interface RfqProviderProps {
   children: ReactNode;
 }
 
+function clearPendingAuthState(client: ActaWsClient) {
+  const internal = client as unknown as {
+    authRequested?: boolean;
+    authProvider?: unknown;
+    startAuthSent?: boolean;
+  };
+  internal.authRequested = false;
+  internal.authProvider = null;
+  internal.startAuthSent = false;
+}
+
+function isAuthFailureMessage(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes("user rejected") || lower.includes("auth timeout");
+}
+
+function isRecoverableRfqBusinessError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("quote_not_found") ||
+    lower.includes("quote_expired") ||
+    lower.includes("quote_refresh_required") ||
+    lower.includes("rfq_expired") ||
+    lower.includes("rfq_closed")
+  );
+}
+
+function resetToAnonymous(client: ActaWsClient) {
+  clearPendingAuthState(client);
+  client.disconnect();
+  // Reconnect without auth intent so market data keeps working.
+  window.setTimeout(() => {
+    client.connectAnonymous();
+  }, 250);
+}
+
 export function RfqProvider({ children }: RfqProviderProps) {
-  const clientRef = useRef<YuzuWsClient | null>(null);
+  const clientRef = useRef<ActaWsClient | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [markets, setMarkets] = useState<MarketInfo[]>([]);
   const [positions, setPositions] = useState<PositionInfo[]>([]);
@@ -115,8 +151,16 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
     client.on("error", (err) => {
       console.error("[RfqProvider] Error:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      // Prevent reconnect-auth loops after user rejection/timeouts.
+      if (isAuthFailureMessage(message)) {
+        resetToAnonymous(client);
+      }
       setError(err instanceof Error ? err : new Error(String(err)));
-      setConnectionState("error");
+      // Keep connection state for recoverable business-level RFQ errors.
+      if (!isRecoverableRfqBusinessError(message)) {
+        setConnectionState("error");
+      }
     });
 
     // Data events
@@ -187,6 +231,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
         await client.authenticate(authProvider);
       } catch (err) {
         console.error("[RfqProvider] Authentication failed:", err);
+        const message = err instanceof Error ? err.message : String(err);
+        if (isAuthFailureMessage(message)) {
+          resetToAnonymous(client);
+        }
         setError(err instanceof Error ? err : new Error(String(err)));
         throw err;
       }

@@ -13,7 +13,7 @@ import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getTokenMint } from "@/lib/tokens";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
-import { computeApyFromScaledPrices } from "yuzu-ts-sdk/ws";
+import { computeApyFromScaledPrices } from "@acta-markets/ts-sdk/ws";
 import {
   MARKETS,
   getMarket,
@@ -90,7 +90,14 @@ export function MarketClient({ asset }: { asset: string }) {
   const [rfqModalOpen, setRfqModalOpen] = useState(false);
   
   // Global RFQ context (markets already fetched on app load)
-  const { markets: rfqMarkets, indicativePrices, getIndicativePrices, isConnected: rfqConnected } = useRfqContext();
+  const {
+    markets: rfqMarkets,
+    indicativePrices,
+    getIndicativePrices,
+    isConnected: rfqConnected,
+    isAuthenticated: rfqAuthenticated,
+    authenticate: authenticateRfq,
+  } = useRfqContext();
   
   // Log available RFQ markets
   useEffect(() => {
@@ -179,6 +186,10 @@ export function MarketClient({ asset }: { asset: string }) {
   
   // Wallet address
   const walletAddress = selectedAccount?.address;
+  const pendingRfqAuthWalletRef = useRef<string | null>(null);
+  const authInFlightRef = useRef(false);
+  const authWarmupTimerRef = useRef<number | null>(null);
+  const [authWarmupDone, setAuthWarmupDone] = useState(false);
   
   // Log wallet state changes
   useEffect(() => {
@@ -208,6 +219,60 @@ export function MarketClient({ asset }: { asset: string }) {
       throw err;
     }
   }, [isConnected, selectedAccount, solanaSignMessage]);
+
+  // Trigger RFQ auth after wallet connect (outside modal flow).
+  useEffect(() => {
+    if (!walletAddress) {
+      pendingRfqAuthWalletRef.current = null;
+      setAuthWarmupDone(false);
+      if (authWarmupTimerRef.current != null) {
+        window.clearTimeout(authWarmupTimerRef.current);
+        authWarmupTimerRef.current = null;
+      }
+      return;
+    }
+    pendingRfqAuthWalletRef.current = walletAddress;
+    setAuthWarmupDone(false);
+
+    // Give wallets a short settle window after initial connect before auth signing.
+    if (authWarmupTimerRef.current != null) {
+      window.clearTimeout(authWarmupTimerRef.current);
+    }
+    authWarmupTimerRef.current = window.setTimeout(() => {
+      setAuthWarmupDone(true);
+      authWarmupTimerRef.current = null;
+    }, 900);
+
+    return () => {
+      if (authWarmupTimerRef.current != null) {
+        window.clearTimeout(authWarmupTimerRef.current);
+        authWarmupTimerRef.current = null;
+      }
+    };
+  }, [walletAddress]);
+
+  useEffect(() => {
+    if (!walletAddress || !rfqConnected || rfqAuthenticated || authInFlightRef.current || !authWarmupDone) {
+      return;
+    }
+    if (pendingRfqAuthWalletRef.current !== walletAddress) {
+      return;
+    }
+
+    authInFlightRef.current = true;
+    void authenticateRfq(walletAddress, signMessage)
+      .then(() => {
+        pendingRfqAuthWalletRef.current = null;
+      })
+      .catch((err) => {
+        console.error("[MarketClient] RFQ auth after wallet connect failed:", err);
+        // Stop automatic retries; user can reconnect wallet to re-trigger.
+        pendingRfqAuthWalletRef.current = null;
+      })
+      .finally(() => {
+        authInFlightRef.current = false;
+      });
+  }, [walletAddress, rfqConnected, rfqAuthenticated, authWarmupDone, authenticateRfq, signMessage]);
 
   useEffect(() => {
     // Default: show chart on desktop, hidden on mobile.
