@@ -57,7 +57,7 @@ export const TOKENS: Record<string, TokenConfig> = {
     pythId: "67be9f519b95cf24338801051f9a808eff0a578ccb388db73b7f6fe1de019ffb",
     mint: {
       mainnet: "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
-      devnet: "6iL1DqHbkS2kmL7cdDxL66fcbBpvfi1fkfcyDp6sCd25", // Devnet underlying mint
+      devnet: "So11111111111111111111111111111111111111112", // Devnet underlying mint
     },
   },
   JLP: {

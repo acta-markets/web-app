@@ -114,7 +114,7 @@ export function MarketClient({ asset }: { asset: string }) {
     const isPut = type === "csp"; // CSP = put, call = not put
     const underlyingMint = getTokenMint(market.asset);
     
-    // Try to find matching market by underlying mint and put/call type
+    // Strict match only: underlying mint + put/call type.
     const match = rfqMarkets.find(m => {
       const matchesUnderlying = m.underlying === underlyingMint;
       const matchesType = m.is_put === isPut;
@@ -125,17 +125,14 @@ export function MarketClient({ asset }: { asset: string }) {
       console.log("[MarketClient] Found matching RFQ market:", match);
       return match;
     }
-    
-    // If no exact match, try matching just by put/call type
-    const typeMatch = rfqMarkets.find(m => m.is_put === isPut);
-    if (typeMatch) {
-      console.log("[MarketClient] Found type-matching RFQ market:", typeMatch);
-      return typeMatch;
-    }
-    
-    // If still no match, use first available market for testing
-    console.log("[MarketClient] No match found, using first RFQ market:", rfqMarkets[0]);
-    return rfqMarkets[0];
+
+    console.warn("[MarketClient] No RFQ market matched required underlying+type:", {
+      asset: market.asset,
+      underlyingMint,
+      isPut,
+      availableMarkets: rfqMarkets.length,
+    });
+    return undefined;
   }, [rfqMarkets, type, market]);
   
   const rfqMarketPda = rfqMarket?.pda;
