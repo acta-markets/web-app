@@ -5,11 +5,13 @@ export function AppModal({
   open,
   onClose,
   title,
+  showHowItWorks = true,
   children
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  showHowItWorks?: boolean;
   children: React.ReactNode;
 }) {
   React.useEffect(() => {
@@ -45,7 +47,9 @@ export function AppModal({
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <div className="text-xs font-semibold text-content-tertiary">How it works</div>
+            {showHowItWorks ? (
+              <div className="text-xs font-semibold text-content-tertiary">How it works</div>
+            ) : null}
             <div className="mt-1 text-xl font-semibold">{title}</div>
           </div>
           <button

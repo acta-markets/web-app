@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
-import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
+import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
@@ -13,6 +13,7 @@ import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getTokenMint } from "@/lib/tokens";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
+import type { QuoteReceivedMessage } from "@/lib/rfq-client";
 import { computeApyFromScaledPrices } from "@acta-markets/ts-sdk/ws";
 import {
   MARKETS,
@@ -25,12 +26,6 @@ import {
 type PythLatestResponse =
   | { ok: true; prices: Record<string, { price: number; conf: number; expo: number; publishTime: number }> }
   | { ok: false; error: string };
-
-function addDays(d: Date, days: number) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + days);
-  return x;
-}
 
 function formatDate(d: Date) {
   return d.toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" });
@@ -55,6 +50,7 @@ function formatUsdc(n: number) {
 export function MarketClient({ asset }: { asset: string }) {
   const searchParams = useSearchParams();
   const typeParam = searchParams.get("type");
+  const strikeParam = searchParams.get("strike") ?? searchParams.get("price");
   const type: MarketType = typeParam === "csp" ? "csp" : "call";
 
   const market = useMemo(() => getMarket(asset, type), [asset, type]);
@@ -76,27 +72,39 @@ export function MarketClient({ asset }: { asset: string }) {
     return items;
   }, []);
 
-  const today = useMemo(() => new Date(), []);
-
   const [strikeIdx, setStrikeIdx] = useState<0>(0);
   const [priceIdx, setPriceIdx] = useState(0);
   const [deposit, setDeposit] = useState("");
   const [live, setLive] = useState<{ price: number; publishTime: number } | null>(null);
   const pythId = market?.pythId;
   const [baseSpot, setBaseSpot] = useState<number | null>(null);
-  const spotForHooks = live?.price ?? market?.spotPrice ?? 0;
+  const spotForHooks = live?.price ?? 0;
 
   // RFQ Flow state
   const [rfqModalOpen, setRfqModalOpen] = useState(false);
+  const [rfqRequestNonce, setRfqRequestNonce] = useState(0);
+  const [isRequestingQuote, setIsRequestingQuote] = useState(false);
+  const [isPrefetchingQuote, setIsPrefetchingQuote] = useState(false);
+  const [previewQuote, setPreviewQuote] = useState<QuoteReceivedMessage | null>(null);
+  const [previewQuoteKey, setPreviewQuoteKey] = useState<string | null>(null);
+  const [modalInitialQuote, setModalInitialQuote] = useState<QuoteReceivedMessage | null>(null);
+  const [modalAprPct, setModalAprPct] = useState<number | null>(null);
+  const [modalPremiumUsd, setModalPremiumUsd] = useState<number | null>(null);
+  const [indicativeRequestedKey, setIndicativeRequestedKey] = useState<string | null>(null);
+  const latestPreviewRequestKeyRef = useRef<string | null>(null);
   
   // Global RFQ context (markets already fetched on app load)
   const {
     markets: rfqMarkets,
-    indicativePrices,
+    currentQuote,
+    error: rfqError,
+    submitRfq,
+    clearTransientState,
     getIndicativePrices,
+    getIndicativePricesCached,
     isConnected: rfqConnected,
     isAuthenticated: rfqAuthenticated,
-    authenticate: authenticateRfq,
+    connectionState,
   } = useRfqContext();
   
   // Log available RFQ markets
@@ -112,12 +120,29 @@ export function MarketClient({ asset }: { asset: string }) {
     if (rfqMarkets.length === 0 || !market) return undefined;
     
     const isPut = type === "csp"; // CSP = put, call = not put
-    const underlyingMint = getTokenMint(market.asset);
+    const underlyingMint = (getTokenMint(market.asset) ?? "").trim();
+
+    const normalizeIsPut = (value: unknown): boolean | null => {
+      if (typeof value === "boolean") return value;
+      if (typeof value === "number") return value === 1 ? true : value === 0 ? false : null;
+      if (typeof value === "string") {
+        const v = value.trim().toLowerCase();
+        if (v === "true" || v === "1") return true;
+        if (v === "false" || v === "0") return false;
+      }
+      return null;
+    };
     
     // Strict match only: underlying mint + put/call type.
     const match = rfqMarkets.find(m => {
-      const matchesUnderlying = m.underlying === underlyingMint;
-      const matchesType = m.is_put === isPut;
+      const marketUnderlying = String(
+        (m as unknown as { underlying?: string; underlying_mint?: string }).underlying ??
+        (m as unknown as { underlying?: string; underlying_mint?: string }).underlying_mint ??
+        ""
+      ).trim();
+      const marketIsPut = normalizeIsPut((m as unknown as { is_put?: unknown }).is_put);
+      const matchesUnderlying = marketUnderlying === underlyingMint;
+      const matchesType = marketIsPut === isPut;
       return matchesUnderlying && matchesType;
     });
     
@@ -131,11 +156,45 @@ export function MarketClient({ asset }: { asset: string }) {
       underlyingMint,
       isPut,
       availableMarkets: rfqMarkets.length,
+      candidates: rfqMarkets.map((m) => {
+        const marketUnderlying = String(
+          (m as unknown as { underlying?: string; underlying_mint?: string }).underlying ??
+          (m as unknown as { underlying?: string; underlying_mint?: string }).underlying_mint ??
+          ""
+        ).trim();
+        const marketIsPut = normalizeIsPut((m as unknown as { is_put?: unknown }).is_put);
+        return {
+          pda: (m as unknown as { pda?: string }).pda,
+          underlying: marketUnderlying,
+          is_put: marketIsPut,
+          matchesUnderlying: marketUnderlying === underlyingMint,
+          matchesType: marketIsPut === isPut,
+        };
+      }),
     });
     return undefined;
   }, [rfqMarkets, type, market]);
   
   const rfqMarketPda = rfqMarket?.pda;
+  const positionType = type === "call" ? "covered_call" : "cash_secured_put";
+  const currentIndicativePrices = useMemo(
+    () => (rfqMarketPda ? getIndicativePricesCached(rfqMarketPda, positionType) : null),
+    [rfqMarketPda, positionType, getIndicativePricesCached]
+  );
+  const currentIndicativeKey = rfqMarketPda ? `${rfqMarketPda}:${positionType}` : null;
+  const hasCurrentIndicativePrices = !!(
+    currentIndicativePrices &&
+    currentIndicativePrices.market === rfqMarketPda &&
+    currentIndicativePrices.position_type === positionType &&
+    currentIndicativePrices.strikes &&
+    currentIndicativePrices.strikes.length > 0
+  );
+  const isResolvingRfqMarket = rfqConnected && rfqMarkets.length === 0;
+  const hasRequestedCurrentIndicative =
+    currentIndicativeKey != null && indicativeRequestedKey === currentIndicativeKey;
+  const shouldShowIndicativeLoading =
+    isResolvingRfqMarket ||
+    (!!currentIndicativeKey && (!hasRequestedCurrentIndicative || !hasCurrentIndicativePrices));
   
   // Use expiry from RFQ market data if available, otherwise fallback to default dates
   const expiryFromMarket = useMemo(() => {
@@ -151,42 +210,42 @@ export function MarketClient({ asset }: { asset: string }) {
     return null;
   }, [rfqMarket?.expiry_ts]);
   
-  // Fallback dates if no market expiry
-  const fallbackDates = useMemo(() => [addDays(today, 14), addDays(today, 28)], [today]);
-  
-  // Single expiry date from market, or multiple fallback options
+  // Single expiry date from RFQ market only (no local fallback dates).
   const strikeDates = useMemo(() => {
     if (expiryFromMarket) {
       return [expiryFromMarket];
     }
-    return fallbackDates;
-  }, [expiryFromMarket, fallbackDates]);
+    return [];
+  }, [expiryFromMarket]);
   
   // Fetch indicative prices when we have a market PDA
   useEffect(() => {
     if (rfqConnected && rfqMarketPda) {
-      const positionType = type === "call" ? "covered_call" : "cash_secured_put";
       console.log("[MarketClient] Fetching indicative prices for:", rfqMarketPda, positionType);
+      setIndicativeRequestedKey(`${rfqMarketPda}:${positionType}`);
       getIndicativePrices(rfqMarketPda, positionType);
     }
-  }, [rfqConnected, rfqMarketPda, type, getIndicativePrices]);
+  }, [rfqConnected, rfqMarketPda, positionType, getIndicativePrices]);
+
+  useEffect(() => {
+    if (!currentIndicativeKey) {
+      setIndicativeRequestedKey(null);
+    }
+  }, [currentIndicativeKey]);
   
   // Log indicative prices when received
   useEffect(() => {
-    if (indicativePrices) {
-      console.log("[MarketClient] Indicative prices received:", indicativePrices);
+    if (currentIndicativePrices) {
+      console.log("[MarketClient] Indicative prices received:", currentIndicativePrices);
     }
-  }, [indicativePrices]);
+  }, [currentIndicativePrices]);
   
   // Solana wallet via Wallet Standard
-  const { selectedAccount, isConnected, signMessage: solanaSignMessage, signTransaction: solanaSignTransaction } = useSolana();
+  const { selectedAccount, isConnected, signTransaction: solanaSignTransaction } = useSolana();
+  const { openSidebar } = useWalletSidebar();
   
   // Wallet address
   const walletAddress = selectedAccount?.address;
-  const pendingRfqAuthWalletRef = useRef<string | null>(null);
-  const authInFlightRef = useRef(false);
-  const authWarmupTimerRef = useRef<number | null>(null);
-  const [authWarmupDone, setAuthWarmupDone] = useState(false);
   
   // Log wallet state changes
   useEffect(() => {
@@ -195,81 +254,6 @@ export function MarketClient({ asset }: { asset: string }) {
       address: selectedAccount?.address,
     });
   }, [isConnected, selectedAccount]);
-  
-  // Sign message function using Wallet Standard
-  const signMessage = useCallback(async (message: Uint8Array): Promise<Uint8Array> => {
-    console.log("[signMessage] Called, message length:", message.length);
-    console.log("[signMessage] Wallet connected:", isConnected);
-    console.log("[signMessage] Address:", selectedAccount?.address);
-    
-    if (!isConnected || !selectedAccount) {
-      throw new Error("No wallet connected");
-    }
-    
-    try {
-      console.log("[signMessage] Calling solanaSignMessage...");
-      const signature = await solanaSignMessage(message);
-      console.log("[signMessage] Got signature, length:", signature.length);
-      return signature;
-    } catch (err) {
-      console.error("[signMessage] Error signing message:", err);
-      throw err;
-    }
-  }, [isConnected, selectedAccount, solanaSignMessage]);
-
-  // Trigger RFQ auth after wallet connect (outside modal flow).
-  useEffect(() => {
-    if (!walletAddress) {
-      pendingRfqAuthWalletRef.current = null;
-      setAuthWarmupDone(false);
-      if (authWarmupTimerRef.current != null) {
-        window.clearTimeout(authWarmupTimerRef.current);
-        authWarmupTimerRef.current = null;
-      }
-      return;
-    }
-    pendingRfqAuthWalletRef.current = walletAddress;
-    setAuthWarmupDone(false);
-
-    // Give wallets a short settle window after initial connect before auth signing.
-    if (authWarmupTimerRef.current != null) {
-      window.clearTimeout(authWarmupTimerRef.current);
-    }
-    authWarmupTimerRef.current = window.setTimeout(() => {
-      setAuthWarmupDone(true);
-      authWarmupTimerRef.current = null;
-    }, 900);
-
-    return () => {
-      if (authWarmupTimerRef.current != null) {
-        window.clearTimeout(authWarmupTimerRef.current);
-        authWarmupTimerRef.current = null;
-      }
-    };
-  }, [walletAddress]);
-
-  useEffect(() => {
-    if (!walletAddress || !rfqConnected || rfqAuthenticated || authInFlightRef.current || !authWarmupDone) {
-      return;
-    }
-    if (pendingRfqAuthWalletRef.current !== walletAddress) {
-      return;
-    }
-
-    authInFlightRef.current = true;
-    void authenticateRfq(walletAddress, signMessage)
-      .then(() => {
-        pendingRfqAuthWalletRef.current = null;
-      })
-      .catch((err) => {
-        console.error("[MarketClient] RFQ auth after wallet connect failed:", err);
-        // Stop automatic retries; user can reconnect wallet to re-trigger.
-        pendingRfqAuthWalletRef.current = null;
-      })
-      .finally(() => {
-        authInFlightRef.current = false;
-      });
-  }, [walletAddress, rfqConnected, rfqAuthenticated, authWarmupDone, authenticateRfq, signMessage]);
 
   useEffect(() => {
     // Default: show chart on desktop, hidden on mobile.
@@ -316,7 +300,7 @@ export function MarketClient({ asset }: { asset: string }) {
           setLive({ price: p.price, publishTime: p.publishTime });
         }
       } catch {
-        // ignore; keep last known price or mock fallback
+        // ignore; keep last known live price
       }
     }
 
@@ -354,35 +338,21 @@ export function MarketClient({ asset }: { asset: string }) {
       setBaseSpot(spotForHooks);
       return;
     }
-    // If we started from mock spot and later receive live, update once.
-    if (baseSpot != null && live?.price && baseSpot === (market?.spotPrice ?? baseSpot)) {
+    if (baseSpot != null && live?.price && baseSpot !== live.price) {
       setBaseSpot(live.price);
     }
-  }, [baseSpot, live?.price, market?.spotPrice, spotForHooks]);
-
-  function roundNice(n: number) {
-    const abs = Math.abs(n);
-    let step = 1;
-    if (abs >= 10000) step = 500;
-    else if (abs >= 1000) step = 25;
-    else if (abs >= 100) step = 1;
-    else if (abs >= 1) step = 0.01;
-    else if (abs >= 0.01) step = 0.0001;
-    else step = 0.0000001;
-    return Math.round(n / step) * step;
-  }
+  }, [baseSpot, live?.price, spotForHooks]);
 
   // Price options with APR calculated from indicative prices
   const priceOptionsWithApr = useMemo(() => {
-    const positionType = type === "call" ? "covered_call" : "cash_secured_put";
     const spotPrice = baseSpot ?? spotForHooks ?? 0;
     
     // Calculate seconds to expiry from RFQ market
     const expiryTs = rfqMarket?.expiry_ts ? Number(rfqMarket.expiry_ts) : 0;
-    const secondsToExpiry = expiryTs > 0 ? expiryTs - Math.floor(Date.now() / 1000) : 14 * 24 * 60 * 60; // default 14 days
+    const secondsToExpiry = expiryTs > 0 ? expiryTs - Math.floor(Date.now() / 1000) : 0;
     
     // Use indicative prices strikes if available
-    if (indicativePrices?.strikes && indicativePrices.strikes.length > 0) {
+    if (hasCurrentIndicativePrices && currentIndicativePrices?.strikes) {
       const nowSeconds = Math.floor(Date.now() / 1000);
       const daysToExpiry = secondsToExpiry / (24 * 60 * 60);
       const hoursToExpiry = secondsToExpiry / (60 * 60);
@@ -397,10 +367,10 @@ export function MarketClient({ asset }: { asset: string }) {
         secondsToExpiry,
         hoursToExpiry: hoursToExpiry.toFixed(2) + " hours",
         daysToExpiry: daysToExpiry.toFixed(2) + " days",
-        strikesCount: indicativePrices.strikes.length,
+        strikesCount: currentIndicativePrices.strikes.length,
       });
       
-      const options = indicativePrices.strikes.map(s => {
+      const options = currentIndicativePrices.strikes.map(s => {
         const strike = Number(s.strike) / 1_000_000_000; // Convert to human readable
         const bestPrice = s.best_price ? Number(s.best_price) : null;
         const bestPriceHuman = bestPrice ? bestPrice / 1_000_000_000 : null;
@@ -447,30 +417,16 @@ export function MarketClient({ asset }: { asset: string }) {
       })));
       return sorted;
     }
-    
-    // Fallback: generate from spot price with estimated APRs
-    const s = spotPrice;
-    const count = Math.max(3, market?.priceOptions.length ?? 3);
-    const callMults = count === 4 ? [1.03, 1.06, 1.09, 1.15] : [1.04, 1.08, 1.14];
-    const putMults = count === 4 ? [0.97, 0.94, 0.91, 0.85] : [0.96, 0.92, 0.86];
-    const mults = type === "call" ? callMults : putMults;
-    
-    // Generate fallback with interpolated APRs
-    const maxApr = market?.maxApr ?? 0.35;
-    const minApr = market?.minApr ?? 0.10;
-    
-    const arr = mults.slice(0, count).map((m, i) => {
-      const strike = roundNice(s * m);
-      const t = count <= 1 ? 0 : i / (count - 1);
-      const apr = maxApr - (maxApr - minApr) * t;
-      return { strike, apr, bestPrice: null };
-    });
-    
-    // Sort: calls ascending, puts descending
-    const sorted = [...arr].sort((a, b) => (type === "call" ? a.strike - b.strike : b.strike - a.strike));
-    return sorted;
+    return [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indicativePrices?.strikes, rfqMarket?.expiry_ts, baseSpot, market?.priceOptions.length, market?.maxApr, market?.minApr, spotForHooks, type]);
+  }, [
+    hasCurrentIndicativePrices,
+    currentIndicativePrices?.strikes,
+    rfqMarket?.expiry_ts,
+    baseSpot,
+    spotForHooks,
+    type,
+  ]);
   
   // Extract just the strike prices for backward compatibility
   const priceOptions = useMemo(() => priceOptionsWithApr.map(o => o.strike), [priceOptionsWithApr]);
@@ -480,9 +436,30 @@ export function MarketClient({ asset }: { asset: string }) {
     setPriceIdx((i) => clampNumber(i, 0, priceOptions.length - 1));
   }, [priceOptions.length]);
 
+  useEffect(() => {
+    if (!market || priceOptions.length === 0) return;
+
+    if (strikeParam) {
+      const targetStrike = Number(strikeParam);
+      if (Number.isFinite(targetStrike)) {
+        let bestIdx = 0;
+        let bestDelta = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < priceOptions.length; i += 1) {
+          const delta = Math.abs(priceOptions[i] - targetStrike);
+          if (delta < bestDelta) {
+            bestDelta = delta;
+            bestIdx = i;
+          }
+        }
+        setPriceIdx(bestIdx);
+      }
+    }
+  }, [market, type, priceOptions, strikeParam]);
+
   const selectedPriceIdx = clampNumber(priceIdx, 0, priceOptions.length - 1);
   const selectedPrice = priceOptions[selectedPriceIdx];
   const selectedPriceOption = priceOptionsWithApr[selectedPriceIdx];
+  const hasSelectedPrice = priceOptions.length > 0;
 
   if (!market) {
     return (
@@ -494,33 +471,335 @@ export function MarketClient({ asset }: { asset: string }) {
       </div>
     );
   }
-
   // Calculate term from expiry date
-  const expiryDate = strikeDates[strikeIdx] ?? strikeDates[0];
+  const expiryDate = strikeDates[strikeIdx] ?? strikeDates[0] ?? new Date();
+  const isLiveMarketReady = !!expiryFromMarket && Number.isFinite(selectedPrice);
   const msToExpiry = expiryDate.getTime() - Date.now();
   const hoursToExpiry = Math.max(1, Math.ceil(msToExpiry / (1000 * 60 * 60)));
   const termDays = Math.max(1, Math.ceil(msToExpiry / (1000 * 60 * 60 * 24)));
   const isSameDay = termDays <= 1 || hoursToExpiry < 24;
   const termDisplay = isSameDay ? `${hoursToExpiry} hour${hoursToExpiry !== 1 ? "s" : ""}` : `${termDays} days`;
   const termDisplayShort = isSameDay ? `${hoursToExpiry}h` : `${termDays}d`;
-  const spot = live?.price ?? market.spotPrice;
-
-  // Use calculated APR from indicative prices, or fallback to interpolated APR
-  // Convert from decimal (0.30) to percentage (30) for display
-  const selectedApr = (selectedPriceOption?.apr ?? 0) * 100;
+  const spot = live?.price ?? 0;
 
   const depositNum = Number(deposit);
   const depositOk = Number.isFinite(depositNum) && depositNum > 0;
+  const selectedStrikeLamports = Math.round(selectedPrice * 1_000_000_000);
+  const quantityLamports = Math.round(depositNum * 1_000_000_000);
+  const quoteInputKey =
+    depositOk && hasSelectedPrice && rfqMarketPda && !shouldShowIndicativeLoading
+      ? `${rfqMarketPda}:${positionType}:${selectedStrikeLamports}:${quantityLamports}`
+      : null;
 
   const notionalUsd =
     type === "call" ? (depositOk ? depositNum * spot : 0) : depositOk ? depositNum : 0;
 
-  const estPremiumUsd = notionalUsd * (selectedApr / 100) * (termDays / 365);
+  const hasFreshPreviewQuote =
+    !!previewQuote &&
+    !!quoteInputKey &&
+    previewQuoteKey === quoteInputKey &&
+    Number(previewQuote.strike) === selectedStrikeLamports;
+  const quotePricePerUnitUsd = hasFreshPreviewQuote ? Number(previewQuote.price) / 1_000_000_000 : null;
+  const selectedAprFromQuotePct = useMemo(() => {
+    if (!hasFreshPreviewQuote || !previewQuote) return null;
+    try {
+      const result = computeApyFromScaledPrices({
+        positionType,
+        underlyingAmount: 1,
+        grossPremiumPerUnit1e9: Number(previewQuote.price),
+        strike1e9: selectedStrikeLamports,
+        spotPrice1e9: Math.round(spot * 1_000_000_000),
+        secondsToExpiry: Math.max(1, Math.floor(msToExpiry / 1000)),
+      });
+      return result.apr * 100;
+    } catch {
+      return null;
+    }
+  }, [hasFreshPreviewQuote, previewQuote, positionType, selectedStrikeLamports, spot, msToExpiry]);
+  // Use quote-derived APR when we already have a live quote for current inputs.
+  const selectedApr = selectedAprFromQuotePct ?? (selectedPriceOption?.apr ?? 0) * 100;
+  const displayedPremiumUsd = depositOk
+    ? quotePricePerUnitUsd != null
+      ? quotePricePerUnitUsd * depositNum
+      : notionalUsd * (selectedApr / 100) * (termDays / 365)
+    : 0;
+  const isRfqAuthPending =
+    !!walletAddress &&
+    depositOk &&
+    !!rfqMarketPda &&
+    (connectionState === "authenticating" || connectionState === "connecting" || !rfqAuthenticated);
+  const requiresLiveQuote =
+    depositOk &&
+    hasSelectedPrice &&
+    !!rfqMarketPda &&
+    rfqConnected &&
+    rfqAuthenticated &&
+    !shouldShowIndicativeLoading &&
+    !isRfqAuthPending;
+  const needsFreshQuote = requiresLiveQuote && !hasFreshPreviewQuote;
+  const isQuoteUpdating = isRfqAuthPending || isPrefetchingQuote;
+  const ctaLabel = !walletAddress
+    ? "Connect"
+    : !hasSelectedPrice
+      ? "Choose price"
+      : !depositOk
+        ? "Choose size"
+        : shouldShowIndicativeLoading
+          ? "Loading prices..."
+          : isRfqAuthPending
+            ? "Connecting..."
+            : isQuoteUpdating
+              ? "Updating quote..."
+              : needsFreshQuote
+                ? "Waiting for quote..."
+              : isRequestingQuote
+                ? "Getting quote..."
+                : "Deposit";
+
+  const requestPreviewQuote = useCallback(() => {
+    if (!rfqMarketPda) return;
+    latestPreviewRequestKeyRef.current = quoteInputKey;
+    clearTransientState();
+    setIsPrefetchingQuote(true);
+    submitRfq({
+      market: rfqMarketPda,
+      positionType,
+      strike: selectedStrikeLamports,
+      quantity: quantityLamports,
+      timeoutSeconds: 30,
+    });
+  }, [
+    rfqMarketPda,
+    quoteInputKey,
+    clearTransientState,
+    submitRfq,
+    positionType,
+    selectedStrikeLamports,
+    quantityLamports,
+  ]);
 
   const capFilled = clampNumber(market.capFilledPct, 0, 100);
 
   const maxPreset = type === "call" ? "10" : "5000";
   const maxPresetNum = Number(maxPreset);
+
+  useEffect(() => {
+    if (!isRequestingQuote) return;
+    if (currentQuote || rfqError) {
+      setIsRequestingQuote(false);
+    }
+  }, [isRequestingQuote, currentQuote, rfqError]);
+
+  useEffect(() => {
+    if (!quoteInputKey || !rfqConnected || !rfqAuthenticated || !rfqMarketPda || shouldShowIndicativeLoading) {
+      setIsPrefetchingQuote(false);
+      setPreviewQuote(null);
+      setPreviewQuoteKey(null);
+      return;
+    }
+    if (rfqModalOpen) {
+      setIsPrefetchingQuote(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setPreviewQuote(null);
+      setPreviewQuoteKey(null);
+      requestPreviewQuote();
+    }, 150);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    rfqModalOpen,
+    quoteInputKey,
+    rfqConnected,
+    rfqAuthenticated,
+    rfqMarketPda,
+    shouldShowIndicativeLoading,
+    clearTransientState,
+    requestPreviewQuote,
+  ]);
+
+  useEffect(() => {
+    if (!quoteInputKey || !rfqConnected || !rfqAuthenticated || !rfqMarketPda || shouldShowIndicativeLoading || rfqModalOpen) {
+      return;
+    }
+    const refreshEveryMs = hasFreshPreviewQuote ? 30_000 : 5_000;
+
+    const intervalId = window.setInterval(() => {
+      if (isRequestingQuote || isPrefetchingQuote) return;
+      requestPreviewQuote();
+    }, refreshEveryMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [
+    quoteInputKey,
+    rfqConnected,
+    rfqAuthenticated,
+    rfqMarketPda,
+    shouldShowIndicativeLoading,
+    rfqModalOpen,
+    isRequestingQuote,
+    isPrefetchingQuote,
+    hasFreshPreviewQuote,
+    requestPreviewQuote,
+  ]);
+
+  useEffect(() => {
+    if (!isPrefetchingQuote) return;
+    if (!currentQuote) return;
+    const quoteStrike = Number(currentQuote.strike);
+    if (Number.isFinite(quoteStrike) && quoteStrike === selectedStrikeLamports) {
+      setPreviewQuote(currentQuote);
+      setPreviewQuoteKey(latestPreviewRequestKeyRef.current);
+    }
+    setIsPrefetchingQuote(false);
+  }, [isPrefetchingQuote, currentQuote, selectedStrikeLamports]);
+
+  useEffect(() => {
+    if (!isPrefetchingQuote || !rfqError) return;
+    setIsPrefetchingQuote(false);
+  }, [isPrefetchingQuote, rfqError]);
+
+  useEffect(() => {
+    if (!isPrefetchingQuote) return;
+    const timeoutId = window.setTimeout(() => {
+      setIsPrefetchingQuote(false);
+    }, 8000);
+    return () => window.clearTimeout(timeoutId);
+  }, [isPrefetchingQuote]);
+
+  const handleDepositClick = useCallback(() => {
+    if (isRequestingQuote) return;
+
+    if (!depositOk) {
+      console.warn("[MarketClient] Deposit blocked: invalid or empty deposit amount");
+      return;
+    }
+    if (!hasSelectedPrice) {
+      console.warn("[MarketClient] Deposit blocked: no strike selected yet");
+      return;
+    }
+
+    const marketPda = rfqMarketPda;
+    const blockedReasons: string[] = [];
+    if (!marketPda) blockedReasons.push("no strictly matching RFQ market");
+    if (!rfqConnected) blockedReasons.push("RFQ socket is not connected");
+    if (!rfqAuthenticated) blockedReasons.push("wallet is not authenticated with RFQ");
+
+    if (blockedReasons.length > 0) {
+      console.warn("[MarketClient] Deposit blocked:", blockedReasons.join("; "), {
+        marketPda,
+        rfqConnected,
+        rfqAuthenticated,
+      });
+      return;
+    }
+    if (!marketPda) return;
+
+    if (!hasFreshPreviewQuote) {
+      console.warn("[MarketClient] Deposit blocked: waiting for fresh live quote");
+      return;
+    }
+
+    setModalInitialQuote(previewQuote);
+    setModalAprPct(selectedApr);
+    setModalPremiumUsd(displayedPremiumUsd);
+    if (hasFreshPreviewQuote) {
+      setIsRequestingQuote(false);
+    } else {
+      clearTransientState();
+      submitRfq({
+        market: marketPda,
+        positionType,
+        strike: selectedStrikeLamports,
+        quantity: quantityLamports,
+        timeoutSeconds: 30,
+      });
+      setIsRequestingQuote(true);
+    }
+    setRfqRequestNonce((n) => n + 1);
+    setRfqModalOpen(true);
+  }, [
+    isRequestingQuote,
+    rfqMarketPda,
+    depositOk,
+    hasSelectedPrice,
+    rfqConnected,
+    rfqAuthenticated,
+    clearTransientState,
+    submitRfq,
+    selectedStrikeLamports,
+    quantityLamports,
+    positionType,
+    hasFreshPreviewQuote,
+    previewQuote,
+    selectedApr,
+    displayedPremiumUsd,
+  ]);
+
+  if (!isLiveMarketReady) {
+    return (
+      <div className="space-y-8">
+        <header className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-start">
+            <div className="min-w-0">
+              <div className="text-sm text-black/50 dark:text-white/50">
+                <Link href="/earn" className="underline">Earn</Link> / Market
+              </div>
+              <div className="mt-2 text-4xl font-semibold tracking-tight text-white md:text-5xl">{asset}</div>
+              <p className="mt-2 text-sm text-black/60 dark:text-white/60">Loading live market data...</p>
+            </div>
+            <div className="h-10 w-44 animate-pulse rounded-xl border border-white/10 bg-white/5" />
+          </div>
+        </header>
+
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="text-xs font-semibold text-white/50">Expiry</div>
+            <div className="flex gap-2">
+              <div className="h-9 w-28 animate-pulse rounded-xl border border-white/10 bg-white/10" />
+              <div className="h-9 w-28 animate-pulse rounded-xl border border-white/10 bg-white/5" />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+              <div className="mx-auto h-6 w-96 max-w-full animate-pulse rounded bg-white/10" />
+              <div className="mt-5 grid w-full grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+                <div className="h-24 animate-pulse rounded-xl border border-white/10 bg-white/10" />
+                <div className="h-24 animate-pulse rounded-xl border border-white/10 bg-white/5" />
+                <div className="h-24 animate-pulse rounded-xl border border-white/10 bg-white/5" />
+              </div>
+            </div>
+
+            <AppCard className="p-4">
+              <div className="h-5 w-36 animate-pulse rounded bg-white/10" />
+              <div className="mt-3 h-14 animate-pulse rounded-2xl border border-white/10 bg-white/5" />
+              <div className="mt-3 h-5 w-72 max-w-full animate-pulse rounded bg-white/10" />
+            </AppCard>
+
+            <AppCard className="overflow-hidden p-0">
+              <div className="h-10 border-b border-white/10 bg-white/5" />
+              <div className="space-y-3 px-5 py-5">
+                <div className="h-10 w-40 animate-pulse rounded bg-white/10" />
+                <div className="h-5 w-60 max-w-full animate-pulse rounded bg-white/10" />
+              </div>
+              <div className="h-10 border-y border-white/10 bg-white/5" />
+              <div className="grid gap-0 md:grid-cols-2">
+                <div className="h-28 border-b border-white/10 p-5 md:border-b-0 md:border-r" />
+                <div className="h-28 p-5" />
+              </div>
+            </AppCard>
+
+            <AppButton className="w-full" disabled>
+              Loading prices...
+            </AppButton>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -630,7 +909,6 @@ export function MarketClient({ asset }: { asset: string }) {
             strikePrice={selectedPrice}
             expiryLabel={formatDate(expiryDate)}
             expiryTs={Math.round(expiryDate.getTime() / 1000)}
-            defaultSpot={spot}
             range={chartRange}
             onRangeChange={setChartRange}
             onClose={() => setChartOpen(false)}
@@ -692,7 +970,14 @@ export function MarketClient({ asset }: { asset: string }) {
               <div
                 className="mx-auto grid w-full max-w-4xl grid-cols-2 gap-3 sm:[grid-template-columns:repeat(auto-fit,minmax(180px,1fr))] sm:gap-4"
               >
-                {priceOptionsWithApr.map((option, idx) => {
+                {shouldShowIndicativeLoading
+                  ? Array.from({ length: 4 }).map((_, idx) => (
+                    <div key={`price-skeleton-${idx}`} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 sm:px-6 sm:py-6">
+                      <div className="h-8 w-24 animate-pulse rounded bg-white/10 sm:h-10" />
+                      <div className="mt-3 h-4 w-16 animate-pulse rounded bg-white/10" />
+                    </div>
+                  ))
+                  : priceOptionsWithApr.map((option, idx) => {
                   const active = idx === priceIdx;
                   const priceText = formatUsdSmart(option.strike);
                   const absPrice = Math.abs(option.strike);
@@ -712,7 +997,14 @@ export function MarketClient({ asset }: { asset: string }) {
                   // Use calculated APR from indicative prices
                   const aprForIdx = option.apr;
                   return (
-                    <button key={option.strike} type="button" onClick={() => setPriceIdx(idx)} className="text-left">
+                    <button
+                      key={option.strike}
+                      type="button"
+                      onClick={() => {
+                        setPriceIdx(idx);
+                      }}
+                      className="text-left"
+                    >
                       <AppCard
                         className={[
                           "px-4 py-4 text-center transition-all sm:px-6 sm:py-6",
@@ -741,8 +1033,13 @@ export function MarketClient({ asset }: { asset: string }) {
                       </AppCard>
                     </button>
                   );
-                })}
+                  })}
               </div>
+              {shouldShowIndicativeLoading ? (
+                <div className="mt-3 text-center text-xs font-semibold text-white/60">
+                  Fetching live strike quotes...
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -799,16 +1096,32 @@ export function MarketClient({ asset }: { asset: string }) {
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/70">
               <div>
                 <span className="text-white/50">APR</span>{" "}
-                <span className="font-semibold text-white">{formatPct(selectedApr)}</span>
+                <span className="font-semibold text-white">
+                  {shouldShowIndicativeLoading ? "Loading..." : formatPct(selectedApr)}
+                </span>
               </div>
               <div>
                 <span className="text-white/50">Upfront</span>{" "}
-                <span className="font-semibold text-white">{depositOk ? formatUsdc(estPremiumUsd) : "—"}</span>
+                <span className="font-semibold text-white">{depositOk ? formatUsdc(displayedPremiumUsd) : "—"}</span>
               </div>
               <div>
                 <span className="text-white/50">Term</span>{" "}
                 <span className="font-semibold text-white">{termDisplayShort}</span>
               </div>
+              {depositOk ? (
+                <div>
+                  <span className="text-white/50">Quote</span>{" "}
+                  <span className="font-semibold text-white">
+                    {hasFreshPreviewQuote
+                      ? "Live"
+                      : isRfqAuthPending
+                        ? "Connecting..."
+                      : isPrefetchingQuote
+                        ? "Updating..."
+                        : "Waiting"}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </AppCard>
 
@@ -817,11 +1130,15 @@ export function MarketClient({ asset }: { asset: string }) {
               Now
             </div>
             <div className="px-5 py-5">
-              <div className="text-4xl font-semibold text-white">{formatPct(selectedApr)} APR</div>
+              {shouldShowIndicativeLoading ? (
+                <div className="text-4xl font-semibold text-white">Loading...</div>
+              ) : (
+                <div className="text-4xl font-semibold text-white">{formatPct(selectedApr)} APR</div>
+              )}
               <div className="mt-2 text-sm text-white/70">
                 {depositOk ? (
                   <>
-                    <span className="font-semibold text-white">{formatUsdc(estPremiumUsd)}</span> upfront premium
+                    <span className="font-semibold text-white">{formatUsdc(displayedPremiumUsd)}</span> upfront premium
                   </>
                 ) : (
                   "Enter a deposit amount to preview upfront premium."
@@ -874,15 +1191,23 @@ export function MarketClient({ asset }: { asset: string }) {
           </AppCard>
 
           {!walletAddress ? (
-            // Show wallet connect button when not connected
-            <SolanaConnectButton fullWidth />
+            <AppButton className="w-full" onClick={openSidebar}>
+              {ctaLabel}
+            </AppButton>
           ) : (
             <AppButton
               className="w-full"
-              disabled={!depositOk}
-              onClick={() => setRfqModalOpen(true)}
+              disabled={
+                !depositOk ||
+                !hasSelectedPrice ||
+                isRequestingQuote ||
+                shouldShowIndicativeLoading ||
+                isQuoteUpdating ||
+                needsFreshQuote
+              }
+              onClick={handleDepositClick}
             >
-              Deposit
+              {ctaLabel}
             </AppButton>
           )}
         </div>
@@ -897,7 +1222,6 @@ export function MarketClient({ asset }: { asset: string }) {
                 strikePrice={selectedPrice}
                 expiryLabel={formatDate(expiryDate)}
                 expiryTs={Math.round(expiryDate.getTime() / 1000)}
-                defaultSpot={spot}
                 range={chartRange}
                 onRangeChange={setChartRange}
                 onClose={() => setChartOpen(false)}
@@ -911,7 +1235,14 @@ export function MarketClient({ asset }: { asset: string }) {
       {/* RFQ Flow Modal */}
       <RfqFlowModal
         open={rfqModalOpen}
-        onClose={() => setRfqModalOpen(false)}
+        onClose={() => {
+          setRfqModalOpen(false);
+          setIsRequestingQuote(false);
+          setModalInitialQuote(null);
+          setModalAprPct(null);
+          setModalPremiumUsd(null);
+        }}
+        requestNonce={rfqRequestNonce}
         marketPda={rfqMarketPda}
         asset={market.asset}
         positionType={type === "call" ? "covered_call" : "cash_secured_put"}
@@ -919,8 +1250,9 @@ export function MarketClient({ asset }: { asset: string }) {
         quantity={Math.round(depositNum * 1_000_000_000)} // Convert to token smallest units (9 decimals for most)
         strikeDisplay={formatUsdSmart(selectedPrice)}
         quantityDisplay={`${depositNum.toLocaleString()} ${market.asset}`}
-        walletPublicKey={walletAddress || undefined}
-        signMessage={walletAddress ? signMessage : undefined}
+        initialQuote={modalInitialQuote}
+        lockedAprPct={modalAprPct}
+        lockedPremiumUsd={modalPremiumUsd}
         signTransaction={walletAddress ? solanaSignTransaction : undefined}
       />
     </div>

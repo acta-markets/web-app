@@ -42,7 +42,6 @@ export function MarketChart({
   strikePrice: number;
   expiryLabel: string;
   expiryTs: number;
-  defaultSpot: number;
   range: Range;
   onRangeChange: (r: Range) => void;
   onClose?: () => void;
@@ -148,23 +147,16 @@ export function MarketChart({
     return out;
   }, [historyPoints, livePoints]);
 
-  const last = combinedSeries.length ? combinedSeries[combinedSeries.length - 1].v : defaultSpot;
-  const first = combinedSeries.length ? combinedSeries[0].v : defaultSpot;
-  const pct = first ? ((last - first) / first) * 100 : 0;
+  const last = combinedSeries.length ? combinedSeries[combinedSeries.length - 1].v : null;
+  const first = combinedSeries.length ? combinedSeries[0].v : null;
+  const pct = first != null && first !== 0 && last != null ? ((last - first) / first) * 100 : 0;
 
   const svg = useMemo(() => {
     const w = 320;
     const h = 140;
     const pad = 12;
 
-    const fallbackNow = Math.floor(Date.now() / 1000);
-    const s =
-      combinedSeries.length >= 2
-        ? combinedSeries
-        : [
-            { t: fallbackNow - 60, v: defaultSpot },
-            { t: fallbackNow, v: defaultSpot }
-          ];
+    const s = combinedSeries;
     // Anchor "now" to the end of the loaded history window so history doesn't reflow on each live tick.
     const nowT =
       historySeries.length >= 2
@@ -255,7 +247,7 @@ export function MarketChart({
       yLastAtNow,
       nowT
     };
-  }, [combinedSeries, historySeries, historyPoints, liveSeries, defaultSpot, strikePrice, last, expiryTs]);
+  }, [combinedSeries, historySeries, historyPoints, liveSeries, strikePrice, last, expiryTs]);
 
   return (
     <AppCard className="p-3">
@@ -263,7 +255,7 @@ export function MarketChart({
         <div className="min-w-0">
           <div className="text-xs font-semibold text-white/50">Price</div>
           <div className="mt-1 flex items-center gap-2">
-            <div className="truncate text-2xl font-semibold text-white">{formatUsdSmart(last)}</div>
+            <div className="truncate text-2xl font-semibold text-white">{last != null ? formatUsdSmart(last) : "—"}</div>
             <div
               className={[
                 "rounded-lg px-2 py-1 text-xs font-semibold",
@@ -311,6 +303,11 @@ export function MarketChart({
       </div>
 
       <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+        {combinedSeries.length < 2 ? (
+          <div className="flex h-[140px] items-center justify-center text-xs font-semibold text-white/50">
+            Waiting for live price history...
+          </div>
+        ) : (
         <svg viewBox={`0 0 ${svg.w} ${svg.h}`} className="block h-[140px] w-full">
           {/* grid */}
           <g opacity="0.25" stroke="rgba(255,255,255,0.25)" strokeWidth="1">
@@ -395,6 +392,7 @@ export function MarketChart({
           {/* last dot */}
           <circle cx={svg.xNow} cy={svg.yLast} r="3" fill="rgba(204,255,0,0.95)" />
         </svg>
+        )}
       </div>
 
     </AppCard>

@@ -22,6 +22,8 @@ type FlowStep =
 interface RfqFlowModalProps {
   open: boolean;
   onClose: () => void;
+  /** Incremented by parent whenever a new quote is requested */
+  requestNonce: number;
   /** Market PDA to request quote for */
   marketPda?: string;
   /** Asset symbol for display */
@@ -36,10 +38,12 @@ interface RfqFlowModalProps {
   strikeDisplay: string;
   /** Display quantity */
   quantityDisplay: string;
-  /** Wallet public key */
-  walletPublicKey?: string;
-  /** Sign message function from wallet */
-  signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
+  /** Optional quote to lock modal to exact market-page preview */
+  initialQuote?: QuoteReceivedMessage | null;
+  /** Locked APR from market page at click time */
+  lockedAprPct?: number | null;
+  /** Locked total premium from market page at click time */
+  lockedPremiumUsd?: number | null;
   /** Sign transaction function from wallet */
   signTransaction?: (tx: any) => Promise<any>;
 }
@@ -47,6 +51,7 @@ interface RfqFlowModalProps {
 export function RfqFlowModal({
   open,
   onClose,
+  requestNonce,
   marketPda,
   asset,
   positionType,
@@ -54,16 +59,14 @@ export function RfqFlowModal({
   quantity,
   strikeDisplay,
   quantityDisplay,
-  walletPublicKey,
-  signMessage,
+  initialQuote,
+  lockedAprPct,
+  lockedPremiumUsd,
   signTransaction,
 }: RfqFlowModalProps) {
   const {
-    isConnected,
-    isAuthenticated,
     currentQuote,
     error: rfqError,
-    submitRfq,
     acceptQuote,
     submitSignedTx,
     getClient,
@@ -80,39 +83,27 @@ export function RfqFlowModal({
   // Reset state when modal opens
   useEffect(() => {
     if (open) {
-      setStep("idle");
+      setStep(initialQuote ? "quote_received" : "requesting_quote");
       setError(null);
-      setQuote(null);
+      setQuote(initialQuote ?? null);
       setRetryCount(0);
       setOrderId(null);
       setTxSignature(null);
       setPositionPda(null);
     }
-  }, [open]);
+  }, [open, requestNonce, initialQuote]);
 
   // Handle quote received
   useEffect(() => {
-    if (currentQuote && step === "requesting_quote") {
+    if (
+      currentQuote &&
+      step === "requesting_quote" &&
+      Number(currentQuote.strike) === strike
+    ) {
       setQuote(currentQuote);
       setStep("quote_received");
     }
-  }, [currentQuote, step]);
-
-  const requestFreshQuote = useCallback(() => {
-    if (!marketPda) {
-      setError("No market available");
-      setStep("failed");
-      return;
-    }
-    setStep("requesting_quote");
-    submitRfq({
-      market: marketPda,
-      positionType,
-      strike,
-      quantity,
-      timeoutSeconds: 30,
-    });
-  }, [marketPda, positionType, strike, quantity, submitRfq]);
+  }, [currentQuote, step, strike]);
 
   // Handle RFQ errors
   useEffect(() => {
@@ -127,51 +118,17 @@ export function RfqFlowModal({
       lower.includes("quote_expired") ||
       lower.includes("quote_refresh_required");
 
-    if (isRecoverableQuoteError && retryCount < 2) {
+    if (isRecoverableQuoteError) {
       setRetryCount((c) => c + 1);
       setQuote(null);
-      setError("Quote expired while accepting. Requesting a fresh quote...");
-      requestFreshQuote();
+      setError("Quote expired. Close this modal and click Deposit again to request a fresh quote.");
+      setStep("failed");
       return;
     }
 
     setError(message);
     setStep("failed");
-  }, [rfqError, step, retryCount, requestFreshQuote]);
-
-  // Start the flow: authenticate if not already
-  // Authentication is handled outside this modal (after wallet connect).
-  const startFlow = useCallback(async () => {
-    if (!walletPublicKey) {
-      setError("Please connect your wallet first");
-      setStep("failed");
-      return;
-    }
-    
-    if (!marketPda) {
-      setError("No market available. Please wait for markets to load.");
-      setStep("failed");
-      return;
-    }
-    
-    if (!isConnected) {
-      setError("RFQ server not connected. Please try again.");
-      setStep("failed");
-      return;
-    }
-
-    if (!isAuthenticated) {
-      setError("Wallet is not authenticated with RFQ yet. Please reconnect wallet and approve auth.");
-      setStep("failed");
-      return;
-    }
-
-    setError(null);
-
-    setRetryCount(0);
-    console.log("[RFQ] Submitting RFQ");
-    requestFreshQuote();
-  }, [walletPublicKey, marketPda, isConnected, isAuthenticated, requestFreshQuote]);
+  }, [rfqError, step, retryCount]);
 
   // Handle accepting quote
   const handleAcceptQuote = useCallback(async () => {
@@ -278,22 +235,48 @@ export function RfqFlowModal({
     onClose();
   };
 
-  // Format price (u64 in lamports, 9 decimals)
-  const formatPrice = (price: number | string) => {
-    const value = typeof price === "string" ? Number(price) : price;
-    return `${(value / 1_000_000_000).toLocaleString(undefined, {
+  const formatUsdc = (value: number) => {
+    return `${value.toLocaleString(undefined, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })} USDC`;
   };
+  const quoteQuantity = quantity / 1_000_000_000;
+  const quoteUnitPremium = quote ? Number(quote.price) / 1_000_000_000 : null;
+  const totalPremiumUsd =
+    lockedPremiumUsd != null
+      ? lockedPremiumUsd
+      : quoteUnitPremium != null
+        ? quoteUnitPremium * quoteQuantity
+        : null;
+  const displayedAprPct = lockedAprPct ?? null;
+
+  const processingLabel =
+    step === "accepting_quote"
+      ? "Accepting quote..."
+      : step === "signing"
+        ? "Waiting for wallet signature..."
+        : "Submitting to blockchain...";
+
+  const progressText =
+    step === "requesting_quote"
+      ? "Getting quote..."
+      : step === "quote_received" || step === "accepting_quote"
+        ? "Review & accept quote"
+        : step === "signing" || step === "submitting"
+          ? "Sign & submit transaction"
+          : step === "confirmed"
+            ? "Order confirmed"
+            : "Order failed";
+  const panelClass = "rounded-xl border border-white/10 bg-white/5 p-4";
 
   return (
-    <AppModal open={open} onClose={handleClose} title="Submit Order">
-      <div className="space-y-6">
+    <AppModal open={open} onClose={handleClose} title="Submit Order" showHowItWorks={false}>
+      <div className="space-y-4">
         {/* Order Summary */}
-        <div className="rounded-xl border border-bg-border bg-action-primary/20 p-4">
-          <div className="text-sm font-medium text-content-secondary">Order Summary</div>
-          <div className="mt-3 space-y-2">
+        <div className={panelClass}>
+          <div className="text-sm font-medium text-content-secondary">Order</div>
+          <div className="mt-2 space-y-2">
             <div className="flex justify-between">
               <span className="text-content-secondary">Asset</span>
               <span className="font-semibold text-content-primary">{asset}</span>
@@ -315,46 +298,47 @@ export function RfqFlowModal({
           </div>
         </div>
 
-        {/* Flow Steps */}
-        <div className="space-y-3">
-          <FlowStepRow
-            label="Request quote from market makers"
-            status={getStepStatus(step, ["requesting_quote"], [])}
-            isActive={step === "requesting_quote"}
-          />
-          <FlowStepRow
-            label="Review & accept quote"
-            status={getStepStatus(step, ["quote_received", "accepting_quote"], ["requesting_quote"])}
-            isActive={step === "quote_received" || step === "accepting_quote"}
-          />
-          <FlowStepRow
-            label="Sign transaction"
-            status={getStepStatus(step, ["signing"], ["requesting_quote", "quote_received", "accepting_quote"])}
-            isActive={step === "signing"}
-          />
-          <FlowStepRow
-            label="Submit to blockchain"
-            status={getStepStatus(step, ["submitting", "confirmed"], ["requesting_quote", "quote_received", "accepting_quote", "signing"])}
-            isActive={step === "submitting"}
-          />
+        {/* Progress */}
+        <div className="flex items-center gap-2 text-sm">
+          {(step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting") ? (
+            <Loader2 className="h-4 w-4 animate-spin text-accent-primary" />
+          ) : step === "confirmed" ? (
+            <CheckCircle2 className="h-4 w-4 text-additional-green-primary" />
+          ) : step === "failed" ? (
+            <XCircle className="h-4 w-4 text-additional-red-primary" />
+          ) : (
+            <div className="h-2.5 w-2.5 rounded-full border border-content-tertiary" />
+          )}
+          <span className="text-content-secondary">{progressText}</span>
         </div>
+
+        {/* Initial quote wait state */}
+        {step === "requesting_quote" && (
+          <div className={panelClass}>
+            <div className="flex items-center gap-2 text-sm font-semibold text-accent-primary">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Getting quote from market makers
+            </div>
+            <div className="mt-1 text-xs text-content-secondary">
+              This usually takes a few seconds.
+            </div>
+          </div>
+        )}
 
         {/* Quote Details */}
         {quote && step === "quote_received" && (
-          <div className="rounded-xl border border-accent-primary/30 bg-accent-primary/10 p-4">
+          <div className={panelClass}>
             <div className="text-sm font-semibold text-accent-primary">Quote Received</div>
             <div className="mt-3 space-y-2">
               <div className="flex justify-between">
-                <span className="text-content-secondary">Price</span>
+                <span className="text-content-secondary">Total premium</span>
                 <span className="text-lg font-bold text-accent-primary">
-                  {formatPrice(quote.price)}
+                  {totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : "—"}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-content-tertiary">Strike</span>
-                <span className="text-content-secondary">
-                  {formatPrice(quote.strike)}
-                </span>
+                <span className="text-content-tertiary">APR</span>
+                <span className="text-content-secondary">{displayedAprPct != null ? `${displayedAprPct.toFixed(2)}%` : "—"}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-content-tertiary">Expires in</span>
@@ -368,13 +352,18 @@ export function RfqFlowModal({
 
         {/* Success State */}
         {step === "confirmed" && (
-          <div className="rounded-xl border border-additional-green-primary/30 bg-additional-green-primary/10 p-4 text-center">
+          <div className={`${panelClass} text-center`}>
             <CheckCircle2 className="mx-auto h-12 w-12 text-additional-green-primary" />
             <div className="mt-3 font-semibold text-content-primary">Order Confirmed!</div>
+            {positionPda && (
+              <div className="mt-1 text-xs text-content-secondary">
+                Position opened successfully.
+              </div>
+            )}
             {txSignature && (
               <div className="mt-2 text-sm text-content-secondary">
                 <a
-                  href={`https://solscan.io/tx/${txSignature}?cluster=devnet`}
+                  href={`https://solscan.io/tx/${txSignature}?cluster=testnet`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-accent-primary underline"
@@ -388,7 +377,7 @@ export function RfqFlowModal({
 
         {/* Error State */}
         {step === "failed" && error && (
-          <div className="rounded-xl border border-additional-red-primary/30 bg-additional-red-primary/10 p-4">
+          <div className={panelClass}>
             <div className="flex items-start gap-3">
               <XCircle className="h-5 w-5 shrink-0 text-additional-red-primary" />
               <div>
@@ -400,13 +389,7 @@ export function RfqFlowModal({
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-3">
-          {step === "idle" && (
-            <AppButton className="w-full" onClick={startFlow}>
-              Request Quote
-            </AppButton>
-          )}
-
+        <div className="flex gap-2">
           {step === "quote_received" && (
             <>
               <AppButton variant="secondary" className="flex-1" onClick={handleClose}>
@@ -418,10 +401,10 @@ export function RfqFlowModal({
             </>
           )}
 
-          {(step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting") && (
+          {(step === "accepting_quote" || step === "signing" || step === "submitting") && (
             <AppButton className="w-full" disabled>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing...
+              {processingLabel}
             </AppButton>
           )}
 
@@ -433,85 +416,13 @@ export function RfqFlowModal({
         </div>
 
         {/* Demo Notice */}
-        <div className="flex items-start gap-2 rounded-lg bg-additional-gold-primary/10 p-3 text-xs text-additional-gold-primary">
+        <div className="flex items-start gap-2 border-t border-white/10 pt-2 text-xs text-content-tertiary">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>
-            Connected to devnet. Quotes come from test market makers.
+            Connected to testnet. Quotes come from test market makers.
           </span>
         </div>
       </div>
     </AppModal>
   );
-}
-
-// Helper component for flow steps
-function FlowStepRow({
-  label,
-  status,
-  isActive,
-}: {
-  label: string;
-  status: "pending" | "active" | "completed" | "failed";
-  isActive: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center">
-        {status === "completed" && (
-          <CheckCircle2 className="h-5 w-5 text-additional-green-primary" />
-        )}
-        {status === "active" && (
-          <Loader2 className="h-5 w-5 animate-spin text-accent-primary" />
-        )}
-        {status === "pending" && (
-          <div className="h-3 w-3 rounded-full border-2 border-content-tertiary" />
-        )}
-        {status === "failed" && (
-          <XCircle className="h-5 w-5 text-additional-red-primary" />
-        )}
-      </div>
-      <span
-        className={
-          status === "completed"
-            ? "text-content-primary"
-            : status === "active"
-              ? "font-medium text-accent-primary"
-              : "text-content-tertiary"
-        }
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function getStepStatus(
-  currentStep: FlowStep,
-  activeSteps: FlowStep[],
-  completedWhen: FlowStep[] = []
-): "pending" | "active" | "completed" | "failed" {
-  if (currentStep === "failed") return "failed";
-  if (activeSteps.includes(currentStep)) return "active";
-  
-  const allStepsOrder: FlowStep[] = [
-    "idle",
-    "requesting_quote",
-    "quote_received",
-    "accepting_quote",
-    "signing",
-    "submitting",
-    "confirmed",
-  ];
-  
-  const currentIdx = allStepsOrder.indexOf(currentStep);
-  const stepIdx = Math.max(...activeSteps.map(s => allStepsOrder.indexOf(s)));
-  
-  if (currentIdx > stepIdx) return "completed";
-  
-  if (completedWhen.length > 0) {
-    const completedIdx = Math.max(...completedWhen.map(s => allStepsOrder.indexOf(s)));
-    if (currentIdx > completedIdx) return "completed";
-  }
-  
-  return "pending";
 }

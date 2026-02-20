@@ -21,6 +21,7 @@ export {
 
 export type { 
   MarketInfo, 
+  MarketDescriptorInfo,
   PositionInfo, 
   QuoteReceivedMessage,
   IndicativePricesMessage,
@@ -37,6 +38,15 @@ const RFQ_WS_URL = process.env.NEXT_PUBLIC_RFQ_WS_URL || "ws://78.46.77.51:8080"
 export interface CreateClientOptions {
   url?: string;
   debug?: boolean;
+}
+
+function normalizeWsUrl(url: string): string {
+  if (typeof window === "undefined") return url;
+  // Browsers block insecure ws:// from secure https pages.
+  if (window.location.protocol === "https:" && url.startsWith("ws://")) {
+    return `wss://${url.slice("ws://".length)}`;
+  }
+  return url;
 }
 
 function createRequestId(): string {
@@ -119,7 +129,8 @@ function patchQueryMessagesForServer(client: ActaWsClient): void {
 // ============================================================================
 
 export function createRfqClient(options?: CreateClientOptions): ActaWsClient {
-  const url = options?.url || RFQ_WS_URL;
+  const configuredUrl = options?.url || RFQ_WS_URL;
+  const url = normalizeWsUrl(configuredUrl);
   console.log("[RFQ] Creating ActaWsClient with URL:", url);
   console.log("[RFQ] Options:", { role: "taker", autoReconnect: true, debug: true });
   

@@ -454,6 +454,6 @@ Recommended recovery order:
  
  ## Support
  
- - **Devnet:** `wss://{devnet-host}`
+- **Testnet:** `wss://{testnet-host}`
  - **Production:** `wss://{host}`
  - **Questions:** Contact the Acta team

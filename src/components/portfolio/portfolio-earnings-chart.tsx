@@ -45,16 +45,15 @@ function toStepData(points: Point[]) {
   const out: Array<{ time: UTCTimestamp; value: number }> = [];
   const s = [...points].sort((a, b) => a.t - b.t);
   if (!s.length) return out;
-  out.push({ time: s[0]!.t as UTCTimestamp, value: s[0]!.v });
+  let lastTime = s[0]!.t;
+  out.push({ time: lastTime as UTCTimestamp, value: s[0]!.v });
 
   for (let i = 1; i < s.length; i++) {
-    const prev = s[i - 1]!;
     const cur = s[i]!;
-    const t = cur.t;
     // Ensure strictly increasing times to keep lightweight-charts happy.
-    const tHold = Math.max(prev.t + 1, t - 1);
-    if (tHold > prev.t) out.push({ time: tHold as UTCTimestamp, value: prev.v });
+    const t = Math.max(cur.t, lastTime + 1);
     out.push({ time: t as UTCTimestamp, value: cur.v });
+    lastTime = t;
   }
   return out;
 }

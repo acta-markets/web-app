@@ -4,11 +4,11 @@ import React, { createContext, useContext, useState, useMemo, useCallback, useEf
 import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 
 // Network configuration
-const NETWORK = process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet" ? "mainnet-beta" : "devnet";
+const NETWORK = process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet" ? "mainnet-beta" : "testnet";
 const RPC_ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 
-  (NETWORK === "mainnet-beta" ? "https://api.mainnet-beta.solana.com" : "https://api.devnet.solana.com");
+  (NETWORK === "mainnet-beta" ? "https://api.mainnet-beta.solana.com" : "https://api.testnet.solana.com");
 const WS_ENDPOINT = RPC_ENDPOINT.replace("https://", "wss://").replace("http://", "ws://");
-const CHAIN = NETWORK === "mainnet-beta" ? "solana:mainnet" : "solana:devnet";
+const CHAIN = NETWORK === "mainnet-beta" ? "solana:mainnet" : "solana:testnet";
 
 // Create RPC connections
 const rpc = createSolanaRpc(RPC_ENDPOINT);
