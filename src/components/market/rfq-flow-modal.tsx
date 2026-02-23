@@ -242,7 +242,7 @@ export function RfqFlowModal({
     })} USDC`;
   };
   const quoteQuantity = quantity / 1_000_000_000;
-  const quoteUnitPremium = quote ? Number(quote.price) / 1_000_000_000 : null;
+  const quoteUnitPremium = quote ? Number(quote.net_price ?? quote.price) / 1_000_000_000 : null;
   const totalPremiumUsd =
     lockedPremiumUsd != null
       ? lockedPremiumUsd

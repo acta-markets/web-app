@@ -111,6 +111,14 @@ function isRecoverableRfqBusinessError(message: string): boolean {
   );
 }
 
+function isMissingMarketDescriptorError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("missing market descriptor") ||
+    lower.includes("call getmarketdescriptors() before createrfq")
+  );
+}
+
 function resetToAnonymous(client: ActaWsClient) {
   clearPendingAuthState(client);
   client.disconnect();
@@ -237,6 +245,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
       // Fetch markets immediately after connecting
       console.log("[RfqProvider] Fetching markets...");
       client.getMarkets();
+      // SDK now requires descriptors to be loaded before createRfq.
+      client.getMarketDescriptors({ active_only: true });
     });
 
     client.on("stateChange", (state) => {
@@ -256,6 +266,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       }
       // Fetch positions + market metadata together for stable PDA->underlying lookup.
       fetchPortfolioPrereqs();
+      client.getMarketDescriptors({ active_only: true });
     });
 
     client.on("disconnected", (code, reason) => {
@@ -579,9 +590,26 @@ export function RfqProvider({ children }: RfqProviderProps) {
         timeoutSeconds: params.timeoutSeconds ?? 30,
       };
       console.log("[RfqProvider] Submitting RFQ:", rfqRequest);
-      client.createRfq(rfqRequest);
+      const hasDescriptor = marketDescriptors.some((d) => d.market?.market_pda === params.market);
+      if (!hasDescriptor) {
+        console.warn("[RfqProvider] Missing descriptor for market before RFQ; refreshing descriptors", {
+          market: params.market,
+        });
+        client.getMarketDescriptors({ active_only: true });
+        setError(new Error("Market metadata is still loading. Please retry in a moment."));
+        return;
+      }
+      void client.createRfq(rfqRequest).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        if (isMissingMarketDescriptorError(message)) {
+          client.getMarketDescriptors({ active_only: true });
+          setError(new Error("Market metadata refreshed. Please retry quote request."));
+          return;
+        }
+        setError(err instanceof Error ? err : new Error(message));
+      });
     },
-    []
+    [marketDescriptors]
   );
 
   const acceptQuote = useCallback((rfqId: string, maker: string, orderIdHex: string) => {

@@ -499,14 +499,20 @@ export function MarketClient({ asset }: { asset: string }) {
     !!quoteInputKey &&
     previewQuoteKey === quoteInputKey &&
     Number(previewQuote.strike) === selectedStrikeLamports;
-  const quotePricePerUnitUsd = hasFreshPreviewQuote ? Number(previewQuote.price) / 1_000_000_000 : null;
+  const previewDisplayPrice1e9 =
+    hasFreshPreviewQuote && previewQuote
+      ? Number(previewQuote.net_price)
+      : null;
+  const quotePricePerUnitUsd =
+    previewDisplayPrice1e9 != null ? previewDisplayPrice1e9 / 1_000_000_000 : null;
   const selectedAprFromQuotePct = useMemo(() => {
     if (!hasFreshPreviewQuote || !previewQuote) return null;
+    const premium1e9 = Number(previewQuote.net_price ?? previewQuote.price);
     try {
       const result = computeApyFromScaledPrices({
         positionType,
         underlyingAmount: 1,
-        grossPremiumPerUnit1e9: Number(previewQuote.price),
+        grossPremiumPerUnit1e9: premium1e9,
         strike1e9: selectedStrikeLamports,
         spotPrice1e9: Math.round(spot * 1_000_000_000),
         secondsToExpiry: Math.max(1, Math.floor(msToExpiry / 1000)),
