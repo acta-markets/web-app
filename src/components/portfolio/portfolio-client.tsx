@@ -297,7 +297,7 @@ export function PortfolioClient() {
   const nextMaturity = useMemo(() => {
     const expiries = openRows
       .map((r) => r.expiryTs)
-      .filter((x): x is number => Number.isFinite(x) && x > 0)
+      .filter((x): x is number => typeof x === "number" && Number.isFinite(x) && x > 0)
       .sort((a, b) => a - b);
     return expiries[0] ?? null;
   }, [openRows]);

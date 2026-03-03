@@ -1,14 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppModal } from "@/components/app-ui/app-modal";
 import { AppTable, AppTd, AppTh } from "@/components/app-ui/app-table";
 import { MARKETS, type MarketType, formatPct } from "@/lib/markets";
+import { getTokenMint } from "@/lib/tokens";
+import { getCapFilledPct } from "@/lib/token-caps";
 import { getTokenBrand } from "@/lib/token-brand";
 import { getTokenLogoSrc } from "@/lib/token-assets";
+import { useRfqContext } from "@/components/rfq/rfq-provider";
 
 function typeLabel(t: MarketType) {
   // Keep verbose names out of the UI; users already chose a strategy.
@@ -23,6 +26,7 @@ export function EarnClient() {
   const [type, setType] = useState<MarketType>("call");
   const router = useRouter();
   const [howOpen, setHowOpen] = useState(false);
+  const { tokenCaps } = useRfqContext();
   const [sort, setSort] = useState<{ key: "minApr" | "maxApr"; dir: "asc" | "desc" } | null>(
     null
   );
@@ -42,6 +46,25 @@ export function EarnClient() {
       .filter((r) => order.has(r.asset.toUpperCase()))
       .sort((a, b) => (order.get(a.asset.toUpperCase()) ?? 999) - (order.get(b.asset.toUpperCase()) ?? 999));
   }, [rows]);
+
+  const capFilledPctByAsset = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const tokenCap of tokenCaps) {
+      const mint = String(tokenCap.underlying_mint ?? "").trim();
+      if (!mint) continue;
+      const liveFilled = getCapFilledPct(tokenCap);
+      if (liveFilled == null) continue;
+      map.set(mint, liveFilled);
+    }
+    return map;
+  }, [tokenCaps]);
+
+  const getMarketCapFilledPct = useCallback((asset: string, fallbackCapFilledPct: number) => {
+    const mint = (getTokenMint(asset) ?? "").trim();
+    const fallbackFilled = Math.max(0, Math.min(100, fallbackCapFilledPct));
+    if (!mint) return fallbackFilled;
+    return capFilledPctByAsset.get(mint) ?? fallbackFilled;
+  }, [capFilledPctByAsset]);
 
   return (
     <div className="space-y-8">
@@ -233,14 +256,14 @@ export function EarnClient() {
                 <div className="mt-4 text-xs text-content-tertiary">
                   Cap filled:{" "}
                   <span className="font-semibold text-content-secondary">
-                    {formatPct(m.capFilledPct)}
+                    {formatPct(getMarketCapFilledPct(m.asset, m.capFilledPct))}
                   </span>
                 </div>
                 <div className="mt-2 h-2 w-full rounded-full bg-action-primary/20">
                   <div
                     className="h-2 rounded-full"
                     style={{
-                      width: `${m.capFilledPct}%`,
+                      width: `${getMarketCapFilledPct(m.asset, m.capFilledPct)}%`,
                       background:
                         "linear-gradient(90deg, var(--brand-a), var(--brand-b))"
                     }}
@@ -329,7 +352,7 @@ export function EarnClient() {
                 </AppTd>
                 <AppTd className="text-right">{formatPct(m.minApr)}</AppTd>
                 <AppTd className="text-right">{formatPct(m.maxApr)}</AppTd>
-                <AppTd className="text-right">{formatPct(m.capFilledPct)}</AppTd>
+                <AppTd className="text-right">{formatPct(getMarketCapFilledPct(m.asset, m.capFilledPct))}</AppTd>
                 <AppTd className="text-right text-content-tertiary">→</AppTd>
               </tr>
             )})}

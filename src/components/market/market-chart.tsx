@@ -32,7 +32,6 @@ export function MarketChart({
   strikePrice,
   expiryLabel,
   expiryTs,
-  defaultSpot,
   range,
   onRangeChange,
   onClose
@@ -225,7 +224,8 @@ export function MarketChart({
     const yStrike = Math.max(pad, Math.min(h - pad, yStrikeRaw));
     const strikeOff =
       strikePrice > yMax ? "above" : strikePrice < yMin ? "below" : null;
-    const yLast = y(last);
+    const lastValue = last ?? (s.length ? s[s.length - 1].v : strikePrice);
+    const yLast = y(lastValue);
     const xNow = x(nowT);
     const xExpiry = x(endT);
     const xStrike = x(expiryTs);

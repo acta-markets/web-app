@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
@@ -12,9 +12,15 @@ import { MarketChart } from "@/components/market/market-chart";
 import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getTokenMint } from "@/lib/tokens";
+import { getCapFilledPct } from "@/lib/token-caps";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import type { QuoteReceivedMessage } from "@/lib/rfq-client";
-import { computeApyFromScaledPrices } from "@acta-markets/ts-sdk/ws";
+import {
+  computeApyFromScaledPrices,
+  quoteAmountToQuantity,
+  quantityToQuoteAmount,
+  sizeRuleInQuoteTerms,
+} from "@acta-markets/ts-sdk/ws";
 import {
   MARKETS,
   getMarket,
@@ -45,6 +51,31 @@ function formatUsdc(n: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })} USDC`;
+}
+
+function alignQuantityToRule(
+  quantity: number,
+  rule: { min_size: number; max_size: number; step: number }
+): number {
+  const clamped = Math.max(rule.min_size, Math.min(rule.max_size, Math.round(quantity)));
+  if (rule.step <= 0) return clamped;
+  const offset = clamped - rule.min_size;
+  const steps = Math.round(offset / rule.step);
+  const snapped = rule.min_size + steps * rule.step;
+  return Math.max(rule.min_size, Math.min(rule.max_size, snapped));
+}
+
+function decimalsFromStep(step: number): number {
+  if (!Number.isFinite(step) || step <= 0) return 2;
+  const text = step.toString();
+  if (!text.includes(".")) return 0;
+  return Math.min(9, text.split(".")[1]?.length ?? 0);
+}
+
+function formatInputValue(value: number, maxDecimals: number): string {
+  if (!Number.isFinite(value)) return "";
+  if (maxDecimals <= 0) return String(Math.round(value));
+  return value.toFixed(maxDecimals).replace(/\.?0+$/, "");
 }
 
 export function MarketClient({ asset }: { asset: string }) {
@@ -84,18 +115,14 @@ export function MarketClient({ asset }: { asset: string }) {
   const [rfqModalOpen, setRfqModalOpen] = useState(false);
   const [rfqRequestNonce, setRfqRequestNonce] = useState(0);
   const [isRequestingQuote, setIsRequestingQuote] = useState(false);
-  const [isPrefetchingQuote, setIsPrefetchingQuote] = useState(false);
-  const [previewQuote, setPreviewQuote] = useState<QuoteReceivedMessage | null>(null);
-  const [previewQuoteKey, setPreviewQuoteKey] = useState<string | null>(null);
   const [modalInitialQuote, setModalInitialQuote] = useState<QuoteReceivedMessage | null>(null);
-  const [modalAprPct, setModalAprPct] = useState<number | null>(null);
-  const [modalPremiumUsd, setModalPremiumUsd] = useState<number | null>(null);
   const [indicativeRequestedKey, setIndicativeRequestedKey] = useState<string | null>(null);
-  const latestPreviewRequestKeyRef = useRef<string | null>(null);
   
   // Global RFQ context (markets already fetched on app load)
   const {
     markets: rfqMarkets,
+    tokenCaps,
+    marketDescriptors,
     currentQuote,
     error: rfqError,
     submitRfq,
@@ -460,17 +487,76 @@ export function MarketClient({ asset }: { asset: string }) {
   const selectedPrice = priceOptions[selectedPriceIdx];
   const selectedPriceOption = priceOptionsWithApr[selectedPriceIdx];
   const hasSelectedPrice = priceOptions.length > 0;
+  const selectedStrikeLamports = Math.round(selectedPrice * 1_000_000_000);
+  const rfqMarketDescriptor = useMemo(
+    () =>
+      rfqMarketPda
+        ? marketDescriptors.find((d) => d.market?.market_pda === rfqMarketPda) ?? null
+        : null,
+    [marketDescriptors, rfqMarketPda]
+  );
+  const underlyingDecimals = rfqMarketDescriptor?.underlying_decimals ?? 9;
+  const wireSizeRule = rfqMarketDescriptor?.size_rule ?? null;
+  const depositRule = useMemo(() => {
+    if (!wireSizeRule) return null;
+    if (type === "call") {
+      const scale = 10 ** underlyingDecimals;
+      return {
+        min: wireSizeRule.min_size / scale,
+        max: wireSizeRule.max_size / scale,
+        step: wireSizeRule.step / scale,
+      };
+    }
+    return sizeRuleInQuoteTerms(wireSizeRule, selectedStrikeLamports, underlyingDecimals);
+  }, [wireSizeRule, type, selectedStrikeLamports, underlyingDecimals]);
+  const depositInputDecimals = useMemo(() => {
+    if (!depositRule) return type === "call" ? Math.min(9, underlyingDecimals) : 2;
+    return Math.max(type === "csp" ? 2 : 0, decimalsFromStep(depositRule.step));
+  }, [depositRule, type, underlyingDecimals]);
 
-  if (!market) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-4xl font-black uppercase">Market not found</h1>
-        <div className="font-bold text-gray-700">
-          Try <Link className="underline" href="/earn">/earn</Link>.
-        </div>
-      </div>
-    );
-  }
+  const normalizeDepositAmount = useCallback(
+    (value: number): number => {
+      if (!Number.isFinite(value) || value <= 0 || !wireSizeRule) return value;
+      const rawQuantity =
+        type === "call"
+          ? Math.round(value * 10 ** underlyingDecimals)
+          : quoteAmountToQuantity(value, selectedStrikeLamports, underlyingDecimals);
+      const alignedQuantity = alignQuantityToRule(rawQuantity, wireSizeRule);
+      return type === "call"
+        ? alignedQuantity / 10 ** underlyingDecimals
+        : quantityToQuoteAmount(alignedQuantity, selectedStrikeLamports, underlyingDecimals);
+    },
+    [wireSizeRule, type, underlyingDecimals, selectedStrikeLamports]
+  );
+
+  const handleDepositChange = useCallback(
+    (raw: string) => {
+      if (raw === "") {
+        setDeposit("");
+        return;
+      }
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) {
+        setDeposit(raw);
+        return;
+      }
+      const normalized = normalizeDepositAmount(parsed);
+      setDeposit(formatInputValue(normalized, depositInputDecimals));
+    },
+    [normalizeDepositAmount, depositInputDecimals]
+  );
+
+  useEffect(() => {
+    if (deposit === "") return;
+    const parsed = Number(deposit);
+    if (!Number.isFinite(parsed) || parsed <= 0) return;
+    const normalized = normalizeDepositAmount(parsed);
+    const formatted = formatInputValue(normalized, depositInputDecimals);
+    if (formatted !== deposit) {
+      setDeposit(formatted);
+    }
+  }, [deposit, normalizeDepositAmount, depositInputDecimals]);
+
   // Calculate term from expiry date
   const expiryDate = strikeDates[strikeIdx] ?? strikeDates[0] ?? new Date();
   const isLiveMarketReady = !!expiryFromMarket && Number.isFinite(selectedPrice);
@@ -483,51 +569,22 @@ export function MarketClient({ asset }: { asset: string }) {
   const spot = live?.price ?? 0;
 
   const depositNum = Number(deposit);
-  const depositOk = Number.isFinite(depositNum) && depositNum > 0;
-  const selectedStrikeLamports = Math.round(selectedPrice * 1_000_000_000);
-  const quantityLamports = Math.round(depositNum * 1_000_000_000);
-  const quoteInputKey =
-    depositOk && hasSelectedPrice && rfqMarketPda && !shouldShowIndicativeLoading
-      ? `${rfqMarketPda}:${positionType}:${selectedStrikeLamports}:${quantityLamports}`
-      : null;
-
+  const quantityLamports = useMemo(() => {
+    if (!Number.isFinite(depositNum) || depositNum <= 0 || !wireSizeRule) return null;
+    const quantity =
+      type === "call"
+        ? Math.round(depositNum * 10 ** underlyingDecimals)
+        : quoteAmountToQuantity(depositNum, selectedStrikeLamports, underlyingDecimals);
+    if (quantity < wireSizeRule.min_size || quantity > wireSizeRule.max_size) return null;
+    if (wireSizeRule.step > 0 && (quantity - wireSizeRule.min_size) % wireSizeRule.step !== 0) return null;
+    return quantity;
+  }, [depositNum, wireSizeRule, type, underlyingDecimals, selectedStrikeLamports]);
+  const depositOk = quantityLamports != null;
   const notionalUsd =
     type === "call" ? (depositOk ? depositNum * spot : 0) : depositOk ? depositNum : 0;
-
-  const hasFreshPreviewQuote =
-    !!previewQuote &&
-    !!quoteInputKey &&
-    previewQuoteKey === quoteInputKey &&
-    Number(previewQuote.strike) === selectedStrikeLamports;
-  const previewDisplayPrice1e9 =
-    hasFreshPreviewQuote && previewQuote
-      ? Number(previewQuote.net_price)
-      : null;
-  const quotePricePerUnitUsd =
-    previewDisplayPrice1e9 != null ? previewDisplayPrice1e9 / 1_000_000_000 : null;
-  const selectedAprFromQuotePct = useMemo(() => {
-    if (!hasFreshPreviewQuote || !previewQuote) return null;
-    const premium1e9 = Number(previewQuote.net_price ?? previewQuote.price);
-    try {
-      const result = computeApyFromScaledPrices({
-        positionType,
-        underlyingAmount: 1,
-        grossPremiumPerUnit1e9: premium1e9,
-        strike1e9: selectedStrikeLamports,
-        spotPrice1e9: Math.round(spot * 1_000_000_000),
-        secondsToExpiry: Math.max(1, Math.floor(msToExpiry / 1000)),
-      });
-      return result.apr * 100;
-    } catch {
-      return null;
-    }
-  }, [hasFreshPreviewQuote, previewQuote, positionType, selectedStrikeLamports, spot, msToExpiry]);
-  // Use quote-derived APR when we already have a live quote for current inputs.
-  const selectedApr = selectedAprFromQuotePct ?? (selectedPriceOption?.apr ?? 0) * 100;
+  const selectedApr = (selectedPriceOption?.apr ?? 0) * 100;
   const displayedPremiumUsd = depositOk
-    ? quotePricePerUnitUsd != null
-      ? quotePricePerUnitUsd * depositNum
-      : notionalUsd * (selectedApr / 100) * (termDays / 365)
+    ? notionalUsd * (selectedApr / 100) * (termDays / 365)
     : 0;
   const isRfqAuthPending =
     !!walletAddress &&
@@ -542,8 +599,6 @@ export function MarketClient({ asset }: { asset: string }) {
     rfqAuthenticated &&
     !shouldShowIndicativeLoading &&
     !isRfqAuthPending;
-  const needsFreshQuote = requiresLiveQuote && !hasFreshPreviewQuote;
-  const isQuoteUpdating = isRfqAuthPending || isPrefetchingQuote;
   const ctaLabel = !walletAddress
     ? "Connect"
     : !hasSelectedPrice
@@ -554,126 +609,44 @@ export function MarketClient({ asset }: { asset: string }) {
           ? "Loading prices..."
           : isRfqAuthPending
             ? "Connecting..."
-            : isQuoteUpdating
-              ? "Updating quote..."
-              : needsFreshQuote
-                ? "Waiting for quote..."
-              : isRequestingQuote
+            : isRequestingQuote
                 ? "Getting quote..."
                 : "Deposit";
 
-  const requestPreviewQuote = useCallback(() => {
-    if (!rfqMarketPda) return;
-    latestPreviewRequestKeyRef.current = quoteInputKey;
-    clearTransientState();
-    setIsPrefetchingQuote(true);
-    submitRfq({
-      market: rfqMarketPda,
-      positionType,
-      strike: selectedStrikeLamports,
-      quantity: quantityLamports,
-      timeoutSeconds: 30,
-    });
-  }, [
-    rfqMarketPda,
-    quoteInputKey,
-    clearTransientState,
-    submitRfq,
-    positionType,
-    selectedStrikeLamports,
-    quantityLamports,
-  ]);
+  const capFilledFallback = clampNumber(market?.capFilledPct ?? 0, 0, 100);
+  const currentUnderlyingMint = (getTokenMint(market?.asset ?? asset) ?? "").trim();
+  const currentTokenCap = tokenCaps.find((cap) => cap.underlying_mint === currentUnderlyingMint);
+  const liveCapFilledPct = getCapFilledPct(currentTokenCap);
+  const capFilledPct = liveCapFilledPct ?? capFilledFallback;
 
-  const capFilled = clampNumber(market.capFilledPct, 0, 100);
-
-  const maxPreset = type === "call" ? "10" : "5000";
-  const maxPresetNum = Number(maxPreset);
+  const defaultMaxPresetNum = type === "call" ? 10 : 5000;
+  const maxPresetNum = depositRule?.max ?? defaultMaxPresetNum;
+  const halfPresetNum = depositRule
+    ? normalizeDepositAmount((depositRule.min + depositRule.max) / 2)
+    : maxPresetNum / 2;
+  const maxPreset = formatInputValue(maxPresetNum, depositInputDecimals);
 
   useEffect(() => {
-    if (!isRequestingQuote) return;
-    if (currentQuote || rfqError) {
+    if (!isRequestingQuote || rfqModalOpen) return;
+    if (rfqError) {
       setIsRequestingQuote(false);
-    }
-  }, [isRequestingQuote, currentQuote, rfqError]);
-
-  useEffect(() => {
-    if (!quoteInputKey || !rfqConnected || !rfqAuthenticated || !rfqMarketPda || shouldShowIndicativeLoading) {
-      setIsPrefetchingQuote(false);
-      setPreviewQuote(null);
-      setPreviewQuoteKey(null);
       return;
     }
-    if (rfqModalOpen) {
-      setIsPrefetchingQuote(false);
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setPreviewQuote(null);
-      setPreviewQuoteKey(null);
-      requestPreviewQuote();
-    }, 150);
-
-    return () => window.clearTimeout(timer);
-  }, [
-    rfqModalOpen,
-    quoteInputKey,
-    rfqConnected,
-    rfqAuthenticated,
-    rfqMarketPda,
-    shouldShowIndicativeLoading,
-    clearTransientState,
-    requestPreviewQuote,
-  ]);
-
-  useEffect(() => {
-    if (!quoteInputKey || !rfqConnected || !rfqAuthenticated || !rfqMarketPda || shouldShowIndicativeLoading || rfqModalOpen) {
-      return;
-    }
-    const refreshEveryMs = hasFreshPreviewQuote ? 30_000 : 5_000;
-
-    const intervalId = window.setInterval(() => {
-      if (isRequestingQuote || isPrefetchingQuote) return;
-      requestPreviewQuote();
-    }, refreshEveryMs);
-
-    return () => window.clearInterval(intervalId);
-  }, [
-    quoteInputKey,
-    rfqConnected,
-    rfqAuthenticated,
-    rfqMarketPda,
-    shouldShowIndicativeLoading,
-    rfqModalOpen,
-    isRequestingQuote,
-    isPrefetchingQuote,
-    hasFreshPreviewQuote,
-    requestPreviewQuote,
-  ]);
-
-  useEffect(() => {
-    if (!isPrefetchingQuote) return;
     if (!currentQuote) return;
-    const quoteStrike = Number(currentQuote.strike);
-    if (Number.isFinite(quoteStrike) && quoteStrike === selectedStrikeLamports) {
-      setPreviewQuote(currentQuote);
-      setPreviewQuoteKey(latestPreviewRequestKeyRef.current);
-    }
-    setIsPrefetchingQuote(false);
-  }, [isPrefetchingQuote, currentQuote, selectedStrikeLamports]);
+    if (Number(currentQuote.strike) !== selectedStrikeLamports) return;
+    setModalInitialQuote(currentQuote);
+    setIsRequestingQuote(false);
+    setRfqRequestNonce((n) => n + 1);
+    setRfqModalOpen(true);
+  }, [isRequestingQuote, rfqModalOpen, rfqError, currentQuote, selectedStrikeLamports]);
 
   useEffect(() => {
-    if (!isPrefetchingQuote || !rfqError) return;
-    setIsPrefetchingQuote(false);
-  }, [isPrefetchingQuote, rfqError]);
-
-  useEffect(() => {
-    if (!isPrefetchingQuote) return;
+    if (!isRequestingQuote || rfqModalOpen) return;
     const timeoutId = window.setTimeout(() => {
-      setIsPrefetchingQuote(false);
-    }, 8000);
+      setIsRequestingQuote(false);
+    }, 15000);
     return () => window.clearTimeout(timeoutId);
-  }, [isPrefetchingQuote]);
+  }, [isRequestingQuote, rfqModalOpen]);
 
   const handleDepositClick = useCallback(() => {
     if (isRequestingQuote) return;
@@ -684,6 +657,10 @@ export function MarketClient({ asset }: { asset: string }) {
     }
     if (!hasSelectedPrice) {
       console.warn("[MarketClient] Deposit blocked: no strike selected yet");
+      return;
+    }
+    if (quantityLamports == null) {
+      console.warn("[MarketClient] Deposit blocked: amount violates market size rule");
       return;
     }
 
@@ -703,29 +680,16 @@ export function MarketClient({ asset }: { asset: string }) {
     }
     if (!marketPda) return;
 
-    if (!hasFreshPreviewQuote) {
-      console.warn("[MarketClient] Deposit blocked: waiting for fresh live quote");
-      return;
-    }
-
-    setModalInitialQuote(previewQuote);
-    setModalAprPct(selectedApr);
-    setModalPremiumUsd(displayedPremiumUsd);
-    if (hasFreshPreviewQuote) {
-      setIsRequestingQuote(false);
-    } else {
-      clearTransientState();
-      submitRfq({
-        market: marketPda,
-        positionType,
-        strike: selectedStrikeLamports,
-        quantity: quantityLamports,
-        timeoutSeconds: 30,
-      });
-      setIsRequestingQuote(true);
-    }
-    setRfqRequestNonce((n) => n + 1);
-    setRfqModalOpen(true);
+    clearTransientState();
+    setModalInitialQuote(null);
+    submitRfq({
+      market: marketPda,
+      positionType,
+      strike: selectedStrikeLamports,
+      quantity: quantityLamports,
+      timeoutSeconds: 30,
+    });
+    setIsRequestingQuote(true);
   }, [
     isRequestingQuote,
     rfqMarketPda,
@@ -738,11 +702,18 @@ export function MarketClient({ asset }: { asset: string }) {
     selectedStrikeLamports,
     quantityLamports,
     positionType,
-    hasFreshPreviewQuote,
-    previewQuote,
-    selectedApr,
-    displayedPremiumUsd,
   ]);
+
+  if (!market) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-4xl font-black uppercase">Market not found</h1>
+        <div className="font-bold text-gray-700">
+          Try <Link className="underline" href="/earn">/earn</Link>.
+        </div>
+      </div>
+    );
+  }
 
   if (!isLiveMarketReady) {
     return (
@@ -872,7 +843,7 @@ export function MarketClient({ asset }: { asset: string }) {
               <div className="text-sm font-semibold text-white/70">
                 Spot <span className="text-white">{formatUsdSmart(spot)}</span>
                 <span className="mx-2 text-white/25">·</span>
-                Cap <span className="text-white">{formatPct(capFilled)}</span>
+                Cap filled <span className="text-white">{formatPct(capFilledPct)}</span>
                 <span className="mx-2 text-white/25">·</span>
                 <button
                   type="button"
@@ -1057,7 +1028,7 @@ export function MarketClient({ asset }: { asset: string }) {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setDeposit(String(maxPresetNum / 2))}
+                  onClick={() => setDeposit(formatInputValue(halfPresetNum, depositInputDecimals))}
                   className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white/80 hover:bg-white/10"
                 >
                   HALF
@@ -1078,7 +1049,7 @@ export function MarketClient({ asset }: { asset: string }) {
                   inputMode="decimal"
                   placeholder={maxPreset}
                   value={deposit}
-                  onChange={(e) => setDeposit(e.target.value)}
+                  onChange={(e) => handleDepositChange(e.target.value)}
                   className="h-14 w-full bg-transparent text-lg font-semibold text-white outline-none placeholder:text-white/35"
                 />
               </div>
@@ -1100,6 +1071,15 @@ export function MarketClient({ asset }: { asset: string }) {
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/70">
+              {depositRule ? (
+                <div className="w-full text-xs text-white/50">
+                  Size rule: min {formatInputValue(depositRule.min, depositInputDecimals)}{" "}
+                  {type === "call" ? market.asset : "USDC"}, max{" "}
+                  {formatInputValue(depositRule.max, depositInputDecimals)}{" "}
+                  {type === "call" ? market.asset : "USDC"}, step{" "}
+                  {formatInputValue(depositRule.step, depositInputDecimals)}.
+                </div>
+              ) : null}
               <div>
                 <span className="text-white/50">APR</span>{" "}
                 <span className="font-semibold text-white">
@@ -1118,13 +1098,7 @@ export function MarketClient({ asset }: { asset: string }) {
                 <div>
                   <span className="text-white/50">Quote</span>{" "}
                   <span className="font-semibold text-white">
-                    {hasFreshPreviewQuote
-                      ? "Live"
-                      : isRfqAuthPending
-                        ? "Connecting..."
-                      : isPrefetchingQuote
-                        ? "Updating..."
-                        : "Waiting"}
+                    {isRfqAuthPending ? "Connecting..." : "Indicative"}
                   </span>
                 </div>
               ) : null}
@@ -1207,9 +1181,7 @@ export function MarketClient({ asset }: { asset: string }) {
                 !depositOk ||
                 !hasSelectedPrice ||
                 isRequestingQuote ||
-                shouldShowIndicativeLoading ||
-                isQuoteUpdating ||
-                needsFreshQuote
+                shouldShowIndicativeLoading
               }
               onClick={handleDepositClick}
             >
@@ -1245,20 +1217,17 @@ export function MarketClient({ asset }: { asset: string }) {
           setRfqModalOpen(false);
           setIsRequestingQuote(false);
           setModalInitialQuote(null);
-          setModalAprPct(null);
-          setModalPremiumUsd(null);
         }}
         requestNonce={rfqRequestNonce}
         marketPda={rfqMarketPda}
         asset={market.asset}
         positionType={type === "call" ? "covered_call" : "cash_secured_put"}
         strike={Math.round(selectedPrice * 1_000_000_000)} // Convert to lamports (9 decimals)
-        quantity={Math.round(depositNum * 1_000_000_000)} // Convert to token smallest units (9 decimals for most)
+        quantity={quantityLamports ?? 0}
         strikeDisplay={formatUsdSmart(selectedPrice)}
-        quantityDisplay={`${depositNum.toLocaleString()} ${market.asset}`}
+        quantityDisplay={`${depositNum.toLocaleString()} ${type === "call" ? market.asset : "USDC"}`}
         initialQuote={modalInitialQuote}
-        lockedAprPct={modalAprPct}
-        lockedPremiumUsd={modalPremiumUsd}
+        lockedAprPct={selectedApr}
         signTransaction={walletAddress ? solanaSignTransaction : undefined}
       />
     </div>

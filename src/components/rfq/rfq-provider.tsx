@@ -10,6 +10,8 @@ import {
   type PositionInfo,
   type QuoteReceivedMessage,
   type IndicativePricesMessage,
+  type TokenCapInfo,
+  type ServerMessage,
   type ConnectionState,
 } from "@/lib/rfq-client";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
@@ -23,6 +25,8 @@ interface RfqContextValue {
   isAuthenticated: boolean;
   /** Available markets from RFQ server */
   markets: MarketInfo[];
+  /** Token OI caps by underlying token */
+  tokenCaps: TokenCapInfo[];
   /** Market descriptors (includes underlying/quote metadata) */
   marketDescriptors: MarketDescriptorInfo[];
   /** User's positions (requires auth) */
@@ -168,6 +172,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const walletAddressRef = useRef<string | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [markets, setMarkets] = useState<MarketInfo[]>([]);
+  const [tokenCaps, setTokenCaps] = useState<TokenCapInfo[]>([]);
   const [marketDescriptors, setMarketDescriptors] = useState<MarketDescriptorInfo[]>([]);
   const [positions, setPositions] = useState<PositionInfo[]>([]);
   const [currentQuote, setCurrentQuote] = useState<QuoteReceivedMessage | null>(null);
@@ -245,6 +250,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       // Fetch markets immediately after connecting
       console.log("[RfqProvider] Fetching markets...");
       client.getMarkets();
+      client.getTokenCaps({ include_markets: false });
       // SDK now requires descriptors to be loaded before createRfq.
       client.getMarketDescriptors({ active_only: true });
     });
@@ -266,6 +272,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       }
       // Fetch positions + market metadata together for stable PDA->underlying lookup.
       fetchPortfolioPrereqs();
+      client.getTokenCaps({ include_markets: false });
       client.getMarketDescriptors({ active_only: true });
     });
 
@@ -292,10 +299,13 @@ export function RfqProvider({ children }: RfqProviderProps) {
     });
 
     // Data events
-    client.on("message", () => {
+    client.on("message", (message: ServerMessage) => {
       lastWsMessageAtRef.current = Date.now();
       setWsHealth("healthy");
       setWsSilentSeconds(0);
+      if (message.type === "TokenCaps") {
+        setTokenCaps(message.data.tokens ?? []);
+      }
     });
 
     client.on("markets", (m) => {
@@ -363,6 +373,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       if (!activeClient) return;
       // Keep indicative prices fresh across app navigation.
       prefetchIndicativesForMarkets(activeClient, markets);
+      activeClient.getTokenCaps({ include_markets: false });
     }, 30_000);
 
     return () => window.clearInterval(intervalId);
@@ -636,6 +647,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     isConnected: connectionState !== "disconnected" && connectionState !== "error",
     isAuthenticated: connectionState === "authenticated",
     markets,
+    tokenCaps,
     marketDescriptors,
     positions,
     currentQuote,

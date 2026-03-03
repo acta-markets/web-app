@@ -25,6 +25,9 @@ export type {
   PositionInfo, 
   QuoteReceivedMessage,
   IndicativePricesMessage,
+  TokenCapInfo,
+  TokenCapsMessage,
+  ServerMessage,
 } from "@acta-markets/ts-sdk/ws";
 
 import { ActaWsClient, WalletAuthProvider, type WalletLike } from "@acta-markets/ts-sdk/ws";
@@ -33,7 +36,7 @@ import { ActaWsClient, WalletAuthProvider, type WalletLike } from "@acta-markets
 // Configuration
 // ============================================================================
 
-const RFQ_WS_URL = process.env.NEXT_PUBLIC_RFQ_WS_URL || "ws://78.46.77.51:8080";
+const RFQ_WS_URL = process.env.NEXT_PUBLIC_RFQ_WS_URL || "wss://devnet-api.acta.markets";
 
 export interface CreateClientOptions {
   url?: string;
@@ -70,6 +73,7 @@ function patchQueryMessagesForServer(client: ActaWsClient): void {
       is_put?: boolean | null;
     }) => void;
     getTokens: (args?: { active_only?: boolean }) => void;
+    getTokenCaps: (args?: { include_markets?: boolean }) => void;
     getIndicativePrices: (req: { market: string; position_type: "covered_call" | "cash_secured_put" }) => void;
   };
 
@@ -114,6 +118,12 @@ function patchQueryMessagesForServer(client: ActaWsClient): void {
     c.send({
       type: "GetTokens",
       data: { request_id: createRequestId(), active_only: args?.active_only ?? true },
+    });
+  };
+  c.getTokenCaps = (args?: { include_markets?: boolean }) => {
+    c.send({
+      type: "GetTokenCaps",
+      data: { request_id: createRequestId(), include_markets: args?.include_markets ?? false },
     });
   };
   c.getIndicativePrices = (req: { market: string; position_type: "covered_call" | "cash_secured_put" }) => {
