@@ -1,17 +1,22 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppModal } from "@/components/app-ui/app-modal";
 import { AppTable, AppTd, AppTh } from "@/components/app-ui/app-table";
-import { MARKETS, type MarketType, formatPct } from "@/lib/markets";
-import { getTokenMint } from "@/lib/tokens";
+import { MARKETS, type MarketType, type Market, formatPct } from "@/lib/markets";
+import { getNetwork, getTokenMint, getTokenPythId, getTokenSymbolByMint } from "@/lib/tokens";
 import { getCapFilledPct } from "@/lib/token-caps";
 import { getTokenBrand } from "@/lib/token-brand";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
+import { computeApyFromScaledPrices } from "@acta-markets/ts-sdk/ws";
+
+type PythLatestResponse =
+  | { ok: true; prices: Record<string, { price: number; conf: number; expo: number; publishTime: number }> }
+  | { ok: false; error: string };
 
 function typeLabel(t: MarketType) {
   // Keep verbose names out of the UI; users already chose a strategy.
@@ -22,16 +27,114 @@ function typeShort(t: MarketType) {
   return t === "call" ? "Call" : "CSP";
 }
 
+function normalizeExpiryTs(raw: unknown): number | null {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  // Some backends may send ms timestamps; normalize to seconds.
+  return value > 1_000_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
+}
+
 export function EarnClient() {
   const [type, setType] = useState<MarketType>("call");
   const router = useRouter();
   const [howOpen, setHowOpen] = useState(false);
-  const { tokenCaps } = useRfqContext();
+  const { tokenCaps, markets: rfqMarkets, getIndicativePricesCached } = useRfqContext();
+  const network = getNetwork();
+  const isTestnet = network === "testnet";
   const [sort, setSort] = useState<{ key: "minApr" | "maxApr"; dir: "asc" | "desc" } | null>(
     null
   );
+  const [liveSpotByPythId, setLiveSpotByPythId] = useState<Record<string, number>>({});
 
-  const rows = useMemo(() => MARKETS.filter((m) => m.type === type), [type]);
+  const listedMarkets = useMemo<Market[]>(() => {
+    if (!isTestnet) return MARKETS;
+
+    const rows: Market[] = [];
+    const seen = new Set<string>();
+    for (const m of rfqMarkets) {
+      const underlyingMint = String(
+        (m as unknown as { underlying?: string; underlying_mint?: string }).underlying ??
+          (m as unknown as { underlying?: string; underlying_mint?: string }).underlying_mint ??
+          ""
+      ).trim();
+      if (!underlyingMint) continue;
+
+      const asset = getTokenSymbolByMint(underlyingMint, { preferWrappedSol: true });
+      if (!asset) continue;
+
+      const marketType: MarketType = (m as unknown as { is_put?: boolean }).is_put ? "csp" : "call";
+      const key = `${asset}:${marketType}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const fallback = MARKETS.find(
+        (entry) => entry.asset.toUpperCase() === asset.toUpperCase() && entry.type === marketType
+      );
+
+      rows.push({
+        asset,
+        type: marketType,
+        minApr: fallback?.minApr ?? 0,
+        maxApr: fallback?.maxApr ?? 0,
+        capFilledPct: fallback?.capFilledPct ?? 0,
+        spotPrice: fallback?.spotPrice ?? 0,
+        pythId: fallback?.pythId,
+        priceOptions: fallback?.priceOptions ?? [0],
+      });
+    }
+    return rows;
+  }, [isTestnet, rfqMarkets]);
+  const isLoadingLiveMarkets = isTestnet && rfqMarkets.length === 0;
+
+  const rows = useMemo(() => listedMarkets.filter((m) => m.type === type), [listedMarkets, type]);
+  const pythIdsForRows = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of listedMarkets) {
+      const id = getTokenPythId(row.asset);
+      if (id) ids.add(id.toLowerCase());
+    }
+    return Array.from(ids);
+  }, [listedMarkets]);
+
+  useEffect(() => {
+    if (pythIdsForRows.length === 0) {
+      setLiveSpotByPythId({});
+      return;
+    }
+
+    let alive = true;
+    const controller = new AbortController();
+    const query = pythIdsForRows.map((id) => `ids[]=${encodeURIComponent(id)}`).join("&");
+
+    const fetchLatest = async () => {
+      try {
+        const res = await fetch(`/api/pyth/latest?${query}`, { signal: controller.signal });
+        const data = (await res.json()) as PythLatestResponse;
+        if (!alive || !res.ok || !("ok" in data) || data.ok !== true) return;
+
+        const next: Record<string, number> = {};
+        for (const [id, entry] of Object.entries(data.prices ?? {})) {
+          if (Number.isFinite(entry?.price) && entry.price > 0) {
+            next[id.toLowerCase()] = Number(entry.price);
+          }
+        }
+        if (Object.keys(next).length > 0) {
+          setLiveSpotByPythId((prev) => ({ ...prev, ...next }));
+        }
+      } catch {
+        // ignore fetch errors; keep last known spots
+      }
+    };
+
+    void fetchLatest();
+    const intervalId = window.setInterval(fetchLatest, 10_000);
+    return () => {
+      alive = false;
+      controller.abort();
+      window.clearInterval(intervalId);
+    };
+  }, [pythIdsForRows]);
+
   const sortedRows = useMemo(() => {
     if (!sort) return rows;
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -40,7 +143,7 @@ export function EarnClient() {
 
   const popular = useMemo(() => {
     // Make this robust to casing differences (e.g. "ZBTC" vs "zBTC").
-    const preferred = ["jitoSOL", "JLP", "zBTC", "PUMP"];
+    const preferred = ["WSOL", "jitoSOL", "JLP", "zBTC", "PUMP"];
     const order = new Map(preferred.map((s, i) => [s.toUpperCase(), i]));
     return rows
       .filter((r) => order.has(r.asset.toUpperCase()))
@@ -65,6 +168,100 @@ export function EarnClient() {
     if (!mint) return fallbackFilled;
     return capFilledPctByAsset.get(mint) ?? fallbackFilled;
   }, [capFilledPctByAsset]);
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const normalizeIsPut = useCallback((value: unknown): boolean | null => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1 ? true : value === 0 ? false : null;
+    if (typeof value === "string") {
+      const v = value.trim().toLowerCase();
+      if (v === "true" || v === "1") return true;
+      if (v === "false" || v === "0") return false;
+    }
+    return null;
+  }, []);
+
+  const liveAprRangeByMarket = useMemo(() => {
+    const out = new Map<string, { minAprPct: number; maxAprPct: number }>();
+
+    for (const row of listedMarkets) {
+      const underlyingMint = (getTokenMint(row.asset) ?? "").trim();
+      if (!underlyingMint) continue;
+      const isPut = row.type === "csp";
+      const matchingRfqMarkets = rfqMarkets
+        .map((m) => {
+          const marketUnderlying = String(
+            (m as unknown as { underlying?: string; underlying_mint?: string }).underlying ??
+              (m as unknown as { underlying?: string; underlying_mint?: string }).underlying_mint ??
+              ""
+          ).trim();
+          const marketIsPut = normalizeIsPut((m as unknown as { is_put?: unknown }).is_put);
+          const expiryTs = normalizeExpiryTs((m as unknown as { expiry_ts?: unknown }).expiry_ts);
+          return { market: m, marketUnderlying, marketIsPut, expiryTs };
+        })
+        .filter(({ marketUnderlying, marketIsPut, expiryTs }) => {
+          return (
+            marketUnderlying === underlyingMint &&
+            marketIsPut === isPut &&
+            expiryTs != null &&
+            expiryTs > nowSeconds
+          );
+        })
+        .sort((a, b) => (a.expiryTs ?? 0) - (b.expiryTs ?? 0));
+      if (!matchingRfqMarkets.length) continue;
+
+      const positionType = row.type === "call" ? "covered_call" : "cash_secured_put";
+      const pythId = getTokenPythId(row.asset)?.toLowerCase();
+      const liveSpot = pythId ? liveSpotByPythId[pythId] : undefined;
+      const fallbackSpot = Number.isFinite(row.spotPrice) && row.spotPrice > 0 ? row.spotPrice : null;
+      const spot = Number.isFinite(liveSpot) && (liveSpot ?? 0) > 0 ? Number(liveSpot) : fallbackSpot;
+      if (!spot || !Number.isFinite(spot) || spot <= 0) continue;
+
+      for (const { market: matchingRfqMarket, expiryTs } of matchingRfqMarkets) {
+        const marketPda = matchingRfqMarket?.pda;
+        if (!marketPda || !expiryTs) continue;
+        const indicative = getIndicativePricesCached(marketPda, positionType);
+        if (!indicative?.strikes?.length) continue;
+        const secondsToExpiry = expiryTs - nowSeconds;
+        if (secondsToExpiry <= 0) continue;
+
+        const aprValuesPct = indicative.strikes
+          .map((s) => {
+            const bestPrice = s.best_price ? Number(s.best_price) : null;
+            const strike = Number(s.strike);
+            if (!bestPrice || !Number.isFinite(strike) || strike <= 0) return null;
+            try {
+              const result = computeApyFromScaledPrices({
+                positionType,
+                underlyingAmount: 1,
+                grossPremiumPerUnit1e9: bestPrice,
+                strike1e9: strike,
+                spotPrice1e9: Math.round(spot * 1_000_000_000),
+                secondsToExpiry,
+              });
+              return result.apr * 100;
+            } catch {
+              return null;
+            }
+          })
+          .filter((v): v is number => v != null && Number.isFinite(v) && v > 0);
+        if (!aprValuesPct.length) continue;
+
+        out.set(`${row.asset.toUpperCase()}:${row.type}`, {
+          minAprPct: Math.min(...aprValuesPct),
+          maxAprPct: Math.max(...aprValuesPct),
+        });
+        break;
+      }
+    }
+
+    return out;
+  }, [listedMarkets, rfqMarkets, normalizeIsPut, getIndicativePricesCached, nowSeconds, liveSpotByPythId]);
+
+  const getAprRange = useCallback(
+    (m: Market) => liveAprRangeByMarket.get(`${m.asset.toUpperCase()}:${m.type}`) ?? { minAprPct: m.minApr, maxAprPct: m.maxApr },
+    [liveAprRangeByMarket]
+  );
 
   return (
     <div className="space-y-8">
@@ -194,7 +391,21 @@ export function EarnClient() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {popular.map((m) => (
+          {isLoadingLiveMarkets
+            ? Array.from({ length: 4 }).map((_, idx) => (
+                <AppCard key={`popular-skeleton-${idx}`} className="relative overflow-hidden p-4">
+                  <div className="h-1.5 w-full animate-pulse rounded bg-white/15" />
+                  <div className="mt-4 flex items-center gap-3">
+                    <div className="h-10 w-10 animate-pulse rounded-xl bg-white/10" />
+                    <div className="h-5 w-20 animate-pulse rounded bg-white/10" />
+                  </div>
+                  <div className="mt-6 h-4 w-16 animate-pulse rounded bg-white/10" />
+                  <div className="mt-2 h-8 w-28 animate-pulse rounded bg-white/10" />
+                  <div className="mt-5 h-3 w-24 animate-pulse rounded bg-white/10" />
+                  <div className="mt-2 h-2 w-full animate-pulse rounded-full bg-white/10" />
+                </AppCard>
+              ))
+            : popular.map((m) => (
             <Link
               key={`${m.asset}:${m.type}`}
               href={`/market/${encodeURIComponent(m.asset)}?type=${m.type}`}
@@ -250,7 +461,7 @@ export function EarnClient() {
                   APR range
                 </div>
                 <div className="mt-1 text-2xl font-semibold">
-                  {formatPct(m.minApr)}–{formatPct(m.maxApr)}
+                  {formatPct(getAprRange(m).minAprPct)}–{formatPct(getAprRange(m).maxAprPct)}
                 </div>
 
                 <div className="mt-4 text-xs text-content-tertiary">
@@ -328,7 +539,18 @@ export function EarnClient() {
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((m) => {
+            {isLoadingLiveMarkets
+              ? Array.from({ length: 5 }).map((_, idx) => (
+                  <tr key={`table-skeleton-${idx}`} className="border-b border-white/5 last:border-b-0">
+                    <AppTd><div className="h-4 w-20 animate-pulse rounded bg-white/10" /></AppTd>
+                    <AppTd><div className="h-4 w-14 animate-pulse rounded bg-white/10" /></AppTd>
+                    <AppTd className="text-right"><div className="ml-auto h-4 w-12 animate-pulse rounded bg-white/10" /></AppTd>
+                    <AppTd className="text-right"><div className="ml-auto h-4 w-12 animate-pulse rounded bg-white/10" /></AppTd>
+                    <AppTd className="text-right"><div className="ml-auto h-4 w-12 animate-pulse rounded bg-white/10" /></AppTd>
+                    <AppTd className="text-right"><div className="ml-auto h-4 w-4 animate-pulse rounded bg-white/10" /></AppTd>
+                  </tr>
+                ))
+              : sortedRows.map((m) => {
               const href = `/market/${encodeURIComponent(m.asset)}?type=${m.type}`;
               return (
               <tr
@@ -350,8 +572,8 @@ export function EarnClient() {
                     {typeShort(m.type)}
                   </span>
                 </AppTd>
-                <AppTd className="text-right">{formatPct(m.minApr)}</AppTd>
-                <AppTd className="text-right">{formatPct(m.maxApr)}</AppTd>
+                <AppTd className="text-right">{formatPct(getAprRange(m).minAprPct)}</AppTd>
+                <AppTd className="text-right">{formatPct(getAprRange(m).maxAprPct)}</AppTd>
                 <AppTd className="text-right">{formatPct(getMarketCapFilledPct(m.asset, m.capFilledPct))}</AppTd>
                 <AppTd className="text-right text-content-tertiary">→</AppTd>
               </tr>

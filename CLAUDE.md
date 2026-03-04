@@ -21,7 +21,7 @@ MONGODB_URI="<connection_string>"
 MONGODB_DB="yuzu"
 NEXT_PUBLIC_PRIVY_APP_ID="<privy_app_id>"
 NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
-NEXT_PUBLIC_RFQ_WS_URL="ws://78.46.77.51:8080"  # RFQ infrastructure WebSocket
+NEXT_PUBLIC_RFQ_WS_URL="wss://devnet-api.acta.markets"  # RFQ infrastructure WebSocket
 NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "testnet" - controls token mints
 ```
 
@@ -53,12 +53,26 @@ NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "testnet" - controls token 
 
 **Database**: MongoDB via `src/lib/mongodb.ts` with global connection caching for dev HMR.
 
-**RFQ Infrastructure**: WebSocket client using `@acta-markets/ts-sdk@0.0.1-beta`:
+**RFQ Infrastructure**: WebSocket client using `@acta-markets/ts-sdk@0.0.9-beta`:
 - `src/lib/rfq-client.ts` - Thin wrapper around SDK's `ActaWsClient`
 - `src/lib/use-rfq.ts` - React hook for component integration
 - Connects via `NEXT_PUBLIC_RFQ_WS_URL` env variable
 - Auth flow: `connectAnonymous()` → user clicks connect → `authenticate(walletAuthProvider)`
 - Challenge is human-readable text signed as UTF-8 bytes
+
+### Quote flow modes (for rollback)
+
+- **Current mode (fresh on Deposit)**:
+  - Market page shows indicative APR/premium only.
+  - RFQ quote is requested when `Deposit` is clicked.
+  - While waiting, CTA shows `Getting quote...`.
+  - Modal opens only after matching quote arrives.
+
+- **Previous mode (prefetch on page)**:
+  - Quote requested automatically when price + size are selected.
+  - Quote refreshed periodically (every 30s, faster when stale).
+  - Deposit reused prefetched quote and opened modal immediately with locked values.
+  - If rollback needed, restore quote prefetch effects in `src/components/market/market-client.tsx`.
 
 ## Key Conventions
 

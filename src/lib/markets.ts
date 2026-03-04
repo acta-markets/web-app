@@ -16,6 +16,26 @@ export type Market = {
 
 export const MARKETS: Market[] = [
   {
+    asset: "WSOL",
+    type: "call",
+    minApr: 0,
+    maxApr: 0,
+    capFilledPct: 0,
+    spotPrice: 0,
+    pythId: getTokenPythId("WSOL"),
+    priceOptions: [0]
+  },
+  {
+    asset: "WSOL",
+    type: "csp",
+    minApr: 0,
+    maxApr: 0,
+    capFilledPct: 0,
+    spotPrice: 0,
+    pythId: getTokenPythId("WSOL"),
+    priceOptions: [0]
+  },
+  {
     asset: "jitoSOL",
     type: "call",
     minApr: 12,

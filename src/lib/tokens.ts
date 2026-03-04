@@ -6,6 +6,7 @@
  */
 
 export type Network = "mainnet" | "testnet";
+const WSOL_MINT = "So11111111111111111111111111111111111111112";
 
 export function getNetwork(): Network {
   const env = process.env.NEXT_PUBLIC_SOLANA_NETWORK?.trim().toLowerCase();
@@ -42,6 +43,17 @@ export interface TokenConfig {
  * These are the mainnet tokens with their real addresses.
  */
 export const TOKENS: Record<string, TokenConfig> = {
+  WSOL: {
+    symbol: "WSOL",
+    name: "Wrapped Solana",
+    decimals: 9,
+    logo: "/tokens/solana.png",
+    pythId: "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
+    mint: {
+      mainnet: WSOL_MINT,
+      testnet: WSOL_MINT,
+    },
+  },
   SOL: {
     symbol: "SOL",
     name: "Solana",
@@ -181,5 +193,31 @@ export function getSupportedTokens(): string[] {
  */
 export function isTokenSupported(symbol: string): boolean {
   return symbol.toUpperCase() in TOKENS;
+}
+
+/**
+ * Get token symbol by mint for current network.
+ * For the canonical wrapped SOL mint, return WSOL by default.
+ */
+export function getTokenSymbolByMint(
+  mint: string,
+  options?: { preferWrappedSol?: boolean }
+): string | undefined {
+  const normalizedMint = mint.trim();
+  if (!normalizedMint) return undefined;
+
+  const preferWrappedSol = options?.preferWrappedSol ?? true;
+  if (preferWrappedSol && normalizedMint === WSOL_MINT) {
+    return "WSOL";
+  }
+
+  const networkKey: Network = IS_MAINNET ? "mainnet" : "testnet";
+  for (const token of Object.values(TOKENS)) {
+    if (token.mint[networkKey] === normalizedMint) {
+      return token.symbol;
+    }
+  }
+
+  return undefined;
 }
 

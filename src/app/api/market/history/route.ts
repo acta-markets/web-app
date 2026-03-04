@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 type Range = "1w" | "1m" | "3m";
 
 const COINGECKO_IDS: Record<string, string> = {
+  SOL: "solana",
+  WSOL: "solana",
   ETH: "ethereum",
   ZBTC: "bitcoin",
   BTC: "bitcoin",
