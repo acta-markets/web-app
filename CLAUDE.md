@@ -13,6 +13,36 @@ npm test         # Run tests
 npm run test:watch  # Run tests in watch mode
 ```
 
+## Post-Push Deployment Workflow (Required)
+
+After every `git push`, always verify deployment status on Vercel and fix-forward if needed.
+
+1. **Identify project/team**
+   - Team: `frakt` (`team_J2ROv1pOThoNi7xxlgy6AVPm`)
+   - Project: `yuzu-web-76j7` (`prj_e7I8FKtPMxD6cirzUUeHEglKwOvk`)
+   - If this changes, rediscover via MCP: `list_teams` -> `list_projects`.
+
+2. **Find latest deployment for pushed branch/commit**
+   - Use MCP `list_deployments` for the project/team.
+   - Match by `githubCommitSha` and/or `githubCommitRef`.
+
+3. **Track until terminal state**
+   - Poll deployment state (`QUEUED`/`BUILDING` -> `READY`/`ERROR`).
+   - Stream logs with `get_deployment_build_logs` while building.
+
+4. **If deployment is `READY`**
+   - Report deployment URL + inspector URL.
+   - Include any warnings that may become future failures.
+
+5. **If deployment is `ERROR`**
+   - Capture first actionable root cause from build logs.
+   - Implement a fix in code (no rollback unless requested).
+   - Re-run local sanity checks (`npm run build` minimum).
+   - Commit, push, and repeat this workflow until deployment is `READY`.
+
+6. **Communication format**
+   - Always provide: commit SHA, deployment ID, final state, URL, and concise error/fix summary.
+
 ## Environment Setup
 
 Create `.env.local` with:

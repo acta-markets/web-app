@@ -67,19 +67,16 @@ export function EarnClient() {
       if (seen.has(key)) continue;
       seen.add(key);
 
-      const fallback = MARKETS.find(
-        (entry) => entry.asset.toUpperCase() === asset.toUpperCase() && entry.type === marketType
-      );
-
       rows.push({
         asset,
         type: marketType,
-        minApr: fallback?.minApr ?? 0,
-        maxApr: fallback?.maxApr ?? 0,
-        capFilledPct: fallback?.capFilledPct ?? 0,
-        spotPrice: fallback?.spotPrice ?? 0,
-        pythId: fallback?.pythId,
-        priceOptions: fallback?.priceOptions ?? [0],
+        // On testnet, keep these zeroed so UI never shows static/mock APR fallback.
+        minApr: 0,
+        maxApr: 0,
+        capFilledPct: 0,
+        spotPrice: 0,
+        pythId: getTokenPythId(asset),
+        priceOptions: [0],
       });
     }
     return rows;
@@ -259,8 +256,14 @@ export function EarnClient() {
   }, [listedMarkets, rfqMarkets, normalizeIsPut, getIndicativePricesCached, nowSeconds, liveSpotByPythId]);
 
   const getAprRange = useCallback(
-    (m: Market) => liveAprRangeByMarket.get(`${m.asset.toUpperCase()}:${m.type}`) ?? { minAprPct: m.minApr, maxAprPct: m.maxApr },
-    [liveAprRangeByMarket]
+    (m: Market): { minAprPct: number; maxAprPct: number } | null => {
+      const live = liveAprRangeByMarket.get(`${m.asset.toUpperCase()}:${m.type}`) ?? null;
+      if (live) return live;
+      // Testnet must be strict: no static APR fallback values.
+      if (isTestnet) return null;
+      return { minAprPct: m.minApr, maxAprPct: m.maxApr };
+    },
+    [liveAprRangeByMarket, isTestnet]
   );
 
   return (
@@ -461,7 +464,12 @@ export function EarnClient() {
                   APR range
                 </div>
                 <div className="mt-1 text-2xl font-semibold">
-                  {formatPct(getAprRange(m).minAprPct)}–{formatPct(getAprRange(m).maxAprPct)}
+                  {(() => {
+                    const aprRange = getAprRange(m);
+                    return aprRange
+                      ? `${formatPct(aprRange.minAprPct)}–${formatPct(aprRange.maxAprPct)}`
+                      : "—";
+                  })()}
                 </div>
 
                 <div className="mt-4 text-xs text-content-tertiary">
@@ -572,8 +580,18 @@ export function EarnClient() {
                     {typeShort(m.type)}
                   </span>
                 </AppTd>
-                <AppTd className="text-right">{formatPct(getAprRange(m).minAprPct)}</AppTd>
-                <AppTd className="text-right">{formatPct(getAprRange(m).maxAprPct)}</AppTd>
+                <AppTd className="text-right">
+                  {(() => {
+                    const aprRange = getAprRange(m);
+                    return aprRange ? formatPct(aprRange.minAprPct) : "—";
+                  })()}
+                </AppTd>
+                <AppTd className="text-right">
+                  {(() => {
+                    const aprRange = getAprRange(m);
+                    return aprRange ? formatPct(aprRange.maxAprPct) : "—";
+                  })()}
+                </AppTd>
                 <AppTd className="text-right">{formatPct(getMarketCapFilledPct(m.asset, m.capFilledPct))}</AppTd>
                 <AppTd className="text-right text-content-tertiary">→</AppTd>
               </tr>
