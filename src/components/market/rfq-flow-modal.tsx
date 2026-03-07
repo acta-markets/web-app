@@ -79,6 +79,7 @@ export function RfqFlowModal({
   const [orderId, setOrderId] = useState<string | null>(null);
   const [txSignature, setTxSignature] = useState<string | null>(null);
   const [positionPda, setPositionPda] = useState<string | null>(null);
+  const [quoteSecondsLeft, setQuoteSecondsLeft] = useState<number | null>(null);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -129,6 +130,35 @@ export function RfqFlowModal({
     setError(message);
     setStep("failed");
   }, [rfqError, step, retryCount]);
+
+  // Ticking countdown for quote expiry.
+  // Subtracts 300s settlement buffer — the user's real acceptance window
+  // is valid_until minus the on-chain settlement overhead.
+  const SETTLEMENT_BUFFER_S = 300;
+  useEffect(() => {
+    if (!quote?.valid_until || step !== "quote_received") {
+      setQuoteSecondsLeft(null);
+      return;
+    }
+
+    const calcRemaining = () => {
+      const deadline = Number(quote.valid_until) - SETTLEMENT_BUFFER_S;
+      return Math.max(0, Math.floor(deadline - Date.now() / 1000));
+    };
+
+    setQuoteSecondsLeft(calcRemaining());
+    const id = window.setInterval(() => {
+      const left = calcRemaining();
+      setQuoteSecondsLeft(left);
+      if (left <= 0) {
+        window.clearInterval(id);
+        setQuote(null);
+        setError("Quote expired. Close this modal and click Deposit again to request a fresh quote.");
+        setStep("failed");
+      }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [quote?.valid_until, step]);
 
   // Handle accepting quote
   const handleAcceptQuote = useCallback(async () => {
@@ -343,7 +373,7 @@ export function RfqFlowModal({
               <div className="flex justify-between text-sm">
                 <span className="text-content-tertiary">Expires in</span>
                 <span className="text-content-secondary">
-                  {Math.max(0, Math.floor((Number(quote.valid_until) * 1000 - Date.now()) / 1000))}s
+                  {quoteSecondsLeft != null ? `${quoteSecondsLeft}s` : "—"}
                 </span>
               </div>
             </div>

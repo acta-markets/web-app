@@ -19,15 +19,17 @@ export {
   type ActaWsClientOptions,
 } from "@acta-markets/ts-sdk/ws";
 
-export type { 
-  MarketInfo, 
+export type {
+  MarketInfo,
   MarketDescriptorInfo,
-  PositionInfo, 
+  PositionInfo,
   QuoteReceivedMessage,
   IndicativePricesMessage,
   TokenCapInfo,
   TokenCapsMessage,
   ServerMessage,
+  EarnAssetSummary,
+  EarnSummaryData,
 } from "@acta-markets/ts-sdk/ws";
 
 import { ActaWsClient, WalletAuthProvider, type WalletLike } from "@acta-markets/ts-sdk/ws";
@@ -130,6 +132,12 @@ function patchQueryMessagesForServer(client: ActaWsClient): void {
     c.send({
       type: "GetIndicativePrices",
       data: { request_id: createRequestId(), ...req },
+    });
+  };
+  (c as unknown as { getEarnSummary: () => void }).getEarnSummary = () => {
+    c.send({
+      type: "GetEarnSummary",
+      data: { request_id: createRequestId() },
     });
   };
 }
