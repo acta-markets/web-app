@@ -28,10 +28,7 @@ import {
   formatPct,
   formatUsdSmart
 } from "@/lib/markets";
-
-type PythLatestResponse =
-  | { ok: true; prices: Record<string, { price: number; conf: number; expo: number; publishTime: number }> }
-  | { ok: false; error: string };
+import { usePythPrice } from "@/lib/use-pyth-price";
 
 function formatDate(d: Date) {
   return d.toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" });
@@ -107,10 +104,11 @@ export function MarketClient({ asset }: { asset: string }) {
   const [strikeIdx, setStrikeIdx] = useState<0>(0);
   const [priceIdx, setPriceIdx] = useState(0);
   const [deposit, setDeposit] = useState("");
-  const [live, setLive] = useState<{ price: number; publishTime: number } | null>(null);
   const pythId = market?.pythId;
+  const { price: livePrice, publishTime: livePt, livePoints } = usePythPrice(pythId);
+  const live = livePrice != null ? { price: livePrice, publishTime: livePt! } : null;
   const [baseSpot, setBaseSpot] = useState<number | null>(null);
-  const spotForHooks = live?.price ?? 0;
+  const spotForHooks = livePrice ?? 0;
 
   // RFQ Flow state
   const [rfqModalOpen, setRfqModalOpen] = useState(false);
@@ -313,39 +311,6 @@ export function MarketClient({ asset }: { asset: string }) {
       // ignore
     }
   }, [chartRange]);
-
-  useEffect(() => {
-    let alive = true;
-    const controller = new AbortController();
-
-    async function tick() {
-      if (!pythId) return;
-      try {
-        const res = await fetch(`/api/pyth/latest?ids[]=${encodeURIComponent(pythId)}`, {
-          signal: controller.signal
-        });
-        const data = (await res.json()) as PythLatestResponse;
-        if (!alive) return;
-        if (!res.ok || !("ok" in data) || data.ok !== true) return;
-
-        const key = pythId.toLowerCase();
-        const p = data.prices[key];
-        if (p && Number.isFinite(p.price)) {
-          setLive({ price: p.price, publishTime: p.publishTime });
-        }
-      } catch {
-        // ignore; keep last known live price
-      }
-    }
-
-    void tick();
-    const id = window.setInterval(tick, 10_000);
-    return () => {
-      alive = false;
-      controller.abort();
-      window.clearInterval(id);
-    };
-  }, [pythId]);
 
   useEffect(() => {
     if (!assetOpen) return;
@@ -893,13 +858,13 @@ export function MarketClient({ asset }: { asset: string }) {
         <div className="lg:hidden">
           <MarketChart
             symbol={market.asset}
-            pythId={pythId}
             strikePrice={selectedPrice}
             expiryLabel={formatDate(expiryDate)}
             expiryTs={Math.round(expiryDate.getTime() / 1000)}
             range={chartRange}
             onRangeChange={setChartRange}
             onClose={() => setChartOpen(false)}
+            livePoints={livePoints}
           />
         </div>
       ) : null}
@@ -1207,13 +1172,13 @@ export function MarketClient({ asset }: { asset: string }) {
             <div className="sticky top-24 max-h-[calc(100vh-8rem)] overflow-auto">
               <MarketChart
                 symbol={market.asset}
-                pythId={pythId}
                 strikePrice={selectedPrice}
                 expiryLabel={formatDate(expiryDate)}
                 expiryTs={Math.round(expiryDate.getTime() / 1000)}
                 range={chartRange}
                 onRangeChange={setChartRange}
                 onClose={() => setChartOpen(false)}
+                livePoints={livePoints}
               />
             </div>
           </aside>
