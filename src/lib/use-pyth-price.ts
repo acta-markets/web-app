@@ -11,6 +11,11 @@ type HermesStreamEvent = {
   }>;
 };
 
+type HermesLatestResponse = {
+  ok: true;
+  prices: Record<string, { price: number; conf: number; expo: number; publishTime: number }>;
+} | { ok: false; error: string };
+
 function toNumber(v: string, expo: number): number | null {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
@@ -20,8 +25,9 @@ function toNumber(v: string, expo: number): number | null {
 const LIVE_POINTS_CAP = 120;
 
 /**
- * Subscribes to a Pyth price feed via SSE and returns the latest price
- * and a capped rolling window of recent ticks for chart display.
+ * Returns the latest Pyth price via:
+ * 1. One-shot REST fetch on mount for an immediate value (no polling).
+ * 2. SSE stream for continuous live updates and chart points.
  */
 export function usePythPrice(pythId?: string): {
   price: number | null;
@@ -33,10 +39,33 @@ export function usePythPrice(pythId?: string): {
   const [livePoints, setLivePoints] = useState<PythPoint[]>([]);
   const lastSeenRef = useRef<number | null>(null);
 
+  // One-shot initial fetch so the price is available immediately,
+  // before the SSE stream delivers its first event (~1-2s).
   useEffect(() => {
     if (!pythId) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/pyth/latest?ids[]=${encodeURIComponent(pythId)}`);
+        const data = (await res.json()) as HermesLatestResponse;
+        if (!alive || !res.ok || data.ok !== true) return;
+        const p = data.prices[pythId.toLowerCase()];
+        if (p && Number.isFinite(p.price)) {
+          setPrice(p.price);
+          setPublishTime(p.publishTime);
+          lastSeenRef.current = p.publishTime;
+          setLivePoints([{ t: p.publishTime, v: p.price }]);
+        }
+      } catch {
+        // ignore; SSE will deliver the price shortly
+      }
+    })();
+    return () => { alive = false; };
+  }, [pythId]);
 
-    lastSeenRef.current = null;
+  // SSE stream for live updates.
+  useEffect(() => {
+    if (!pythId) return;
 
     const url = `/api/pyth/stream?parsed=true&ids[]=${encodeURIComponent(pythId)}`;
     const es = new EventSource(url);

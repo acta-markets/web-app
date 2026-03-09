@@ -297,12 +297,20 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
     client.on("snapshot", (snap) => {
       console.log("[RfqProvider] Snapshot received, markets:", snap.markets?.length ?? 0);
-      if (snap.markets) setMarkets(snap.markets);
+      if (snap.markets) {
+        setMarkets(snap.markets);
+      }
     });
 
     client.on("markets", (m) => {
-      console.log("[RfqProvider] Markets received:", m.length);
+      console.log(`[RfqProvider] Markets received: ${m.length}`);
       setMarkets(m);
+      // Pre-fetch indicative prices for all markets immediately while still in WS event context.
+      for (const market of m) {
+        const isPut = (market as unknown as { is_put?: unknown }).is_put;
+        const positionType = isPut ? "cash_secured_put" : "covered_call";
+        client.getIndicativePrices({ market: market.pda as any, position_type: positionType });
+      }
     });
 
     client.on("marketDescriptors", (m) => {
@@ -316,7 +324,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
     });
 
     client.on("indicativePrices", (msg) => {
-      console.log("[RfqProvider] Indicative prices:", msg);
       setIndicativePrices(msg);
       const key = getIndicativeKey(String(msg.market), msg.position_type as "covered_call" | "cash_secured_put");
       setIndicativePricesByKey((prev) => ({ ...prev, [key]: msg }));
