@@ -1,25 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { PythPoint } from "@/lib/use-pyth-price";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppButton } from "@/components/app-ui/app-button";
 import { formatUsdSmart } from "@/lib/markets";
 
-type Point = { t: number; v: number };
+type Point = PythPoint;
 type Range = "1w" | "1m" | "3m";
-
-type HermesStreamEvent = {
-  parsed?: Array<{
-    id: string;
-    price: { price: string; expo: number; publish_time: number };
-  }>;
-};
-
-function toNumber(v: string, expo: number) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return null;
-  return n * Math.pow(10, expo);
-}
 
 function formatPctDelta(p: number) {
   const s = Math.abs(p) < 0.01 ? p.toFixed(2) : p.toFixed(2);
@@ -28,26 +16,24 @@ function formatPctDelta(p: number) {
 
 export function MarketChart({
   symbol,
-  pythId,
   strikePrice,
   expiryLabel,
   expiryTs,
   range,
   onRangeChange,
-  onClose
+  onClose,
+  livePoints,
 }: {
   symbol: string;
-  pythId?: string;
   strikePrice: number;
   expiryLabel: string;
   expiryTs: number;
   range: Range;
   onRangeChange: (r: Range) => void;
   onClose?: () => void;
+  livePoints: Point[];
 }) {
   const [historyPoints, setHistoryPoints] = useState<Point[]>([]);
-  const [livePoints, setLivePoints] = useState<Point[]>([]);
-  const lastSeenRef = useRef<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -65,9 +51,6 @@ export function MarketChart({
           .filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]))
           .map(([ms, price]) => ({ t: Math.round(ms / 1000), v: price }));
         setHistoryPoints(pts);
-        // Reset live overlay when changing range/symbol so we don't bias the window.
-        setLivePoints([]);
-        lastSeenRef.current = null;
       } catch {
         // ignore
       }
@@ -77,38 +60,6 @@ export function MarketChart({
       alive = false;
     };
   }, [range, symbol]);
-
-  useEffect(() => {
-    if (!pythId) return;
-
-    const url = `/api/pyth/stream?parsed=true&ids[]=${encodeURIComponent(pythId)}`;
-    const es = new EventSource(url);
-
-    es.onmessage = (e) => {
-      try {
-        const json = JSON.parse(e.data) as HermesStreamEvent;
-        const p = json.parsed?.[0];
-        if (!p) return;
-        const val = toNumber(p.price.price, p.price.expo);
-        if (val == null) return;
-
-        const publishTime = p.price.publish_time;
-        // De-dupe repeated publish times and throttle ultra-fast updates.
-        if (lastSeenRef.current === publishTime) return;
-        lastSeenRef.current = publishTime;
-
-        setLivePoints((prev) => {
-          const next = [...prev, { t: publishTime, v: val }];
-          const cap = 120; // keep recent ticks only; history holds the longer window
-          return next.length > cap ? next.slice(next.length - cap) : next;
-        });
-      } catch {
-        // ignore parse errors
-      }
-    };
-
-    return () => es.close();
-  }, [pythId]);
 
   const historySeries = useMemo(() => {
     // History is stable for a given range; downsample it once so it won't "jitter" on live ticks.

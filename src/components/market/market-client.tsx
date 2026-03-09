@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
@@ -28,10 +28,7 @@ import {
   formatPct,
   formatUsdSmart
 } from "@/lib/markets";
-
-type PythLatestResponse =
-  | { ok: true; prices: Record<string, { price: number; conf: number; expo: number; publishTime: number }> }
-  | { ok: false; error: string };
+import { usePythPrice } from "@/lib/use-pyth-price";
 
 function formatDate(d: Date) {
   return d.toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" });
@@ -82,6 +79,7 @@ export function MarketClient({ asset }: { asset: string }) {
   const searchParams = useSearchParams();
   const typeParam = searchParams.get("type");
   const strikeParam = searchParams.get("strike") ?? searchParams.get("price");
+  const marketParam = searchParams.get("market");
   const type: MarketType = typeParam === "csp" ? "csp" : "call";
 
   const market = useMemo(() => getMarket(asset, type), [asset, type]);
@@ -106,10 +104,11 @@ export function MarketClient({ asset }: { asset: string }) {
   const [strikeIdx, setStrikeIdx] = useState<0>(0);
   const [priceIdx, setPriceIdx] = useState(0);
   const [deposit, setDeposit] = useState("");
-  const [live, setLive] = useState<{ price: number; publishTime: number } | null>(null);
   const pythId = market?.pythId;
+  const { price: livePrice, publishTime: livePt, livePoints } = usePythPrice(pythId);
+  const live = livePrice != null ? { price: livePrice, publishTime: livePt! } : null;
   const [baseSpot, setBaseSpot] = useState<number | null>(null);
-  const spotForHooks = live?.price ?? 0;
+  const spotForHooks = livePrice ?? 0;
 
   // RFQ Flow state
   const [rfqModalOpen, setRfqModalOpen] = useState(false);
@@ -132,6 +131,7 @@ export function MarketClient({ asset }: { asset: string }) {
     isConnected: rfqConnected,
     isAuthenticated: rfqAuthenticated,
     connectionState,
+    getClient,
   } = useRfqContext();
   
   // Log available RFQ markets
@@ -142,11 +142,14 @@ export function MarketClient({ asset }: { asset: string }) {
     }
   }, [rfqMarkets]);
   
-  // Find matching RFQ market for current asset/type
-  const rfqMarket = useMemo(() => {
+  // Resolve RFQ market PDA: prefer explicit query param (from earn page),
+  // fall back to lookup in rfqMarkets (available after auth via Snapshot).
+  const rfqMarketPda = useMemo(() => {
+    if (marketParam) return marketParam;
+
     if (rfqMarkets.length === 0 || !market) return undefined;
-    
-    const isPut = type === "csp"; // CSP = put, call = not put
+
+    const isPut = type === "csp";
     const underlyingMint = (getTokenMint(market.asset) ?? "").trim();
 
     const normalizeIsPut = (value: unknown): boolean | null => {
@@ -159,8 +162,7 @@ export function MarketClient({ asset }: { asset: string }) {
       }
       return null;
     };
-    
-    // Strict match only: underlying mint + put/call type.
+
     const match = rfqMarkets.find(m => {
       const marketUnderlying = String(
         (m as unknown as { underlying?: string; underlying_mint?: string }).underlying ??
@@ -168,41 +170,24 @@ export function MarketClient({ asset }: { asset: string }) {
         ""
       ).trim();
       const marketIsPut = normalizeIsPut((m as unknown as { is_put?: unknown }).is_put);
-      const matchesUnderlying = marketUnderlying === underlyingMint;
-      const matchesType = marketIsPut === isPut;
-      return matchesUnderlying && matchesType;
+      return marketUnderlying === underlyingMint && marketIsPut === isPut;
     });
-    
-    if (match) {
-      console.log("[MarketClient] Found matching RFQ market:", match);
-      return match;
-    }
 
-    console.warn("[MarketClient] No RFQ market matched required underlying+type:", {
+    if (match) return match.pda;
+
+    console.warn("[MarketClient] No RFQ market matched:", {
       asset: market.asset,
       underlyingMint,
       isPut,
       availableMarkets: rfqMarkets.length,
-      candidates: rfqMarkets.map((m) => {
-        const marketUnderlying = String(
-          (m as unknown as { underlying?: string; underlying_mint?: string }).underlying ??
-          (m as unknown as { underlying?: string; underlying_mint?: string }).underlying_mint ??
-          ""
-        ).trim();
-        const marketIsPut = normalizeIsPut((m as unknown as { is_put?: unknown }).is_put);
-        return {
-          pda: (m as unknown as { pda?: string }).pda,
-          underlying: marketUnderlying,
-          is_put: marketIsPut,
-          matchesUnderlying: marketUnderlying === underlyingMint,
-          matchesType: marketIsPut === isPut,
-        };
-      }),
     });
     return undefined;
-  }, [rfqMarkets, type, market]);
-  
-  const rfqMarketPda = rfqMarket?.pda;
+  }, [marketParam, rfqMarkets, type, market]);
+  // Full market object (available after auth when rfqMarkets arrive via Snapshot).
+  const rfqMarket = useMemo(
+    () => rfqMarketPda ? rfqMarkets.find(m => m.pda === rfqMarketPda) : undefined,
+    [rfqMarketPda, rfqMarkets]
+  );
   const positionType = type === "call" ? "covered_call" : "cash_secured_put";
   const currentIndicativePrices = useMemo(
     () => (rfqMarketPda ? getIndicativePricesCached(rfqMarketPda, positionType) : null),
@@ -216,7 +201,7 @@ export function MarketClient({ asset }: { asset: string }) {
     currentIndicativePrices.strikes &&
     currentIndicativePrices.strikes.length > 0
   );
-  const isResolvingRfqMarket = rfqConnected && rfqMarkets.length === 0;
+  const isResolvingRfqMarket = rfqConnected && !rfqMarketPda;
   const hasRequestedCurrentIndicative =
     currentIndicativeKey != null && indicativeRequestedKey === currentIndicativeKey;
   const shouldShowIndicativeLoading =
@@ -245,13 +230,33 @@ export function MarketClient({ asset }: { asset: string }) {
     return [];
   }, [expiryFromMarket]);
   
-  // Fetch indicative prices when we have a market PDA
+  // Fetch market data (GetMarkets + GetMarketDescriptors) once when the market
+  // page loads pre-auth.  These endpoints don't require authentication.
+  // After auth, markets arrive via Snapshot and descriptors are fetched in the provider.
+  const marketDataRequestedRef = useRef(false);
   useEffect(() => {
-    if (rfqConnected && rfqMarketPda) {
-      console.log("[MarketClient] Fetching indicative prices for:", rfqMarketPda, positionType);
+    if (!rfqConnected || !rfqMarketPda) return;
+    if (marketDataRequestedRef.current) return;
+    const client = getClient();
+    if (!client) return;
+    marketDataRequestedRef.current = true;
+    console.log("[MarketClient] Fetching markets + descriptors for market page");
+    client.getMarkets();
+    client.getMarketDescriptors({ active_only: true });
+  }, [rfqConnected, rfqMarketPda, getClient]);
+
+  // Fetch indicative prices when we have a market PDA, then refresh every 30s.
+  useEffect(() => {
+    if (!rfqConnected || !rfqMarketPda) return;
+
+    const fetch = () => {
       setIndicativeRequestedKey(`${rfqMarketPda}:${positionType}`);
       getIndicativePrices(rfqMarketPda, positionType);
-    }
+    };
+
+    fetch();
+    const id = window.setInterval(fetch, 30_000);
+    return () => window.clearInterval(id);
   }, [rfqConnected, rfqMarketPda, positionType, getIndicativePrices]);
 
   useEffect(() => {
@@ -306,39 +311,6 @@ export function MarketClient({ asset }: { asset: string }) {
       // ignore
     }
   }, [chartRange]);
-
-  useEffect(() => {
-    let alive = true;
-    const controller = new AbortController();
-
-    async function tick() {
-      if (!pythId) return;
-      try {
-        const res = await fetch(`/api/pyth/latest?ids[]=${encodeURIComponent(pythId)}`, {
-          signal: controller.signal
-        });
-        const data = (await res.json()) as PythLatestResponse;
-        if (!alive) return;
-        if (!res.ok || !("ok" in data) || data.ok !== true) return;
-
-        const key = pythId.toLowerCase();
-        const p = data.prices[key];
-        if (p && Number.isFinite(p.price)) {
-          setLive({ price: p.price, publishTime: p.publishTime });
-        }
-      } catch {
-        // ignore; keep last known live price
-      }
-    }
-
-    void tick();
-    const id = window.setInterval(tick, 10_000);
-    return () => {
-      alive = false;
-      controller.abort();
-      window.clearInterval(id);
-    };
-  }, [pythId]);
 
   useEffect(() => {
     if (!assetOpen) return;
@@ -583,9 +555,13 @@ export function MarketClient({ asset }: { asset: string }) {
   const notionalUsd =
     type === "call" ? (depositOk ? depositNum * spot : 0) : depositOk ? depositNum : 0;
   const selectedApr = (selectedPriceOption?.apr ?? 0) * 100;
-  const displayedPremiumUsd = depositOk
-    ? notionalUsd * (selectedApr / 100) * (termDays / 365)
+  // Premium directly from indicative best_price (per-unit, 1e9 scale).
+  // Avoids reverse-engineering from APR which breaks for sub-day expiries
+  // (termDays was clamped to min 1, inflating premium by hours-in-a-day).
+  const bestPricePerUnit = selectedPriceOption?.bestPrice
+    ? Number(selectedPriceOption.bestPrice) / 1_000_000_000
     : 0;
+  const displayedPremiumUsd = depositOk ? bestPricePerUnit * depositNum : 0;
   const isRfqAuthPending =
     !!walletAddress &&
     depositOk &&
@@ -882,13 +858,13 @@ export function MarketClient({ asset }: { asset: string }) {
         <div className="lg:hidden">
           <MarketChart
             symbol={market.asset}
-            pythId={pythId}
             strikePrice={selectedPrice}
             expiryLabel={formatDate(expiryDate)}
             expiryTs={Math.round(expiryDate.getTime() / 1000)}
             range={chartRange}
             onRangeChange={setChartRange}
             onClose={() => setChartOpen(false)}
+            livePoints={livePoints}
           />
         </div>
       ) : null}
@@ -1196,13 +1172,13 @@ export function MarketClient({ asset }: { asset: string }) {
             <div className="sticky top-24 max-h-[calc(100vh-8rem)] overflow-auto">
               <MarketChart
                 symbol={market.asset}
-                pythId={pythId}
                 strikePrice={selectedPrice}
                 expiryLabel={formatDate(expiryDate)}
                 expiryTs={Math.round(expiryDate.getTime() / 1000)}
                 range={chartRange}
                 onRangeChange={setChartRange}
                 onClose={() => setChartOpen(false)}
+                livePoints={livePoints}
               />
             </div>
           </aside>

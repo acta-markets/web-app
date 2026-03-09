@@ -11,6 +11,7 @@ import {
   type QuoteReceivedMessage,
   type IndicativePricesMessage,
   type TokenCapInfo,
+  type EarnAssetSummary,
   type ServerMessage,
   type ConnectionState,
 } from "@/lib/rfq-client";
@@ -27,6 +28,8 @@ interface RfqContextValue {
   markets: MarketInfo[];
   /** Token OI caps by underlying token */
   tokenCaps: TokenCapInfo[];
+  /** Server-computed earn summary (APR + caps per asset/type) */
+  earnSummary: EarnAssetSummary[] | null;
   /** Market descriptors (includes underlying/quote metadata) */
   marketDescriptors: MarketDescriptorInfo[];
   /** User's positions (requires auth) */
@@ -173,6 +176,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [markets, setMarkets] = useState<MarketInfo[]>([]);
   const [tokenCaps, setTokenCaps] = useState<TokenCapInfo[]>([]);
+  const [earnSummary, setEarnSummary] = useState<EarnAssetSummary[] | null>(null);
   const [marketDescriptors, setMarketDescriptors] = useState<MarketDescriptorInfo[]>([]);
   const [positions, setPositions] = useState<PositionInfo[]>([]);
   const [currentQuote, setCurrentQuote] = useState<QuoteReceivedMessage | null>(null);
@@ -195,32 +199,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
     []
   );
 
-  const prefetchIndicativesForMarkets = useCallback(
-    (client: ActaWsClient, marketsToWarm: MarketInfo[]) => {
-      for (const marketInfo of marketsToWarm) {
-        const marketPda = marketInfo?.pda;
-        if (!marketPda) continue;
-        const callKey = getIndicativeKey(marketPda, "covered_call");
-        if (!prefetchedIndicativeKeysRef.current.has(callKey)) {
-          prefetchedIndicativeKeysRef.current.add(callKey);
-        }
-        client.getIndicativePrices({ market: marketPda as any, position_type: "covered_call" });
-
-        const putKey = getIndicativeKey(marketPda, "cash_secured_put");
-        if (!prefetchedIndicativeKeysRef.current.has(putKey)) {
-          prefetchedIndicativeKeysRef.current.add(putKey);
-        }
-        client.getIndicativePrices({ market: marketPda as any, position_type: "cash_secured_put" });
-      }
-    },
-    [getIndicativeKey]
-  );
-
   const fetchPortfolioPrereqs = useCallback(() => {
     const client = clientRef.current;
     if (!client) return;
-    // Per SDK quickstart recovery order, positions + markets are sufficient here.
-    client.getMarkets();
+    // Markets arrive via Snapshot on auth — only positions need explicit fetch.
     client.getPositions();
   }, []);
 
@@ -247,12 +229,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
       lastWsPingAtRef.current = 0;
       setWsHealth("healthy");
       setWsSilentSeconds(0);
-      // Fetch markets immediately after connecting
-      console.log("[RfqProvider] Fetching markets...");
-      client.getMarkets();
-      client.getTokenCaps({ include_markets: false });
-      // SDK now requires descriptors to be loaded before createRfq.
-      client.getMarketDescriptors({ active_only: true });
+      // Anonymous connect: EarnSummary only.  Markets arrive via Snapshot on auth;
+      // the earn page passes nearest_market_pda directly so no anonymous GetMarkets needed.
+      client.getEarnSummary();
     });
 
     client.on("stateChange", (state) => {
@@ -270,8 +249,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
       if (walletAddressRef.current) {
         persistSession(walletAddressRef.current, sessionId, expiresAt ?? null);
       }
-      // Fetch positions + market metadata together for stable PDA->underlying lookup.
-      fetchPortfolioPrereqs();
+      // Markets arrive via SDK Snapshot on auth — no explicit GetMarkets needed.
+      // Positions are fetched by portfolio page on mount (avoids duplicate).
+      // EarnSummary already fetched on connect.
       client.getTokenCaps({ include_markets: false });
       client.getMarketDescriptors({ active_only: true });
     });
@@ -308,12 +288,19 @@ export function RfqProvider({ children }: RfqProviderProps) {
       }
     });
 
+    client.on("earnSummary", (data) => {
+      console.log("[RfqProvider] Earn summary received:", data.assets?.length ?? 0, "assets");
+      setEarnSummary(data.assets ?? []);
+    });
+
+    client.on("snapshot", (snap) => {
+      console.log("[RfqProvider] Snapshot received, markets:", snap.markets?.length ?? 0);
+      if (snap.markets) setMarkets(snap.markets);
+    });
+
     client.on("markets", (m) => {
       console.log("[RfqProvider] Markets received:", m.length);
-      console.log("[RfqProvider] Markets:", m);
       setMarkets(m);
-      // Warm indicatives immediately after markets so market page can render faster.
-      prefetchIndicativesForMarkets(client, m);
     });
 
     client.on("marketDescriptors", (m) => {
@@ -338,6 +325,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setCurrentQuote(q);
     });
 
+    client.on("rfqClosed", (msg) => {
+      console.log("[RfqProvider] RFQ closed:", msg.rfq_id);
+      setCurrentQuote(null);
+      setError(new Error("rfq_closed"));
+    });
+
     // Order events
     client.on("orderSubmitted", (orderId, sig) => {
       console.log("[RfqProvider] Order submitted:", orderId, sig);
@@ -352,8 +345,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setError(new Error(`Order failed: ${reason}`));
     });
 
-    // Connect anonymously on mount
-    console.log("[RfqProvider] Connecting anonymously...");
+    // Always connect once. If wallet is available, auth will upgrade
+    // this same connection in-place (no second WS).
+    console.log("[RfqProvider] Connecting...");
     client.connectAnonymous();
 
     return () => {
@@ -361,23 +355,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
       client.disconnect();
       clientRef.current = null;
     };
-  }, [fetchPortfolioPrereqs, getIndicativeKey, prefetchIndicativesForMarkets]);
+  }, [getIndicativeKey]);
 
-  useEffect(() => {
-    const client = clientRef.current;
-    if (!client) return;
-    if (connectionState === "disconnected" || connectionState === "error" || markets.length === 0) return;
-
-    const intervalId = window.setInterval(() => {
-      const activeClient = clientRef.current;
-      if (!activeClient) return;
-      // Keep indicative prices fresh across app navigation.
-      prefetchIndicativesForMarkets(activeClient, markets);
-      activeClient.getTokenCaps({ include_markets: false });
-    }, 30_000);
-
-    return () => window.clearInterval(intervalId);
-  }, [connectionState, markets, prefetchIndicativesForMarkets]);
+  // No periodic refresh here — earn summary is fetched once on connect and on
+  // auth.  Pages that need periodic updates (e.g. /earn) should refresh locally.
 
   useEffect(() => {
     if (connectionState === "disconnected" || connectionState === "error") return;
@@ -648,6 +629,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     isAuthenticated: connectionState === "authenticated",
     markets,
     tokenCaps,
+    earnSummary,
     marketDescriptors,
     positions,
     currentQuote,
