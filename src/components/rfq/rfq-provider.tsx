@@ -229,9 +229,11 @@ export function RfqProvider({ children }: RfqProviderProps) {
       lastWsPingAtRef.current = 0;
       setWsHealth("healthy");
       setWsSilentSeconds(0);
-      // Anonymous connect: EarnSummary only.  Markets arrive via Snapshot on auth;
-      // the earn page passes nearest_market_pda directly so no anonymous GetMarkets needed.
+      // Fetch markets and earn summary on anonymous connect so the market page
+      // works without auth (no Snapshot arrives until wallet is connected).
       client.getEarnSummary();
+      client.getMarkets();
+      client.getMarketDescriptors({ active_only: true });
     });
 
     client.on("stateChange", (state) => {
