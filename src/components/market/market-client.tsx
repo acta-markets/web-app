@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
@@ -133,18 +133,16 @@ export function MarketClient({ asset }: { asset: string }) {
     connectionState,
   } = useRfqContext();
   
-  // Log available RFQ markets
-  useEffect(() => {
-    console.log("[MarketClient] RFQ markets from context:", rfqMarkets.length);
-    if (rfqMarkets.length > 0) {
-      console.log("[MarketClient] RFQ Markets:", rfqMarkets);
-    }
-  }, [rfqMarkets]);
-  
   // Resolve RFQ market PDA: prefer explicit query param (from earn page),
   // fall back to lookup in rfqMarkets (available after auth via Snapshot).
   const rfqMarketPda = useMemo(() => {
-    if (marketParam) return marketParam;
+    if (marketParam) {
+      // Optimistically use marketParam before markets load (enables parallel requests).
+      // Once markets load, validate — if stale/invalid, fall through to asset-based lookup.
+      if (rfqMarkets.length === 0) return marketParam;
+      if (rfqMarkets.some((m) => m.pda === marketParam)) return marketParam;
+      // marketParam doesn't match any live market — fall through to asset lookup below.
+    }
 
     if (rfqMarkets.length === 0 || !market) return undefined;
 
@@ -210,13 +208,7 @@ export function MarketClient({ asset }: { asset: string }) {
   // Use expiry from RFQ market data if available, otherwise fallback to default dates
   const expiryFromMarket = useMemo(() => {
     if (rfqMarket?.expiry_ts) {
-      const expiryTs = Number(rfqMarket.expiry_ts);
-      const expiryDate = new Date(expiryTs * 1000);
-      console.log("[MarketClient] Using expiry from RFQ market:", {
-        expiry_ts: rfqMarket.expiry_ts,
-        expiryDate: expiryDate.toLocaleString(),
-      });
-      return expiryDate;
+      return new Date(Number(rfqMarket.expiry_ts) * 1000);
     }
     return null;
   }, [rfqMarket?.expiry_ts]);
@@ -230,17 +222,16 @@ export function MarketClient({ asset }: { asset: string }) {
   }, [expiryFromMarket]);
   
 
-  // Fetch indicative prices when we have a market PDA, then refresh every 30s.
+  // Fetch indicative prices immediately when market PDA is known, then refresh every 30s.
+  // When marketParam is set (URL has ?market=<pda>), rfqMarketPda is available instantly,
+  // so this fires in parallel with GetMarkets — saving one serial round trip.
   useEffect(() => {
     if (!rfqConnected || !rfqMarketPda) return;
-
-    const fetch = () => {
-      setIndicativeRequestedKey(`${rfqMarketPda}:${positionType}`);
+    setIndicativeRequestedKey(`${rfqMarketPda}:${positionType}`);
+    getIndicativePrices(rfqMarketPda, positionType);
+    const id = window.setInterval(() => {
       getIndicativePrices(rfqMarketPda, positionType);
-    };
-
-    fetch();
-    const id = window.setInterval(fetch, 30_000);
+    }, 30_000);
     return () => window.clearInterval(id);
   }, [rfqConnected, rfqMarketPda, positionType, getIndicativePrices]);
 
@@ -250,27 +241,11 @@ export function MarketClient({ asset }: { asset: string }) {
     }
   }, [currentIndicativeKey]);
   
-  // Log indicative prices when received
-  useEffect(() => {
-    if (currentIndicativePrices) {
-      console.log("[MarketClient] Indicative prices received:", currentIndicativePrices);
-    }
-  }, [currentIndicativePrices]);
-  
   // Solana wallet via Wallet Standard
-  const { selectedAccount, isConnected, signTransaction: solanaSignTransaction } = useSolana();
+  const { selectedAccount, signTransaction: solanaSignTransaction } = useSolana();
   const { openSidebar } = useWalletSidebar();
   
-  // Wallet address
   const walletAddress = selectedAccount?.address;
-  
-  // Log wallet state changes
-  useEffect(() => {
-    console.log("[MarketClient] Wallet state:", {
-      isConnected,
-      address: selectedAccount?.address,
-    });
-  }, [isConnected, selectedAccount]);
 
   useEffect(() => {
     // Default: show chart on desktop, hidden on mobile.
@@ -337,31 +312,10 @@ export function MarketClient({ asset }: { asset: string }) {
     
     // Use indicative prices strikes if available
     if (hasCurrentIndicativePrices && currentIndicativePrices?.strikes) {
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const daysToExpiry = secondsToExpiry / (24 * 60 * 60);
-      const hoursToExpiry = secondsToExpiry / (60 * 60);
-      const expiryDate = new Date(expiryTs * 1000);
-      console.log("[MarketClient] Computing APRs from indicative prices:", {
-        positionType,
-        spotPrice,
-        expiryTs,
-        expiryDate: expiryDate.toISOString(),
-        expiryReadable: expiryDate.toLocaleString(),
-        nowSeconds,
-        secondsToExpiry,
-        hoursToExpiry: hoursToExpiry.toFixed(2) + " hours",
-        daysToExpiry: daysToExpiry.toFixed(2) + " days",
-        strikesCount: currentIndicativePrices.strikes.length,
-      });
-      
       const options = currentIndicativePrices.strikes.map(s => {
         const strike = Number(s.strike) / 1_000_000_000; // Convert to human readable
         const bestPrice = s.best_price ? Number(s.best_price) : null;
-        const bestPriceHuman = bestPrice ? bestPrice / 1_000_000_000 : null;
-        
         let apr = 0;
-        let apy = 0;
-        let termYield = 0;
         if (bestPrice && secondsToExpiry > 0) {
           try {
             const result = computeApyFromScaledPrices({
@@ -373,42 +327,25 @@ export function MarketClient({ asset }: { asset: string }) {
               secondsToExpiry,
             });
             apr = result.apr;
-            apy = result.apy;
-            termYield = result.termYield;
-            
-            console.log("[MarketClient] APR for strike", strike, ":", {
-              bestPriceHuman,
-              termYield: (termYield * 100).toFixed(2) + "%",
-              apr: (apr * 100).toFixed(2) + "%",
-              apy: (apy * 100).toFixed(2) + "%",
-            });
-          } catch (e) {
-            console.warn("[MarketClient] APR calculation failed for strike", strike, ":", e);
+          } catch {
+            // ignore
           }
-        } else {
-          console.log("[MarketClient] No price for strike", strike, "(bestPrice:", bestPrice, ")");
         }
         
         return { strike, apr, bestPrice };
       });
       
       // Sort: calls ascending, puts descending
-      const sorted = [...options].sort((a, b) => (type === "call" ? a.strike - b.strike : b.strike - a.strike));
-      console.log("[MarketClient] Final price options with APR:", sorted.map(o => ({
-        strike: o.strike,
-        apr: (o.apr * 100).toFixed(2) + "%",
-        hasPrice: o.bestPrice !== null,
-      })));
-      return sorted;
+      return [...options].sort((a, b) => (type === "call" ? a.strike - b.strike : b.strike - a.strike));
     }
     return [];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     hasCurrentIndicativePrices,
     currentIndicativePrices?.strikes,
     rfqMarket?.expiry_ts,
     baseSpot,
     spotForHooks,
+    positionType,
     type,
   ]);
   
@@ -441,7 +378,7 @@ export function MarketClient({ asset }: { asset: string }) {
   }, [market, type, priceOptions, strikeParam]);
 
   const selectedPriceIdx = clampNumber(priceIdx, 0, priceOptions.length - 1);
-  const selectedPrice = priceOptions[selectedPriceIdx];
+  const selectedPrice = priceOptions[selectedPriceIdx] ?? 0;
   const selectedPriceOption = priceOptionsWithApr[selectedPriceIdx];
   const hasSelectedPrice = priceOptions.length > 0;
   const selectedStrikeLamports = Math.round(selectedPrice * 1_000_000_000);
@@ -516,7 +453,7 @@ export function MarketClient({ asset }: { asset: string }) {
 
   // Calculate term from expiry date
   const expiryDate = strikeDates[strikeIdx] ?? strikeDates[0] ?? new Date();
-  const isLiveMarketReady = !!expiryFromMarket && Number.isFinite(selectedPrice);
+  const isLiveMarketReady = !!expiryFromMarket;
   const msToExpiry = expiryDate.getTime() - Date.now();
   const hoursToExpiry = Math.max(1, Math.ceil(msToExpiry / (1000 * 60 * 60)));
   const termDays = Math.max(1, Math.ceil(msToExpiry / (1000 * 60 * 60 * 24)));
