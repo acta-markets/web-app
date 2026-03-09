@@ -196,6 +196,19 @@ export function isTokenSupported(symbol: string): boolean {
 }
 
 /**
+ * Normalize a server-provided token symbol to match the app's canonical names.
+ * e.g. "SOL" → "WSOL" (the app uses WSOL everywhere for wrapped SOL).
+ */
+export function normalizeTokenSymbol(symbol: string): string {
+  const upper = symbol.toUpperCase();
+  if (upper === "SOL") return "WSOL";
+  // If the symbol matches a known token as-is, return canonical casing.
+  const token = TOKENS[upper];
+  if (token) return token.symbol;
+  return symbol;
+}
+
+/**
  * Get token symbol by mint for current network.
  * For the canonical wrapped SOL mint, return WSOL by default.
  */
