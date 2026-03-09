@@ -131,7 +131,6 @@ export function MarketClient({ asset }: { asset: string }) {
     isConnected: rfqConnected,
     isAuthenticated: rfqAuthenticated,
     connectionState,
-    getClient,
   } = useRfqContext();
   
   // Log available RFQ markets
@@ -230,20 +229,6 @@ export function MarketClient({ asset }: { asset: string }) {
     return [];
   }, [expiryFromMarket]);
   
-  // Fetch market data (GetMarkets + GetMarketDescriptors) once when the market
-  // page loads pre-auth.  These endpoints don't require authentication.
-  // After auth, markets arrive via Snapshot and descriptors are fetched in the provider.
-  const marketDataRequestedRef = useRef(false);
-  useEffect(() => {
-    if (!rfqConnected || !rfqMarketPda) return;
-    if (marketDataRequestedRef.current) return;
-    const client = getClient();
-    if (!client) return;
-    marketDataRequestedRef.current = true;
-    console.log("[MarketClient] Fetching markets + descriptors for market page");
-    client.getMarkets();
-    client.getMarketDescriptors({ active_only: true });
-  }, [rfqConnected, rfqMarketPda, getClient]);
 
   // Fetch indicative prices when we have a market PDA, then refresh every 30s.
   useEffect(() => {
@@ -1059,7 +1044,7 @@ export function MarketClient({ asset }: { asset: string }) {
               <div>
                 <span className="text-white/50">APR</span>{" "}
                 <span className="font-semibold text-white">
-                  {shouldShowIndicativeLoading ? "Loading..." : formatPct(selectedApr)}
+                  {shouldShowIndicativeLoading || livePrice == null ? "Loading..." : formatPct(selectedApr)}
                 </span>
               </div>
               <div>
@@ -1086,7 +1071,7 @@ export function MarketClient({ asset }: { asset: string }) {
               Now
             </div>
             <div className="px-5 py-5">
-              {shouldShowIndicativeLoading ? (
+              {shouldShowIndicativeLoading || livePrice == null ? (
                 <div className="text-4xl font-semibold text-white">Loading...</div>
               ) : (
                 <div className="text-4xl font-semibold text-white">{formatPct(selectedApr)} APR</div>
