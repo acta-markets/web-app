@@ -30,6 +30,9 @@ export type {
   ServerMessage,
   EarnAssetSummary,
   EarnSummaryData,
+  TokenMarketsInfoData,
+  TokenMarketEntry,
+  TokenMarketIndicatives,
 } from "@acta-markets/ts-sdk/ws";
 
 import { ActaWsClient, WalletAuthProvider, type WalletLike } from "@acta-markets/ts-sdk/ws";
@@ -77,6 +80,7 @@ function patchQueryMessagesForServer(client: ActaWsClient): void {
     getTokens: (args?: { active_only?: boolean }) => void;
     getTokenCaps: (args?: { include_markets?: boolean }) => void;
     getIndicativePrices: (req: { market: string; position_type: "covered_call" | "cash_secured_put" }) => void;
+    getTokenMarketsInfo: (underlyingMint: string) => void;
   };
 
   // Server on oracle-update branch requires `request_id` in query-style messages.
@@ -138,6 +142,12 @@ function patchQueryMessagesForServer(client: ActaWsClient): void {
     c.send({
       type: "GetEarnSummary",
       data: { request_id: createRequestId() },
+    });
+  };
+  c.getTokenMarketsInfo = (underlyingMint: string) => {
+    c.send({
+      type: "GetTokenMarketsInfo",
+      data: { request_id: createRequestId(), underlying_mint: underlyingMint },
     });
   };
 }
