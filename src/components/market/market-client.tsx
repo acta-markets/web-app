@@ -14,7 +14,7 @@ import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getTokenMint } from "@/lib/tokens";
 import { getCapFilledPct } from "@/lib/token-caps";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
-import type { QuoteReceivedMessage } from "@/lib/rfq-client";
+import type { QuoteReceivedMessage, IndicativePricesMessage } from "@/lib/rfq-client";
 import {
   computeApyFromScaledPrices,
   quoteAmountToQuantity,
@@ -128,16 +128,31 @@ export function MarketClient({ asset }: { asset: string }) {
     clearTransientState,
     getIndicativePrices,
     getIndicativePricesCached,
+    tokenMarketsInfo,
+    getTokenMarketsInfo,
     isConnected: rfqConnected,
     isAuthenticated: rfqAuthenticated,
     connectionState,
   } = useRfqContext();
   
   // All RFQ markets matching this asset+type, sorted by expiry (nearest first).
+  // Primary source: tokenMarketsInfo (arrives via single GetTokenMarketsInfo request).
+  // Fallback: rfqMarkets from Snapshot (arrives on auth).
   const matchingMarkets = useMemo(() => {
-    if (rfqMarkets.length === 0 || !market) return [];
-
+    if (!market) return [];
     const isPut = type === "csp";
+
+    // Prefer tokenMarketsInfo — it's available before auth and contains exactly
+    // the markets for this underlying, already filtered by the server.
+    if (tokenMarketsInfo?.markets && tokenMarketsInfo.markets.length > 0) {
+      return tokenMarketsInfo.markets
+        .filter(m => m.is_put === isPut)
+        .map(m => ({ pda: m.market_pda, expiry_ts: m.expiry_ts, is_put: m.is_put }))
+        .sort((a, b) => Number(a.expiry_ts) - Number(b.expiry_ts));
+    }
+
+    // Fallback to rfqMarkets (from Snapshot after auth).
+    if (rfqMarkets.length === 0) return [];
     const underlyingMint = (getTokenMint(market.asset) ?? "").trim();
 
     const normalizeIsPut = (value: unknown): boolean | null => {
@@ -162,7 +177,7 @@ export function MarketClient({ asset }: { asset: string }) {
         return marketUnderlying === underlyingMint && marketIsPut === isPut;
       })
       .sort((a, b) => Number(a.expiry_ts) - Number(b.expiry_ts));
-  }, [rfqMarkets, type, market]);
+  }, [tokenMarketsInfo, rfqMarkets, type, market]);
 
   // Resolve RFQ market PDA: prefer explicit query param (from earn page)
   // ONLY before user manually switches expiry, then use matchingMarkets[strikeIdx].
@@ -201,16 +216,27 @@ export function MarketClient({ asset }: { asset: string }) {
       setStrikeIdx(0);
     }
   }, [matchingMarkets.length, strikeIdx]);
-  // Full market object (available after auth when rfqMarkets arrive via Snapshot).
-  const rfqMarket = useMemo(
-    () => rfqMarketPda ? rfqMarkets.find(m => m.pda === rfqMarketPda) : undefined,
-    [rfqMarketPda, rfqMarkets]
-  );
   const positionType = type === "call" ? "covered_call" : "cash_secured_put";
-  const currentIndicativePrices = useMemo(
-    () => (rfqMarketPda ? getIndicativePricesCached(rfqMarketPda, positionType) : null),
-    [rfqMarketPda, positionType, getIndicativePricesCached]
-  );
+  const currentIndicativePrices = useMemo(() => {
+    if (!rfqMarketPda) return null;
+    // Try cache first (populated by individual GetIndicativePrices responses).
+    const cached = getIndicativePricesCached(rfqMarketPda, positionType);
+    if (cached) return cached;
+    // Fallback: read directly from tokenMarketsInfo response.
+    if (tokenMarketsInfo?.markets) {
+      const mkt = tokenMarketsInfo.markets.find(m => m.market_pda === rfqMarketPda);
+      const ind = mkt?.indicatives?.find(i => i.position_type === positionType);
+      if (ind?.strikes?.length) {
+        return {
+          market: rfqMarketPda,
+          position_type: positionType,
+          strikes: ind.strikes,
+          updated_at: ind.updated_at,
+        } as IndicativePricesMessage;
+      }
+    }
+    return null;
+  }, [rfqMarketPda, positionType, getIndicativePricesCached, tokenMarketsInfo]);
   const currentIndicativeKey = rfqMarketPda ? `${rfqMarketPda}:${positionType}` : null;
   const hasCurrentIndicativePrices = !!(
     currentIndicativePrices &&
@@ -234,18 +260,30 @@ export function MarketClient({ asset }: { asset: string }) {
   const expiryFromMarket = strikeDates.length > 0 ? strikeDates[strikeIdx] ?? strikeDates[0] : null;
   
 
-  // Fetch indicative prices immediately when market PDA is known, then refresh every 30s.
-  // When marketParam is set (URL has ?market=<pda>), rfqMarketPda is available instantly,
-  // so this fires in parallel with GetMarkets — saving one serial round trip.
+  // Initial load: single GetTokenMarketsInfo for markets + decimals + size_rule + indicatives.
+  // Uses connectionState (not rfqConnected) to fire only when WS is actually open.
+  const wsReady = connectionState === "connected" || connectionState === "authenticated";
   useEffect(() => {
-    if (!rfqConnected || !rfqMarketPda) return;
-    setIndicativeRequestedKey(`${rfqMarketPda}:${positionType}`);
-    getIndicativePrices(rfqMarketPda, positionType);
+    if (!wsReady || !market) return;
+    const underlyingMint = (getTokenMint(market.asset) ?? "").trim();
+    if (!underlyingMint) return;
+    getTokenMarketsInfo(underlyingMint);
+  }, [wsReady, market, getTokenMarketsInfo]);
+
+  // 30s refresh: lightweight GetIndicativePrices for current market only.
+  useEffect(() => {
+    if (!wsReady || !rfqMarketPda) return;
     const id = window.setInterval(() => {
       getIndicativePrices(rfqMarketPda, positionType);
     }, 30_000);
     return () => window.clearInterval(id);
-  }, [rfqConnected, rfqMarketPda, positionType, getIndicativePrices]);
+  }, [wsReady, rfqMarketPda, positionType, getIndicativePrices]);
+
+  // Mark indicative as requested when market PDA is resolved (keeps loading state accurate).
+  useEffect(() => {
+    if (!rfqMarketPda) return;
+    setIndicativeRequestedKey(`${rfqMarketPda}:${positionType}`);
+  }, [rfqMarketPda, positionType]);
 
   useEffect(() => {
     if (!currentIndicativeKey) {
@@ -318,8 +356,8 @@ export function MarketClient({ asset }: { asset: string }) {
   const priceOptionsWithApr = useMemo(() => {
     const spotPrice = baseSpot ?? spotForHooks ?? 0;
 
-    // Calculate seconds to expiry from RFQ market
-    const expiryTs = rfqMarket?.expiry_ts ? Number(rfqMarket.expiry_ts) : 0;
+    // Calculate seconds to expiry from matching markets (available pre-auth via tokenMarketsInfo).
+    const expiryTs = matchingMarkets[strikeIdx]?.expiry_ts ? Number(matchingMarkets[strikeIdx].expiry_ts) : 0;
     const secondsToExpiry = expiryTs > 0 ? expiryTs - Math.floor(Date.now() / 1000) : 0;
 
     // Use indicative prices strikes if available
@@ -354,7 +392,8 @@ export function MarketClient({ asset }: { asset: string }) {
   }, [
     hasCurrentIndicativePrices,
     currentIndicativePrices?.strikes,
-    rfqMarket?.expiry_ts,
+    matchingMarkets,
+    strikeIdx,
     baseSpot,
     spotForHooks,
     positionType,
@@ -401,8 +440,10 @@ export function MarketClient({ asset }: { asset: string }) {
         : null,
     [marketDescriptors, rfqMarketPda]
   );
-  const underlyingDecimals = rfqMarketDescriptor?.underlying_decimals ?? 9;
-  const wireSizeRule = rfqMarketDescriptor?.size_rule ?? null;
+  const underlyingDecimals = tokenMarketsInfo?.underlying_decimals != null
+    ? Number(tokenMarketsInfo.underlying_decimals)
+    : (rfqMarketDescriptor?.underlying_decimals ?? 9);
+  const wireSizeRule = tokenMarketsInfo?.size_rule ?? rfqMarketDescriptor?.size_rule ?? null;
   const depositRule = useMemo(() => {
     if (!wireSizeRule) return null;
     if (type === "call") {
