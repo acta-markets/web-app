@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppCard } from "@/components/app-ui/app-card";
@@ -42,7 +42,13 @@ export function EarnClient() {
   const [type, setType] = useState<MarketType>("call");
   const router = useRouter();
   const [howOpen, setHowOpen] = useState(false);
-  const { earnSummary } = useRfqContext();
+  const { earnSummary, connectionState, getEarnSummary } = useRfqContext();
+
+  const wsReady = connectionState === "connected" || connectionState === "authenticated";
+  useEffect(() => {
+    if (!wsReady) return;
+    getEarnSummary();
+  }, [wsReady, getEarnSummary]);
   const [sort, setSort] = useState<{ key: "minAprPct" | "maxAprPct"; dir: "asc" | "desc" } | null>(null);
 
   const isLoading = earnSummary === null;

@@ -14,12 +14,16 @@ import {
   type EarnAssetSummary,
   type ServerMessage,
   type ConnectionState,
+  type TokenMarketsInfoData,
 } from "@/lib/rfq-client";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 
+/** SDK ConnectionState + "connected" (WS open but not yet authenticating). */
+type AppConnectionState = ConnectionState | "connected";
+
 interface RfqContextValue {
   /** Connection state */
-  connectionState: ConnectionState;
+  connectionState: AppConnectionState;
   /** Whether WebSocket is connected */
   isConnected: boolean;
   /** Whether user is authenticated with wallet */
@@ -43,6 +47,12 @@ interface RfqContextValue {
     market: string,
     positionType: "covered_call" | "cash_secured_put"
   ) => IndicativePricesMessage | null;
+  /** Token markets info (single-request bootstrap for market page) */
+  tokenMarketsInfo: TokenMarketsInfoData | null;
+  /** Fetch token markets info for an underlying */
+  getTokenMarketsInfo: (underlyingMint: string) => void;
+  /** Fetch earn summary */
+  getEarnSummary: () => void;
   /** Last error */
   error: Error | null;
   /** Authenticate with wallet (triggers signing prompt) */
@@ -173,7 +183,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const { selectedAccount, isConnected: walletConnected, signMessage } = useSolana();
   const clientRef = useRef<ActaWsClient | null>(null);
   const walletAddressRef = useRef<string | null>(null);
-  const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
+  const [connectionState, setConnectionState] = useState<AppConnectionState>("disconnected");
   const [markets, setMarkets] = useState<MarketInfo[]>([]);
   const [tokenCaps, setTokenCaps] = useState<TokenCapInfo[]>([]);
   const [earnSummary, setEarnSummary] = useState<EarnAssetSummary[] | null>(null);
@@ -182,6 +192,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [currentQuote, setCurrentQuote] = useState<QuoteReceivedMessage | null>(null);
   const [indicativePrices, setIndicativePrices] = useState<IndicativePricesMessage | null>(null);
   const [indicativePricesByKey, setIndicativePricesByKey] = useState<Record<string, IndicativePricesMessage>>({});
+  const [tokenMarketsInfo, setTokenMarketsInfo] = useState<TokenMarketsInfoData | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const pendingRfqAuthWalletRef = useRef<string | null>(null);
   const authInFlightRef = useRef(false);
@@ -224,16 +235,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
     client.on("connected", () => {
       console.log("[RfqProvider] Connected (anonymous)");
+      setConnectionState("connected");
       setError(null);
       lastWsMessageAtRef.current = Date.now();
       lastWsPingAtRef.current = 0;
       setWsHealth("healthy");
       setWsSilentSeconds(0);
-      // Fetch markets and earn summary on anonymous connect so the market page
-      // works without auth (no Snapshot arrives until wallet is connected).
-      client.getEarnSummary();
-      client.getMarkets();
-      client.getMarketDescriptors({ active_only: true });
     });
 
     client.on("stateChange", (state) => {
@@ -253,9 +260,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
       }
       // Markets arrive via SDK Snapshot on auth — no explicit GetMarkets needed.
       // Positions are fetched by portfolio page on mount (avoids duplicate).
-      // EarnSummary already fetched on connect.
-      client.getTokenCaps({ include_markets: false });
+      // EarnSummary + TokenMarketsInfo fetched by their respective pages on mount.
       client.getMarketDescriptors({ active_only: true });
+      client.getTokenCaps({ include_markets: false });
     });
 
     client.on("disconnected", (code, reason) => {
@@ -305,12 +312,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
     client.on("markets", (m) => {
       console.log(`[RfqProvider] Markets received: ${m.length}`);
       setMarkets(m);
-      // Pre-fetch indicative prices for all markets immediately while still in WS event context.
-      for (const market of m) {
-        const isPut = (market as unknown as { is_put?: unknown }).is_put;
-        const positionType = isPut ? "cash_secured_put" : "covered_call";
-        client.getIndicativePrices({ market: market.pda as any, position_type: positionType });
-      }
     });
 
     client.on("marketDescriptors", (m) => {
@@ -321,6 +322,28 @@ export function RfqProvider({ children }: RfqProviderProps) {
     client.on("positions", (p) => {
       console.log("[RfqProvider] Positions:", p);
       setPositions(p);
+    });
+
+    client.on("tokenMarketsInfo", (data: TokenMarketsInfoData) => {
+      console.log("[RfqProvider] TokenMarketsInfo received:", data.markets?.length ?? 0, "markets");
+      setTokenMarketsInfo(data);
+      // Populate indicativePricesByKey so getIndicativePricesCached works transparently.
+      const updates: Record<string, IndicativePricesMessage> = {};
+      for (const mkt of data.markets ?? []) {
+        for (const ind of mkt.indicatives ?? []) {
+          const pt = ind.position_type as "covered_call" | "cash_secured_put";
+          const key = getIndicativeKey(mkt.market_pda, pt);
+          updates[key] = {
+            market: mkt.market_pda,
+            position_type: pt,
+            strikes: ind.strikes,
+            updated_at: ind.updated_at,
+          } as IndicativePricesMessage;
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        setIndicativePricesByKey((prev) => ({ ...prev, ...updates }));
+      }
     });
 
     client.on("indicativePrices", (msg) => {
@@ -562,6 +585,14 @@ export function RfqProvider({ children }: RfqProviderProps) {
     [getIndicativeKey]
   );
 
+  const getTokenMarketsInfo = useCallback((underlyingMint: string) => {
+    clientRef.current?.getTokenMarketsInfo(underlyingMint);
+  }, []);
+
+  const getEarnSummary = useCallback(() => {
+    clientRef.current?.getEarnSummary();
+  }, []);
+
   const getIndicativePricesCached = useCallback(
     (market: string, positionType: "covered_call" | "cash_secured_put") => {
       return indicativePricesByKey[getIndicativeKey(market, positionType)] ?? null;
@@ -644,6 +675,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
     currentQuote,
     indicativePrices,
     getIndicativePricesCached,
+    tokenMarketsInfo,
+    getTokenMarketsInfo,
+    getEarnSummary,
     error,
     authenticate,
     disconnect,
