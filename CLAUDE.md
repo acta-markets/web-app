@@ -52,7 +52,7 @@ MONGODB_DB="yuzu"
 NEXT_PUBLIC_PRIVY_APP_ID="<privy_app_id>"
 NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
 NEXT_PUBLIC_RFQ_WS_URL="wss://devnet-api.acta.markets"  # RFQ infrastructure WebSocket
-NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "testnet" - controls token mints
+NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "devnet" - controls token mints
 ```
 
 ## Architecture
@@ -76,7 +76,7 @@ NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "testnet" - controls token 
 **Markets**: Static market definitions in `src/lib/markets.ts` with call/CSP (cash-secured put) types, APR ranges, and price options.
 
 **Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
-- Token mints for mainnet/testnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)
+- Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)
 - Pyth price feed IDs
 - Token metadata (decimals, logos)
 - Helper functions: `getToken()`, `getTokenMint()`, `getTokenLogo()`, `getTokenPythId()`

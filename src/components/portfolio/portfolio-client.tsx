@@ -166,7 +166,7 @@ export function PortfolioClient() {
     let cancelled = false;
     const rpcEndpoint =
       process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-      (currentNetwork === "mainnet" ? "https://api.mainnet-beta.solana.com" : "https://api.testnet.solana.com");
+      (currentNetwork === "mainnet" ? "https://api.mainnet-beta.solana.com" : "https://api.devnet.solana.com");
 
     const resolveMissingMarkets = async () => {
       try {

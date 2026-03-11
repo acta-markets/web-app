@@ -393,7 +393,7 @@ export function RfqFlowModal({
             {txSignature && (
               <div className="mt-2 text-sm text-content-secondary">
                 <a
-                  href={`https://solscan.io/tx/${txSignature}?cluster=testnet`}
+                  href={`https://solscan.io/tx/${txSignature}?cluster=devnet`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-accent-primary underline"
@@ -449,7 +449,7 @@ export function RfqFlowModal({
         <div className="flex items-start gap-2 border-t border-white/10 pt-2 text-xs text-content-tertiary">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>
-            Connected to testnet. Quotes come from test market makers.
+            Connected to devnet. Quotes come from dev market makers.
           </span>
         </div>
       </div>
