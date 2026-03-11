@@ -17,6 +17,7 @@ import {
   type TokenMarketsInfoData,
 } from "@/lib/rfq-client";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
+import { AppModal } from "@/components/app-ui/app-modal";
 
 /** SDK ConnectionState + "connected" (WS open but not yet authenticating). */
 type AppConnectionState = ConnectionState | "connected";
@@ -204,6 +205,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const lastForcedReconnectAtRef = useRef<number>(0);
   const [wsHealth, setWsHealth] = useState<"healthy" | "quiet" | "recovering">("healthy");
   const [wsSilentSeconds, setWsSilentSeconds] = useState(0);
+  const [showAuthSignModal, setShowAuthSignModal] = useState(false);
+  const [dismissedAuthSignModal, setDismissedAuthSignModal] = useState(false);
 
   const getIndicativeKey = useCallback(
     (market: string, positionType: "covered_call" | "cash_secured_put") => `${market}:${positionType}`,
@@ -564,6 +567,19 @@ export function RfqProvider({ children }: RfqProviderProps) {
       });
   }, [walletConnected, walletAddress, rfqConnected, authWarmupDone, authenticate, signMessage]);
 
+  useEffect(() => {
+    if (connectionState !== "authenticating") {
+      setShowAuthSignModal(false);
+      setDismissedAuthSignModal(false);
+      return;
+    }
+    if (dismissedAuthSignModal) return;
+    const timeoutId = window.setTimeout(() => {
+      setShowAuthSignModal(true);
+    }, 800);
+    return () => window.clearTimeout(timeoutId);
+  }, [connectionState, dismissedAuthSignModal]);
+
   const disconnect = useCallback(() => {
     clientRef.current?.disconnect();
     setConnectionState("disconnected");
@@ -700,6 +716,24 @@ export function RfqProvider({ children }: RfqProviderProps) {
           <div className="text-white/70">silent: {wsSilentSeconds}s</div>
         </div>
       ) : null}
+      <AppModal
+        open={showAuthSignModal}
+        onClose={() => {
+          setShowAuthSignModal(false);
+          setDismissedAuthSignModal(true);
+        }}
+        title="Awaiting Wallet Signature"
+        showHowItWorks={false}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-content-secondary">
+            Please check your wallet and sign the authentication message to continue.
+          </p>
+          <p className="text-xs text-content-tertiary">
+            Keep this tab open. This popup closes automatically after successful authentication.
+          </p>
+        </div>
+      </AppModal>
     </RfqContext.Provider>
   );
 }
