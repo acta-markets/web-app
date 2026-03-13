@@ -28,6 +28,7 @@ export type {
   TokenCapInfo,
   TokenCapsMessage,
   ServerMessage,
+  ServerError,
   EarnAssetSummary,
   EarnSummaryData,
   TokenMarketsInfoData,
