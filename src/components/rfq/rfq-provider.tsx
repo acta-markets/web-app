@@ -244,6 +244,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       lastWsPingAtRef.current = 0;
       setWsHealth("healthy");
       setWsSilentSeconds(0);
+      client.getEarnSummary();
     });
 
     client.on("stateChange", (state) => {
@@ -264,6 +265,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       // Markets arrive via SDK Snapshot on auth — no explicit GetMarkets needed.
       // Positions are fetched by portfolio page on mount (avoids duplicate).
       // EarnSummary + TokenMarketsInfo fetched by their respective pages on mount.
+      client.getEarnSummary();
       client.getMarketDescriptors({ active_only: true });
       client.getTokenCaps({ include_markets: false });
     });
@@ -297,6 +299,15 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setWsSilentSeconds(0);
       if (message.type === "TokenCaps") {
         setTokenCaps(message.data.tokens ?? []);
+      }
+      const messageType = ((message as unknown as { type?: string }).type ?? "").toLowerCase();
+      if (messageType.includes("earnsummary")) {
+        const payload = message as unknown as {
+          data?: { assets?: EarnAssetSummary[]; data?: { assets?: EarnAssetSummary[] } };
+          assets?: EarnAssetSummary[];
+        };
+        const assets = payload.data?.assets ?? payload.data?.data?.assets ?? payload.assets ?? [];
+        setEarnSummary(Array.isArray(assets) ? assets : []);
       }
     });
 
