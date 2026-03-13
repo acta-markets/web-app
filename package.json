@@ -13,7 +13,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "@acta-markets/ts-sdk": "^0.0.18-beta",
+    "@acta-markets/ts-sdk": "^0.0.19-beta",
     "@privy-io/react-auth": "^3.9.1",
     "@solana-program/memo": "^0.10.0",
     "@solana-program/system": "^0.10.0",

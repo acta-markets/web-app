@@ -11,6 +11,7 @@ import {
   type QuoteReceivedMessage,
   type IndicativePricesMessage,
   type ConnectionState,
+  type ServerError,
 } from "./rfq-client";
 
 // Re-export types for components
@@ -77,19 +78,23 @@ function clearPendingAuthState(client: ActaWsClient) {
   internal.startAuthSent = false;
 }
 
-function isAuthFailureMessage(message: string): boolean {
-  const lower = message.toLowerCase();
-  return lower.includes("user rejected") || lower.includes("auth timeout");
+function isAuthFailureError(err: ServerError): boolean {
+  return err.type === "unauthenticated" || err.type === "unauthorized" ||
+    (err.type === "generic" && (
+      err.data.code === "unauthenticated" ||
+      err.data.message.toLowerCase().includes("user rejected") ||
+      err.data.message.toLowerCase().includes("auth timeout")
+    ));
 }
 
-function isRecoverableRfqBusinessError(message: string): boolean {
-  const lower = message.toLowerCase();
+function isRecoverableRfqBusinessError(err: ServerError): boolean {
+  const code = err.type === "generic" ? err.data.code : err.type;
   return (
-    lower.includes("quote_not_found") ||
-    lower.includes("quote_expired") ||
-    lower.includes("quote_refresh_required") ||
-    lower.includes("rfq_expired") ||
-    lower.includes("rfq_closed")
+    code === "quote_not_found" ||
+    code === "quote_expired" ||
+    code === "quote_refresh_required" ||
+    code === "rfq_expired" ||
+    code === "rfq_closed"
   );
 }
 
@@ -143,14 +148,14 @@ export function useRfq(options: UseRfqOptions = {}): UseRfqReturn {
       setConnectionState("disconnected");
     });
 
-    client.on("error", (err) => {
-      console.error("[useRfq] Error:", err);
-      const message = err instanceof Error ? err.message : String(err);
-      if (isAuthFailureMessage(message)) {
+    client.on("error", (serverErr) => {
+      console.error("[useRfq] Error:", serverErr);
+      if (isAuthFailureError(serverErr)) {
         resetToAnonymous(client);
       }
-      setError(err instanceof Error ? err : new Error(String(err)));
-      if (!isRecoverableRfqBusinessError(message)) {
+      const message = serverErr.type === "generic" ? serverErr.data.message : serverErr.type;
+      setError(new Error(message));
+      if (!isRecoverableRfqBusinessError(serverErr)) {
         setConnectionState("error");
       }
     });
@@ -236,11 +241,12 @@ export function useRfq(options: UseRfqOptions = {}): UseRfqReturn {
         await client.authenticate(authProvider);
       } catch (err) {
         console.error("[useRfq] Authentication failed:", err);
-        const message = err instanceof Error ? err.message : String(err);
-        if (isAuthFailureMessage(message)) {
+        const serverErr = err as ServerError;
+        if (isAuthFailureError(serverErr)) {
           resetToAnonymous(client);
         }
-        setError(err instanceof Error ? err : new Error(String(err)));
+        const message = serverErr?.type === "generic" ? serverErr.data.message : String(err);
+        setError(new Error(message));
         throw err;
       }
     },
