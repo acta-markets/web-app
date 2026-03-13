@@ -5,6 +5,7 @@
 @layer base {
   /* Light theme (default for :root, used when no .dark class) */
   :root {
+    --font-syne: "Syne";
     /* Background */
     --bg-primary: #F7F7F7;
     --bg-secondary: #FBFBFB;
@@ -130,12 +131,12 @@
   }
 
   h1, h2, h3 {
-    font-family: var(--font-syne), system-ui, sans-serif;
+    font-family: "Syne", var(--font-syne), system-ui, sans-serif;
     letter-spacing: 0.01em;
   }
 
   .logo {
-    font-family: var(--font-syne), system-ui, sans-serif;
+    font-family: "Syne", var(--font-syne), system-ui, sans-serif;
     font-weight: 800;
     letter-spacing: -0.03em;
   }
