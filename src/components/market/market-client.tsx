@@ -518,7 +518,11 @@ export function MarketClient({ asset }: { asset: string }) {
   const bestPricePerUnit = selectedPriceOption?.bestPrice
     ? Number(selectedPriceOption.bestPrice) / 1_000_000_000
     : 0;
-  const displayedPremiumUsd = depositOk ? bestPricePerUnit * depositNum : 0;
+  const underlyingAmountFromInput =
+    depositOk && quantityLamportsFromInput != null
+      ? quantityLamportsFromInput / 10 ** underlyingDecimals
+      : 0;
+  const displayedPremiumUsd = depositOk ? bestPricePerUnit * underlyingAmountFromInput : 0;
   const isRfqAuthPending =
     !!walletAddress &&
     depositOk &&
