@@ -13,6 +13,7 @@ import {
   type TokenCapInfo,
   type EarnAssetSummary,
   type ServerMessage,
+  type ServerError,
   type ConnectionState,
   type TokenMarketsInfoData,
 } from "@/lib/rfq-client";
@@ -109,23 +110,25 @@ function clearPendingAuthState(client: ActaWsClient) {
   internal.startAuthSent = false;
 }
 
-function isAuthFailureMessage(message: string): boolean {
-  const lower = message.toLowerCase();
-  return lower.includes("user rejected") || lower.includes("auth timeout");
+function isAuthFailureError(err: ServerError): boolean {
+  return err.type === "unauthenticated" || err.type === "unauthorized" ||
+    (err.type === "generic" && (
+      err.data.code === "unauthenticated" ||
+      err.data.message.toLowerCase().includes("user rejected") ||
+      err.data.message.toLowerCase().includes("auth timeout")
+    ));
 }
 
-function isRecoverableRfqBusinessError(message: string): boolean {
-  const lower = message.toLowerCase();
+function isRecoverableRfqBusinessError(err: ServerError): boolean {
+  const code = err.type === "generic" ? err.data.code : err.type;
   return (
-    lower.includes("quote_not_found") ||
-    lower.includes("quote_expired") ||
-    lower.includes("quote_refresh_required") ||
-    lower.includes("rfq_expired") ||
-    lower.includes("rfq_closed") ||
-    lower.includes("marketmetadataincomplete") ||
-    lower.includes("market_metadata_incomplete") ||
-    lower.includes("tokenmetadataincomplete") ||
-    lower.includes("token_metadata_incomplete")
+    code === "quote_not_found" ||
+    code === "quote_expired" ||
+    code === "quote_refresh_required" ||
+    code === "rfq_expired" ||
+    code === "rfq_closed" ||
+    code === "market_metadata_incomplete" ||
+    code === "token_metadata_incomplete"
   );
 }
 
@@ -276,16 +279,16 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setWsHealth("recovering");
     });
 
-    client.on("error", (err) => {
-      console.error("[RfqProvider] Error:", err);
-      const message = err instanceof Error ? err.message : String(err);
+    client.on("error", (serverErr) => {
+      console.error("[RfqProvider] Error:", serverErr);
       // Prevent reconnect-auth loops after user rejection/timeouts.
-      if (isAuthFailureMessage(message)) {
+      if (isAuthFailureError(serverErr)) {
         resetToAnonymous(client);
       }
-      setError(err instanceof Error ? err : new Error(String(err)));
+      const message = serverErr.type === "generic" ? serverErr.data.message : serverErr.type;
+      setError(new Error(message));
       // Keep connection state for recoverable business-level RFQ errors.
-      if (!isRecoverableRfqBusinessError(message)) {
+      if (!isRecoverableRfqBusinessError(serverErr)) {
         setConnectionState("error");
       }
     });
@@ -489,9 +492,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
             resolve();
           };
 
-          const onError = (err: Error) => {
+          const onError = (serverErr: ServerError) => {
             cleanup();
-            reject(err);
+            reject(serverErr);
           };
 
           client.on("authenticated", onAuthenticated);
@@ -500,11 +503,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
         });
       } catch (err) {
         console.error("[RfqProvider] Authentication failed:", err);
-        const message = err instanceof Error ? err.message : String(err);
-        if (isAuthFailureMessage(message)) {
+        const serverErr = err as ServerError;
+        if (isAuthFailureError(serverErr)) {
           resetToAnonymous(client);
         }
-        setError(err instanceof Error ? err : new Error(String(err)));
+        const message = serverErr?.type === "generic" ? serverErr.data.message : String(err);
+        setError(new Error(message));
         throw err;
       }
     },
