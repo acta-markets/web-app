@@ -462,48 +462,12 @@ export function MarketClient({ asset }: { asset: string }) {
     return Math.max(type === "csp" ? 2 : 0, decimalsFromStep(depositRule.step));
   }, [depositRule, type, underlyingDecimals]);
 
-  const normalizeDepositAmount = useCallback(
-    (value: number): number => {
-      if (!Number.isFinite(value) || value <= 0 || !wireSizeRule) return value;
-      const rawQuantity =
-        type === "call"
-          ? Math.round(value * 10 ** underlyingDecimals)
-          : quoteAmountToQuantity(value, selectedStrikeLamports, underlyingDecimals);
-      const alignedQuantity = alignQuantityToRule(rawQuantity, wireSizeRule);
-      return type === "call"
-        ? alignedQuantity / 10 ** underlyingDecimals
-        : quantityToQuoteAmount(alignedQuantity, selectedStrikeLamports, underlyingDecimals);
-    },
-    [wireSizeRule, type, underlyingDecimals, selectedStrikeLamports]
-  );
-
   const handleDepositChange = useCallback(
     (raw: string) => {
-      if (raw === "") {
-        setDeposit("");
-        return;
-      }
-      const parsed = Number(raw);
-      if (!Number.isFinite(parsed)) {
-        setDeposit(raw);
-        return;
-      }
-      const normalized = normalizeDepositAmount(parsed);
-      setDeposit(formatInputValue(normalized, depositInputDecimals));
+      if (raw === "" || /^(\d+(\.\d*)?|\.\d+)$/.test(raw)) setDeposit(raw);
     },
-    [normalizeDepositAmount, depositInputDecimals]
+    []
   );
-
-  useEffect(() => {
-    if (deposit === "") return;
-    const parsed = Number(deposit);
-    if (!Number.isFinite(parsed) || parsed <= 0) return;
-    const normalized = normalizeDepositAmount(parsed);
-    const formatted = formatInputValue(normalized, depositInputDecimals);
-    if (formatted !== deposit) {
-      setDeposit(formatted);
-    }
-  }, [deposit, normalizeDepositAmount, depositInputDecimals]);
 
   // Calculate term from expiry date
   const expiryDate = strikeDates[strikeIdx] ?? strikeDates[0] ?? new Date();
@@ -517,17 +481,34 @@ export function MarketClient({ asset }: { asset: string }) {
   const spot = live?.price ?? 0;
 
   const depositNum = Number(deposit);
-  const quantityLamports = useMemo(() => {
+  const quantityLamportsFromInput = useMemo(() => {
     if (!Number.isFinite(depositNum) || depositNum <= 0 || !wireSizeRule) return null;
-    const quantity =
-      type === "call"
+    if (type === "csp" && selectedStrikeLamports <= 0) return null;
+    try {
+      return type === "call"
         ? Math.round(depositNum * 10 ** underlyingDecimals)
         : quoteAmountToQuantity(depositNum, selectedStrikeLamports, underlyingDecimals);
-    if (quantity < wireSizeRule.min_size || quantity > wireSizeRule.max_size) return null;
-    if (wireSizeRule.step > 0 && (quantity - wireSizeRule.min_size) % wireSizeRule.step !== 0) return null;
-    return quantity;
+    } catch {
+      return null;
+    }
   }, [depositNum, wireSizeRule, type, underlyingDecimals, selectedStrikeLamports]);
-  const depositOk = quantityLamports != null;
+  const sizeRuleUnitSymbol = type === "call" ? (market?.asset ?? asset) : "USDC";
+  const sizeRuleViolationMessage = useMemo(() => {
+    if (!wireSizeRule || !depositRule) return null;
+    if (!Number.isFinite(depositNum) || depositNum <= 0 || quantityLamportsFromInput == null) return null;
+    if (quantityLamportsFromInput < wireSizeRule.min_size) {
+      return `Below min ${formatInputValue(depositRule.min, depositInputDecimals)} ${sizeRuleUnitSymbol}`;
+    }
+    if (quantityLamportsFromInput > wireSizeRule.max_size) {
+      return `Above max ${formatInputValue(depositRule.max, depositInputDecimals)} ${sizeRuleUnitSymbol}`;
+    }
+    return null;
+  }, [wireSizeRule, depositRule, depositNum, quantityLamportsFromInput, depositInputDecimals, sizeRuleUnitSymbol]);
+  const depositOk =
+    quantityLamportsFromInput != null &&
+    wireSizeRule != null &&
+    quantityLamportsFromInput >= wireSizeRule.min_size &&
+    quantityLamportsFromInput <= wireSizeRule.max_size;
   const notionalUsd =
     type === "call" ? (depositOk ? depositNum * spot : 0) : depositOk ? depositNum : 0;
   const selectedApr = (selectedPriceOption?.apr ?? 0) * 100;
@@ -556,7 +537,7 @@ export function MarketClient({ asset }: { asset: string }) {
     : !hasSelectedPrice
       ? "Choose price"
       : !depositOk
-        ? "Choose size"
+        ? (sizeRuleViolationMessage ?? "Choose size")
         : shouldShowIndicativeLoading
           ? "Loading prices..."
           : isRfqAuthPending
@@ -573,9 +554,7 @@ export function MarketClient({ asset }: { asset: string }) {
 
   const defaultMaxPresetNum = type === "call" ? 10 : 5000;
   const maxPresetNum = depositRule?.max ?? defaultMaxPresetNum;
-  const halfPresetNum = depositRule
-    ? normalizeDepositAmount((depositRule.min + depositRule.max) / 2)
-    : maxPresetNum / 2;
+  const halfPresetNum = depositRule ? (depositRule.min + depositRule.max) / 2 : maxPresetNum / 2;
   const maxPreset = formatInputValue(maxPresetNum, depositInputDecimals);
 
   useEffect(() => {
@@ -611,7 +590,7 @@ export function MarketClient({ asset }: { asset: string }) {
       console.warn("[MarketClient] Deposit blocked: no strike selected yet");
       return;
     }
-    if (quantityLamports == null) {
+    if (quantityLamportsFromInput == null || !wireSizeRule) {
       console.warn("[MarketClient] Deposit blocked: amount violates market size rule");
       return;
     }
@@ -632,13 +611,22 @@ export function MarketClient({ asset }: { asset: string }) {
     }
     if (!marketPda) return;
 
+    const alignedQuantity = alignQuantityToRule(quantityLamportsFromInput, wireSizeRule);
+    if (alignedQuantity !== quantityLamportsFromInput) {
+      const alignedDeposit =
+        type === "call"
+          ? alignedQuantity / 10 ** underlyingDecimals
+          : quantityToQuoteAmount(alignedQuantity, selectedStrikeLamports, underlyingDecimals);
+      setDeposit(formatInputValue(alignedDeposit, depositInputDecimals));
+    }
+
     clearTransientState();
     setModalInitialQuote(null);
     submitRfq({
       market: marketPda,
       positionType,
       strike: selectedStrikeLamports,
-      quantity: quantityLamports,
+      quantity: alignedQuantity,
       timeoutSeconds: 30,
     });
     setIsRequestingQuote(true);
@@ -652,8 +640,12 @@ export function MarketClient({ asset }: { asset: string }) {
     clearTransientState,
     submitRfq,
     selectedStrikeLamports,
-    quantityLamports,
+    quantityLamportsFromInput,
+    wireSizeRule,
     positionType,
+    type,
+    underlyingDecimals,
+    depositInputDecimals,
   ]);
 
   if (!market) {
@@ -1175,7 +1167,9 @@ export function MarketClient({ asset }: { asset: string }) {
         asset={market.asset}
         positionType={type === "call" ? "covered_call" : "cash_secured_put"}
         strike={Math.round(selectedPrice * 1_000_000_000)} // Convert to lamports (9 decimals)
-        quantity={quantityLamports ?? 0}
+        quantity={(depositOk && wireSizeRule && quantityLamportsFromInput != null)
+          ? alignQuantityToRule(quantityLamportsFromInput, wireSizeRule)
+          : 0}
         strikeDisplay={formatUsdSmart(selectedPrice)}
         quantityDisplay={`${depositNum.toLocaleString()} ${type === "call" ? market.asset : "USDC"}`}
         initialQuote={modalInitialQuote}
