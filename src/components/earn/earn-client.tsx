@@ -49,10 +49,6 @@ export function EarnClient() {
   useEffect(() => {
     if (!wsReady) return;
     getEarnSummary();
-    const id = window.setInterval(() => {
-      getEarnSummary();
-    }, 30_000);
-    return () => window.clearInterval(id);
   }, [wsReady, getEarnSummary]);
   const [sort, setSort] = useState<{ key: "minAprPct" | "maxAprPct"; dir: "asc" | "desc" } | null>(null);
 
