@@ -5,6 +5,13 @@ self.addEventListener("install", () => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
+      const hostname = self.location.hostname;
+      const isLocalhost =
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1";
+      if (!isLocalhost) return;
+
       try {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
