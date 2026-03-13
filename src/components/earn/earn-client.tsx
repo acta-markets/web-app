@@ -44,10 +44,15 @@ export function EarnClient() {
   const [howOpen, setHowOpen] = useState(false);
   const { earnSummary, connectionState, getEarnSummary } = useRfqContext();
 
-  const wsReady = connectionState === "connected" || connectionState === "authenticated";
+  const wsReady =
+    connectionState !== "disconnected" && connectionState !== "error" && connectionState !== "connecting";
   useEffect(() => {
     if (!wsReady) return;
     getEarnSummary();
+    const id = window.setInterval(() => {
+      getEarnSummary();
+    }, 30_000);
+    return () => window.clearInterval(id);
   }, [wsReady, getEarnSummary]);
   const [sort, setSort] = useState<{ key: "minAprPct" | "maxAprPct"; dir: "asc" | "desc" } | null>(null);
 
