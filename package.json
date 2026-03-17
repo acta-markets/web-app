@@ -12,9 +12,10 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui"
   },
-  "dependencies": {    
-    "@fontsource/syne": "^5.2.7",
+  "dependencies": {
     "@acta-markets/ts-sdk": "^0.0.19-beta",
+    "@fontsource/syne": "^5.2.7",
+    "@microsoft/clarity": "^1.0.2",
     "@privy-io/react-auth": "^3.9.1",
     "@solana-program/memo": "^0.10.0",
     "@solana-program/system": "^0.10.0",
