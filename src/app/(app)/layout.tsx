@@ -1,5 +1,5 @@
 import { AppNav } from "@/components/app-nav";
-import { RouteTheme } from "@/components/route-theme";
+import { HeroBg } from "@/components/hero-bg";
 import { SolanaWalletProvider } from "@/components/solana/solana-wallet-provider";
 import { WalletSidebarProvider } from "@/components/wallet/wallet-sidebar";
 import { RfqProvider } from "@/components/rfq/rfq-provider";
@@ -12,10 +12,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <ClarityProvider />
       <WalletSidebarProvider>
         <RfqProvider>
-          <div className="flex min-h-screen flex-col app-bg text-content-primary">
-            <RouteTheme theme="dark" />
+          <div className="relative flex min-h-screen flex-col bg-bg-primary text-content-primary">
+            <HeroBg />
             <AppNav />
-            <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-10">{children}</main>
+            <main className="relative z-[1] flex-1">{children}</main>
             <Footer />
           </div>
         </RfqProvider>

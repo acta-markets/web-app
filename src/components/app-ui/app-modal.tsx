@@ -34,28 +34,28 @@ export function AppModal({
     >
       <button
         type="button"
-        className="absolute inset-0 cursor-default bg-bg-primary/60 backdrop-blur-sm"
+        className="absolute inset-0 cursor-default bg-bg-primary/80 backdrop-blur-sm"
         aria-label="Close modal"
         onClick={onClose}
       />
 
       <div
         className={cn(
-          "relative w-full max-w-2xl rounded-2xl border border-bg-border bg-bg-secondary p-6 shadow-2xl",
+          "relative w-full max-w-2xl border border-bg-border bg-bg-primary p-6 shadow-2xl",
           "text-content-primary"
         )}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
             {showHowItWorks ? (
-              <div className="text-xs font-semibold text-content-tertiary">How it works</div>
+              <div className="text-xs font-medium text-content-tertiary">How it works</div>
             ) : null}
-            <div className="mt-1 text-xl font-semibold">{title}</div>
+            <div className="mt-1 text-xl font-medium">{title}</div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-2 text-sm font-semibold text-content-secondary hover:bg-action-primary/20 hover:text-content-primary"
+            className="px-3 py-2 text-sm font-medium text-content-secondary hover:bg-action-primary hover:text-content-primary"
           >
             Close
           </button>

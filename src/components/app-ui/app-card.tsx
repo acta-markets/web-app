@@ -8,7 +8,7 @@ export function AppCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-white/10 bg-white/5 shadow-sm backdrop-blur",
+        "border border-bg-border bg-bg-primary backdrop-blur-[4px]",
         className
       )}
       {...props}

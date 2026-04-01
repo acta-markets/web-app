@@ -1,13 +1,12 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AppCard } from "@/components/app-ui/app-card";
 import { AppModal } from "@/components/app-ui/app-modal";
-import { AppTable, AppTd, AppTh } from "@/components/app-ui/app-table";
 import { type MarketType, formatPct } from "@/lib/markets";
-import { getTokenBrand } from "@/lib/token-brand";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { normalizeTokenSymbol } from "@/lib/tokens";
@@ -81,325 +80,233 @@ export function EarnClient() {
   };
 
   return (
-    <div className="space-y-8">
-      <header className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-start">
-        <div className="space-y-3">
-          <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">Earn</h1>
-          <p className="max-w-2xl text-sm text-content-secondary">
-            Get instant yield on your assets.{" "}
+    <div>
+      {/* Hero — pt-[104px] pb-[80px] gap-[32px] */}
+      <div className="flex flex-col items-center gap-8 pb-20 pt-[104px]">
+        <div className="flex w-[298px] flex-col items-center gap-3">
+          <h1 className="w-full text-center font-space text-[64px] font-semibold leading-[1.2] tracking-[-1.28px] text-content-primary max-md:text-[40px]">
+            Earn
+          </h1>
+          <div className="flex w-full flex-col items-center gap-1.5">
+            <p className="w-full text-center text-base font-normal leading-[1.2] tracking-[-0.32px] text-content-secondary">
+              Get instant yield on your assets
+            </p>
             <button
               type="button"
               onClick={() => setHowOpen(true)}
-              className="font-semibold text-accent-primary hover:underline underline-offset-4"
+              className="inline-flex items-center gap-0.5 text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary"
             >
               How it works
+              <img src="/chevron-right-duo.svg" alt="" className="h-5 w-5" />
             </button>
-          </p>
+          </div>
         </div>
 
-        <div className="flex max-w-full flex-col gap-4 md:flex-row md:items-start lg:max-w-[720px] lg:justify-end">
-          <button
-            type="button"
-            onClick={() => setType("call")}
-            className="w-full text-left md:w-[340px]"
-          >
-            <AppCard
-              className={[
-                "p-5 transition-all",
-                "hover:-translate-y-0.5 hover:shadow-md",
-                type === "call"
-                  ? "!border-yuzu-main/60 !bg-yuzu-main/10"
-                  : "hover:bg-white/10"
-              ].join(" ")}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 text-base font-semibold">
-                    <span className="text-accent-primary">📈</span>
-                    Calls
-                  </div>
-                  <div className="mt-2 text-sm text-content-secondary">
-                    Deposit the asset and earn premium. If spot finishes above your selected price, you
-                    sell there, otherwise you keep your asset
-                  </div>
-                </div>
+        {/* Calls / Puts — gap-[8px], both flex-1 */}
+        <div className="flex w-full max-w-[850px] gap-2 max-xl:px-[71px] max-lg:px-6">
+          {(["call", "csp"] as const).map((t) => (
+            <button key={t} type="button" onClick={() => setType(t)} className="flex-1">
+              <div className={[
+                "flex flex-col items-center gap-1.5 border px-6 py-5 backdrop-blur-[4px] transition-colors",
+                type === t
+                  ? "bg-[rgba(42,162,134,0.2)] border-[rgba(42,162,134,0.3)]"
+                  : "bg-[rgba(18,18,18,0.01)] border-bg-border hover:bg-[rgba(40,40,40,0.24)] hover:border-[rgba(240,240,240,0.15)]"
+              ].join(" ")}>
+                <span className="text-xl font-bold leading-[1.2] tracking-[-0.4px] text-content-primary">
+                  {t === "call" ? "Calls" : "Puts"}
+                </span>
+                <p className={[
+                  "text-sm text-center leading-[1.2] tracking-[-0.28px] w-full",
+                  type === t ? "text-[rgba(240,240,240,0.5)]" : "text-content-secondary"
+                ].join(" ")}>
+                  {t === "call"
+                    ? "Deposit the asset and earn premium. If spot finishes above your selected price, you sell there, otherwise you keep your asset"
+                    : "Deposit USDC and earn premium. If spot finishes below your selected price, you buy the asset there, otherwise you keep your USDC"}
+                </p>
               </div>
-            </AppCard>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setType("csp")}
-            className="w-full text-left md:w-[340px]"
-          >
-            <AppCard
-              className={[
-                "p-5 transition-all",
-                "hover:-translate-y-0.5 hover:shadow-md",
-                type === "csp"
-                  ? "!border-yuzu-main/60 !bg-yuzu-main/10"
-                  : "hover:bg-white/10"
-              ].join(" ")}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 text-base font-semibold">
-                    <span className="text-accent-primary">📉</span>
-                    Puts
-                  </div>
-                  <div className="mt-2 text-sm text-content-secondary">
-                    Deposit USDC and earn premium. If spot finishes below your selected price, you buy
-                    the asset there, otherwise you keep your USDC
-                  </div>
-                </div>
-              </div>
-            </AppCard>
-          </button>
+            </button>
+          ))}
         </div>
-      </header>
+      </div>
 
-      <AppModal open={howOpen} onClose={() => setHowOpen(false)} title="Acta Earn">
-        <div className="space-y-3 text-[15px]">
-          <div className="rounded-xl border border-bg-border bg-action-primary/30 p-4">
-            <div className="font-semibold text-content-primary">1) Choose strategy</div>
-            <div className="mt-2 text-content-primary/80">
-              Pick <span className="font-semibold text-accent-primary">📈 Calls</span> or{" "}
-              <span className="font-semibold text-accent-primary">📉 Puts</span>.
-            </div>
-          </div>
+      {/* Content — 850px centered */}
+      <div className="mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6">
+        {/* Popular — gap title-to-cards: 16px */}
+        <section className="flex flex-col gap-4">
+          <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
+            Popular
+          </h2>
 
-          <div className="rounded-xl border border-bg-border bg-action-primary/30 p-4">
-            <div className="font-semibold text-content-primary">2) Pick a market</div>
-            <div className="mt-2 text-content-primary/80">
-              Choose an asset (e.g. JLP, jitoSOL, zBTC) and pick the expiry and price you&apos;re comfortable with.
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-bg-border bg-action-primary/30 p-4">
-            <div className="font-semibold text-content-primary">3) Deposit</div>
-            <div className="mt-2 text-content-primary/80">
-              Deposit collateral (asset for calls, USDC for puts). You earn upfront premium right after deposit.
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-bg-border bg-action-primary/30 p-4">
-            <div className="font-semibold text-content-primary">4) Settlement at expiry</div>
-            <div className="mt-2 text-content-primary/80">
-              <ul className="list-disc space-y-2 pl-5">
-                <li>
-                  <span className="font-semibold text-content-primary">Calls</span>: if spot &gt; your price, your asset is sold at that price (you receive USDC). Otherwise, you keep the asset.
-                </li>
-                <li>
-                  <span className="font-semibold text-content-primary">Puts</span>: if spot &lt; your price, your USDC buys the asset at that price. Otherwise, you keep the USDC.
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="text-sm text-content-secondary">
-            Note: This is a UI prototype; final mechanics (fees/oracles/settlement) will be documented.
-          </div>
-        </div>
-      </AppModal>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-content-secondary">Popular</div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {isLoading
-            ? Array.from({ length: 4 }).map((_, idx) => (
-                <AppCard key={`popular-skeleton-${idx}`} className="relative overflow-hidden p-4">
-                  <div className="h-1.5 w-full animate-pulse rounded bg-white/15" />
-                  <div className="mt-4 flex items-center gap-3">
-                    <div className="h-10 w-10 animate-pulse rounded-xl bg-white/10" />
-                    <div className="h-5 w-20 animate-pulse rounded bg-white/10" />
+          <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
+            {isLoading
+              ? Array.from({ length: 3 }).map((_, idx) => (
+                  <div key={`popular-skeleton-${idx}`} className="relative flex h-[220px] flex-col items-start justify-end gap-3 overflow-clip border border-bg-border bg-bg-primary p-6">
+                    <div className="absolute left-[-1px] right-[-1px] top-0 h-[74px] animate-pulse bg-action-primary" />
+                    <div className="relative z-10 flex w-full flex-col items-center gap-2.5">
+                      <div className="h-14 w-14 animate-pulse rounded-full bg-action-primary" />
+                      <div className="h-6 w-20 animate-pulse rounded bg-action-primary" />
+                    </div>
+                    <div className="relative z-10 flex w-full items-center gap-1">
+                      <div className="flex-1"><div className="mx-auto h-4 w-16 animate-pulse rounded bg-action-primary" /></div>
+                      <div className="h-6 w-px bg-bg-border" />
+                      <div className="flex-1"><div className="mx-auto h-4 w-16 animate-pulse rounded bg-action-primary" /></div>
+                    </div>
                   </div>
-                  <div className="mt-6 h-4 w-16 animate-pulse rounded bg-white/10" />
-                  <div className="mt-2 h-8 w-28 animate-pulse rounded bg-white/10" />
-                  <div className="mt-5 h-3 w-24 animate-pulse rounded bg-white/10" />
-                  <div className="mt-2 h-2 w-full animate-pulse rounded-full bg-white/10" />
-                </AppCard>
-              ))
-            : popular.map((m) => (
-            <Link
-              key={`${m.asset}:${m.type}`}
-              href={`/market/${encodeURIComponent(m.asset)}?type=${m.type}&market=${encodeURIComponent(m.nearestMarketPda)}`}
-              className="group block"
-            >
-              <AppCard
-                className="relative overflow-hidden p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                style={
-                  {
-                    ["--brand-a" as any]: getTokenBrand(m.asset).a,
-                    ["--brand-b" as any]: getTokenBrand(m.asset).b
-                  } as React.CSSProperties
-                }
+                ))
+              : popular.map((m) => (
+              <Link
+                key={`${m.asset}:${m.type}`}
+                href={`/market/${encodeURIComponent(m.asset)}?type=${m.type}&market=${encodeURIComponent(m.nearestMarketPda)}`}
+                className="group block"
               >
-                <div
-                  className="absolute inset-x-0 top-0 h-1.5 opacity-90"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, var(--brand-a), var(--brand-b))"
-                  }}
-                />
+                {/* Card — exact Figma: 275x220, backdrop-blur-[4px], border #282828, bg #121212, overflow-clip */}
+                <div className="relative flex h-[220px] flex-col items-start justify-end gap-3 overflow-clip border border-bg-border bg-bg-primary backdrop-blur-[4px] pb-6 pt-5 px-6 transition-colors hover:bg-[rgba(40,40,40,0.24)] hover:border-[rgba(240,240,240,0.15)]">
+                  {/* Decorative top band */}
+                  <div
+                    className="absolute left-[-1px] right-[-1px] top-0 h-[74px] overflow-clip bg-black"
+                    style={{
+                      backgroundImage: "url(/bg-card-band.png)",
+                      backgroundSize: "cover",
+                      backgroundPosition: "center"
+                    }}
+                  />
 
-                <div
-                  className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-25 blur-2xl transition-opacity group-hover:opacity-40"
-                  style={{
-                    background:
-                      "radial-gradient(circle at 30% 30%, var(--brand-a), transparent 60%)"
-                  }}
-                />
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-action-primary/60 p-1"
-                      style={{
-                        boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.04)"
-                      }}
-                    >
+                  {/* Logo + name */}
+                  <div className="relative z-10 flex w-full flex-col items-center gap-2.5">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-clip rounded-full border border-[rgba(240,240,240,0.1)] bg-[#f0f0f0] shadow-[0_0_0_5px_#121212]">
                       <img
                         src={getTokenLogoSrc(m.asset)}
-                        alt={`${m.asset} logo`}
-                        className="h-full w-full rounded-lg object-contain"
+                        alt={`${m.asset}`}
+                        className="h-14 w-14 rounded-full object-cover"
                         loading="lazy"
                       />
                     </div>
-                    <div>
-                      <div className="text-base font-semibold">{m.asset}</div>
+                    <span className="w-full text-center text-2xl font-bold leading-[1.2] tracking-[-0.48px] text-content-primary">
+                      {m.asset}
+                    </span>
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="relative z-10 flex w-full items-center gap-1">
+                    <div className="flex flex-1 flex-col items-start gap-1.5 text-center leading-[1.2]">
+                      <span className="w-full text-sm tracking-[-0.28px] text-content-secondary">
+                        APR range
+                      </span>
+                      <span className="w-full text-base font-medium tracking-[-0.32px] text-content-primary">
+                        {formatAprRange(m)}
+                      </span>
+                    </div>
+                    <div className="h-6 w-px shrink-0 bg-bg-border" />
+                    <div className="flex flex-1 flex-col items-center gap-1.5">
+                      <span className="w-full text-center text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
+                        Cap filled
+                      </span>
+                      <div className="flex w-[93px] items-center gap-2">
+                        <span className="shrink-0 text-center text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
+                          {formatPct(m.capFilledPct)}
+                        </span>
+                        <div className="flex h-2.5 min-h-px min-w-px flex-1 items-start bg-accent-primary/20">
+                          <div
+                            className="h-full min-h-px min-w-px bg-accent-primary"
+                            style={{ width: `${Math.min(100, m.capFilledPct)}%` }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
+              </Link>
+            ))}
+          </div>
+        </section>
 
-                <div className="mt-4 text-sm text-content-secondary">
-                  APR range
-                </div>
-                <div className="mt-1 text-2xl font-semibold">
-                  {formatAprRange(m)}
-                </div>
+        <div className="h-16" />
 
-                <div className="mt-4 text-xs text-content-tertiary">
-                  Cap filled:{" "}
-                  <span className="font-semibold text-content-secondary">
-                    {formatPct(m.capFilledPct)}
-                  </span>
-                </div>
-                <div className="mt-2 h-2 w-full rounded-full bg-action-primary/20">
-                  <div
-                    className="h-2 rounded-full"
-                    style={{
-                      width: `${m.capFilledPct}%`,
-                      background:
-                        "linear-gradient(90deg, var(--brand-a), var(--brand-b))"
-                    }}
-                  />
-                </div>
-              </AppCard>
-            </Link>
-          ))}
-        </div>
-      </section>
+        {/* All markets — H2 40px */}
+        <section className="flex flex-col gap-4">
+          <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
+            All markets
+          </h2>
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-content-secondary">All markets</div>
-        </div>
+          {/* Table */}
+          <div className="overflow-clip border border-bg-border backdrop-blur-[4px]">
+            {/* Header */}
+            <div className="flex items-center gap-2 border-b border-bg-border bg-bg-primary py-3 pl-5 pr-12">
+              <div className="flex-1 text-xs font-medium leading-[1.2] tracking-[-0.24px] text-content-secondary">Asset</div>
+              <div className="w-[120px] text-xs font-medium leading-[1.2] tracking-[-0.24px] text-content-secondary">Type</div>
+              <button
+                type="button"
+                className="flex w-[120px] items-center gap-1 text-xs font-medium leading-[1.2] tracking-[-0.24px] text-content-secondary"
+                onClick={() => setSort((p) => p?.key === "minAprPct" ? { key: "minAprPct", dir: p.dir === "asc" ? "desc" : "asc" } : { key: "minAprPct", dir: "desc" })}
+              >
+                Min APR <span className="text-content-tertiary">{sort?.key === "minAprPct" ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}</span>
+              </button>
+              <button
+                type="button"
+                className="flex w-[120px] items-center gap-1 text-xs font-medium leading-[1.2] tracking-[-0.24px] text-content-secondary"
+                onClick={() => setSort((p) => p?.key === "maxAprPct" ? { key: "maxAprPct", dir: p.dir === "asc" ? "desc" : "asc" } : { key: "maxAprPct", dir: "desc" })}
+              >
+                Max APR <span className="text-content-tertiary">{sort?.key === "maxAprPct" ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}</span>
+              </button>
+              <div className="w-[120px] text-xs font-medium leading-[1.2] tracking-[-0.24px] text-content-secondary">Cap filled</div>
+            </div>
 
-        <AppTable className="border border-white/10 bg-white/5">
-          <thead>
-            <tr className="border-b border-white/10">
-              <AppTh>Asset</AppTh>
-              <AppTh>Type</AppTh>
-              <AppTh className="text-right">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 whitespace-nowrap"
-                  onClick={() =>
-                    setSort((prev) =>
-                      prev?.key === "minAprPct"
-                        ? { key: "minAprPct", dir: prev.dir === "asc" ? "desc" : "asc" }
-                        : { key: "minAprPct", dir: "desc" }
-                    )
-                  }
-                >
-                  Min APR
-                  <span className="inline-flex w-4 justify-end text-content-tertiary">
-                    {sort?.key === "minAprPct" ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}
-                  </span>
-                </button>
-              </AppTh>
-              <AppTh className="text-right">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 whitespace-nowrap"
-                  onClick={() =>
-                    setSort((prev) =>
-                      prev?.key === "maxAprPct"
-                        ? { key: "maxAprPct", dir: prev.dir === "asc" ? "desc" : "asc" }
-                        : { key: "maxAprPct", dir: "desc" }
-                    )
-                  }
-                >
-                  Max APR
-                  <span className="inline-flex w-4 justify-end text-content-tertiary">
-                    {sort?.key === "maxAprPct" ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}
-                  </span>
-                </button>
-              </AppTh>
-              <AppTh className="text-right">Cap Filled</AppTh>
-              <AppTh className="text-right" aria-label="Open" />
-            </tr>
-          </thead>
-          <tbody>
+            {/* Rows */}
             {isLoading
               ? Array.from({ length: 5 }).map((_, idx) => (
-                  <tr key={`table-skeleton-${idx}`} className="border-b border-white/5 last:border-b-0">
-                    <AppTd><div className="h-4 w-20 animate-pulse rounded bg-white/10" /></AppTd>
-                    <AppTd><div className="h-4 w-14 animate-pulse rounded bg-white/10" /></AppTd>
-                    <AppTd className="text-right"><div className="ml-auto h-4 w-12 animate-pulse rounded bg-white/10" /></AppTd>
-                    <AppTd className="text-right"><div className="ml-auto h-4 w-12 animate-pulse rounded bg-white/10" /></AppTd>
-                    <AppTd className="text-right"><div className="ml-auto h-4 w-12 animate-pulse rounded bg-white/10" /></AppTd>
-                    <AppTd className="text-right"><div className="ml-auto h-4 w-4 animate-pulse rounded bg-white/10" /></AppTd>
-                  </tr>
+                  <div key={`table-skeleton-${idx}`} className="flex h-[60px] items-center gap-2 border-b border-bg-border bg-bg-primary p-5 last:border-b-0">
+                    <div className="flex-1"><div className="h-4 w-20 animate-pulse rounded bg-action-primary" /></div>
+                    <div className="w-[120px]"><div className="h-4 w-14 animate-pulse rounded bg-action-primary" /></div>
+                    <div className="w-[120px]"><div className="h-4 w-12 animate-pulse rounded bg-action-primary" /></div>
+                    <div className="w-[120px]"><div className="h-4 w-12 animate-pulse rounded bg-action-primary" /></div>
+                    <div className="w-[120px]"><div className="h-4 w-12 animate-pulse rounded bg-action-primary" /></div>
+                    <div className="w-5"><div className="h-4 w-4 animate-pulse rounded bg-action-primary" /></div>
+                  </div>
                 ))
               : sortedRows.map((m) => {
               const href = `/market/${encodeURIComponent(m.asset)}?type=${m.type}&market=${encodeURIComponent(m.nearestMarketPda)}`;
               return (
-              <tr
-                key={`${m.asset}:${m.type}`}
-                className="cursor-pointer border-b border-white/5 last:border-b-0 hover:bg-yuzu-main/15"
-                role="link"
-                tabIndex={0}
-                onClick={() => router.push(href)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    router.push(href);
-                  }
-                }}
-              >
-                <AppTd className="font-semibold text-content-primary">{m.asset}</AppTd>
-                <AppTd>
-                  <span className="text-sm font-semibold text-content-secondary">
-                    {typeShort(m.type)}
-                  </span>
-                </AppTd>
-                <AppTd className="text-right">
-                  {m.minAprPct != null ? formatPct(m.minAprPct) : "—"}
-                </AppTd>
-                <AppTd className="text-right">
-                  {m.maxAprPct != null ? formatPct(m.maxAprPct) : "—"}
-                </AppTd>
-                <AppTd className="text-right">{formatPct(m.capFilledPct)}</AppTd>
-                <AppTd className="text-right text-content-tertiary">→</AppTd>
-              </tr>
-            )})}
-          </tbody>
-        </AppTable>
-      </section>
+                <div
+                  key={`${m.asset}:${m.type}`}
+                  className="flex h-[60px] cursor-pointer items-center gap-2 border-b border-bg-border bg-bg-primary p-5 transition-colors hover:bg-action-primary last:border-b-0"
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => router.push(href)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(href); } }}
+                >
+                  <div className="flex flex-1 items-center gap-1.5">
+                    <div className="flex h-[18px] w-[18px] items-center justify-center overflow-clip rounded-full border border-[rgba(240,240,240,0.1)] bg-[#f0f0f0]">
+                      <img src={getTokenLogoSrc(m.asset)} alt="" className="h-[18px] w-[18px] rounded-full object-cover" loading="lazy" />
+                    </div>
+                    <span className="text-sm font-medium leading-[1.2] tracking-[-0.28px] text-content-primary">{m.asset}</span>
+                  </div>
+                  <div className="w-[120px] text-sm font-medium leading-[1.2] tracking-[-0.28px] text-content-primary">{typeShort(m.type)}</div>
+                  <div className="w-[120px] text-sm font-medium leading-[1.2] tracking-[-0.28px] text-content-primary">{m.minAprPct != null ? formatPct(m.minAprPct) : "—"}</div>
+                  <div className="w-[120px] text-sm font-medium leading-[1.2] tracking-[-0.28px] text-content-primary">{m.maxAprPct != null ? formatPct(m.maxAprPct) : "—"}</div>
+                  <div className="w-[120px] text-sm font-medium leading-[1.2] tracking-[-0.28px] text-content-primary">{formatPct(m.capFilledPct)}</div>
+                  <div className="w-5 text-center text-content-secondary">»</div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+
+      <AppModal open={howOpen} onClose={() => setHowOpen(false)} title="Acta Earn">
+        <div className="space-y-3 text-[15px]">
+          {[
+            { n: "1) Choose strategy", t: <>Pick <span className="font-medium text-accent-secondary">Calls</span> or <span className="font-medium text-accent-secondary">Puts</span>.</> },
+            { n: "2) Pick a market", t: "Choose an asset (e.g. JLP, jitoSOL, zBTC) and pick the expiry and price you're comfortable with." },
+            { n: "3) Deposit", t: "Deposit collateral (asset for calls, USDC for puts). You earn upfront premium right after deposit." },
+            { n: "4) Settlement at expiry", t: <ul className="list-disc space-y-2 pl-5"><li><span className="font-medium text-content-primary">Calls</span>: if spot &gt; your price, your asset is sold at that price. Otherwise, you keep the asset.</li><li><span className="font-medium text-content-primary">Puts</span>: if spot &lt; your price, your USDC buys the asset at that price. Otherwise, you keep the USDC.</li></ul> },
+          ].map((s) => (
+            <div key={s.n} className="border border-bg-border bg-action-primary p-4">
+              <div className="font-medium text-content-primary">{s.n}</div>
+              <div className="mt-2 text-content-primary/80">{s.t}</div>
+            </div>
+          ))}
+        </div>
+      </AppModal>
     </div>
   );
 }
