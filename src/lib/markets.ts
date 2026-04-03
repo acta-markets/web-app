@@ -193,7 +193,7 @@ export function formatUsdSmart(n: number) {
   
   // For 3-digit prices (100-999), no decimals for cleaner display
   if (abs >= 100) {
-    return n.toLocaleString(undefined, {
+    return n.toLocaleString("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 0,

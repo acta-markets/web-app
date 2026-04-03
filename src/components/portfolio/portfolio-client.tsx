@@ -22,7 +22,7 @@ function fmtDate(ts: number) {
 }
 
 function fmtNumber(n: number, frac = 0) {
-  return n.toLocaleString(undefined, {
+  return n.toLocaleString("en-US", {
     minimumFractionDigits: frac,
     maximumFractionDigits: frac
   });
@@ -477,7 +477,7 @@ export function PortfolioClient() {
                     </AppTd>
                     <AppTd className="text-content-secondary">{p.type}</AppTd>
                     <AppTd className="text-content-secondary">{p.userStatus}</AppTd>
-                    <AppTd className="font-mono text-xs text-content-secondary">{p.expiryTs ? fmtDate(p.expiryTs) : "\u2014"}</AppTd>
+                    <AppTd className="font-mono text-content-secondary">{p.expiryTs ? fmtDate(p.expiryTs) : "\u2014"}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{fmtNumber(p.quantity, 4)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.strike)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.premiumUsd)}</AppTd>
@@ -513,7 +513,7 @@ export function PortfolioClient() {
                     <AppTd className="font-medium text-content-primary">{p.asset}</AppTd>
                     <AppTd className="text-content-secondary">{p.type}</AppTd>
                     <AppTd className="text-content-secondary">{p.userStatus}</AppTd>
-                    <AppTd className="font-mono text-xs text-content-secondary">{fmtDate(p.expiryTs ?? p.createdTs)}</AppTd>
+                    <AppTd className="font-mono text-content-secondary">{fmtDate(p.expiryTs ?? p.createdTs)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{fmtNumber(p.quantity, 4)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.strike)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.premiumUsd)}</AppTd>

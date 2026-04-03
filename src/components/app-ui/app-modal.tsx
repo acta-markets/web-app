@@ -50,12 +50,12 @@ export function AppModal({
             {showHowItWorks ? (
               <div className="text-xs font-medium text-content-tertiary">How it works</div>
             ) : null}
-            <div className="mt-1 text-xl font-medium">{title}</div>
+            <div className="mt-1 font-mono text-xl font-medium">{title}</div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-2 text-sm font-medium text-content-secondary hover:bg-action-primary hover:text-content-primary"
+            className="px-3 py-2 font-mono text-sm font-medium text-content-secondary hover:bg-action-primary hover:text-content-primary"
           >
             Close
           </button>

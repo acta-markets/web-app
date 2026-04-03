@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
@@ -9,7 +9,7 @@ import { AppCard } from "@/components/app-ui/app-card";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { AppPill } from "@/components/app-ui/app-pill";
-import { MarketChart } from "@/components/market/market-chart";
+// import { MarketChart } from "@/components/market/market-chart";
 import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getTokenMint } from "@/lib/tokens";
@@ -32,11 +32,11 @@ import {
 import { usePythPrice } from "@/lib/use-pyth-price";
 
 function formatDate(d: Date) {
-  return d.toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" });
+  return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
 }
 
 function formatShortDate(d: Date) {
-  return d.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+  return d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
 }
 
 function clampNumber(n: number, min: number, max: number) {
@@ -45,7 +45,7 @@ function clampNumber(n: number, min: number, max: number) {
 
 function formatUsdc(n: number) {
   if (!Number.isFinite(n)) return "\u2014";
-  return `${n.toLocaleString(undefined, {
+  return `${n.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })} USDC`;
@@ -85,8 +85,8 @@ export function MarketClient({ asset }: { asset: string }) {
 
   const market = useMemo(() => getMarket(asset, type), [asset, type]);
   const [assetOpen, setAssetOpen] = useState(false);
-  const [chartOpen, setChartOpen] = useState(false);
-  const [chartRange, setChartRange] = useState<"1w" | "1m" | "3m">("1w");
+  // const [chartOpen, setChartOpen] = useState(false);
+  // const [chartRange, setChartRange] = useState<"1w" | "1m" | "3m">("1w");
   const assetOptions = useMemo(() => {
     const uniq = new Map<string, string>();
     for (const m of MARKETS) uniq.set(m.asset.toUpperCase(), m.asset);
@@ -104,6 +104,7 @@ export function MarketClient({ asset }: { asset: string }) {
   const [strikeIdx, setStrikeIdx] = useState(0);
   const [priceIdx, setPriceIdx] = useState(0);
   const [deposit, setDeposit] = useState("");
+  const depositInputRef = useRef<HTMLInputElement>(null);
   const pythId = market?.pythId;
   const { price: livePrice, publishTime: livePt, livePoints } = usePythPrice(pythId);
   const live = livePrice != null ? { price: livePrice, publishTime: livePt! } : null;
@@ -285,28 +286,28 @@ export function MarketClient({ asset }: { asset: string }) {
 
   const walletAddress = selectedAccount?.address;
 
-  useEffect(() => {
-    setChartOpen(window.innerWidth >= 1024);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // useEffect(() => {
+  //   setChartOpen(window.innerWidth >= 1024);
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, []);
 
-  useEffect(() => {
-    try {
-      const v = window.localStorage.getItem("yuzu_chart_range");
-      if (v === "1w" || v === "1m" || v === "3m") setChartRange(v);
-    } catch {
-      // ignore
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // useEffect(() => {
+  //   try {
+  //     const v = window.localStorage.getItem("yuzu_chart_range");
+  //     if (v === "1w" || v === "1m" || v === "3m") setChartRange(v);
+  //   } catch {
+  //     // ignore
+  //   }
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, []);
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem("yuzu_chart_range", chartRange);
-    } catch {
-      // ignore
-    }
-  }, [chartRange]);
+  // useEffect(() => {
+  //   try {
+  //     window.localStorage.setItem("yuzu_chart_range", chartRange);
+  //   } catch {
+  //     // ignore
+  //   }
+  // }, [chartRange]);
 
   useEffect(() => {
     if (!assetOpen) return;
@@ -708,18 +709,18 @@ export function MarketClient({ asset }: { asset: string }) {
 
   const n = priceOptions.length;
 
-  const chartEl = (
-    <MarketChart
-      symbol={market.asset}
-      strikePrice={selectedPrice}
-      expiryLabel={formatDate(expiryDate)}
-      expiryTs={Math.round(expiryDate.getTime() / 1000)}
-      range={chartRange}
-      onRangeChange={setChartRange}
-      onClose={() => setChartOpen(false)}
-      livePoints={livePoints}
-    />
-  );
+  // const chartEl = (
+  //   <MarketChart
+  //     symbol={market.asset}
+  //     strikePrice={selectedPrice}
+  //     expiryLabel={formatDate(expiryDate)}
+  //     expiryTs={Math.round(expiryDate.getTime() / 1000)}
+  //     range={chartRange}
+  //     onRangeChange={setChartRange}
+  //     onClose={() => setChartOpen(false)}
+  //     livePoints={livePoints}
+  //   />
+  // );
 
   return (
     <div>
@@ -817,7 +818,7 @@ export function MarketClient({ asset }: { asset: string }) {
       {/* Main content */}
       <div className="mx-auto flex w-full max-w-[850px] gap-5 pb-16 max-xl:px-[71px] max-lg:px-6 max-md:flex-col max-md:px-3">
         {/* Mobile chart (above form on small screens) */}
-        {chartOpen && <div className="hidden max-lg:block">{chartEl}</div>}
+        {/* {chartOpen && <div className="hidden max-lg:block">{chartEl}</div>} */}
 
         {/* Left column: form */}
         <div className="min-w-0 flex-1 space-y-5">
@@ -952,11 +953,12 @@ export function MarketClient({ asset }: { asset: string }) {
                 {/* Input */}
                 <div
                   className="flex cursor-text flex-col gap-2 overflow-clip border border-[rgba(240,240,240,0.1)] bg-action-primary p-4"
+                  onClick={() => depositInputRef.current?.focus()}
                 >
                   {/* Top row */}
                   <div className="flex items-center justify-between font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
                     <span>Deposit</span>
-                    <span>~${depositOk ? Math.round(notionalUsd).toLocaleString() : "0"}</span>
+                    <span>~${depositOk ? Math.round(notionalUsd).toLocaleString("en-US") : "0"}</span>
                   </div>
 
                   {/* Token + value */}
@@ -974,6 +976,7 @@ export function MarketClient({ asset }: { asset: string }) {
                       </span>
                     </div>
                     <input
+                      ref={depositInputRef}
                       inputMode="decimal"
                       placeholder={maxPreset}
                       value={deposit}
@@ -989,7 +992,7 @@ export function MarketClient({ asset }: { asset: string }) {
                         <path d="M6.75 10h6.5M15 5H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                         <circle cx="14" cy="10" r="0.75" fill="currentColor" />
                       </svg>
-                      <span>{maxPresetNum.toLocaleString()} {depositToken}</span>
+                      <span>{maxPresetNum.toLocaleString("en-US")} {depositToken}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <AppPill
@@ -1084,7 +1087,7 @@ export function MarketClient({ asset }: { asset: string }) {
                 <span className="font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
                   {depositOk
                     ? type === "call"
-                      ? `Get ${depositNum.toLocaleString()} ${market.asset} back`
+                      ? `Get ${depositNum.toLocaleString("en-US")} ${market.asset} back`
                       : `Keep ${formatUsdc(depositNum)}`
                     : "\u2014"}
                 </span>
@@ -1144,13 +1147,13 @@ export function MarketClient({ asset }: { asset: string }) {
         </div>
 
         {/* Desktop chart sidebar */}
-        {chartOpen && (
+        {/* {chartOpen && (
           <aside className="hidden w-[260px] shrink-0 lg:block">
             <div className="sticky top-24">
               {chartEl}
             </div>
           </aside>
-        )}
+        )} */}
       </div>
 
       {/* RFQ Flow Modal */}
@@ -1170,7 +1173,7 @@ export function MarketClient({ asset }: { asset: string }) {
           ? alignQuantityToRule(quantityLamportsFromInput, wireSizeRule)
           : 0}
         strikeDisplay={formatUsdSmart(selectedPrice)}
-        quantityDisplay={`${depositNum.toLocaleString()} ${type === "call" ? market.asset : "USDC"}`}
+        quantityDisplay={`${depositNum.toLocaleString("en-US")} ${type === "call" ? market.asset : "USDC"}`}
         initialQuote={modalInitialQuote}
         lockedAprPct={selectedApr}
         signTransaction={walletAddress ? solanaSignTransaction : undefined}
