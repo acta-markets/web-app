@@ -167,7 +167,7 @@ export function formatPct(n: number) {
 }
 
 export function formatUsd(n: number) {
-  return n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
 /**
@@ -182,7 +182,7 @@ export function formatUsdSmart(n: number) {
   // For large ticket assets (e.g. zBTC), decimals are mostly noise.
   // Keep grouping so the magnitude is readable in locales that group with spaces.
   if (abs >= 1000) {
-    return n.toLocaleString(undefined, {
+    return n.toLocaleString("en-US", {
       style: "currency",
       currency: "USD",
       minimumFractionDigits: 0,
@@ -217,7 +217,7 @@ export function formatUsdSmart(n: number) {
     max = 8;
   }
 
-  return n.toLocaleString(undefined, {
+  return n.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: max,

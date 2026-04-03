@@ -78,13 +78,7 @@
     letter-spacing: -0.02em;
   }
 
-  .outcome-positive {
-    background: linear-gradient(135deg, rgba(73, 170, 25, 0.12) 0%, transparent 60%);
-  }
 
-  .outcome-negative {
-    background: linear-gradient(225deg, rgba(255, 51, 71, 0.12) 0%, transparent 60%);
-  }
 }
 
 @layer utilities {
