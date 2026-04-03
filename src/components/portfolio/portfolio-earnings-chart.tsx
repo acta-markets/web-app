@@ -86,17 +86,17 @@ export function PortfolioEarningsChart({
       height: 280,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "rgba(255,255,255,0.55)"
+        textColor: "#8A8A8A"
       },
       grid: {
-        vertLines: { color: "rgba(255,255,255,0.06)" },
-        horzLines: { color: "rgba(255,255,255,0.10)" }
+        vertLines: { color: "#282828" },
+        horzLines: { color: "#282828" }
       },
       rightPriceScale: {
-        borderColor: "rgba(255,255,255,0.10)"
+        borderColor: "#282828"
       },
       timeScale: {
-        borderColor: "rgba(255,255,255,0.10)",
+        borderColor: "#282828",
         timeVisible: true,
         secondsVisible: false
       },
@@ -105,18 +105,18 @@ export function PortfolioEarningsChart({
         // This prevents the label from changing based on mouse Y position.
         mode: CrosshairMode.Magnet,
         vertLine: {
-          color: "rgba(34,197,94,0.55)",
+          color: "rgba(128,201,182,0.55)",
           width: 1,
           style: LineStyle.Dashed,
           labelVisible: true,
-          labelBackgroundColor: "rgba(0,0,0,0.55)"
+          labelBackgroundColor: "#121212"
         },
         horzLine: {
-          color: "rgba(34,197,94,0.35)",
+          color: "rgba(128,201,182,0.35)",
           width: 1,
           style: LineStyle.Dashed,
           labelVisible: true,
-          labelBackgroundColor: "rgba(0,0,0,0.55)"
+          labelBackgroundColor: "#121212"
         }
       },
       // Keep interactions stable: range is controlled by pills.
@@ -125,9 +125,9 @@ export function PortfolioEarningsChart({
     });
 
     const series = chart.addSeries(AreaSeries, {
-      lineColor: "rgba(34,197,94,0.95)",
-      topColor: "rgba(34,197,94,0.28)",
-      bottomColor: "rgba(34,197,94,0.02)",
+      lineColor: "#80C9B6",
+      topColor: "rgba(128,201,182,0.28)",
+      bottomColor: "rgba(128,201,182,0.02)",
       lineWidth: 2,
       lineType: LineType.WithSteps,
       priceLineVisible: false,
