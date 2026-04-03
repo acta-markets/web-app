@@ -100,7 +100,7 @@ function WalletSidebar() {
       <aside
         className={cn(
           "fixed right-0 top-0 z-[101] h-full w-full max-w-md",
-          "bg-bg-secondary border-l border-bg-border",
+          "bg-bg-primary border-l border-bg-border",
           "transform transition-transform duration-300 ease-out",
           "flex flex-col",
           isOpen ? "translate-x-0" : "translate-x-full"
@@ -112,14 +112,14 @@ function WalletSidebar() {
         {/* Header */}
         <header className="flex items-center justify-between border-b border-bg-border px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-primary/20">
+            <div className="flex h-10 w-10 items-center justify-center border border-bg-border bg-accent-primary/20">
               <Wallet className="h-5 w-5 text-accent-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-content-primary">
+              <h2 className="font-mono text-lg font-semibold tracking-tight text-content-primary">
                 {isConnected ? "Wallet" : "Connect Wallet"}
               </h2>
-              <p className="text-xs text-content-tertiary">
+              <p className="font-mono text-xs text-content-tertiary">
                 {isConnected ? "Manage your connection" : "Select a wallet to continue"}
               </p>
             </div>
@@ -127,7 +127,7 @@ function WalletSidebar() {
           <button
             type="button"
             onClick={closeSidebar}
-            className="rounded-lg p-2 text-content-secondary transition-colors hover:bg-action-primary hover:text-content-primary"
+            className="p-2 text-content-secondary transition-colors hover:bg-action-primary hover:text-content-primary"
             aria-label="Close sidebar"
           >
             <X className="h-5 w-5" />
@@ -139,7 +139,7 @@ function WalletSidebar() {
           {!isReady ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-accent-primary" />
-              <p className="mt-4 text-sm text-content-secondary">Detecting wallets...</p>
+              <p className="mt-4 font-mono text-sm text-content-secondary">Detecting wallets...</p>
             </div>
           ) : isConnected ? (
             <ConnectedView
@@ -161,7 +161,7 @@ function WalletSidebar() {
 
         {/* Footer */}
         <footer className="border-t border-bg-border px-6 py-4">
-          <p className="text-center text-xs text-content-tertiary">
+          <p className="text-center font-mono text-xs text-content-tertiary">
             By connecting, you agree to our Terms of Service
           </p>
         </footer>
@@ -183,20 +183,20 @@ function ConnectedView({
   return (
     <div className="space-y-6">
       {/* Connected wallet card */}
-      <div className="rounded-2xl border border-accent-primary/30 bg-accent-primary/5 p-5">
+      <div className="border border-accent-primary/30 bg-accent-primary/5 p-5">
         <div className="flex items-center gap-4">
           {wallet.icon ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={wallet.icon} alt={wallet.name} className="h-12 w-12 rounded-xl" />
+            <img src={wallet.icon} alt={wallet.name} className="h-12 w-12" />
           ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-primary/20">
+            <div className="flex h-12 w-12 items-center justify-center border border-bg-border bg-accent-primary/20">
               <Wallet className="h-6 w-6 text-accent-primary" />
             </div>
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-content-primary">{wallet.name}</span>
-              <span className="flex items-center gap-1 rounded-full bg-accent-primary/20 px-2 py-0.5 text-xs font-medium text-accent-primary">
+              <span className="font-mono font-semibold text-content-primary">{wallet.name}</span>
+              <span className="flex items-center gap-1 bg-accent-primary/20 px-2 py-0.5 font-mono text-xs font-medium text-accent-primary">
                 <Check className="h-3 w-3" />
                 Connected
               </span>
@@ -210,8 +210,8 @@ function ConnectedView({
 
       {/* Address details */}
       <div className="space-y-3">
-        <h3 className="text-sm font-medium text-content-secondary">Wallet Address</h3>
-        <div className="rounded-xl border border-bg-border bg-action-primary/50 p-4">
+        <h3 className="font-mono text-sm font-medium text-content-secondary">Wallet Address</h3>
+        <div className="border border-bg-border bg-action-primary/50 p-4">
           <p className="break-all font-mono text-sm text-content-primary">
             {account.address}
           </p>
@@ -222,7 +222,7 @@ function ConnectedView({
       <button
         type="button"
         onClick={onDisconnect}
-        className="w-full rounded-xl border border-additional-red-primary/30 bg-additional-red-primary/10 px-4 py-3 font-semibold text-additional-red-primary transition-colors hover:bg-additional-red-primary/20"
+        className="w-full border border-additional-red-primary/30 bg-additional-red-primary/10 px-4 py-3 font-mono font-semibold text-additional-red-primary transition-colors hover:bg-additional-red-primary/20"
       >
         Disconnect Wallet
       </button>
@@ -272,7 +272,7 @@ function WalletListView({
               onClick={() => onConnect(wallet as WalletType)}
               disabled={isConnecting}
               className={cn(
-                "group flex w-full items-center gap-4 rounded-xl border border-bg-border p-4",
+                "group flex w-full items-center gap-4 border border-bg-border p-4",
                 "bg-action-primary/30 transition-all duration-200",
                 "hover:border-accent-primary/50 hover:bg-accent-primary/10",
                 "disabled:cursor-not-allowed disabled:opacity-50",
@@ -281,13 +281,13 @@ function WalletListView({
             >
               {icon ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={icon} alt={wallet.name} className="h-10 w-10 rounded-xl" />
+                <img src={icon} alt={wallet.name} className="h-10 w-10" />
               ) : (
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-bg-border">
+                <div className="flex h-10 w-10 items-center justify-center border border-bg-border bg-bg-primary">
                   <Wallet className="h-5 w-5 text-content-secondary" />
                 </div>
               )}
-              <span className="flex-1 text-left font-medium text-content-primary">
+              <span className="flex-1 text-left font-mono font-medium text-content-primary">
                 {wallet.name}
               </span>
               {isLoading ? (
@@ -301,8 +301,8 @@ function WalletListView({
       </div>
 
       {/* Info note */}
-      <div className="rounded-xl bg-action-primary/50 p-4">
-        <p className="text-sm text-content-secondary">
+      <div className="border border-bg-border bg-action-primary/50 p-4">
+        <p className="font-mono text-sm text-content-secondary">
           <span className="font-medium text-content-primary">New to Solana?</span>{" "}
           Install a wallet extension like Phantom or Backpack to get started.
         </p>
@@ -321,26 +321,26 @@ function EmptyWalletsView() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-additional-orange-primary/30 bg-additional-orange-primary/10 p-5">
-        <h3 className="font-semibold text-additional-orange-primary">No Wallet Detected</h3>
-        <p className="mt-2 text-sm text-content-secondary">
+      <div className="border border-additional-orange-primary/30 bg-additional-orange-primary/10 p-5">
+        <h3 className="font-mono font-semibold text-additional-orange-primary">No Wallet Detected</h3>
+        <p className="mt-2 font-mono text-sm text-content-secondary">
           Please install a Solana wallet extension to connect.
         </p>
       </div>
 
       <div className="space-y-3">
-        <h3 className="text-sm font-medium text-content-secondary">Popular Wallets</h3>
+        <h3 className="font-mono text-sm font-medium text-content-secondary">Popular Wallets</h3>
         {popularWallets.map((wallet) => (
           <a
             key={wallet.name}
             href={wallet.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-4 rounded-xl border border-bg-border bg-action-primary/30 p-4 transition-colors hover:border-accent-primary/50 hover:bg-accent-primary/10"
+            className="flex items-center gap-4 border border-bg-border bg-action-primary/30 p-4 transition-colors hover:border-accent-primary/50 hover:bg-accent-primary/10"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={wallet.icon} alt={wallet.name} className="h-10 w-10 rounded-xl" />
-            <span className="flex-1 font-medium text-content-primary">{wallet.name}</span>
+            <img src={wallet.icon} alt={wallet.name} className="h-10 w-10" />
+            <span className="flex-1 font-mono font-medium text-content-primary">{wallet.name}</span>
             <ChevronRight className="h-5 w-5 text-content-tertiary" />
           </a>
         ))}
@@ -348,7 +348,3 @@ function EmptyWalletsView() {
     </div>
   );
 }
-
-
-
-

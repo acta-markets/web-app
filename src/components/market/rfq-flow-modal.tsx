@@ -266,7 +266,7 @@ export function RfqFlowModal({
   };
 
   const formatUsdc = (value: number) => {
-    return `${value.toLocaleString(undefined, {
+    return `${value.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })} USDC`;
@@ -298,15 +298,15 @@ export function RfqFlowModal({
           : step === "confirmed"
             ? "Order confirmed"
             : "Order failed";
-  const panelClass = "rounded-xl border border-white/10 bg-white/5 p-4";
+  const panelClass = "border border-bg-border bg-action-primary/30 p-4";
 
   return (
     <AppModal open={open} onClose={handleClose} title="Submit Order" showHowItWorks={false}>
       <div className="space-y-4">
         {/* Order Summary */}
         <div className={panelClass}>
-          <div className="text-sm font-medium text-content-secondary">Order</div>
-          <div className="mt-2 space-y-2">
+          <div className="font-mono text-sm font-medium text-content-secondary">Order</div>
+          <div className="mt-2 space-y-2 font-mono">
             <div className="flex justify-between">
               <span className="text-content-secondary">Asset</span>
               <span className="font-semibold text-content-primary">{asset}</span>
@@ -329,7 +329,7 @@ export function RfqFlowModal({
         </div>
 
         {/* Progress */}
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 font-mono text-sm">
           {(step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting") ? (
             <Loader2 className="h-4 w-4 animate-spin text-accent-primary" />
           ) : step === "confirmed" ? (
@@ -337,7 +337,7 @@ export function RfqFlowModal({
           ) : step === "failed" ? (
             <XCircle className="h-4 w-4 text-additional-red-primary" />
           ) : (
-            <div className="h-2.5 w-2.5 rounded-full border border-content-tertiary" />
+            <div className="h-2.5 w-2.5 border border-content-tertiary" />
           )}
           <span className="text-content-secondary">{progressText}</span>
         </div>
@@ -345,11 +345,11 @@ export function RfqFlowModal({
         {/* Initial quote wait state */}
         {step === "requesting_quote" && (
           <div className={panelClass}>
-            <div className="flex items-center gap-2 text-sm font-semibold text-accent-primary">
+            <div className="flex items-center gap-2 font-mono text-sm font-semibold text-accent-primary">
               <Loader2 className="h-4 w-4 animate-spin" />
               Getting quote from market makers
             </div>
-            <div className="mt-1 text-xs text-content-secondary">
+            <div className="mt-1 font-mono text-xs text-content-secondary">
               This usually takes a few seconds.
             </div>
           </div>
@@ -358,8 +358,8 @@ export function RfqFlowModal({
         {/* Quote Details */}
         {quote && step === "quote_received" && (
           <div className={panelClass}>
-            <div className="text-sm font-semibold text-accent-primary">Quote Received</div>
-            <div className="mt-3 space-y-2">
+            <div className="font-mono text-sm font-semibold text-accent-primary">Quote Received</div>
+            <div className="mt-3 space-y-2 font-mono">
               <div className="flex justify-between">
                 <span className="text-content-secondary">Total premium</span>
                 <span className="text-lg font-bold text-accent-primary">
@@ -384,7 +384,7 @@ export function RfqFlowModal({
         {step === "confirmed" && (
           <div className={`${panelClass} text-center`}>
             <CheckCircle2 className="mx-auto h-12 w-12 text-additional-green-primary" />
-            <div className="mt-3 font-semibold text-content-primary">Order Confirmed!</div>
+            <div className="mt-3 font-mono font-semibold text-content-primary">Order Confirmed!</div>
             {positionPda && (
               <div className="mt-1 text-xs text-content-secondary">
                 Position opened successfully.
@@ -411,8 +411,8 @@ export function RfqFlowModal({
             <div className="flex items-start gap-3">
               <XCircle className="h-5 w-5 shrink-0 text-additional-red-primary" />
               <div>
-                <div className="font-semibold text-content-primary">Order Failed</div>
-                <div className="mt-1 text-sm text-content-secondary">{error}</div>
+                <div className="font-mono font-semibold text-content-primary">Order Failed</div>
+                <div className="mt-1 font-mono text-sm text-content-secondary">{error}</div>
               </div>
             </div>
           </div>
@@ -446,7 +446,7 @@ export function RfqFlowModal({
         </div>
 
         {/* Demo Notice */}
-        <div className="flex items-start gap-2 border-t border-white/10 pt-2 text-xs text-content-tertiary">
+        <div className="flex items-start gap-2 border-t border-bg-border pt-2 text-xs text-content-tertiary">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>
             Connected to devnet. Quotes come from dev market makers.
