@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
 import { AppCard } from "@/components/app-ui/app-card";
@@ -77,6 +77,7 @@ function formatInputValue(value: number, maxDecimals: number): string {
 }
 
 export function MarketClient({ asset }: { asset: string }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const typeParam = searchParams.get("type");
   const strikeParam = searchParams.get("strike") ?? searchParams.get("price");
@@ -918,7 +919,7 @@ export function MarketClient({ asset }: { asset: string }) {
                   type="button"
                   onClick={() => {
                     if (type !== "call") {
-                      window.location.assign(`/market/${encodeURIComponent(market.asset)}?type=call`);
+                      router.push(`/market/${encodeURIComponent(market.asset)}?type=call`);
                     }
                   }}
                   className={[
@@ -934,7 +935,7 @@ export function MarketClient({ asset }: { asset: string }) {
                   type="button"
                   onClick={() => {
                     if (type !== "csp") {
-                      window.location.assign(`/market/${encodeURIComponent(market.asset)}?type=csp`);
+                      router.push(`/market/${encodeURIComponent(market.asset)}?type=csp`);
                     }
                   }}
                   className={[
