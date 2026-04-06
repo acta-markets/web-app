@@ -18,7 +18,7 @@ const BRAND: Record<string, TokenBrand> = {
 
 export function getTokenBrand(symbol: string): TokenBrand {
   const key = symbol.toUpperCase();
-  return BRAND[key] ?? { a: "#CCFF00", b: "#CCFF00" };
+  return BRAND[key] ?? { a: "#2AA286", b: "#80C9B6" };
 }
 
 

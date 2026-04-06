@@ -73,6 +73,8 @@ export function PrivyConnectButton() {
         title={disabledTitle}
       >
         {label}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/chevron-right-duo-dark.svg" alt="" className="h-5 w-5" />
       </AppButton>
     );
   }
@@ -88,7 +90,7 @@ export function PrivyConnectButton() {
         }
         disabled={disabled}
         title={disabledTitle}
-        className="rounded-r-none"
+        className="backdrop-blur-[4px]"
       >
         {label}
       </AppButton>
@@ -97,7 +99,7 @@ export function PrivyConnectButton() {
         variant="secondary"
         onClick={disconnect}
         disabled={disabled || disconnecting}
-        className="rounded-l-none border-l-0 px-3 dark:border-white/10"
+        className="border-l border-bg-border px-3 backdrop-blur-[4px]"
         title="Disconnect wallet"
         aria-label="Disconnect wallet"
       >

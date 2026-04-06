@@ -22,7 +22,7 @@ function fmtDate(ts: number) {
 }
 
 function fmtNumber(n: number, frac = 0) {
-  return n.toLocaleString(undefined, {
+  return n.toLocaleString("en-US", {
     minimumFractionDigits: frac,
     maximumFractionDigits: frac
   });
@@ -49,8 +49,8 @@ function formatCountdown(targetTs: number, nowMs: number) {
 
 type PositionsTab = "positions" | "history";
 const positionsTabOptions: Array<AppSegmentedOption<PositionsTab>> = [
-  { value: "positions", label: "positions" },
-  { value: "history", label: "history" }
+  { value: "positions", label: "Positions" },
+  { value: "history", label: "History" }
 ];
 
 type PortfolioRow = {
@@ -301,7 +301,7 @@ export function PortfolioClient() {
       .sort((a, b) => a - b);
     return expiries[0] ?? null;
   }, [openRows]);
-  const countdown = nextMaturity ? formatCountdown(nextMaturity, nowMs) : "—";
+  const countdown = nextMaturity ? formatCountdown(nextMaturity, nowMs) : "\u2014";
 
   const monthlyRate = weightedApr / 12;
   const pnlSeries = useMemo(() => {
@@ -320,10 +320,10 @@ export function PortfolioClient() {
 
   if (!walletConnected) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <AppCard className="w-full max-w-md border-white/10 bg-white/5 p-6">
-          <h1 className="text-2xl font-semibold text-white">Connect wallet</h1>
-          <p className="mt-2 text-sm text-white/70">
+      <div className="mx-auto flex min-h-[60vh] w-full max-w-[850px] items-center justify-center pb-16 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-16">
+        <AppCard className="w-full max-w-md p-6">
+          <h1 className="font-space text-2xl font-semibold text-content-primary">Connect wallet</h1>
+          <p className="mt-2 font-mono text-sm text-content-secondary">
             Connect your wallet to view your dashboard positions and earnings.
           </p>
           <div className="mt-5">
@@ -335,187 +335,195 @@ export function PortfolioClient() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">Portfolio</h1>
-        <div className="mt-2 flex items-center gap-3 text-sm text-white/60">
-          <span>Track all your positions and earnings</span>
-          <a href="#" className="text-yuzu-main hover:text-yuzu-main/80">
-            Learn more <span aria-hidden>›</span>
+    <div className="mx-auto w-full max-w-[850px] pb-16 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-16">
+      {/* Header -- centered */}
+      <div className="flex flex-col items-center gap-3">
+        <h1 className="text-center font-space text-[64px] font-semibold leading-[1.2] tracking-[-1.28px] text-content-primary max-md:text-[40px]">
+          Portfolio
+        </h1>
+        <div className="flex flex-col items-center gap-1.5">
+          <p className="text-center font-mono text-base leading-[1.2] tracking-[-0.32px] text-content-secondary">
+            Track all your positions and earnings
+          </p>
+          <a href="#" className="inline-flex items-center gap-0.5 font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary">
+            How it works
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="shrink-0">
+              <path d="M7.5 5l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </a>
         </div>
       </div>
 
-      {/* Top metrics row */}
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AppCard className="border-white/10 bg-white/5 p-5">
-          <div className="text-sm font-semibold text-white/60">Current APR</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums text-white">
-            {Number.isFinite(weightedApr) ? `${weightedApr.toFixed(2)}%` : "—"}
-          </div>
-          <div className="mt-1 text-sm text-white/40 tabular-nums">
-            Next maturity in {countdown}
-          </div>
-        </AppCard>
+      {/* Top metrics + chart */}
+      <section className="mt-[80px] flex flex-col gap-2 max-md:mt-10">
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+          <AppCard className="p-4">
+            <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Current APR</div>
+            <div className="mt-2 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">
+              {Number.isFinite(weightedApr) ? `${weightedApr.toFixed(2)}%` : "\u2014"}
+            </div>
+            <div className="mt-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] tabular-nums text-content-secondary">
+              Next maturity in {countdown}
+            </div>
+          </AppCard>
 
-        <AppCard className="border-white/10 bg-white/5 p-5">
-          <div className="text-sm font-semibold text-white/60">Total Earnings</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums text-white">
-            {formatUsdSmart(totalIncomeUsd)}
-          </div>
-          <div className="mt-1 text-sm text-white/40 tabular-nums">
-            All-time income
-          </div>
-        </AppCard>
+          <AppCard className="p-4">
+            <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Total Earnings</div>
+            <div className="mt-2 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">
+              {formatUsdSmart(totalIncomeUsd)}
+            </div>
+            <div className="mt-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] tabular-nums text-content-secondary">
+              All-time income
+            </div>
+          </AppCard>
 
-        <AppCard className="border-white/10 bg-white/5 p-5">
-          <div className="text-sm font-semibold text-white/60">Value locked</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums text-white">
-            {formatUsdSmart(totalNotionalUsd)}
-          </div>
-          <div className="mt-1 text-sm text-white/40 tabular-nums">{openRows.length} open positions</div>
-        </AppCard>
+          <AppCard className="p-4">
+            <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Value locked</div>
+            <div className="mt-2 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">
+              {formatUsdSmart(totalNotionalUsd)}
+            </div>
+            <div className="mt-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] tabular-nums text-content-secondary">
+              {openRows.length} open positions
+            </div>
+          </AppCard>
 
-        <AppCard className="border-white/10 bg-white/5 p-5">
-          <div className="text-sm font-semibold text-white/60">Monthly</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums text-white">
-            {formatUsdSmart(incomeLast30dUsd)}
-          </div>
-          <div className="mt-1 text-sm text-white/40 tabular-nums">
-            {Number.isFinite(monthlyRate) ? `${monthlyRate.toFixed(2)}%` : "—"} monthly APR
-          </div>
-        </AppCard>
-      </section>
+          <AppCard className="p-4">
+            <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Monthly</div>
+            <div className="mt-2 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">
+              {formatUsdSmart(incomeLast30dUsd)}
+            </div>
+            <div className="mt-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] tabular-nums text-content-secondary">
+              {Number.isFinite(monthlyRate) ? `${monthlyRate.toFixed(2)}%` : "\u2014"} monthly APR
+            </div>
+          </AppCard>
+        </div>
 
-      {/* Chart */}
-      <section className="space-y-3">
-        <AppCard className="border-white/10 bg-white/5 p-4">
+        {/* Chart */}
+        <AppCard className="p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm font-semibold text-white/70">Income</div>
+            <div className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">Income</div>
             <AppSegmented
               value={chartRange}
               onChange={setChartRange}
               options={[
-                { value: "24h", label: "24 hours" },
-                { value: "7d", label: "7 days" },
-                { value: "30d", label: "30 days" }
+                { value: "24h", label: "24H" },
+                { value: "7d", label: "5D" },
+                { value: "30d", label: "7D" }
               ]}
-              className="bg-black/40 sm:w-auto"
+              className="sm:w-auto"
             />
           </div>
 
-          <div className="mt-4">
+          <div className="mt-3">
             <PortfolioEarningsChart points={pnlSeries} now={now} range={chartRange} />
           </div>
         </AppCard>
       </section>
 
-      {/* Positions table */}
-      <section className="space-y-3">
+      {/* Positions / History table */}
+      <section className="mt-16 flex flex-col gap-4">
         <div className="flex items-center justify-between">
+          <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
+            {positionsTab === "positions" ? `Positions: ${openRows.length}` : "Transactions"}
+          </h2>
           <AppSegmented
             value={positionsTab}
             onChange={setPositionsTab}
             options={positionsTabOptions}
-            className="bg-black/40"
           />
-          <div className="text-sm text-white/50">
-            {positionsTab === "positions" ? `${openRows.length} open` : `${historyRows.length} closed`}
-          </div>
         </div>
 
         {shouldShowAuthPrompt ? (
-          <AppCard className="border-white/10 bg-white/5 p-6 text-white/70">
+          <AppCard className="p-6 text-content-secondary">
             Connect wallet and approve RFQ auth to load live positions.
-            <div className="mt-2 text-xs text-white/50">RFQ state: {connectionState}</div>
+            <div className="mt-2 text-xs text-content-secondary/60">RFQ state: {connectionState}</div>
           </AppCard>
         ) : positionsTab === "positions" ? (
-          <AppTable className="border-white/10 bg-white/5">
+          <AppTable>
             <thead>
-              <tr className="border-b border-white/10">
-                <AppTh className="text-white/50">Asset</AppTh>
-                <AppTh className="text-white/50">Type</AppTh>
-                <AppTh className="text-white/50">Status</AppTh>
-                <AppTh className="text-white/50">Maturity</AppTh>
-                <AppTh className="text-right text-white/50">Quantity</AppTh>
-                <AppTh className="text-right text-white/50">Strike</AppTh>
-                <AppTh className="text-right text-white/50">Premium</AppTh>
-                <AppTh className="text-right text-white/50">APR</AppTh>
+              <tr className="border-b border-bg-border">
+                <AppTh>Asset</AppTh>
+                <AppTh>Type</AppTh>
+                <AppTh>Status</AppTh>
+                <AppTh>Maturity</AppTh>
+                <AppTh className="text-right">Quantity</AppTh>
+                <AppTh className="text-right">Strike</AppTh>
+                <AppTh className="text-right">Premium</AppTh>
+                <AppTh className="text-right">APR</AppTh>
               </tr>
             </thead>
             <tbody>
               {openRows.length === 0 ? (
                 <tr>
-                  <AppTd colSpan={8} className="py-10 text-center text-white/50">
+                  <AppTd colSpan={8} className="py-10 text-center text-content-secondary">
                     No open RFQ positions yet.
                   </AppTd>
                 </tr>
               ) : (
                 openRows.map((p) => (
-                  <tr key={p.id} className="border-b border-white/10 last:border-b-0">
-                    <AppTd className="font-semibold text-white">
+                  <tr key={p.id} className="border-b border-bg-border last:border-b-0">
+                    <AppTd className="font-medium text-content-primary">
                       <div className="flex items-center gap-3">
-                        <div
-                          className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-black/30 p-1"
-                          style={
-                            {
-                              ["--brand-a" as any]: getTokenBrand(p.asset).a,
-                              ["--brand-b" as any]: getTokenBrand(p.asset).b
-                            } as React.CSSProperties
-                          }
-                        >
+                        <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-bg-border bg-content-primary">
                           <img
                             src={getTokenLogoSrc(p.asset)}
                             alt={`${p.asset} logo`}
-                            className="h-full w-full rounded-lg object-contain"
+                            className="h-full w-full object-cover"
                             loading="lazy"
                           />
                         </div>
                         <span>{p.asset}</span>
                       </div>
                     </AppTd>
-                    <AppTd className="text-white/70">{p.type}</AppTd>
-                    <AppTd className="text-white/70">{p.userStatus}</AppTd>
-                    <AppTd className="font-mono text-xs text-white/70">{p.expiryTs ? fmtDate(p.expiryTs) : "—"}</AppTd>
-                    <AppTd className="text-right tabular-nums text-white/70">{fmtNumber(p.quantity, 4)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-white/70">{formatUsdSmart(p.strike)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-white/70">{formatUsdSmart(p.premiumUsd)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-white/70">{Number.isFinite(p.apr) ? `${p.apr.toFixed(2)}%` : "—"}</AppTd>
+                    <AppTd className="text-content-secondary">{p.type}</AppTd>
+                    <AppTd className="text-content-secondary">{p.userStatus}</AppTd>
+                    <AppTd className="font-mono text-content-secondary">
+                      {p.expiryTs ? (
+                        <div className="flex flex-col">
+                          <span>{fmtDate(p.expiryTs)}</span>
+                          <span className="text-xs text-content-secondary/60">{formatCountdown(p.expiryTs, nowMs)}</span>
+                        </div>
+                      ) : "\u2014"}
+                    </AppTd>
+                    <AppTd className="text-right tabular-nums text-content-secondary">{fmtNumber(p.quantity, 4)}</AppTd>
+                    <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.strike)}</AppTd>
+                    <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.premiumUsd)}</AppTd>
+                    <AppTd className="text-right tabular-nums text-content-secondary">{Number.isFinite(p.apr) ? `${p.apr.toFixed(2)}%` : "\u2014"}</AppTd>
                   </tr>
                 ))
               )}
             </tbody>
           </AppTable>
         ) : (
-          <AppTable className="border-white/10 bg-white/5">
+          <AppTable>
             <thead>
-              <tr className="border-b border-white/10">
-                <AppTh className="text-white/50">Asset</AppTh>
-                <AppTh className="text-white/50">Type</AppTh>
-                <AppTh className="text-white/50">Status</AppTh>
-                <AppTh className="text-white/50">Maturity</AppTh>
-                <AppTh className="text-right text-white/50">Quantity</AppTh>
-                <AppTh className="text-right text-white/50">Strike</AppTh>
-                <AppTh className="text-right text-white/50">Premium</AppTh>
+              <tr className="border-b border-bg-border">
+                <AppTh>Asset</AppTh>
+                <AppTh>Type</AppTh>
+                <AppTh>Status</AppTh>
+                <AppTh>Maturity</AppTh>
+                <AppTh className="text-right">Quantity</AppTh>
+                <AppTh className="text-right">Strike</AppTh>
+                <AppTh className="text-right">Premium</AppTh>
               </tr>
             </thead>
             <tbody>
               {historyRows.length === 0 ? (
                 <tr>
-                  <AppTd colSpan={7} className="py-10 text-center text-white/50">
+                  <AppTd colSpan={7} className="py-10 text-center text-content-secondary">
                     No closed RFQ positions yet.
                   </AppTd>
                 </tr>
               ) : (
                 historyRows.map((p) => (
-                  <tr key={p.id} className="border-b border-white/10 last:border-b-0">
-                    <AppTd className="font-semibold text-white">{p.asset}</AppTd>
-                    <AppTd className="text-white/70">{p.type}</AppTd>
-                    <AppTd className="text-white/70">{p.userStatus}</AppTd>
-                    <AppTd className="font-mono text-xs text-white/70">{fmtDate(p.expiryTs ?? p.createdTs)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-white/70">{fmtNumber(p.quantity, 4)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-white/70">{formatUsdSmart(p.strike)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-white/70">{formatUsdSmart(p.premiumUsd)}</AppTd>
+                  <tr key={p.id} className="border-b border-bg-border last:border-b-0">
+                    <AppTd className="font-medium text-content-primary">{p.asset}</AppTd>
+                    <AppTd className="text-content-secondary">{p.type}</AppTd>
+                    <AppTd className="text-content-secondary">{p.userStatus}</AppTd>
+                    <AppTd className="font-mono text-content-secondary">{fmtDate(p.expiryTs ?? p.createdTs)}</AppTd>
+                    <AppTd className="text-right tabular-nums text-content-secondary">{fmtNumber(p.quantity, 4)}</AppTd>
+                    <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.strike)}</AppTd>
+                    <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.premiumUsd)}</AppTd>
                   </tr>
                 ))
               )}
@@ -523,7 +531,7 @@ export function PortfolioClient() {
           </AppTable>
         )}
         {!rfqAuthenticated && hasLoadedRfqData ? (
-          <div className="text-xs text-white/45">
+          <div className="text-xs text-content-secondary/60">
             Showing last synced positions while RFQ session reconnects.
           </div>
         ) : null}
@@ -531,5 +539,3 @@ export function PortfolioClient() {
     </div>
   );
 }
-
-
