@@ -477,7 +477,14 @@ export function PortfolioClient() {
                     </AppTd>
                     <AppTd className="text-content-secondary">{p.type}</AppTd>
                     <AppTd className="text-content-secondary">{p.userStatus}</AppTd>
-                    <AppTd className="font-mono text-content-secondary">{p.expiryTs ? fmtDate(p.expiryTs) : "\u2014"}</AppTd>
+                    <AppTd className="font-mono text-content-secondary">
+                      {p.expiryTs ? (
+                        <div className="flex flex-col">
+                          <span>{fmtDate(p.expiryTs)}</span>
+                          <span className="text-xs text-content-secondary/60">{formatCountdown(p.expiryTs, nowMs)}</span>
+                        </div>
+                      ) : "\u2014"}
+                    </AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{fmtNumber(p.quantity, 4)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.strike)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.premiumUsd)}</AppTd>

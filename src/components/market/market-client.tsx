@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
 import { AppCard } from "@/components/app-ui/app-card";
@@ -12,7 +12,8 @@ import { AppPill } from "@/components/app-ui/app-pill";
 // import { MarketChart } from "@/components/market/market-chart";
 import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
-import { getTokenMint } from "@/lib/tokens";
+import { getTokenMint, getToken } from "@/lib/tokens";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { getCapFilledPct } from "@/lib/token-caps";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import type { QuoteReceivedMessage, IndicativePricesMessage } from "@/lib/rfq-client";
@@ -76,7 +77,67 @@ function formatInputValue(value: number, maxDecimals: number): string {
   return value.toFixed(maxDecimals).replace(/\.?0+$/, "");
 }
 
+const RPC_ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+  (process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet"
+    ? "https://api.mainnet-beta.solana.com"
+    : "https://api.devnet.solana.com");
+const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+
+let _conn: Connection | null = null;
+function getConnection() {
+  if (!_conn) _conn = new Connection(RPC_ENDPOINT, "confirmed");
+  return _conn;
+}
+
+function useTokenBalance(walletAddress: string | undefined, tokenSymbol: string) {
+  const [balance, setBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!walletAddress) { setBalance(null); return; }
+
+    let cancelled = false;
+    const conn = getConnection();
+    const token = getToken(tokenSymbol);
+    const mint = getTokenMint(tokenSymbol);
+    const decimals = token?.decimals ?? 9;
+
+    async function fetch() {
+      try {
+        const owner = new PublicKey(walletAddress!);
+        // For SOL/WSOL: use native SOL balance
+        if (tokenSymbol.toUpperCase() === "SOL" || tokenSymbol.toUpperCase() === "WSOL") {
+          const lamports = await conn.getBalance(owner);
+          if (!cancelled) setBalance(lamports / 10 ** decimals);
+          return;
+        }
+        if (!mint) { if (!cancelled) setBalance(null); return; }
+        const accounts = await conn.getTokenAccountsByOwner(owner, {
+          mint: new PublicKey(mint),
+          programId: TOKEN_PROGRAM_ID,
+        });
+        let total = 0;
+        for (const { account } of accounts.value) {
+          // SPL token account data: amount is at offset 64, 8 bytes LE
+          const data = account.data;
+          const raw = data.readBigUInt64LE(64);
+          total += Number(raw) / 10 ** decimals;
+        }
+        if (!cancelled) setBalance(total);
+      } catch {
+        if (!cancelled) setBalance(null);
+      }
+    }
+
+    fetch();
+    const id = setInterval(fetch, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [walletAddress, tokenSymbol]);
+
+  return balance;
+}
+
 export function MarketClient({ asset }: { asset: string }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const typeParam = searchParams.get("type");
   const strikeParam = searchParams.get("strike") ?? searchParams.get("price");
@@ -198,7 +259,7 @@ export function MarketClient({ asset }: { asset: string }) {
     if (idx !== -1 && idx !== strikeIdx) {
       setStrikeIdx(idx);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketParam, matchingMarkets]);
 
   // Clamp strikeIdx when matching markets change.
@@ -285,6 +346,8 @@ export function MarketClient({ asset }: { asset: string }) {
   const { openSidebar } = useWalletSidebar();
 
   const walletAddress = selectedAccount?.address;
+  const depositToken = type === "call" ? market?.asset ?? asset : "USDC";
+  const walletBalance = useTokenBalance(walletAddress, depositToken);
 
   // useEffect(() => {
   //   setChartOpen(window.innerWidth >= 1024);
@@ -532,8 +595,8 @@ export function MarketClient({ asset }: { asset: string }) {
           : isRfqAuthPending
             ? "Connecting..."
             : isRequestingQuote
-                ? "Getting quote..."
-                : "Deposit";
+              ? "Getting quote..."
+              : "Deposit";
 
   const capFilledFallback = clampNumber(market?.capFilledPct ?? 0, 0, 100);
   const currentUnderlyingMint = (getTokenMint(market?.asset ?? asset) ?? "").trim();
@@ -541,11 +604,19 @@ export function MarketClient({ asset }: { asset: string }) {
   const liveCapFilledPct = getCapFilledPct(currentTokenCap);
   const capFilledPct = liveCapFilledPct ?? capFilledFallback;
 
-  const defaultMaxPresetNum = type === "call" ? 10 : 5000;
-  const maxPresetNum = depositRule?.max ?? defaultMaxPresetNum;
-  const halfPresetNum = depositRule ? (depositRule.min + depositRule.max) / 2 : maxPresetNum / 2;
+  const sizeRuleMax = depositRule?.max ?? (type === "call" ? 10 : 5000);
+  const sizeRuleMin = depositRule?.min ?? 0;
+  const sizeRuleStep = depositRule?.step ?? 0;
+  const rawMax = walletBalance != null ? Math.min(walletBalance, sizeRuleMax) : sizeRuleMax;
+  // Snap down to the nearest valid step
+  const maxPresetNum = sizeRuleStep > 0
+    ? Math.max(sizeRuleMin, sizeRuleMin + Math.floor((rawMax - sizeRuleMin) / sizeRuleStep) * sizeRuleStep)
+    : rawMax;
+  const rawHalf = maxPresetNum / 2;
+  const halfPresetNum = sizeRuleStep > 0
+    ? Math.max(sizeRuleMin, sizeRuleMin + Math.floor((rawHalf - sizeRuleMin) / sizeRuleStep) * sizeRuleStep)
+    : rawHalf;
   const maxPreset = formatInputValue(maxPresetNum, depositInputDecimals);
-  const depositToken = type === "call" ? market?.asset ?? asset : "USDC";
 
   useEffect(() => {
     if (!isRequestingQuote || rfqModalOpen) return;
@@ -878,32 +949,32 @@ export function MarketClient({ asset }: { asset: string }) {
                     </div>
                   ))
                   : priceOptionsWithApr.map((option, idx) => {
-                  const active = idx === priceIdx;
-                  const aprForIdx = option.apr;
-                  return (
-                    <button
-                      key={option.strike}
-                      type="button"
-                      onClick={() => setPriceIdx(idx)}
-                      className={[
-                        "flex min-w-0 flex-1 flex-col items-start justify-center gap-1 border px-4 py-3 backdrop-blur-[4px] transition-colors",
-                        active
-                          ? "border-accent-primary/30 bg-accent-primary/20 text-content-primary"
-                          : "border-bg-border bg-[rgba(18,18,18,0.01)] text-content-primary hover:border-content-primary/15 hover:bg-[rgba(40,40,40,0.24)]"
-                      ].join(" ")}
-                    >
-                      <span className="w-full font-mono text-base font-medium leading-[1.2] tracking-[-0.32px]">
-                        {formatUsdSmart(option.strike)}
-                      </span>
-                      <span className="flex w-full items-center justify-center gap-1.5 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
-                        <span className={active ? "text-content-primary" : "text-content-secondary"}>APR</span>
-                        <span className="text-content-primary">
-                          {aprForIdx > 0 ? formatPct(aprForIdx * 100) : "\u2014"}
+                    const active = idx === priceIdx;
+                    const aprForIdx = option.apr;
+                    return (
+                      <button
+                        key={option.strike}
+                        type="button"
+                        onClick={() => setPriceIdx(idx)}
+                        className={[
+                          "flex min-w-0 flex-1 flex-col items-start justify-center gap-1 border px-4 py-3 backdrop-blur-[4px] transition-colors",
+                          active
+                            ? "border-accent-primary/30 bg-accent-primary/20 text-content-primary"
+                            : "border-bg-border bg-[rgba(18,18,18,0.01)] text-content-primary hover:border-content-primary/15 hover:bg-[rgba(40,40,40,0.24)]"
+                        ].join(" ")}
+                      >
+                        <span className="w-full font-mono text-base font-medium leading-[1.2] tracking-[-0.32px]">
+                          {formatUsdSmart(option.strike)}
                         </span>
-                      </span>
-                    </button>
-                  );
-                })}
+                        <span className="flex w-full items-center justify-center gap-1.5 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
+                          <span className={active ? "text-content-primary" : "text-content-secondary"}>APR</span>
+                          <span className="text-content-primary">
+                            {aprForIdx > 0 ? formatPct(aprForIdx * 100) : "\u2014"}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
               </div>
               {shouldShowIndicativeLoading ? (
                 <div className="mt-3 font-mono text-sm text-content-secondary">
@@ -920,7 +991,7 @@ export function MarketClient({ asset }: { asset: string }) {
                   type="button"
                   onClick={() => {
                     if (type !== "call") {
-                      window.location.assign(`/market/${encodeURIComponent(market.asset)}?type=call`);
+                      router.push(`/market/${encodeURIComponent(market.asset)}?type=call`);
                     }
                   }}
                   className={[
@@ -936,7 +1007,7 @@ export function MarketClient({ asset }: { asset: string }) {
                   type="button"
                   onClick={() => {
                     if (type !== "csp") {
-                      window.location.assign(`/market/${encodeURIComponent(market.asset)}?type=csp`);
+                      router.push(`/market/${encodeURIComponent(market.asset)}?type=csp`);
                     }
                   }}
                   className={[
@@ -994,7 +1065,7 @@ export function MarketClient({ asset }: { asset: string }) {
                         <path d="M6.75 10h6.5M15 5H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                         <circle cx="14" cy="10" r="0.75" fill="currentColor" />
                       </svg>
-                      <span>{maxPresetNum.toLocaleString("en-US")} {depositToken}</span>
+                      <span>{walletBalance != null ? walletBalance.toLocaleString("en-US", { maximumFractionDigits: type === "csp" ? 2 : 4 }) : "\u2014"} {depositToken}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <AppPill
@@ -1113,8 +1184,8 @@ export function MarketClient({ asset }: { asset: string }) {
                 </span>
                 <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-primary opacity-50">
                   {type === "call"
-                    ? "Your asset is sold at your selected price."
-                    : "Your USDC is used to buy the asset at your selected price."}
+                    ? "Your asset is swaped at your selected price."
+                    : "Your USDC is swaped at your selected price."}
                 </span>
               </div>
             </div>
