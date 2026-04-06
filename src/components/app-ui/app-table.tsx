@@ -8,7 +8,7 @@ export function AppTable({
   return (
     <div
       className={cn(
-        "overflow-x-auto rounded-2xl border border-white/10 bg-white/5",
+        "overflow-x-auto border border-bg-border backdrop-blur-[4px] overflow-clip",
         className
       )}
     >
@@ -24,7 +24,7 @@ export function AppTh({
   return (
     <th
       className={cn(
-        "whitespace-nowrap px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-content-secondary",
+        "whitespace-nowrap px-5 py-3 text-left text-sm font-medium tracking-tight text-content-secondary",
         className
       )}
       {...props}
@@ -39,7 +39,7 @@ export function AppTd({
   return (
     <td
       className={cn(
-        "whitespace-nowrap px-5 py-3.5 text-[15px] text-content-primary",
+        "whitespace-nowrap px-5 py-5 text-sm font-medium text-content-primary",
         className
       )}
       {...props}

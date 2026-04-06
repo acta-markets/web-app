@@ -3,21 +3,24 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "ghost";
-type Size = "sm" | "md";
+type Size = "sm" | "md" | "lg";
 
 const base =
-  "inline-flex items-center justify-center rounded-xl font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 disabled:opacity-60 disabled:cursor-not-allowed";
+  "inline-flex items-center justify-center gap-0.5 font-medium tracking-tight transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40 disabled:cursor-not-allowed";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-accent-primary text-bg-primary hover:bg-accent-deep",
+  primary:
+    "bg-accent-primary text-bg-primary hover:bg-accent-deep disabled:bg-accent-primary/30 disabled:text-content-primary/50",
   secondary:
-    "bg-action-primary/70 text-content-primary hover:bg-accent-primary/40",
-  ghost: "bg-transparent text-content-primary hover:bg-accent-primary/15"
+    "bg-[rgba(40,40,40,0.24)] border border-bg-border text-content-primary hover:bg-action-primary hover:border-content-primary/10 disabled:bg-bg-primary disabled:border-bg-border disabled:text-content-primary/25",
+  ghost:
+    "bg-transparent text-accent-secondary hover:text-accent-primary disabled:text-content-primary/25"
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-9 px-3 text-sm",
-  md: "h-11 px-4 text-sm"
+  sm: "h-10 pl-5 pr-4 py-2.5 text-base",
+  md: "h-10 pl-5 pr-4 py-2.5 text-base",
+  lg: "pl-7 pr-6 py-3 text-xl"
 };
 
 export function AppButton({
