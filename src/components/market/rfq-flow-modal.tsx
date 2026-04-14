@@ -325,6 +325,18 @@ export function RfqFlowModal({
               <span className="text-content-secondary">Quantity</span>
               <span className="font-semibold text-content-primary">{quantityDisplay}</span>
             </div>
+            {totalPremiumUsd != null && (
+              <div className="flex justify-between">
+                <span className="text-content-secondary">Premium</span>
+                <span className="font-semibold text-content-primary">{formatUsdc(totalPremiumUsd)}</span>
+              </div>
+            )}
+            {displayedAprPct != null && (
+              <div className="flex justify-between">
+                <span className="text-content-secondary">APR</span>
+                <span className="font-semibold text-content-primary">{displayedAprPct.toFixed(2)}%</span>
+              </div>
+            )}
           </div>
         </div>
 
