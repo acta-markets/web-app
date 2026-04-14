@@ -5,7 +5,8 @@ import { AppButton } from "@/components/app-ui/app-button";
 import { AppModal } from "@/components/app-ui/app-modal";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import type { QuoteReceivedMessage } from "@/lib/rfq-client";
-import { Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { IS_MAINNET } from "@/lib/tokens";
 
 type PositionType = "covered_call" | "cash_secured_put";
 
@@ -405,7 +406,7 @@ export function RfqFlowModal({
             {txSignature && (
               <div className="mt-2 text-sm text-content-secondary">
                 <a
-                  href={`https://solscan.io/tx/${txSignature}?cluster=devnet`}
+                  href={`https://solscan.io/tx/${txSignature}${IS_MAINNET ? "" : "?cluster=devnet"}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-accent-primary underline"
@@ -457,13 +458,6 @@ export function RfqFlowModal({
           )}
         </div>
 
-        {/* Demo Notice */}
-        <div className="flex items-start gap-2 border-t border-bg-border pt-2 text-xs text-content-tertiary">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>
-            Connected to devnet. Quotes come from dev market makers.
-          </span>
-        </div>
       </div>
     </AppModal>
   );

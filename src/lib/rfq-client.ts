@@ -42,7 +42,7 @@ import { ActaWsClient, WalletAuthProvider, type WalletLike } from "@acta-markets
 // Configuration
 // ============================================================================
 
-const RFQ_WS_URL = process.env.NEXT_PUBLIC_RFQ_WS_URL || "wss://devnet-api.acta.markets";
+const RFQ_WS_URL = process.env.NEXT_PUBLIC_RFQ_WS_URL || "wss://beta-api.acta.markets";
 
 export interface CreateClientOptions {
   url?: string;
