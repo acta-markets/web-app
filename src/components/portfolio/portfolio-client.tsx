@@ -23,7 +23,7 @@ function fmtDate(ts: number) {
 
 function fmtNumber(n: number, frac = 0) {
   return n.toLocaleString("en-US", {
-    minimumFractionDigits: frac,
+    minimumFractionDigits: 0,
     maximumFractionDigits: frac
   });
 }
@@ -462,19 +462,7 @@ export function PortfolioClient() {
               ) : (
                 openRows.map((p) => (
                   <tr key={p.id} className="border-b border-bg-border last:border-b-0">
-                    <AppTd className="font-medium text-content-primary">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-bg-border bg-content-primary">
-                          <img
-                            src={getTokenLogoSrc(p.asset)}
-                            alt={`${p.asset} logo`}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                          />
-                        </div>
-                        <span>{p.asset}</span>
-                      </div>
-                    </AppTd>
+                    <AppTd className="font-medium text-content-primary">{p.asset}</AppTd>
                     <AppTd className="text-content-secondary">{p.type}</AppTd>
                     <AppTd className="text-content-secondary">{p.userStatus}</AppTd>
                     <AppTd className="font-mono text-content-secondary">
