@@ -43,17 +43,6 @@ export interface TokenConfig {
  * These are the mainnet tokens with their real addresses.
  */
 export const TOKENS: Record<string, TokenConfig> = {
-  WSOL: {
-    symbol: "WSOL",
-    name: "Wrapped Solana",
-    decimals: 9,
-    logo: "/tokens/solana.png",
-    pythId: "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
-    mint: {
-      mainnet: WSOL_MINT,
-      devnet: WSOL_MINT,
-    },
-  },
   SOL: {
     symbol: "SOL",
     name: "Solana",
@@ -61,8 +50,8 @@ export const TOKENS: Record<string, TokenConfig> = {
     logo: "/tokens/solana.png",
     pythId: "ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d",
     mint: {
-      mainnet: "So11111111111111111111111111111111111111112",
-      devnet: "So11111111111111111111111111111111111111112",
+      mainnet: WSOL_MINT,
+      devnet: WSOL_MINT,
     },
   },
   JITOSOL: {
@@ -153,7 +142,7 @@ export const TOKENS: Record<string, TokenConfig> = {
  */
 export function getToken(symbol: string): TokenConfig | undefined {
   const key = symbol.toUpperCase();
-  return TOKENS[key];
+  return TOKENS[key === "WSOL" ? "SOL" : key];
 }
 
 /**
@@ -201,27 +190,18 @@ export function isTokenSupported(symbol: string): boolean {
  */
 export function normalizeTokenSymbol(symbol: string): string {
   const upper = symbol.toUpperCase();
-  if (upper === "SOL") return "WSOL";
-  // If the symbol matches a known token as-is, return canonical casing.
+  if (upper === "WSOL") return "SOL";
   const token = TOKENS[upper];
   if (token) return token.symbol;
   return symbol;
 }
 
-/**
- * Get token symbol by mint for current network.
- * For the canonical wrapped SOL mint, return WSOL by default.
- */
-export function getTokenSymbolByMint(
-  mint: string,
-  options?: { preferWrappedSol?: boolean }
-): string | undefined {
+export function getTokenSymbolByMint(mint: string): string | undefined {
   const normalizedMint = mint.trim();
   if (!normalizedMint) return undefined;
 
-  const preferWrappedSol = options?.preferWrappedSol ?? true;
-  if (preferWrappedSol && normalizedMint === WSOL_MINT) {
-    return "WSOL";
+  if (normalizedMint === WSOL_MINT) {
+    return "SOL";
   }
 
   const networkKey: Network = IS_MAINNET ? "mainnet" : "devnet";
