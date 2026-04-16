@@ -158,7 +158,7 @@ export const MARKETS: Market[] = [
 ];
 
 export function getMarket(asset: string, type: MarketType): Market | undefined {
-  const a = asset.toUpperCase();
+  const a = asset.toUpperCase() === "WSOL" ? "SOL" : asset.toUpperCase();
   return MARKETS.find((m) => m.asset.toUpperCase() === a && m.type === type);
 }
 

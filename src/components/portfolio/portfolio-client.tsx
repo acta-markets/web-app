@@ -7,7 +7,7 @@ import { AppTable, AppTd, AppTh } from "@/components/app-ui/app-table";
 import { formatUsdSmart } from "@/lib/markets";
 import { getTokenBrand } from "@/lib/token-brand";
 import { getTokenLogoSrc } from "@/lib/token-assets";
-import { TOKENS, getNetwork } from "@/lib/tokens";
+import { TOKENS, getNetwork, normalizeTokenSymbol } from "@/lib/tokens";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
@@ -222,9 +222,10 @@ export function PortfolioClient() {
         market?.underlying ??
         descriptorUnderlying ??
         resolvedUnderlyingByMarket[p.market];
-      const assetSymbol =
+      const rawSymbol =
         descriptorSymbol ??
         (underlyingMint ? mintToSymbol.get(underlyingMint) ?? "Unknown" : "Unknown");
+      const assetSymbol = normalizeTokenSymbol(rawSymbol);
       const strike = Number(p.strike) / decimals;
       const quantity = Number(p.quantity) / decimals;
       const premiumUsd =
