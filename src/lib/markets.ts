@@ -16,23 +16,23 @@ export type Market = {
 
 export const MARKETS: Market[] = [
   {
-    asset: "WSOL",
+    asset: "SOL",
     type: "call",
     minApr: 0,
     maxApr: 0,
     capFilledPct: 0,
     spotPrice: 0,
-    pythId: getTokenPythId("WSOL"),
+    pythId: getTokenPythId("SOL"),
     priceOptions: [0]
   },
   {
-    asset: "WSOL",
+    asset: "SOL",
     type: "csp",
     minApr: 0,
     maxApr: 0,
     capFilledPct: 0,
     spotPrice: 0,
-    pythId: getTokenPythId("WSOL"),
+    pythId: getTokenPythId("SOL"),
     priceOptions: [0]
   },
   {
@@ -158,7 +158,7 @@ export const MARKETS: Market[] = [
 ];
 
 export function getMarket(asset: string, type: MarketType): Market | undefined {
-  const a = asset.toUpperCase();
+  const a = asset.toUpperCase() === "WSOL" ? "SOL" : asset.toUpperCase();
   return MARKETS.find((m) => m.asset.toUpperCase() === a && m.type === type);
 }
 

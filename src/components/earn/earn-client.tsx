@@ -67,7 +67,7 @@ export function EarnClient() {
   }, [rows, sort]);
 
   const popular = useMemo(() => {
-    const preferred = ["WSOL", "jitoSOL", "JLP", "zBTC", "PUMP"];
+    const preferred = ["SOL", "jitoSOL", "JLP", "zBTC", "PUMP"];
     const order = new Map(preferred.map((s, i) => [s.toUpperCase(), i]));
     return rows
       .filter((r) => order.has(r.asset.toUpperCase()))

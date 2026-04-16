@@ -77,15 +77,12 @@ function formatInputValue(value: number, maxDecimals: number): string {
   return value.toFixed(maxDecimals).replace(/\.?0+$/, "");
 }
 
-const RPC_ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-  (process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet"
-    ? "https://api.mainnet-beta.solana.com"
-    : "https://api.devnet.solana.com");
+const RPC_ENDPOINT = "/api/rpc";
 const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 let _conn: Connection | null = null;
 function getConnection() {
-  if (!_conn) _conn = new Connection(RPC_ENDPOINT, "confirmed");
+  if (!_conn) _conn = new Connection(`${window.location.origin}${RPC_ENDPOINT}`, "confirmed");
   return _conn;
 }
 
@@ -625,12 +622,11 @@ export function MarketClient({ asset }: { asset: string }) {
       return;
     }
     if (!currentQuote) return;
-    if (Number(currentQuote.strike) !== selectedStrikeLamports) return;
     setModalInitialQuote(currentQuote);
     setIsRequestingQuote(false);
     setRfqRequestNonce((n) => n + 1);
     setRfqModalOpen(true);
-  }, [isRequestingQuote, rfqModalOpen, rfqError, currentQuote, selectedStrikeLamports]);
+  }, [isRequestingQuote, rfqModalOpen, rfqError, currentQuote]);
 
   useEffect(() => {
     if (!isRequestingQuote || rfqModalOpen) return;
@@ -1112,14 +1108,6 @@ export function MarketClient({ asset }: { asset: string }) {
                     <span className="text-content-secondary">Term</span>
                     <span className="text-content-primary">{termDisplayShort}</span>
                   </div>
-                  {depositOk ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-content-secondary">Quote</span>
-                      <span className="text-content-primary">
-                        {isRfqAuthPending ? "Connecting..." : "Indicative"}
-                      </span>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             </AppCard>
