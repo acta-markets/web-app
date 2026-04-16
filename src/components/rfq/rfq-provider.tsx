@@ -283,6 +283,15 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
     client.on("error", (serverErr) => {
       console.error("[RfqProvider] Error:", serverErr);
+
+      // session_replaced means another tab/connection took over — stop
+      // reconnecting to avoid an infinite error loop.
+      if (serverErr.type === "generic" && serverErr.data.code === "session_replaced") {
+        console.warn("[RfqProvider] Session replaced by newer connection, disconnecting.");
+        client.disconnect();
+        return;
+      }
+
       // Prevent reconnect-auth loops after user rejection/timeouts.
       if (isAuthFailureError(serverErr)) {
         resetToAnonymous(client);
