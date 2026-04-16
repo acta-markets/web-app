@@ -625,12 +625,11 @@ export function MarketClient({ asset }: { asset: string }) {
       return;
     }
     if (!currentQuote) return;
-    if (Number(currentQuote.strike) !== selectedStrikeLamports) return;
     setModalInitialQuote(currentQuote);
     setIsRequestingQuote(false);
     setRfqRequestNonce((n) => n + 1);
     setRfqModalOpen(true);
-  }, [isRequestingQuote, rfqModalOpen, rfqError, currentQuote, selectedStrikeLamports]);
+  }, [isRequestingQuote, rfqModalOpen, rfqError, currentQuote]);
 
   useEffect(() => {
     if (!isRequestingQuote || rfqModalOpen) return;
@@ -1112,14 +1111,6 @@ export function MarketClient({ asset }: { asset: string }) {
                     <span className="text-content-secondary">Term</span>
                     <span className="text-content-primary">{termDisplayShort}</span>
                   </div>
-                  {depositOk ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-content-secondary">Quote</span>
-                      <span className="text-content-primary">
-                        {isRfqAuthPending ? "Connecting..." : "Indicative"}
-                      </span>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             </AppCard>
