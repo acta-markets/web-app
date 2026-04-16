@@ -2,11 +2,9 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
-  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        // Background colors
         bg: {
           primary: "var(--bg-primary)",
           secondary: "var(--bg-secondary)",
@@ -14,25 +12,21 @@ const config: Config = {
           border: "var(--bg-border)",
           "border-active": "var(--bg-border-active)"
         },
-        // Content/text colors
         content: {
           primary: "var(--content-primary)",
           secondary: "var(--content-secondary)",
           tertiary: "var(--content-tertiary)"
         },
-        // Accent colors (primary brand green)
         accent: {
-          primary: "var(--accent-primary)",
+          primary: "rgb(var(--accent-primary-rgb) / <alpha-value>)",
           secondary: "var(--accent-secondary)",
           deep: "var(--accent-primary-deep)"
         },
-        // Action/interactive surface colors
         action: {
           primary: "var(--action-primary)",
           secondary: "var(--action-secondary)",
           tertiary: "var(--action-tertiary)"
         },
-        // Semantic/additional colors
         additional: {
           red: {
             primary: "var(--additional-red-primary)",
@@ -65,20 +59,13 @@ const config: Config = {
             secondary: "var(--additional-violet-secondary)"
           }
         },
-        // Legacy aliases for backward compatibility (using rgb for opacity support)
-        "yuzu-main": "rgb(var(--accent-primary-rgb) / <alpha-value>)",
-        "yuzu-accent": "var(--additional-violet-primary)",
-        "yuzu-dark": "var(--bg-primary)",
-        "off-white": "var(--bg-tertiary)"
+        error: "var(--error)",
+        // Legacy alias for opacity support (rgb format)
+        "yuzu-main": "rgb(var(--accent-primary-rgb) / <alpha-value>)"
       },
       fontFamily: {
         space: ["var(--font-space-grotesk)", "system-ui", "sans-serif"],
-        syne: ["var(--font-syne)", "system-ui", "sans-serif"]
-      },
-      boxShadow: {
-        neo: "6px 6px 0px 0px var(--bg-border)",
-        "neo-hover": "10px 10px 0px 0px var(--bg-border)",
-        "neo-sm": "3px 3px 0px 0px var(--bg-border)"
+        mono: ["var(--font-jetbrains-mono)", "monospace"]
       },
       keyframes: {
         marquee: {

@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Syne } from "next/font/google";
+import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
-import { ThemeScript } from "@/components/theme-script";
+import "@fontsource/syne/400.css";
+import "@fontsource/syne/600.css";
+import "@fontsource/syne/700.css";
+import "@fontsource/syne/800.css";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -10,9 +13,9 @@ const spaceGrotesk = Space_Grotesk({
   display: "swap"
 });
 
-const syne = Syne({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-syne",
+  variable: "--font-jetbrains-mono",
   display: "swap"
 });
 
@@ -31,11 +34,8 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${syne.variable}`}>
-      <head>
-        <ThemeScript />
-      </head>
-      <body className="font-space antialiased selection:bg-accent-primary selection:text-bg-primary text-content-primary">
+    <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
+      <body className="font-mono antialiased selection:bg-accent-primary selection:text-bg-primary text-content-primary">
         {children}
       </body>
     </html>

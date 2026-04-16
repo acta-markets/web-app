@@ -5,6 +5,7 @@ export type TokenBrand = {
 
 const BRAND: Record<string, TokenBrand> = {
   SOL: { a: "#14F195", b: "#9945FF" },
+  WSOL: { a: "#14F195", b: "#9945FF" },
   JITOSOL: { a: "#4F9CFB", b: "#14F195" },
   // Jupiter app green (approx). If you want exact brand hexes, tell me and I’ll update.
   JLP: { a: "#00FFA3", b: "#00E599" },
@@ -17,7 +18,7 @@ const BRAND: Record<string, TokenBrand> = {
 
 export function getTokenBrand(symbol: string): TokenBrand {
   const key = symbol.toUpperCase();
-  return BRAND[key] ?? { a: "#CCFF00", b: "#CCFF00" };
+  return BRAND[key] ?? { a: "#2AA286", b: "#80C9B6" };
 }
 
 

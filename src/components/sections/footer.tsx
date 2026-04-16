@@ -1,7 +1,7 @@
-import { Container } from "@/components/ui/container";
+import Link from "next/link";
+import { ActaLogo } from "@/components/acta-logo";
 
 const links = [
-  { label: "About", href: "/about" },
   { label: "Docs", href: "#" },
   { label: "Security", href: "#" },
   { label: "Telegram", href: "#" },
@@ -10,25 +10,24 @@ const links = [
 
 export function Footer() {
   return (
-    <footer className="px-6 pb-8 pt-12">
-      <Container>
-        <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-          <nav className="flex flex-wrap justify-center gap-x-8 gap-y-3">
-            {links.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="text-sm font-medium text-content-secondary transition-colors hover:text-accent-primary"
-              >
-                {link.label}
-              </a>
-            ))}
-          </nav>
-          <div className="text-xs text-content-tertiary">
-            © 2026 Acta
-          </div>
-        </div>
-      </Container>
+    <footer className="border-t border-bg-border">
+      <div className="mx-auto flex h-[76px] w-full items-center justify-between px-[295px] py-6 max-xl:px-[71px] max-lg:px-6 max-md:h-auto max-md:flex-col max-md:gap-3 max-md:py-6">
+        <Link href="/earn">
+          <ActaLogo className="h-7" />
+        </Link>
+
+        <nav className="flex flex-wrap items-center justify-center gap-4">
+          {links.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              className="text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-secondary transition-colors hover:text-content-primary"
+            >
+              {link.label}
+            </a>
+          ))}
+        </nav>
+      </div>
     </footer>
   );
 }
