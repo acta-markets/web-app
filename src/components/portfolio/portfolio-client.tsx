@@ -164,9 +164,7 @@ export function PortfolioClient() {
     if (unresolvedMarketPdas.length === 0) return;
 
     let cancelled = false;
-    const rpcEndpoint =
-      process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-      (currentNetwork === "mainnet" ? "https://api.mainnet-beta.solana.com" : "https://api.devnet.solana.com");
+    const rpcEndpoint = "/api/rpc";
 
     const resolveMissingMarkets = async () => {
       try {
