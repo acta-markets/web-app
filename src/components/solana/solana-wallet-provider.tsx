@@ -5,9 +5,9 @@ import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 
 // Network configuration
 const NETWORK = process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet" ? "mainnet-beta" : "devnet";
-const RPC_ENDPOINT = "/api/rpc";
-const WS_ENDPOINT =
-  NETWORK === "mainnet-beta" ? "wss://api.mainnet-beta.solana.com" : "wss://api.devnet.solana.com";
+const RPC_ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+  (NETWORK === "mainnet-beta" ? "https://api.mainnet-beta.solana.com" : "https://api.devnet.solana.com");
+const WS_ENDPOINT = RPC_ENDPOINT.replace("https://", "wss://").replace("http://", "ws://");
 const CHAIN = NETWORK === "mainnet-beta" ? "solana:mainnet" : "solana:devnet";
 
 // Create RPC connections
