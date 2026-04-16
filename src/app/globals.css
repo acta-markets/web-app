@@ -3,94 +3,38 @@
 @tailwind utilities;
 
 @layer base {
-  /* Light theme (default for :root, used when no .dark class) */
   :root {
+    --font-syne: "Syne";
     /* Background */
-    --bg-primary: #F7F7F7;
-    --bg-secondary: #FBFBFB;
-    --bg-tertiary: #FEFEFF;
-    --bg-border: #CCCCCC;
-    --bg-border-active: #888888;
+    --bg-primary: #121212;
+    --bg-secondary: #121212;
+    --bg-tertiary: #121212;
+    --bg-border: #282828;
+    --bg-border-active: #F0F0F0;
 
     /* Content/Text */
-    --content-primary: #1B1B1B;
-    --content-secondary: #616161;
-    --content-tertiary: #8C8C8C;
+    --content-primary: #F0F0F0;
+    --content-secondary: #8A8A8A;
+    --content-tertiary: #8A8A8A;
 
-    /* Accent (brand green) */
-    --accent-primary: #98EC2D;
-    --accent-primary-rgb: 152 236 45;
-    --accent-secondary: #E0F9C0;
-    --accent-primary-deep: #8FDA23;
+    /* Accent (brand teal) */
+    --accent-primary: #2AA286;
+    --accent-primary-rgb: 42 162 134;
+    --accent-secondary: #80C9B6;
+    --accent-primary-deep: #078568;
 
     /* Action surfaces */
-    --action-primary: #EFEFEF;
-    --action-secondary: #FAFAFA;
-    --action-tertiary: #F5F5F5;
+    --action-primary: #282828;
+    --action-secondary: #121212;
+    --action-tertiary: #1A1A1A;
 
     /* Constants */
     --constant-black: #000000;
     --constant-white: #F5F5F5;
 
-    /* Additional: Red */
-    --additional-red-primary: #FF2B44;
-    --additional-red-primary-deep: #CF1322;
-    --additional-red-secondary: #FFF1F0;
-
-    /* Additional: Orange */
-    --additional-orange-primary: #FF9D34;
-    --additional-orange-primary-deep: #D46B08;
-    --additional-orange-secondary: #FFF7E6;
-
-    /* Additional: Gold */
-    --additional-gold-primary: #FAAD14;
-    --additional-gold-primary-deep: #D48806;
-    --additional-gold-secondary: #FFFBE6;
-
-    /* Additional: Green */
-    --additional-green-primary: #68CC37;
-    --additional-green-primary-deep: #389E0D;
-    --additional-green-secondary: #EBFFD7;
-
-    /* Additional: Blue */
-    --additional-blue-primary: #69C0FF;
-    --additional-blue-primary-deep: #096DD9;
-    --additional-blue-secondary: #E6F7FF;
-
-    /* Additional: Violet */
-    --additional-violet-primary: #977DFF;
-    --additional-violet-primary-deep: #6843FF;
-    --additional-violet-secondary: #E7E0FF;
-  }
-
-  /* Dark theme */
-  .dark {
-    /* Background */
-    --bg-primary: #181819;
-    --bg-secondary: #151516;
-    --bg-tertiary: #131314;
-    --bg-border: #38383C;
-    --bg-border-active: #8C8C8C;
-
-    /* Content/Text */
-    --content-primary: #D3D3D3;
-    --content-secondary: #8D8D8D;
-    --content-tertiary: #656565;
-
-    /* Accent (brand green) */
-    --accent-primary: #61DE2A;
-    --accent-primary-rgb: 97 222 42;
-    --accent-secondary: #2C511C;
-    --accent-primary-deep: #61BC39;
-
-    /* Action surfaces */
-    --action-primary: #202021;
-    --action-secondary: #181818;
-    --action-tertiary: #1C1C1D;
-
-    /* Constants */
-    --constant-black: #000000;
-    --constant-white: #F5F5F5;
+    /* New tokens */
+    --error: #FF611B;
+    --header-scrolled-bg: rgba(18, 18, 18, 0.8);
 
     /* Additional: Red */
     --additional-red-primary: #FF3347;
@@ -130,54 +74,16 @@
   }
 
   h1, h2, h3 {
-    font-family: var(--font-syne), system-ui, sans-serif;
-    letter-spacing: 0.01em;
+    font-family: var(--font-space-grotesk), system-ui, sans-serif;
+    letter-spacing: -0.02em;
   }
 
-  .logo {
-    font-family: var(--font-syne), system-ui, sans-serif;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-  }
 
-  .outcome-positive {
-    background: linear-gradient(135deg, rgba(73, 170, 25, 0.12) 0%, transparent 60%);
-  }
-
-  .outcome-negative {
-    background: linear-gradient(225deg, rgba(255, 51, 71, 0.12) 0%, transparent 60%);
-  }
 }
 
 @layer utilities {
-  .yuzu-dots {
-    background-color: var(--bg-secondary);
-    background-image: radial-gradient(var(--bg-border) 1px, transparent 1px);
-    background-size: 20px 20px;
-  }
-
-  /* Lightweight app theme helpers (used only in the (app) route group) */
   .app-bg {
-    background:
-      radial-gradient(1200px 600px at 18% 0%, color-mix(in srgb, var(--accent-primary) 20%, transparent), transparent 60%),
-      radial-gradient(900px 520px at 82% 0%, color-mix(in srgb, var(--accent-primary) 12%, transparent), transparent 64%),
-      radial-gradient(700px 420px at 55% 18%, color-mix(in srgb, var(--accent-primary) 8%, transparent), transparent 70%),
-      var(--bg-primary);
-  }
-
-  .glitch-header:hover {
-    text-shadow: 2px 2px 0px var(--additional-violet-primary), -2px -2px 0px var(--accent-primary);
-  }
-
-  .neo-input {
-    border: 3px solid var(--bg-border);
-    outline: none;
-    transition: all 0.2s;
-  }
-
-  .neo-input:focus {
-    box-shadow: 4px 4px 0px 0px var(--accent-primary);
-    transform: translate(-2px, -2px);
+    background: var(--bg-primary);
   }
 
   .marquee-container {
@@ -188,40 +94,5 @@
   .marquee-content {
     display: inline-block;
     animation: marquee 20s linear infinite;
-  }
-
-  .dashed-connector::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    right: -2rem;
-    width: 2rem;
-    height: 4px;
-    background: repeating-linear-gradient(
-      90deg,
-      var(--bg-border),
-      var(--bg-border) 10px,
-      transparent 10px,
-      transparent 20px
-    );
-    z-index: 0;
-  }
-
-  @media (max-width: 768px) {
-    .dashed-connector::after {
-      top: auto;
-      bottom: -2rem;
-      right: 50%;
-      width: 4px;
-      height: 2rem;
-      transform: translateX(50%);
-      background: repeating-linear-gradient(
-        180deg,
-        var(--bg-border),
-        var(--bg-border) 10px,
-        transparent 10px,
-        transparent 20px
-      );
-    }
   }
 }
