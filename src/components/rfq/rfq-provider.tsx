@@ -25,6 +25,7 @@ import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { AppModal } from "@/components/app-ui/app-modal";
 import { ReferralGateModal } from "@/components/referral/referral-gate-modal";
 import { clearPendingRefCode } from "@/components/referral/ref-capture";
+import { useToast } from "@/components/app-ui/toast";
 
 /** SDK ConnectionState + "connected" (WS open but not yet authenticating). */
 type AppConnectionState = ConnectionState | "connected";
@@ -264,6 +265,11 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [referralError, setReferralError] = useState<string | null>(null);
   const [dismissedReferralModal, setDismissedReferralModal] = useState(false);
   const pendingReferralReqsRef = useRef<Map<string, "invite" | "claim">>(new Map());
+  const { show: showToast } = useToast();
+  const showToastRef = useRef(showToast);
+  useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
 
   const getIndicativeKey = useCallback(
     (market: string, positionType: "covered_call" | "cash_secured_put") => `${market}:${positionType}`,
@@ -380,6 +386,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       clearPendingRefCode();
       pendingReferralReqsRef.current.delete(data.request_id);
       client.getMyReferralInfo();
+      showToastRef.current("Invite redeemed — welcome to Acta.", "success");
     });
 
     client.on("referralCodeClaimed", (data) => {
@@ -387,6 +394,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setReferralError(null);
       pendingReferralReqsRef.current.delete(data.request_id);
       client.getMyReferralInfo();
+      showToastRef.current(`Custom code "${data.referral_code}" is yours.`, "success");
     });
 
     client.on("myReferralInfo", (data) => {
