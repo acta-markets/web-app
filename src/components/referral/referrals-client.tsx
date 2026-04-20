@@ -73,7 +73,7 @@ export function ReferralsClient() {
         <AppCard className="p-6">
           <div className="space-y-4">
             <h2 className="font-mono text-lg font-semibold tracking-tight text-content-primary">
-              Redeem Invite
+              Redeem invite
             </h2>
             <p className="text-sm text-content-secondary">
               Trading on Acta is invite-only. Enter your invite code to unlock deposits.
@@ -129,7 +129,7 @@ function YourCodeCard({
   return (
     <AppCard className="p-6">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-mono text-sm uppercase tracking-widest text-content-tertiary">Your code</h2>
+        <h2 className="font-mono text-sm text-content-secondary">Your code</h2>
         <AppPill active={status === "active"}>{status === "active" ? "Active" : "Pending"}</AppPill>
       </div>
       <div className="mb-5 break-all font-mono text-3xl font-semibold tracking-[0.1em] text-content-primary">
@@ -187,7 +187,7 @@ function StatsCard({
 
   return (
     <AppCard className="p-6">
-      <h2 className="mb-4 font-mono text-sm uppercase tracking-widest text-content-tertiary">Stats</h2>
+      <h2 className="mb-4 font-mono text-sm text-content-secondary">Stats</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Stat label="Invited (lifetime)" value={info.total_invited.toString()} />
         <Stat label="This period" value={`${used} / ${max}`} sub={`${remaining} slots remaining`} />
@@ -200,7 +200,7 @@ function StatsCard({
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="border border-bg-border bg-action-primary/20 p-4">
-      <div className="font-mono text-xs uppercase tracking-widest text-content-tertiary">{label}</div>
+      <div className="font-mono text-xs text-content-tertiary">{label}</div>
       <div className="mt-1 font-mono text-xl font-semibold text-content-primary">{value}</div>
       {sub && <div className="mt-1 font-mono text-xs text-content-tertiary">{sub}</div>}
     </div>
@@ -232,7 +232,7 @@ function ClaimVanityCard({
 
   return (
     <AppCard className="p-6">
-      <h2 className="mb-2 font-mono text-sm uppercase tracking-widest text-content-tertiary">Customize code</h2>
+      <h2 className="mb-2 font-mono text-sm text-content-secondary">Customize code</h2>
       <p className="mb-4 font-mono text-xs text-content-tertiary">
         One-time claim. 4–16 characters, A–Z and 0–9 only.
       </p>
@@ -247,8 +247,8 @@ function ClaimVanityCard({
           maxLength={16}
           spellCheck={false}
           autoComplete="off"
-          placeholder="PICK A CODE"
-          className="w-full border border-bg-border bg-bg-tertiary px-4 py-3 font-mono text-lg font-semibold tracking-[0.2em] text-content-primary placeholder:text-content-tertiary/60 focus:border-accent-primary/60 focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
+          placeholder="Pick a code"
+          className="w-full border border-bg-border bg-bg-tertiary px-4 py-3 font-mono text-lg font-semibold tracking-[0.15em] text-content-primary placeholder:tracking-normal placeholder:text-content-tertiary/60 focus:border-accent-primary/60 focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
         />
         {referralError && (
           <p role="alert" className="font-mono text-sm text-additional-red-primary">
