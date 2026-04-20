@@ -5,6 +5,7 @@ import {
   ActaWsClient,
   createRfqClient,
   createWalletAuthProvider,
+  ReferralCodeError,
   type MarketInfo,
   type MarketDescriptorInfo,
   type PositionInfo,
@@ -16,9 +17,15 @@ import {
   type ServerError,
   type ConnectionState,
   type TokenMarketsInfoData,
+  type MyReferralInfoData,
+  type InviteErrorReason,
+  type ClaimErrorReason,
 } from "@/lib/rfq-client";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { AppModal } from "@/components/app-ui/app-modal";
+import { ReferralGateModal } from "@/components/referral/referral-gate-modal";
+import { clearPendingRefCode } from "@/components/referral/ref-capture";
+import { useToast } from "@/components/app-ui/toast";
 
 /** SDK ConnectionState + "connected" (WS open but not yet authenticating). */
 type AppConnectionState = ConnectionState | "connected";
@@ -81,6 +88,49 @@ interface RfqContextValue {
   clearTransientState: () => void;
   /** Get the underlying client */
   getClient: () => ActaWsClient | null;
+  /** Referral gate status — "unknown" before we know, "required" when invite gate blocks trading, "redeemed" otherwise. */
+  referralStatus: ReferralStatus;
+  /** Latest referral info snapshot from the server */
+  referralInfo: MyReferralInfoData | null;
+  /** Last referral-related error (copy-ready, user-facing) */
+  referralError: string | null;
+  /** Redeem an invite code. Synchronous parse errors surface via referralError; server errors arrive async. */
+  redeemInvite: (rawCode: string) => void;
+  /** Claim a vanity referral code. Returns a promise that resolves when the SDK call returns. */
+  claimReferralCode: (rawCode: string) => Promise<void>;
+  /** Refresh referral info from server */
+  refreshReferralInfo: () => void;
+  /** Clear the current referral error */
+  clearReferralError: () => void;
+  /** Re-open the referral gate modal (resets dismissal state) */
+  openReferralGate: () => void;
+}
+
+export type ReferralStatus = "unknown" | "required" | "redeemed";
+
+const INVITE_COPY: Record<InviteErrorReason, string> = {
+  invalid_code: "We couldn't find that invite code.",
+  code_exhausted: "This invite code has no slots left.",
+  code_expired: "This invite code has expired.",
+  code_owner_inactive: "The referrer hasn't made a trade yet.",
+  code_owner_blacklisted: "This referrer is no longer active.",
+  already_registered: "You've already redeemed an invite.",
+  internal_error: "Something went wrong, please try again.",
+};
+
+const CLAIM_COPY: Record<ClaimErrorReason, string> = {
+  not_registered: "Redeem an invite first.",
+  invalid_format: "Use 4–16 letters or digits (A–Z, 0–9).",
+  code_taken: "That code is already taken.",
+  reserved: "That code is reserved, pick another.",
+  internal_error: "Something went wrong, please try again.",
+};
+
+function referralCodeErrorMessage(err: ReferralCodeError): string {
+  if (err.detail.kind === "length") {
+    return `Use ${err.detail.min}–${err.detail.max} letters or digits (A–Z, 0–9).`;
+  }
+  return "Use only letters A–Z and digits 0–9.";
 }
 
 const RfqContext = createContext<RfqContextValue | null>(null);
@@ -111,7 +161,7 @@ function clearPendingAuthState(client: ActaWsClient) {
 }
 
 function isAuthFailureError(err: ServerError): boolean {
-  return err.type === "unauthenticated" || err.type === "unauthorized" ||
+  return err.type === "Unauthenticated" || err.type === "Unauthorized" ||
     (err.type === "generic" && (
       err.data.code === "unauthenticated" ||
       err.data.message.toLowerCase().includes("user rejected") ||
@@ -210,6 +260,16 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [wsSilentSeconds, setWsSilentSeconds] = useState(0);
   const [showAuthSignModal, setShowAuthSignModal] = useState(false);
   const [dismissedAuthSignModal, setDismissedAuthSignModal] = useState(false);
+  const [referralStatus, setReferralStatus] = useState<ReferralStatus>("unknown");
+  const [referralInfo, setReferralInfo] = useState<MyReferralInfoData | null>(null);
+  const [referralError, setReferralError] = useState<string | null>(null);
+  const [dismissedReferralModal, setDismissedReferralModal] = useState(false);
+  const pendingReferralReqsRef = useRef<Map<string, "invite" | "claim">>(new Map());
+  const { show: showToast } = useToast();
+  const showToastRef = useRef(showToast);
+  useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
 
   const getIndicativeKey = useCallback(
     (market: string, positionType: "covered_call" | "cash_secured_put") => `${market}:${positionType}`,
@@ -271,6 +331,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       client.getEarnSummary();
       client.getMarketDescriptors({ active_only: true });
       client.getTokenCaps({ include_markets: false });
+      client.getMyReferralInfo();
     });
 
     client.on("disconnected", (code, reason) => {
@@ -292,6 +353,13 @@ export function RfqProvider({ children }: RfqProviderProps) {
         return;
       }
 
+      // Invite gate: flip status; do not show as a modal error.
+      if (serverErr.type === "InviteRequired") {
+        setReferralStatus("required");
+        setDismissedReferralModal(false);
+        return;
+      }
+
       // Prevent reconnect-auth loops after user rejection/timeouts.
       if (isAuthFailureError(serverErr)) {
         resetToAnonymous(client);
@@ -301,6 +369,50 @@ export function RfqProvider({ children }: RfqProviderProps) {
       // Keep connection state for recoverable business-level RFQ errors.
       if (!isRecoverableRfqBusinessError(serverErr)) {
         setConnectionState("error");
+      }
+    });
+
+    client.on("requireInvite", () => {
+      console.log("[RfqProvider] requireInvite received");
+      setReferralStatus("required");
+      setDismissedReferralModal(false);
+    });
+
+    client.on("inviteRedeemed", (data) => {
+      console.log("[RfqProvider] inviteRedeemed:", data.referral_code);
+      setReferralStatus("redeemed");
+      setReferralError(null);
+      setDismissedReferralModal(false);
+      clearPendingRefCode();
+      pendingReferralReqsRef.current.delete(data.request_id);
+      client.getMyReferralInfo();
+      showToastRef.current("Invite redeemed — welcome to Acta.", "success");
+    });
+
+    client.on("referralCodeClaimed", (data) => {
+      console.log("[RfqProvider] referralCodeClaimed:", data.referral_code);
+      setReferralError(null);
+      pendingReferralReqsRef.current.delete(data.request_id);
+      client.getMyReferralInfo();
+      showToastRef.current(`Custom code "${data.referral_code}" is yours.`, "success");
+    });
+
+    client.on("myReferralInfo", (data) => {
+      console.log("[RfqProvider] myReferralInfo:", data.status, data.referral_code);
+      setReferralInfo(data);
+      setReferralStatus((prev) => (prev === "unknown" ? "redeemed" : prev));
+    });
+
+    client.on("requestError", ({ request_id, error }) => {
+      const kind = pendingReferralReqsRef.current.get(request_id);
+      if (!kind) return;
+      pendingReferralReqsRef.current.delete(request_id);
+      if (kind === "invite" && error.type === "Invite") {
+        setReferralError(INVITE_COPY[error.data] ?? "Invite failed, please try again.");
+      } else if (kind === "claim" && error.type === "Claim") {
+        setReferralError(CLAIM_COPY[error.data] ?? "Claim failed, please try again.");
+      } else {
+        setReferralError("Something went wrong, please try again.");
       }
     });
 
@@ -396,6 +508,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
     client.on("orderConfirmed", (orderId, positionPda) => {
       console.log("[RfqProvider] Order confirmed:", orderId, positionPda);
+      // Taker flips from "pending" → "active" on first successful trade; refresh.
+      client.getMyReferralInfo();
     });
 
     client.on("orderFailed", (orderId, reason) => {
@@ -591,6 +705,26 @@ export function RfqProvider({ children }: RfqProviderProps) {
       });
   }, [walletConnected, walletAddress, rfqConnected, authWarmupDone, authenticate, signMessage]);
 
+  const prevWalletConnectedRef = useRef(walletConnected);
+  useEffect(() => {
+    const wasConnected = prevWalletConnectedRef.current;
+    prevWalletConnectedRef.current = walletConnected;
+    if (!wasConnected || walletConnected) return;
+
+    console.log("[RfqProvider] Wallet disconnected; clearing per-user state");
+    setReferralStatus("unknown");
+    setReferralInfo(null);
+    setReferralError(null);
+    setDismissedReferralModal(false);
+    pendingReferralReqsRef.current.clear();
+    setPositions([]);
+    setCurrentQuote(null);
+    setError(null);
+
+    const client = clientRef.current;
+    if (client) resetToAnonymous(client);
+  }, [walletConnected]);
+
   useEffect(() => {
     if (connectionState !== "authenticating") {
       setShowAuthSignModal(false);
@@ -701,6 +835,58 @@ export function RfqProvider({ children }: RfqProviderProps) {
     setError(null);
   }, []);
 
+  const redeemInvite = useCallback((rawCode: string) => {
+    const client = clientRef.current;
+    if (!client) {
+      setReferralError("Not connected. Please retry in a moment.");
+      return;
+    }
+    setReferralError(null);
+    try {
+      const requestId = client.redeemInvite(rawCode);
+      pendingReferralReqsRef.current.set(requestId, "invite");
+    } catch (err) {
+      if (err instanceof ReferralCodeError) {
+        setReferralError(referralCodeErrorMessage(err));
+        return;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      setReferralError(message || "Something went wrong, please try again.");
+    }
+  }, []);
+
+  const claimReferralCode = useCallback(async (rawCode: string) => {
+    const client = clientRef.current;
+    if (!client) {
+      setReferralError("Not connected. Please retry in a moment.");
+      return;
+    }
+    setReferralError(null);
+    try {
+      const requestId = await client.claimReferralCode(rawCode);
+      pendingReferralReqsRef.current.set(requestId, "claim");
+    } catch (err) {
+      if (err instanceof ReferralCodeError) {
+        setReferralError(referralCodeErrorMessage(err));
+        return;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      setReferralError(message || "Something went wrong, please try again.");
+    }
+  }, []);
+
+  const refreshReferralInfo = useCallback(() => {
+    clientRef.current?.getMyReferralInfo();
+  }, []);
+
+  const clearReferralError = useCallback(() => {
+    setReferralError(null);
+  }, []);
+
+  const openReferralGate = useCallback(() => {
+    setDismissedReferralModal(false);
+  }, []);
+
   const getClient = useCallback(() => clientRef.current, []);
 
   const value: RfqContextValue = {
@@ -728,6 +914,14 @@ export function RfqProvider({ children }: RfqProviderProps) {
     submitSignedTx,
     clearTransientState,
     getClient,
+    referralStatus,
+    referralInfo,
+    referralError,
+    redeemInvite,
+    claimReferralCode,
+    refreshReferralInfo,
+    clearReferralError,
+    openReferralGate,
   };
 
   return (
@@ -758,6 +952,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
           </p>
         </div>
       </AppModal>
+      <ReferralGateModal
+        open={referralStatus === "required" && !dismissedReferralModal}
+        onClose={() => setDismissedReferralModal(true)}
+      />
     </RfqContext.Provider>
   );
 }

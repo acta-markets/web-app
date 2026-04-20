@@ -13,7 +13,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "@acta-markets/ts-sdk": "^0.0.21-beta",
+    "@acta-markets/ts-sdk": "^0.0.23-beta",
     "@fontsource/syne": "^5.2.7",
     "@microsoft/clarity": "^1.0.2",
     "@privy-io/react-auth": "^3.9.1",
