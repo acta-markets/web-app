@@ -5,7 +5,7 @@ import { RedeemInviteForm } from "@/components/referral/redeem-invite-form";
 
 export function ReferralGateModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
-    <AppModal open={open} onClose={onClose} title="Invite Required" showHowItWorks={false}>
+    <AppModal open={open} onClose={onClose} title="Invite required" showHowItWorks={false}>
       <div className="space-y-4">
         <p className="text-sm text-content-secondary">
           Trading on Acta is invite-only right now. Enter your invite code to unlock deposits.

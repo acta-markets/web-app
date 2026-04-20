@@ -52,7 +52,7 @@ export function RedeemInviteForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <label htmlFor="invite-code" className="block font-mono text-xs uppercase tracking-widest text-content-tertiary">
+        <label htmlFor="invite-code" className="block font-mono text-sm text-content-secondary">
           Invite code
         </label>
         <input
@@ -66,8 +66,8 @@ export function RedeemInviteForm({
           autoFocus={autoFocus}
           spellCheck={false}
           autoComplete="off"
-          placeholder="ENTER CODE"
-          className="w-full border border-bg-border bg-bg-tertiary px-4 py-3 font-mono text-lg font-semibold tracking-[0.2em] text-content-primary placeholder:text-content-tertiary/60 focus:border-accent-primary/60 focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
+          placeholder="Enter code"
+          className="w-full border border-bg-border bg-bg-tertiary px-4 py-3 font-mono text-lg font-semibold tracking-[0.15em] text-content-primary placeholder:tracking-normal placeholder:text-content-tertiary/60 focus:border-accent-primary/60 focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
         />
       </div>
       {!isAuthenticated && (
@@ -81,7 +81,7 @@ export function RedeemInviteForm({
         </p>
       )}
       <AppButton type="submit" variant="primary" disabled={!canSubmit} className="w-full">
-        {submitting ? "Redeeming..." : "Redeem Invite"}
+        {submitting ? "Redeeming..." : "Redeem invite"}
       </AppButton>
     </form>
   );
