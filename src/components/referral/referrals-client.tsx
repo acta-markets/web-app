@@ -69,7 +69,7 @@ export function ReferralsClient() {
         </AppCard>
       )}
 
-      {isAuthenticated && referralStatus === "required" && (
+      {walletConnected && isAuthenticated && referralStatus === "required" && (
         <AppCard className="p-6">
           <div className="space-y-4">
             <h2 className="font-mono text-lg font-semibold tracking-tight text-content-primary">
@@ -83,7 +83,7 @@ export function ReferralsClient() {
         </AppCard>
       )}
 
-      {isAuthenticated && referralStatus === "redeemed" && referralInfo && (
+      {walletConnected && isAuthenticated && referralStatus === "redeemed" && referralInfo && (
         <div className="space-y-5">
           <YourCodeCard code={referralInfo.referral_code} shareUrl={shareUrl} status={referralInfo.status} />
           <StatsCard info={referralInfo} />
@@ -95,7 +95,7 @@ export function ReferralsClient() {
         </div>
       )}
 
-      {isAuthenticated && referralStatus === "unknown" && (
+      {walletConnected && isAuthenticated && referralStatus === "unknown" && (
         <AppCard className="p-6">
           <p className="text-sm text-content-secondary">Loading referral info...</p>
         </AppCard>
