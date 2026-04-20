@@ -248,7 +248,7 @@ function ClaimVanityCard({
           spellCheck={false}
           autoComplete="off"
           placeholder="PICK A CODE"
-          className="w-full border border-bg-border bg-action-primary/30 px-4 py-3 font-mono text-lg font-semibold tracking-[0.2em] text-content-primary placeholder:text-content-tertiary/60 focus:border-accent-primary/60 focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
+          className="w-full border border-bg-border bg-bg-tertiary px-4 py-3 font-mono text-lg font-semibold tracking-[0.2em] text-content-primary placeholder:text-content-tertiary/60 focus:border-accent-primary/60 focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
         />
         {referralError && (
           <p role="alert" className="font-mono text-sm text-additional-red-primary">
