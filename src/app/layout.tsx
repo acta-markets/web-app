@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
+import { RefCapture } from "@/components/referral/ref-capture";
 import "./globals.css";
 import "@fontsource/syne/400.css";
 import "@fontsource/syne/600.css";
@@ -36,6 +37,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
       <body className="font-mono antialiased selection:bg-accent-primary selection:text-bg-primary text-content-primary">
+        <Suspense fallback={null}>
+          <RefCapture />
+        </Suspense>
         {children}
       </body>
     </html>

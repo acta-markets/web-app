@@ -1,7 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
-import { X, Wallet, ChevronRight, Loader2, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, Wallet, ChevronRight, Loader2, Check, Users } from "lucide-react";
 import { useSolana, type Wallet as WalletType } from "@/components/solana/solana-wallet-provider";
 import { cn } from "@/lib/cn";
 
@@ -146,6 +147,7 @@ function WalletSidebar() {
               wallet={selectedWallet!}
               account={selectedAccount!}
               onDisconnect={handleDisconnect}
+              onClose={closeSidebar}
             />
           ) : wallets.length === 0 ? (
             <EmptyWalletsView />
@@ -175,11 +177,20 @@ function ConnectedView({
   wallet,
   account,
   onDisconnect,
+  onClose,
 }: {
   wallet: { name: string; icon?: string };
   account: { address: string };
   onDisconnect: () => void;
+  onClose: () => void;
 }) {
+  const router = useRouter();
+
+  const goToReferrals = () => {
+    onClose();
+    router.push("/referrals");
+  };
+
   return (
     <div className="space-y-6">
       {/* Connected wallet card */}
@@ -217,6 +228,22 @@ function ConnectedView({
           </p>
         </div>
       </div>
+
+      {/* Referrals entry */}
+      <button
+        type="button"
+        onClick={goToReferrals}
+        className="group flex w-full items-center gap-4 border border-bg-border bg-action-primary/30 p-4 transition-colors hover:border-accent-primary/50 hover:bg-accent-primary/10"
+      >
+        <div className="flex h-10 w-10 items-center justify-center border border-bg-border bg-accent-primary/10">
+          <Users className="h-5 w-5 text-accent-primary" />
+        </div>
+        <div className="flex-1 text-left">
+          <div className="font-mono font-medium text-content-primary">Referrals</div>
+          <div className="font-mono text-xs text-content-tertiary">Manage your invite code and stats</div>
+        </div>
+        <ChevronRight className="h-5 w-5 text-content-tertiary transition-transform group-hover:translate-x-1 group-hover:text-accent-primary" />
+      </button>
 
       {/* Disconnect button */}
       <button
