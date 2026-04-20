@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { parseReferralCode } from "@/lib/rfq-client";
 
 const STORAGE_KEY = "acta_ref_pending";
@@ -34,24 +34,13 @@ function writePendingRefCode(code: string): void {
 
 export function RefCapture() {
   const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const router = useRouter();
 
   useEffect(() => {
     const raw = searchParams?.get("ref");
     if (!raw) return;
-
     const parsed = parseReferralCode(raw);
-    if (parsed.ok) {
-      writePendingRefCode(parsed.code);
-    }
-
-    const next = new URLSearchParams(searchParams?.toString() ?? "");
-    next.delete("ref");
-    const query = next.toString();
-    const url = query.length > 0 ? `${pathname}?${query}` : pathname ?? "/";
-    router.replace(url, { scroll: false });
-  }, [searchParams, pathname, router]);
+    if (parsed.ok) writePendingRefCode(parsed.code);
+  }, [searchParams]);
 
   return null;
 }
