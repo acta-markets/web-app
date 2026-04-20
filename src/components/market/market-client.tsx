@@ -195,7 +195,10 @@ export function MarketClient({ asset }: { asset: string }) {
     isConnected: rfqConnected,
     isAuthenticated: rfqAuthenticated,
     connectionState,
+    referralStatus,
+    openReferralGate,
   } = useRfqContext();
+  const isReferralGated = referralStatus === "required";
 
   // All RFQ markets matching this asset+type, sorted by expiry (nearest first).
   const matchingMarkets = useMemo(() => {
@@ -586,17 +589,19 @@ export function MarketClient({ asset }: { asset: string }) {
 
   const ctaLabel = !walletAddress
     ? "Connect"
-    : !hasSelectedPrice
-      ? "Choose price"
-      : !depositOk
-        ? (sizeRuleViolationMessage ?? "Choose size")
-        : shouldShowIndicativeLoading
-          ? "Loading prices..."
-          : isRfqAuthPending
-            ? "Connecting..."
-            : isRequestingQuote
-              ? "Getting quote..."
-              : "Deposit";
+    : isReferralGated
+      ? "Redeem invite to trade"
+      : !hasSelectedPrice
+        ? "Choose price"
+        : !depositOk
+          ? (sizeRuleViolationMessage ?? "Choose size")
+          : shouldShowIndicativeLoading
+            ? "Loading prices..."
+            : isRfqAuthPending
+              ? "Connecting..."
+              : isRequestingQuote
+                ? "Getting quote..."
+                : "Deposit";
 
   const capFilledFallback = clampNumber(market?.capFilledPct ?? 0, 0, 100);
   const currentUnderlyingMint = (getTokenMint(market?.asset ?? asset) ?? "").trim();
@@ -641,6 +646,11 @@ export function MarketClient({ asset }: { asset: string }) {
 
   const handleDepositClick = useCallback(() => {
     if (isRequestingQuote) return;
+
+    if (isReferralGated) {
+      openReferralGate();
+      return;
+    }
 
     if (!depositOk) {
       console.warn("[MarketClient] Deposit blocked: invalid or empty deposit amount");
@@ -692,6 +702,8 @@ export function MarketClient({ asset }: { asset: string }) {
     setIsRequestingQuote(true);
   }, [
     isRequestingQuote,
+    isReferralGated,
+    openReferralGate,
     rfqMarketPda,
     depositOk,
     hasSelectedPrice,
@@ -1197,10 +1209,12 @@ export function MarketClient({ asset }: { asset: string }) {
               size="lg"
               className="w-full font-mono"
               disabled={
-                !depositOk ||
-                !hasSelectedPrice ||
-                isRequestingQuote ||
-                shouldShowIndicativeLoading
+                !isReferralGated && (
+                  !depositOk ||
+                  !hasSelectedPrice ||
+                  isRequestingQuote ||
+                  shouldShowIndicativeLoading
+                )
               }
               onClick={handleDepositClick}
             >

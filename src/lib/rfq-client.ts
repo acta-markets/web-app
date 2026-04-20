@@ -36,6 +36,26 @@ export type {
   TokenMarketIndicatives,
 } from "@acta-markets/ts-sdk/ws";
 
+export {
+  parseReferralCode,
+  normalizeReferralCode,
+  ReferralCodeError,
+} from "@acta-markets/ts-sdk/ws";
+
+export type {
+  ReferralCode,
+  ReferralCodeFormatError,
+  InviteErrorReason,
+  ClaimErrorReason,
+  TakerStatus,
+} from "@acta-markets/ts-sdk/ws";
+
+export type {
+  MyReferralInfoData,
+  InviteRedeemedData,
+  ReferralCodeClaimedData,
+} from "@acta-markets/ts-sdk/ws";
+
 import { ActaWsClient, WalletAuthProvider, type WalletLike } from "@acta-markets/ts-sdk/ws";
 
 // ============================================================================

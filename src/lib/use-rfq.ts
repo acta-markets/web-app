@@ -79,7 +79,7 @@ function clearPendingAuthState(client: ActaWsClient) {
 }
 
 function isAuthFailureError(err: ServerError): boolean {
-  return err.type === "unauthenticated" || err.type === "unauthorized" ||
+  return err.type === "Unauthenticated" || err.type === "Unauthorized" ||
     (err.type === "generic" && (
       err.data.code === "unauthenticated" ||
       err.data.message.toLowerCase().includes("user rejected") ||
