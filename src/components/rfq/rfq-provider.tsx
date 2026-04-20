@@ -697,6 +697,26 @@ export function RfqProvider({ children }: RfqProviderProps) {
       });
   }, [walletConnected, walletAddress, rfqConnected, authWarmupDone, authenticate, signMessage]);
 
+  const prevWalletConnectedRef = useRef(walletConnected);
+  useEffect(() => {
+    const wasConnected = prevWalletConnectedRef.current;
+    prevWalletConnectedRef.current = walletConnected;
+    if (!wasConnected || walletConnected) return;
+
+    console.log("[RfqProvider] Wallet disconnected; clearing per-user state");
+    setReferralStatus("unknown");
+    setReferralInfo(null);
+    setReferralError(null);
+    setDismissedReferralModal(false);
+    pendingReferralReqsRef.current.clear();
+    setPositions([]);
+    setCurrentQuote(null);
+    setError(null);
+
+    const client = clientRef.current;
+    if (client) resetToAnonymous(client);
+  }, [walletConnected]);
+
   useEffect(() => {
     if (connectionState !== "authenticating") {
       setShowAuthSignModal(false);
