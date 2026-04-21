@@ -949,7 +949,16 @@ export function RfqProvider({ children }: RfqProviderProps) {
           </p>
         </div>
       </AppModal>
-      <ReferralGateModal open={referralStatus === "required"} />
+      <ReferralGateModal
+        open={!walletConnected || referralStatus !== "redeemed"}
+        state={
+          !walletConnected
+            ? "connect"
+            : referralStatus === "required"
+              ? "redeem"
+              : "loading"
+        }
+      />
     </RfqContext.Provider>
   );
 }
