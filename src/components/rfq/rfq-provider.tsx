@@ -263,7 +263,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [referralStatus, setReferralStatus] = useState<ReferralStatus>("unknown");
   const [referralInfo, setReferralInfo] = useState<MyReferralInfoData | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
-  const [dismissedReferralModal, setDismissedReferralModal] = useState(false);
   const pendingReferralReqsRef = useRef<Map<string, "invite" | "claim">>(new Map());
   const { show: showToast } = useToast();
   const showToastRef = useRef(showToast);
@@ -356,7 +355,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       // Invite gate: flip status; do not show as a modal error.
       if (serverErr.type === "InviteRequired") {
         setReferralStatus("required");
-        setDismissedReferralModal(false);
         return;
       }
 
@@ -375,14 +373,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
     client.on("requireInvite", () => {
       console.log("[RfqProvider] requireInvite received");
       setReferralStatus("required");
-      setDismissedReferralModal(false);
     });
 
     client.on("inviteRedeemed", (data) => {
       console.log("[RfqProvider] inviteRedeemed:", data.referral_code);
       setReferralStatus("redeemed");
       setReferralError(null);
-      setDismissedReferralModal(false);
       clearPendingRefCode();
       pendingReferralReqsRef.current.delete(data.request_id);
       client.getMyReferralInfo();
@@ -399,8 +395,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
     client.on("myReferralInfo", (data) => {
       console.log("[RfqProvider] myReferralInfo:", data.status, data.referral_code);
-      setReferralInfo(data);
-      setReferralStatus((prev) => (prev === "unknown" ? "redeemed" : prev));
+      const hasCode = typeof data.referral_code === "string" && data.referral_code.length > 0;
+      const derived: ReferralStatus = hasCode || data.status === "active" ? "redeemed" : "required";
+      setReferralInfo(hasCode ? data : null);
+      setReferralStatus((prev) => (prev === "unknown" ? derived : prev));
     });
 
     client.on("requestError", ({ request_id, error }) => {
@@ -715,7 +713,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
     setReferralStatus("unknown");
     setReferralInfo(null);
     setReferralError(null);
-    setDismissedReferralModal(false);
     pendingReferralReqsRef.current.clear();
     setPositions([]);
     setCurrentQuote(null);
@@ -884,7 +881,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
   }, []);
 
   const openReferralGate = useCallback(() => {
-    setDismissedReferralModal(false);
+    // Gate modal is always visible when referralStatus === "required"; this is a no-op.
   }, []);
 
   const getClient = useCallback(() => clientRef.current, []);
@@ -953,8 +950,14 @@ export function RfqProvider({ children }: RfqProviderProps) {
         </div>
       </AppModal>
       <ReferralGateModal
-        open={referralStatus === "required" && !dismissedReferralModal}
-        onClose={() => setDismissedReferralModal(true)}
+        open={!walletConnected || referralStatus !== "redeemed"}
+        state={
+          !walletConnected
+            ? "connect"
+            : referralStatus === "required"
+              ? "redeem"
+              : "loading"
+        }
       />
     </RfqContext.Provider>
   );
