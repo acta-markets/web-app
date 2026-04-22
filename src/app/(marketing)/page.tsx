@@ -4,7 +4,6 @@ import { LandingHeader } from "@/components/landing/landing-header";
 import { LandingHero } from "@/components/landing/landing-hero";
 import { LandingStats } from "@/components/landing/landing-stats";
 import { LandingMarkets } from "@/components/landing/landing-markets";
-import { LandingBtcDivider } from "@/components/landing/landing-btc-divider";
 import { LandingHowItWorks } from "@/components/landing/landing-how-it-works";
 import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingCta } from "@/components/landing/landing-cta";
@@ -23,7 +22,6 @@ export default function HomePage() {
         <LandingHero />
         <LandingStats />
         <LandingMarkets />
-        <LandingBtcDivider />
         <LandingHowItWorks />
         <LandingFaq />
         <LandingCta />
