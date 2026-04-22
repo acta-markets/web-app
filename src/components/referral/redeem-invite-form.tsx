@@ -15,7 +15,8 @@ export function RedeemInviteForm({
   autoFocus = false,
   autoSubmitFromUrl = true,
 }: RedeemInviteFormProps) {
-  const { isAuthenticated, redeemInvite, referralError, clearReferralError } = useRfqContext();
+  const { isAuthenticated, redeemInvite, referralError, referralStatus, clearReferralError } =
+    useRfqContext();
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const autoSubmittedRef = useRef(false);
@@ -27,6 +28,14 @@ export function RedeemInviteForm({
     }
   }, []);
 
+  // Any response (server error or status flip away from "required") clears the pending flag.
+  useEffect(() => {
+    if (referralError) setSubmitting(false);
+  }, [referralError]);
+  useEffect(() => {
+    if (referralStatus !== "required") setSubmitting(false);
+  }, [referralStatus]);
+
   useEffect(() => {
     if (!autoSubmitFromUrl) return;
     if (autoSubmittedRef.current) return;
@@ -35,8 +44,6 @@ export function RedeemInviteForm({
     autoSubmittedRef.current = true;
     setSubmitting(true);
     redeemInvite(code);
-    const timer = window.setTimeout(() => setSubmitting(false), 2000);
-    return () => window.clearTimeout(timer);
   }, [autoSubmitFromUrl, isAuthenticated, code, redeemInvite]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -44,7 +51,6 @@ export function RedeemInviteForm({
     if (!code || submitting) return;
     setSubmitting(true);
     redeemInvite(code);
-    window.setTimeout(() => setSubmitting(false), 2000);
   };
 
   const canSubmit = isAuthenticated && code.length >= 4 && !submitting;
