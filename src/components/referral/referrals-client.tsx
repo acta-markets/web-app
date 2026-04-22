@@ -88,6 +88,7 @@ export function ReferralsClient() {
           <YourCodeCard code={referralInfo.referral_code} shareUrl={shareUrl} status={referralInfo.status} />
           <StatsCard info={referralInfo} />
           <ClaimVanityCard
+            currentCode={referralInfo.referral_code}
             onClaim={claimReferralCode}
             referralError={referralError}
             clearReferralError={clearReferralError}
@@ -208,10 +209,12 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 function ClaimVanityCard({
+  currentCode,
   onClaim,
   referralError,
   clearReferralError,
 }: {
+  currentCode: string;
   onClaim: (raw: string) => Promise<void>;
   referralError: string | null;
   clearReferralError: () => void;
@@ -219,15 +222,19 @@ function ClaimVanityCard({
   const [vanity, setVanity] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Any response (server error or the code updating on success) clears the pending flag.
+  useEffect(() => {
+    if (referralError) setSubmitting(false);
+  }, [referralError]);
+  useEffect(() => {
+    setSubmitting(false);
+  }, [currentCode]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vanity || submitting) return;
     setSubmitting(true);
-    try {
-      await onClaim(vanity);
-    } finally {
-      window.setTimeout(() => setSubmitting(false), 2000);
-    }
+    await onClaim(vanity);
   };
 
   return (
