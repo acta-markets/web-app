@@ -1,0 +1,48 @@
+import Link from "next/link";
+import { ActaLogo } from "@/components/acta-logo";
+import { LandingButton } from "./landing-primitives";
+
+const NAV = [
+  { label: "Docs", href: "https://docs.acta.markets", external: true },
+  { label: "Markets", href: "/earn", external: false },
+  { label: "Blog", href: "#", external: false },
+  { label: "Security", href: "#", external: false },
+] as const;
+
+export function LandingHeader() {
+  return (
+    <header className="sticky top-0 z-20 border-b border-bg-border backdrop-blur-md" style={{ background: "rgba(18,18,18,0.72)" }}>
+      <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-6 px-8 py-5 max-md:px-5 max-md:py-4">
+        <Link href="/" aria-label="Acta home">
+          <ActaLogo className="h-7" />
+        </Link>
+        <nav className="flex items-center gap-6 max-md:hidden">
+          {NAV.map((item) =>
+            item.external ? (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="font-mono text-[13px] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary"
+              >
+                {item.label}
+              </a>
+            ) : (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="font-mono text-[13px] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary"
+              >
+                {item.label}
+              </Link>
+            ),
+          )}
+        </nav>
+        <LandingButton variant="primary" size="sm" href="/earn">
+          Launch app ↗
+        </LandingButton>
+      </div>
+    </header>
+  );
+}
