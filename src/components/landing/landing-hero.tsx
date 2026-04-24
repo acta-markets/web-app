@@ -47,7 +47,7 @@ export function LandingHero() {
               className="inline-block h-1.5 w-1.5 rounded-full"
               style={{ background: "#2AA286", boxShadow: "0 0 10px #2AA286" }}
             />
-            Live on Solana
+            Live in beta
           </div>
           <h1
             className="m-0 font-space font-semibold text-content-primary"
@@ -59,14 +59,13 @@ export function LandingHero() {
           >
             Earn
             <br />
-            <span className="italic text-accent-secondary">premium.</span>
+            <span className="italic text-accent-secondary">yield</span>
           </h1>
           <p
             className="mb-9 mt-12 max-w-[520px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
-            style={{ fontSize: 17, letterSpacing: "-0.02em" }}
+            style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
-            Sell the upside you weren&apos;t going to take. Sell the downside you&apos;d buy into anyway. Keep the premium either way.
-          </p>
+            Get paid upfront to sell higher or commit to buy lower. <br /> Keep the yield either way.          </p>
           <div className="inline-flex flex-wrap gap-3">
             <LandingButton variant="primary" size="lg" href="/earn">
               Launch app ↗
