@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Footer } from "@/components/sections/footer";
 import { LandingHeader } from "@/components/landing/landing-header";
 import { LandingHero } from "@/components/landing/landing-hero";
-import { LandingStats } from "@/components/landing/landing-stats";
+// TODO: re-enable once we have real historical data to display
+// import { LandingStats } from "@/components/landing/landing-stats";
 import { LandingMarkets } from "@/components/landing/landing-markets";
 import { LandingHowItWorks } from "@/components/landing/landing-how-it-works";
 import { LandingFaq } from "@/components/landing/landing-faq";
@@ -20,7 +21,7 @@ export default function HomePage() {
       <LandingHeader />
       <main>
         <LandingHero />
-        <LandingStats />
+        {/* <LandingStats /> — hidden until we have real historical data */}
         <LandingMarkets />
         <LandingHowItWorks />
         <LandingFaq />
