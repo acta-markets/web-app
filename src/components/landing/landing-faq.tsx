@@ -5,6 +5,10 @@ import { ChevronDownIcon, SectionMarker } from "./landing-primitives";
 
 const ITEMS = [
   {
+    q: "What is Acta?",
+    a: "Acta is a structured yield and options protocol on Solana. European-style, RFQ-based, on-chain settlement.",
+  },
+  {
     q: "How is yield generated?",
     a: "You earn option premium. The counterparty pays up front for the right to buy or sell at a target price at expiry date.",
   },
