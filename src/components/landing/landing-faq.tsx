@@ -5,24 +5,20 @@ import { ChevronDownIcon, SectionMarker } from "./landing-primitives";
 
 const ITEMS = [
   {
-    q: "What is Acta?",
-    a: "Acta is a structured yield and options protocol on Solana. European-style, RFQ-based, on-chain settlement.",
-  },
-  {
     q: "How is yield generated?",
-    a: "You earn option premium. The counterparty pays up front for the right to buy or sell at a target price at maturity.",
+    a: "You earn option premium. The counterparty pays up front for the right to buy or sell at a target price at expiry date.",
   },
   {
-    q: "What happens if my target hits?",
-    a: "Your position settles into the other asset at the target. If it doesn't hit, you keep your original deposit plus the premium.",
+    q: "What happens at expiry?",
+    a: "If the option expires out of the money, you keep your original collateral and the premium. If it expires in the money, the position settles at the target price you selected.",
   },
   {
     q: "Is it audited?",
-    a: "Audit reports are linked in the docs. Markets are non-custodial and settle on-chain at maturity.",
+    a: "Audit reports are linked in the docs. Markets are non-custodial and settle on-chain.",
   },
   {
     q: "What assets are supported?",
-    a: "SOL, jitoSOL, JLP, BTC for calls; USDC for puts. More markets are added regularly.",
+    a: "We plan to expand supported collateral and markets over time. For now it is: SOL, jitoSOL, JLP, BTC for calls; USDC for puts.",
   },
 ];
 
