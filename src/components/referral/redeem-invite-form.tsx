@@ -11,6 +11,9 @@ interface RedeemInviteFormProps {
   autoSubmitFromUrl?: boolean;
 }
 
+// Survives strict-mode double-mount in dev: auto-submit fires at most once per page load.
+let urlRefAutoAttempted = false;
+
 export function RedeemInviteForm({
   autoFocus = false,
   autoSubmitFromUrl = true,
@@ -19,12 +22,13 @@ export function RedeemInviteForm({
     useRfqContext();
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const autoSubmittedRef = useRef(false);
+  const codeFromUrlRef = useRef(false);
 
   useEffect(() => {
     const pending = readPendingRefCode();
     if (pending) {
       setCode(normalizeReferralCode(pending));
+      codeFromUrlRef.current = true;
     }
   }, []);
 
@@ -38,10 +42,11 @@ export function RedeemInviteForm({
 
   useEffect(() => {
     if (!autoSubmitFromUrl) return;
-    if (autoSubmittedRef.current) return;
+    if (urlRefAutoAttempted) return;
+    if (!codeFromUrlRef.current) return;
     if (!isAuthenticated) return;
     if (code.length < 4) return;
-    autoSubmittedRef.current = true;
+    urlRefAutoAttempted = true;
     setSubmitting(true);
     redeemInvite(code);
   }, [autoSubmitFromUrl, isAuthenticated, code, redeemInvite]);
@@ -66,6 +71,7 @@ export function RedeemInviteForm({
           value={code}
           onChange={(e) => {
             setCode(normalizeReferralCode(e.target.value));
+            codeFromUrlRef.current = false;
             if (referralError) clearReferralError();
           }}
           maxLength={16}
@@ -87,7 +93,7 @@ export function RedeemInviteForm({
         </p>
       )}
       <AppButton type="submit" variant="primary" disabled={!canSubmit} className="w-full">
-        {submitting ? "Redeeming..." : "Redeem invite"}
+        {submitting && !referralError ? "Redeeming..." : "Redeem invite"}
       </AppButton>
     </form>
   );
