@@ -337,6 +337,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
       console.log("[RfqProvider] Disconnected:", code, reason);
       setConnectionState("disconnected");
       prefetchedIndicativeKeysRef.current.clear();
+      // Drop in-flight referral request ids — replies after reconnect cannot be matched anyway.
+      pendingReferralReqsRef.current.clear();
       lastWsPingAtRef.current = 0;
       setWsHealth("recovering");
     });
