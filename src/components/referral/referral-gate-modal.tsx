@@ -1,21 +1,28 @@
 "use client";
 
 import { useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { RedeemInviteForm } from "@/components/referral/redeem-invite-form";
-import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 
-export type GateState = "connect" | "loading" | "redeem";
+export type GateState = "loading" | "redeem";
 
-export function ReferralGateModal({ open, state }: { open: boolean; state: GateState }) {
+export function ReferralGateModal({
+  open,
+  state,
+  onClose,
+}: {
+  open: boolean;
+  state: GateState;
+  onClose: () => void;
+}) {
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -24,32 +31,27 @@ export function ReferralGateModal({ open, state }: { open: boolean; state: GateS
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Get started"
+      aria-label="Invite required"
     >
-      <div className="absolute inset-0 bg-bg-primary/90 backdrop-blur-sm" aria-hidden="true" />
+      <button
+        type="button"
+        aria-label="Close"
+        className="absolute inset-0 cursor-default bg-bg-primary/90 backdrop-blur-sm"
+        onClick={onClose}
+      />
       <div className="relative w-full max-w-2xl border border-bg-border bg-bg-primary p-6 text-content-primary shadow-2xl">
-        {state === "connect" && <ConnectBody />}
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center text-content-tertiary hover:text-content-primary"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
         {state === "loading" && <LoadingBody />}
         {state === "redeem" && <RedeemBody />}
       </div>
     </div>
-  );
-}
-
-function ConnectBody() {
-  return (
-    <>
-      <h2 className="font-mono text-xl font-medium">Connect to continue</h2>
-      <div className="mt-5 space-y-4">
-        <p className="text-sm text-content-secondary">
-          Acta is invite-only during beta. Connect your wallet to enter your code and start trading.
-        </p>
-        <SolanaConnectButton fullWidth />
-        <p className="font-mono text-xs text-content-tertiary">
-          You&apos;ll be asked to sign a message to authenticate — no on-chain transaction required.
-        </p>
-      </div>
-    </>
   );
 }
 

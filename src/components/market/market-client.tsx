@@ -1078,14 +1078,24 @@ export function MarketClient({ asset }: { asset: string }) {
                   </div>
                 </div>
 
-                {/* Size rule info */}
+                {/* Size rule info / violation */}
                 {depositRule ? (
-                  <div className="font-mono text-xs leading-[1.2] tracking-[-0.24px] text-content-secondary">
-                    Size rule: min {formatInputValue(depositRule.min, depositInputDecimals)}{" "}
-                    {depositToken}, max{" "}
-                    {formatInputValue(depositRule.max, depositInputDecimals)}{" "}
-                    {depositToken}, step{" "}
-                    {formatInputValue(depositRule.step, depositInputDecimals)}.
+                  <div
+                    className={`font-mono text-xs leading-[1.2] tracking-[-0.24px] ${
+                      sizeRuleViolationMessage ? "text-error" : "text-content-secondary"
+                    }`}
+                  >
+                    {sizeRuleViolationMessage ? (
+                      <>{sizeRuleViolationMessage}.</>
+                    ) : (
+                      <>
+                        Size rule: min {formatInputValue(depositRule.min, depositInputDecimals)}{" "}
+                        {depositToken}, max{" "}
+                        {formatInputValue(depositRule.max, depositInputDecimals)}{" "}
+                        {depositToken}, step{" "}
+                        {formatInputValue(depositRule.step, depositInputDecimals)}.
+                      </>
+                    )}
                   </div>
                 ) : null}
 
@@ -1127,7 +1137,9 @@ export function MarketClient({ asset }: { asset: string }) {
               <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-primary opacity-50">
                 {depositOk
                   ? `${formatUsdc(displayedPremiumUsd)} upfront`
-                  : "Enter a deposit amount to see your upfront premium"}
+                  : sizeRuleViolationMessage
+                    ? `${sizeRuleViolationMessage} to see your upfront premium`
+                    : "Enter a deposit amount to see your upfront premium"}
               </span>
             </div>
           </div>

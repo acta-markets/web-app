@@ -234,7 +234,7 @@ function persistSession(walletAddress: string, sessionId: string, expiresAt: num
 
 export function RfqProvider({ children }: RfqProviderProps) {
   const showDebugBadge = process.env.NEXT_PUBLIC_RFQ_DEBUG_BADGE === "true";
-  const { selectedAccount, isConnected: walletConnected, signMessage } = useSolana();
+  const { selectedAccount, isConnected: walletConnected, signMessage, disconnectWallet } = useSolana();
   const clientRef = useRef<ActaWsClient | null>(null);
   const walletAddressRef = useRef<string | null>(null);
   const [connectionState, setConnectionState] = useState<AppConnectionState>("disconnected");
@@ -263,6 +263,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [referralStatus, setReferralStatus] = useState<ReferralStatus>("unknown");
   const [referralInfo, setReferralInfo] = useState<MyReferralInfoData | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
+  const [referralGateOpen, setReferralGateOpen] = useState(false);
   const pendingReferralReqsRef = useRef<Map<string, "invite" | "claim">>(new Map());
   const { show: showToast } = useToast();
   const showToastRef = useRef(showToast);
@@ -703,6 +704,15 @@ export function RfqProvider({ children }: RfqProviderProps) {
       });
   }, [walletConnected, walletAddress, rfqConnected, authWarmupDone, authenticate, signMessage]);
 
+  // Mirror referral status to gate visibility:
+  //   required  → auto-open (first probe / server re-prompt)
+  //   redeemed  → auto-close
+  //   unknown   → auto-close (wallet disconnect / skip)
+  // User dismissals don't change referralStatus, so they don't re-trigger this effect.
+  useEffect(() => {
+    setReferralGateOpen(referralStatus === "required");
+  }, [referralStatus]);
+
   const prevWalletConnectedRef = useRef(walletConnected);
   useEffect(() => {
     const wasConnected = prevWalletConnectedRef.current;
@@ -881,8 +891,15 @@ export function RfqProvider({ children }: RfqProviderProps) {
   }, []);
 
   const openReferralGate = useCallback(() => {
-    // Gate modal is always visible when referralStatus === "required"; this is a no-op.
+    setReferralGateOpen(true);
   }, []);
+
+  // Closing the gate drops the wallet connection — the user backed out of
+  // redeeming, so we put them back in the anonymous browsing state.
+  const closeReferralGate = useCallback(() => {
+    setReferralGateOpen(false);
+    void disconnectWallet();
+  }, [disconnectWallet]);
 
   const getClient = useCallback(() => clientRef.current, []);
 
@@ -950,14 +967,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
         </div>
       </AppModal>
       <ReferralGateModal
-        open={!walletConnected || referralStatus !== "redeemed"}
-        state={
-          !walletConnected
-            ? "connect"
-            : referralStatus === "required"
-              ? "redeem"
-              : "loading"
-        }
+        open={referralGateOpen}
+        state={referralStatus === "required" ? "redeem" : "loading"}
+        onClose={closeReferralGate}
       />
     </RfqContext.Provider>
   );
