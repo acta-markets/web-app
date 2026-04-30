@@ -357,24 +357,6 @@ export function MarketClient({ asset }: { asset: string }) {
   //   // eslint-disable-next-line react-hooks/exhaustive-deps
   // }, []);
 
-  // useEffect(() => {
-  //   try {
-  //     const v = window.localStorage.getItem("yuzu_chart_range");
-  //     if (v === "1w" || v === "1m" || v === "3m") setChartRange(v);
-  //   } catch {
-  //     // ignore
-  //   }
-  //   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // }, []);
-
-  // useEffect(() => {
-  //   try {
-  //     window.localStorage.setItem("yuzu_chart_range", chartRange);
-  //   } catch {
-  //     // ignore
-  //   }
-  // }, [chartRange]);
-
   useEffect(() => {
     if (!assetOpen) return;
     function onKeyDown(e: KeyboardEvent) {

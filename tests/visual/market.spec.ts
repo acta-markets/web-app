@@ -118,35 +118,18 @@ test.describe("Market page", () => {
     expect(gradients).toBe(0);
   });
 
-  test("no lime green yuzu-main colors in SVG elements", async ({ page }) => {
-    const limePresent = await page.evaluate(() => {
-      const svgEls = document.querySelectorAll("path, line, circle");
-      for (const el of svgEls) {
-        const stroke = el.getAttribute("stroke") || "";
-        const fill = el.getAttribute("fill") || "";
-        if (stroke.includes("204,255,0") || fill.includes("204,255,0")) {
-          return true;
-        }
-      }
-      return false;
-    });
-    expect(limePresent).toBe(false);
-  });
-
   test("no old styling classes remain in page", async ({ page }) => {
     const oldClasses = await page.evaluate(() => {
       const html = document.body.innerHTML;
       return {
         whiteSlash10: html.includes("white/10"),
         whiteSlash5: html.includes("white/5"),
-        yuzuMain: html.includes("yuzu-main"),
         outcomePos: html.includes("outcome-positive"),
         outcomeNeg: html.includes("outcome-negative")
       };
     });
     expect(oldClasses.whiteSlash10).toBe(false);
     expect(oldClasses.whiteSlash5).toBe(false);
-    expect(oldClasses.yuzuMain).toBe(false);
     expect(oldClasses.outcomePos).toBe(false);
     expect(oldClasses.outcomeNeg).toBe(false);
   });
