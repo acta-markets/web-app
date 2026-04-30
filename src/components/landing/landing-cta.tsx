@@ -3,7 +3,7 @@ import { LandingButton, SectionMarker } from "./landing-primitives";
 export function LandingCta() {
   return (
     <section
-      className="relative overflow-hidden border-t border-bg-border px-8 py-[140px] max-md:px-5 max-md:py-24"
+      className="relative overflow-hidden border-t border-bg-border py-[140px] max-md:py-24"
     >
       <div
         aria-hidden
@@ -29,7 +29,7 @@ export function LandingCta() {
             "linear-gradient(180deg, rgba(7,44,40,0.3) 0%, rgba(7,44,40,0.85) 100%)",
         }}
       />
-      <div className="relative mx-auto max-w-[900px]">
+      <div className="relative mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
         <SectionMarker label="// Get started" color="#B0E8D6" />
         <div
           className="mb-5 text-left font-space font-semibold text-content-primary"
