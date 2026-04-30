@@ -59,9 +59,7 @@ const config: Config = {
             secondary: "var(--additional-violet-secondary)"
           }
         },
-        error: "var(--error)",
-        // Legacy alias for opacity support (rgb format)
-        "yuzu-main": "rgb(var(--accent-primary-rgb) / <alpha-value>)"
+        error: "var(--error)"
       },
       fontFamily: {
         space: ["var(--font-space-grotesk)", "system-ui", "sans-serif"],
