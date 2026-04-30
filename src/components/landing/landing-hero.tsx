@@ -37,7 +37,7 @@ export function LandingHero() {
         }}
       />
 
-      <div className="relative mx-auto max-w-[1200px] px-8 pb-[140px] pt-[120px] max-md:px-5 max-md:pb-[96px] max-md:pt-[72px]">
+      <div className="relative mx-auto w-full max-w-[850px] pb-[140px] pt-[120px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pb-[96px] max-md:pt-[72px]">
         <div className="max-w-[720px]">
           <div
             className="mb-8 inline-flex items-center gap-[10px] font-mono text-[12px] uppercase text-accent-secondary"

@@ -21,7 +21,7 @@ const STEPS: Step[] = [
   {
     n: "02",
     title: "Pick a target",
-    copy: "Choose the price you'd sell or buy at. Higher targets pay more premium but fill less often.",
+    copy: "Choose the price you'd sell or buy at. Further targets pay less premium but are less likely to settle at expiry. Closer targets pay more premium, but are more likely to settle.",
     bg: "#2C0C23",
     accent: "#FF60BD",
     offset: [30, 20],
@@ -29,7 +29,7 @@ const STEPS: Step[] = [
   {
     n: "03",
     title: "Earn premium",
-    copy: "Paid up front, credited to your position. At maturity you either keep your asset or settle into the target.",
+    copy: "Paid upfront, instantly. At expiry you either get your asset back or settle into the target price you chose.",
     bg: "#2A1A00",
     accent: "#FF8A3C",
     offset: [60, 40],
@@ -38,8 +38,8 @@ const STEPS: Step[] = [
 
 export function LandingHowItWorks() {
   return (
-    <section className="px-8 py-[120px] max-md:px-5 max-md:py-20">
-      <div className="mx-auto max-w-[1200px]">
+    <section className="py-[120px] max-md:py-20">
+      <div className="mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
         <SectionMarker label="// Mechanism" />
         <h2
           className="mb-12 font-space font-semibold text-content-primary"
@@ -55,9 +55,8 @@ export function LandingHowItWorks() {
           {STEPS.map((step, i) => (
             <div
               key={step.n}
-              className={`grid items-stretch max-md:grid-cols-1 md:grid-cols-[140px_1fr] ${
-                i === 0 ? "border-t border-bg-border" : ""
-              } border-b border-bg-border`}
+              className={`grid items-stretch max-md:grid-cols-1 md:grid-cols-[140px_1fr] ${i === 0 ? "border-t border-bg-border" : ""
+                } border-b border-bg-border`}
             >
               {/* tinted ASCII numeral */}
               <div
