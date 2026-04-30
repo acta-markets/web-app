@@ -29,8 +29,8 @@ const ITEMS = [
 export function LandingFaq() {
   const [open, setOpen] = useState(0);
   return (
-    <section className="px-8 pb-[120px] max-md:px-5 max-md:pb-20">
-      <div className="mx-auto max-w-[1000px]">
+    <section className="pb-[120px] max-md:pb-20">
+      <div className="mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
         <SectionMarker label="// Questions" />
         <h2
           className="mb-10 font-space font-semibold text-content-primary"

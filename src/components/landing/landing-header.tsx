@@ -12,7 +12,7 @@ const NAV = [
 export function LandingHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-bg-border backdrop-blur-md" style={{ background: "rgba(18,18,18,0.72)" }}>
-      <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-6 px-8 py-5 max-md:px-5 max-md:py-4">
+      <div className="mx-auto flex w-full max-w-[850px] items-center justify-between gap-6 py-5 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:py-4">
         <Link href="/" aria-label="Acta home">
           <ActaLogo className="h-7" />
         </Link>
