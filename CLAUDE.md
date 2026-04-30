@@ -18,9 +18,11 @@ npm run test:watch  # Run tests in watch mode
 After every `git push`, always verify deployment status on Vercel and fix-forward if needed.
 
 1. **Identify project/team**
-   - Team: `frakt` (`team_J2ROv1pOThoNi7xxlgy6AVPm`)
-   - Project: `yuzu-web-76j7` (`prj_e7I8FKtPMxD6cirzUUeHEglKwOvk`)
+   - Team ID: `team_J2ROv1pOThoNi7xxlgy6AVPm`
+   - Project ID: `prj_e7I8FKtPMxD6cirzUUeHEglKwOvk`
    - If this changes, rediscover via MCP: `list_teams` -> `list_projects`.
+
+   IDs are stable; project/team slugs may change with rebrands — always prefer IDs.
 
 2. **Find latest deployment for pushed branch/commit**
    - Use MCP `list_deployments` for the project/team.
@@ -48,11 +50,12 @@ After every `git push`, always verify deployment status on Vercel and fix-forwar
 Create `.env.local` with:
 ```bash
 MONGODB_URI="<connection_string>"
-MONGODB_DB="yuzu"
+MONGODB_DB="acta"
 NEXT_PUBLIC_PRIVY_APP_ID="<privy_app_id>"
 NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
-NEXT_PUBLIC_RFQ_WS_URL="wss://devnet-api.acta.markets"  # RFQ infrastructure WebSocket
+NEXT_PUBLIC_RFQ_WS_URL="wss://beta-api.acta.markets"  # RFQ infrastructure WebSocket (mainnet)
 NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "devnet" - controls token mints
+NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied through /api/rpc
 ```
 
 ## Architecture
@@ -83,7 +86,7 @@ NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "devnet" - controls token m
 
 **Database**: MongoDB via `src/lib/mongodb.ts` with global connection caching for dev HMR.
 
-**RFQ Infrastructure**: WebSocket client using `@acta-markets/ts-sdk@0.0.9-beta`:
+**RFQ Infrastructure**: WebSocket client using `@acta-markets/ts-sdk` (see `package.json` for the pinned version):
 - `src/lib/rfq-client.ts` - Thin wrapper around SDK's `ActaWsClient`
 - `src/lib/use-rfq.ts` - React hook for component integration
 - Connects via `NEXT_PUBLIC_RFQ_WS_URL` env variable
@@ -110,5 +113,5 @@ NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "devnet" - controls token m
 - Design system primitives: `src/components/ui/` (Button, Card, Badge, Container, Input)
 - Page sections: `src/components/sections/`
 - Dark mode: class-based via Tailwind (`darkMode: "class"`)
-- Custom colors: `yuzu-main` (#CCFF00), `yuzu-accent` (#FF00E5), `yuzu-dark` (#0F0F0F)
+- Theme colors are CSS variables (`--accent-primary`, `--bg-*`, `--text-*`) defined in `src/app/globals.css`; reference them via Tailwind utilities (e.g. `bg-accent-primary`).
 - Neobrutalist shadows: `shadow-neo`, `shadow-neo-hover`, `shadow-neo-sm`

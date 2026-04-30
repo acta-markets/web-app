@@ -20,7 +20,7 @@ export async function getDb() {
   }
 
   const client = await mongoClientPromise;
-  const dbName = process.env.MONGODB_DB || "yuzu";
+  const dbName = process.env.MONGODB_DB || "acta";
   return client.db(dbName);
 }
 
