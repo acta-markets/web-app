@@ -3,10 +3,10 @@ import { ActaLogo } from "@/components/acta-logo";
 import { LandingButton } from "./landing-primitives";
 
 const NAV = [
-  { label: "Docs", href: "https://docs.acta.markets", external: true },
+  // { label: "Docs", href: "https://docs.acta.markets", external: true },
   { label: "Markets", href: "/earn", external: false },
   { label: "Blog", href: "#", external: false },
-  { label: "Security", href: "#", external: false },
+  // { label: "Security", href: "#", external: false },
 ] as const;
 
 export function LandingHeader() {
