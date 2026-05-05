@@ -70,14 +70,14 @@ export function LandingHero() {
             <LandingButton variant="primary" size="lg" href="/earn">
               Launch app ↗
             </LandingButton>
-            <LandingButton
+            {/* <LandingButton
               variant="ghost"
               size="lg"
               href="https://docs.acta.markets"
               external
             >
               Read docs
-            </LandingButton>
+            </LandingButton> */}
           </div>
         </div>
       </div>
