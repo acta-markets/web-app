@@ -19,7 +19,7 @@ test.describe("agent discovery HTTP contracts", () => {
       "<loc>http://localhost:3000/docs</loc>",
     );
     expect(await robots.text()).toContain(
-      "Sitemap: https://docs.acta.markets/sitemap-pages.xml",
+      "Sitemap: https://docs.acta.markets/sitemap.xml",
     );
   });
 
@@ -86,11 +86,56 @@ test.describe("agent discovery HTTP contracts", () => {
     expect(await skillResponse.text()).toContain("# Use Acta Public API");
   });
 
-  test("keeps /docs as a compatibility redirect", async ({ request }) => {
-    const response = await request.get("/docs", { maxRedirects: 0 });
+  test("serves self-hosted docs as HTML and source Markdown", async ({ request }) => {
+    const [htmlResponse, markdownResponse, referenceResponse] = await Promise.all([
+      request.get("/docs", { headers: { Accept: "text/html" } }),
+      request.get("/docs", { headers: { Accept: "text/markdown" } }),
+      request.get("/docs/reference/http-api"),
+    ]);
 
-    expect(response.status()).toBe(308);
-    expect(response.headers()["location"]).toBe("https://docs.acta.markets");
+    expect(htmlResponse.status()).toBe(200);
+    expect(htmlResponse.headers()["content-type"]).toContain("text/html");
+    expect(await htmlResponse.text()).toContain("Acta Protocol");
+
+    expect(markdownResponse.status()).toBe(200);
+    expect(markdownResponse.headers()["content-type"]).toContain("text/markdown");
+    expect(markdownResponse.headers()["content-location"]).toBe(
+      "https://docs.acta.markets",
+    );
+    expect(await markdownResponse.text()).toContain("# Acta Protocol");
+
+    expect(referenceResponse.status()).toBe(200);
+    expect(await referenceResponse.text()).toContain("HTTP API");
+  });
+
+  test("serves clean canonical paths on the docs host", async ({ request }) => {
+    const headers = { Host: "docs.acta.markets" };
+    const [home, markdown, robots, sitemap, llms] = await Promise.all([
+      request.get("/", { headers: { ...headers, Accept: "text/html" } }),
+      request.get("/reference/http-api", {
+        headers: { ...headers, Accept: "text/markdown" },
+      }),
+      request.get("/robots.txt", { headers }),
+      request.get("/sitemap.xml", { headers }),
+      request.get("/llms.txt", { headers }),
+    ]);
+
+    expect(home.status()).toBe(200);
+    expect(home.headers()["link"]).toContain('rel="service-doc"');
+    expect(await home.text()).toContain("Acta Protocol");
+    expect(markdown.headers()["content-type"]).toContain("text/markdown");
+    expect(markdown.headers()["content-location"]).toBe(
+      "https://docs.acta.markets/reference/http-api",
+    );
+    expect(await robots.text()).toContain(
+      "Sitemap: https://docs.acta.markets/sitemap.xml",
+    );
+    expect(await sitemap.text()).toContain(
+      "<loc>https://docs.acta.markets/reference/http-api</loc>",
+    );
+    expect(await llms.text()).toContain(
+      "https://docs.acta.markets/reference/http-api",
+    );
   });
 
 });

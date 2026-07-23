@@ -220,7 +220,7 @@ ${contentSignal}
 ${aiGroups}
 
 Sitemap: ${context.siteOrigin}/sitemap.xml
-Sitemap: ${DOCS_SITE_ORIGIN}/sitemap-pages.xml
+Sitemap: ${DOCS_SITE_ORIGIN}/sitemap.xml
 `;
 }
 

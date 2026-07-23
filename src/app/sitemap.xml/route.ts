@@ -1,4 +1,8 @@
 import { getDeploymentContext, getSitemapUrls } from "@/lib/agent-discovery";
+import {
+  getDocsSitemapUrls,
+  isDocsRequest,
+} from "@/lib/docs-content";
 
 function escapeXml(value: string): string {
   return value
@@ -11,7 +15,10 @@ function escapeXml(value: string): string {
 
 export function GET(request: Request) {
   const context = getDeploymentContext(request.url);
-  const urls = getSitemapUrls(context)
+  const sitemapUrls = isDocsRequest(request)
+    ? getDocsSitemapUrls()
+    : getSitemapUrls(context);
+  const urls = sitemapUrls
     .map((url) => `  <url><loc>${escapeXml(url)}</loc></url>`)
     .join("\n");
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
