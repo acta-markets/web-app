@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { Suspense, type ReactNode } from "react";
 import { RefCapture } from "@/components/referral/ref-capture";
@@ -20,6 +20,10 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   display: "swap"
 });
+
+export const viewport: Viewport = {
+  themeColor: "#121212",
+};
 
 export const metadata: Metadata = {
   title: {
