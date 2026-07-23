@@ -209,17 +209,20 @@ export function getDocsCanonicalUrl(slug = ""): string {
     : "https://docs.acta.markets";
 }
 
-function canonicalizeMarkdownTarget(currentSlug: string, href: string): string {
+function resolveMarkdownTargetSlug(
+  currentSlug: string,
+  href: string,
+): string | null {
   if (
     href.startsWith("#") ||
     href.startsWith("/") ||
     /^[a-z][a-z0-9+.-]*:/i.test(href)
   ) {
-    return href;
+    return null;
   }
 
   const match = href.match(/^([^?#]+)(\?[^#]*)?(#.*)?$/);
-  if (!match || !/\.md$/i.test(match[1])) return href;
+  if (!match || !/\.md$/i.test(match[1])) return null;
 
   const currentDirectory = currentSlug
     ? path.posix.dirname(currentSlug)
@@ -228,16 +231,82 @@ function canonicalizeMarkdownTarget(currentSlug: string, href: string): string {
     path.posix.join(currentDirectory, match[1]),
   );
   const withoutExtension = markdownPath.replace(/\.md$/i, "");
-  const slug =
-    withoutExtension === "README"
-      ? ""
-      : withoutExtension.replace(/\/README$/i, "");
+  return withoutExtension === "README"
+    ? ""
+    : withoutExtension.replace(/\/README$/i, "");
+}
+
+function canonicalizeMarkdownTarget(currentSlug: string, href: string): string {
+  const slug = resolveMarkdownTargetSlug(currentSlug, href);
+  if (slug === null) return href;
+
+  const match = href.match(/^([^?#]+)(\?[^#]*)?(#.*)?$/);
+  if (!match) return href;
 
   return `${getDocsCanonicalUrl(slug)}${match[2] ?? ""}${match[3] ?? ""}`;
 }
 
+function readableMarkdownLabel(
+  currentSlug: string,
+  label: string,
+  href: string,
+  titles: Map<string, string>,
+): string {
+  const slug = resolveMarkdownTargetSlug(currentSlug, href);
+  if (slug === null) return label;
+
+  const title = titles.get(slug);
+  if (!title) return label;
+
+  const plainLabel = label.replace(/^`|`$/g, "");
+  const targetPath = href.split(/[?#]/, 1)[0];
+  const filename = path.posix.basename(targetPath);
+
+  if (plainLabel === targetPath || plainLabel === filename) {
+    return title;
+  }
+
+  if (plainLabel.includes(filename)) {
+    return plainLabel.replaceAll(filename, title);
+  }
+
+  return label;
+}
+
+function removeThematicBreaks(markdown: string): string {
+  let fenced = false;
+
+  return markdown
+    .split("\n")
+    .map((line) => {
+      if (/^\s*(?:```|~~~)/.test(line)) {
+        fenced = !fenced;
+        return line;
+      }
+
+      return !fenced && /^\s*(?:---|\*\*\*|___)\s*$/.test(line)
+        ? ""
+        : line;
+    })
+    .join("\n");
+}
+
+export function getDocsDisplayMarkdown(page: DocsPage): string {
+  const titles = new Map(
+    getDocsNavigation()
+      .flatMap((group) => group.items)
+      .map((item) => [item.slug, item.title]),
+  );
+
+  return removeThematicBreaks(page.source).replace(
+    /(?<!!)\[([^\]]+)]\(([^) \t\n]+)\)/g,
+    (_match, label: string, href: string) =>
+      `[${readableMarkdownLabel(page.slug, label, href, titles)}](${href})`,
+  );
+}
+
 export function getDocsAgentMarkdown(page: DocsPage): string {
-  return page.source.replace(
+  return getDocsDisplayMarkdown(page).replace(
     /(\]\()([^) \t\n]+)(\))/g,
     (_match, opening: string, href: string, closing: string) =>
       `${opening}${canonicalizeMarkdownTarget(page.slug, href)}${closing}`,
