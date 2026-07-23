@@ -8,6 +8,7 @@ export interface DeploymentContext {
   solanaCluster: "devnet" | "mainnet-beta";
 }
 
+export const DOCS_SITE_ORIGIN = "https://docs.acta.markets";
 const PUBLIC_DOCS_REPOSITORY = "https://github.com/acta-markets/public-docs";
 
 function configuredEnvironment(): ActaEnvironment {
@@ -57,7 +58,7 @@ export function getDiscoveryLinkHeader(): string {
   return [
     '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
     '</openapi.json>; rel="service-desc"; type="application/vnd.oai.openapi+json"',
-    '</docs>; rel="service-doc"; type="text/html"',
+    `<${DOCS_SITE_ORIGIN}>; rel="service-doc"; type="text/html"`,
     '</llms.txt>; rel="describedby"; type="text/plain"',
   ].join(", ");
 }
@@ -78,7 +79,7 @@ Acta is a structured-yield and European-style options protocol on Solana. Takers
 ## Public resources
 
 - [Markets](${context.siteOrigin}/earn)
-- [Documentation](${context.siteOrigin}/docs)
+- [Documentation](${DOCS_SITE_ORIGIN})
 - [API catalog](${context.siteOrigin}/.well-known/api-catalog)
 - [OpenAPI description](${context.siteOrigin}/openapi.json)
 - [Authentication guide](${context.siteOrigin}/auth.md)
@@ -92,38 +93,6 @@ Public HTTP discovery endpoints are read-only and require no authentication. Tra
 `;
 }
 
-export function getDocsMarkdown(context: DeploymentContext): string {
-  return `# Acta documentation
-
-Use the public documentation repository as the source of truth for protocol integration:
-${PUBLIC_DOCS_REPOSITORY}
-
-## Start here
-
-- [Protocol flow](${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/protocol-flow.md)
-- [Taker quickstart](${PUBLIC_DOCS_REPOSITORY}/blob/main/quickstart/taker-quickstart.md)
-- [Web client SDK](${PUBLIC_DOCS_REPOSITORY}/blob/main/quickstart/web-client-ts-sdk.md)
-- [Maker quickstart](${PUBLIC_DOCS_REPOSITORY}/blob/main/quickstart/maker-quickstart.md)
-- [Rust maker SDK](${PUBLIC_DOCS_REPOSITORY}/blob/main/quickstart/maker-rust-sdk.md)
-
-## Reference
-
-- [HTTP API](${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/http-api.md)
-- [Maker WebSocket API](${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/maker-api.md)
-- [Taker WebSocket API](${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/taker-api.md)
-- [Wire conventions](${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/ws-common.md)
-- [Governance and security](${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/governance.md)
-- [Devnet guide](${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/sandbox.md)
-
-## Machine-readable resources
-
-- API catalog: ${context.siteOrigin}/.well-known/api-catalog
-- OpenAPI: ${context.siteOrigin}/openapi.json
-- Authentication: ${context.siteOrigin}/auth.md
-- Environment API: ${context.apiOrigin}
-`;
-}
-
 export function getEarnMarkdown(context: DeploymentContext): string {
   return `# Acta markets
 
@@ -133,8 +102,8 @@ Browse Acta's currently available structured-yield markets in the ${context.envi
 
 - Public API: ${context.apiOrigin}/api/v1/markets
 - OpenAPI: ${context.siteOrigin}/openapi.json
-- Protocol documentation: ${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/protocol-flow.md
-- Taker integration: ${PUBLIC_DOCS_REPOSITORY}/blob/main/quickstart/taker-quickstart.md
+- Protocol documentation: ${DOCS_SITE_ORIGIN}/reference/protocol-flow
+- Taker integration: ${DOCS_SITE_ORIGIN}/quickstart/taker-quickstart
 
 Market discovery is public and does not require authentication. Opening an RFQ requires a Solana wallet-authenticated WebSocket session. Completing a trade requires the wallet owner to review and explicitly sign the sponsored transaction.
 `;
@@ -177,10 +146,10 @@ Authentication does not authorize a trade. Any sponsored Solana transaction must
 
 ## Documentation
 
-- ${context.siteOrigin}/docs
-- ${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/sandbox.md
-- ${PUBLIC_DOCS_REPOSITORY}/blob/main/quickstart/taker-quickstart.md
-- ${PUBLIC_DOCS_REPOSITORY}/blob/main/quickstart/maker-quickstart.md
+- ${DOCS_SITE_ORIGIN}
+- ${DOCS_SITE_ORIGIN}/reference/sandbox
+- ${DOCS_SITE_ORIGIN}/quickstart/taker-quickstart
+- ${DOCS_SITE_ORIGIN}/quickstart/maker-quickstart
 `;
 }
 
@@ -191,11 +160,11 @@ export function getLlmsText(context: DeploymentContext): string {
 
 ## Documentation
 
-- [Documentation index](${context.siteOrigin}/docs): Human- and agent-readable integration entrypoint.
-- [Protocol flow](${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/protocol-flow.md): Actors, RFQ mechanics, settlement, economics, and risk.
-- [Taker quickstart](${PUBLIC_DOCS_REPOSITORY}/blob/main/quickstart/taker-quickstart.md): Wallet authentication, RFQs, quotes, and sponsored transactions.
-- [Maker quickstart](${PUBLIC_DOCS_REPOSITORY}/blob/main/quickstart/maker-quickstart.md): Maker authentication, subscriptions, quoting, and recovery.
-- [HTTP API](${PUBLIC_DOCS_REPOSITORY}/blob/main/reference/http-api.md): Public read-only HTTP endpoints.
+- [Documentation index](${DOCS_SITE_ORIGIN}): Human- and agent-readable integration entrypoint.
+- [Protocol flow](${DOCS_SITE_ORIGIN}/reference/protocol-flow): Actors, RFQ mechanics, settlement, economics, and risk.
+- [Taker quickstart](${DOCS_SITE_ORIGIN}/quickstart/taker-quickstart): Wallet authentication, RFQs, quotes, and sponsored transactions.
+- [Maker quickstart](${DOCS_SITE_ORIGIN}/quickstart/maker-quickstart): Maker authentication, subscriptions, quoting, and recovery.
+- [HTTP API](${DOCS_SITE_ORIGIN}/reference/http-api): Public read-only HTTP endpoints.
 
 ## Discovery
 
@@ -250,9 +219,10 @@ ${contentSignal}
 ${aiGroups}
 
 Sitemap: ${context.siteOrigin}/sitemap.xml
+Sitemap: ${DOCS_SITE_ORIGIN}/sitemap-pages.xml
 `;
 }
 
 export function getSitemapUrls(context: DeploymentContext): string[] {
-  return ["/", "/earn", "/docs"].map((path) => `${context.siteOrigin}${path}`);
+  return ["/", "/earn"].map((path) => `${context.siteOrigin}${path}`);
 }

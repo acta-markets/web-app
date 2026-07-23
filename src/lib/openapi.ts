@@ -1,4 +1,7 @@
-import type { DeploymentContext } from "@/lib/agent-discovery";
+import {
+  DOCS_SITE_ORIGIN,
+  type DeploymentContext,
+} from "@/lib/agent-discovery";
 
 const errorResponse = {
   description: "Error",
@@ -26,7 +29,7 @@ export function getOpenApiDocument(context: DeploymentContext) {
     ],
     externalDocs: {
       description: "Acta protocol documentation",
-      url: `${context.siteOrigin}/docs`,
+      url: DOCS_SITE_ORIGIN,
     },
     paths: {
       "/health": {

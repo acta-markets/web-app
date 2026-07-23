@@ -346,7 +346,12 @@ export function PortfolioClient() {
           <p className="text-center font-mono text-base leading-[1.2] tracking-[-0.32px] text-content-secondary">
             Track all your positions and earnings
           </p>
-          <a href="/docs" className="inline-flex items-center gap-0.5 font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary">
+          <a
+            href="https://docs.acta.markets"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex items-center gap-0.5 font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary"
+          >
             How it works
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="shrink-0">
               <path d="M7.5 5l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

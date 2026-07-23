@@ -9,17 +9,18 @@ This change targets both `devnet.acta.markets` and `beta.acta.markets` from one 
 
 ## Implemented in the application
 
-- `/robots.txt` with explicit general and AI crawler groups, private-path exclusions, Content Signals, and a host-specific sitemap URL.
+- `/robots.txt` with explicit general and AI crawler groups, private-path exclusions, Content Signals, the host sitemap, and the GitBook documentation sitemap.
 - `/sitemap.xml` with public canonical pages only.
 - Homepage `Link` response headers for `api-catalog`, `service-desc`, `service-doc`, and `describedby`.
-- `Accept: text/markdown` negotiation for `/`, `/earn`, and `/docs`, with `Vary: Accept`.
+- `Accept: text/markdown` negotiation for `/` and `/earn`, with `Vary: Accept`.
 - `/.well-known/api-catalog` using the RFC 9727 JSON Linkset format.
 - `/openapi.json` for the public read-only HTTP API.
 - `/auth.md` documenting the actual Solana wallet challenge flow and its transaction-consent boundary.
 - `/.well-known/agent-skills/index.json` and a digest-verified read-only API skill.
 - `/llms.txt` as a compact resource index.
 - WebMCP registration for two read-only tools: environment discovery and public market listing.
-- `/docs` as a stable human/agent entrypoint.
+- Direct `service-doc` discovery of `https://docs.acta.markets`.
+- `/docs` as a permanent compatibility redirect to the canonical documentation site.
 
 ## Intentionally not published
 
@@ -54,17 +55,38 @@ Do not copy the full protocol documentation into `yuzu-web`.
 The intended publication flow is:
 
 ```text
-docs/external  →  docs/sync-public-docs.sh  →  public-docs  →  docs hosting
+docs/external  →  docs/sync-public-docs.sh  →  public-docs
+                                                    │
+                                              GitBook Git Sync
+                                                    │
+                                            docs.acta.markets
                                                     ↑
-                                      yuzu-web /docs links here
+                              yuzu-web service-doc + /docs redirect
 ```
 
-`docs/external` remains the authored public source, and `public-docs` remains its generated mirror. A GitBook-like renderer can be added to `public-docs` and mapped to `docs.acta.markets` without creating a second editable copy in the web app. Until that hosting decision is made, `/docs` links to the public GitHub repository.
+`docs/external` remains the authored public source, and `public-docs` remains its generated content mirror. GitBook-specific `.gitbook.yaml` and `SUMMARY.md` files live only in `public-docs` and are excluded from content synchronization. Full Markdown documentation is not copied into `yuzu-web`.
 
-### Documentation follow-ups found during this change
+The `public-docs` GitBook change:
 
-- `docs/sync-public-docs.sh --check` currently reports drift in `reference/governance.md` and `reference/protocol-flow.md`. Reconcile the authored files and regenerate `public-docs` in a separate docs change before treating the mirror as fully current.
+- reconciles the previous drift in `reference/governance.md` and `reference/protocol-flow.md`;
+- defines the complete GitBook sidebar;
+- keeps every public Markdown page addressable from the table of contents.
+
+### Documentation follow-up
+
 - The public HTTP documentation lists `/metrics`, but both deployed API hosts currently return `404` for that path. The OpenAPI document in this change intentionally omits `/metrics` until the endpoint and documentation agree.
+
+### Publication order
+
+Do not deploy the website changes before the documentation origin exists:
+
+1. merge the `docs` sync-script change;
+2. merge the `public-docs` GitBook structure and synchronized content;
+3. connect `acta-markets/public-docs` to a GitBook space using Git Sync;
+4. create and publish a GitBook Docs Site;
+5. configure the GitBook-provided CNAME for `docs.acta.markets`;
+6. verify `https://docs.acta.markets/`, `/robots.txt`, and `/sitemap-pages.xml`;
+7. deploy the website change and verify its `service-doc` and sitemap links.
 
 ## Policy decision to confirm
 

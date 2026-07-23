@@ -15,8 +15,11 @@ test.describe("agent discovery HTTP contracts", () => {
 
     expect(sitemap.status()).toBe(200);
     expect(sitemap.headers()["content-type"]).toContain("application/xml");
-    expect(await sitemap.text()).toContain(
+    expect(await sitemap.text()).not.toContain(
       "<loc>http://localhost:3000/docs</loc>",
+    );
+    expect(await robots.text()).toContain(
+      "Sitemap: https://docs.acta.markets/sitemap-pages.xml",
     );
   });
 
@@ -32,6 +35,9 @@ test.describe("agent discovery HTTP contracts", () => {
     );
     const catalog = await catalogResponse.json();
     expect(catalog.linkset[0].anchor).toBe("https://devnet-api.acta.markets");
+    expect(catalog.linkset[0]["service-doc"][0].href).toBe(
+      "https://docs.acta.markets",
+    );
 
     expect(openApiResponse.status()).toBe(200);
     expect(openApiResponse.headers()["content-type"]).toContain(
@@ -78,6 +84,13 @@ test.describe("agent discovery HTTP contracts", () => {
     expect(skillResponse.status()).toBe(200);
     expect(skillResponse.headers()["content-type"]).toContain("text/markdown");
     expect(await skillResponse.text()).toContain("# Use Acta Public API");
+  });
+
+  test("keeps /docs as a compatibility redirect", async ({ request }) => {
+    const response = await request.get("/docs", { maxRedirects: 0 });
+
+    expect(response.status()).toBe(308);
+    expect(response.headers()["location"]).toBe("https://docs.acta.markets");
   });
 
 });

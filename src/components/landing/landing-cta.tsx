@@ -52,7 +52,8 @@ export function LandingCta() {
           <LandingButton
             variant="ghost"
             size="lg"
-            href="/docs"
+            href="https://docs.acta.markets"
+            external
           >
             Read docs
           </LandingButton>

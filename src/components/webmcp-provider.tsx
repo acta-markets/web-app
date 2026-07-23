@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { getDeploymentContext } from "@/lib/agent-discovery";
+import {
+  DOCS_SITE_ORIGIN,
+  getDeploymentContext,
+} from "@/lib/agent-discovery";
 
 type ToolInput = Record<string, unknown>;
 
@@ -51,7 +54,7 @@ function createTools(href: string): WebMcpTool[] {
         solanaCluster: context.solanaCluster,
         site: context.siteOrigin,
         publicApi: context.apiOrigin,
-        docs: `${context.siteOrigin}/docs`,
+        docs: DOCS_SITE_ORIGIN,
         apiCatalog: `${context.siteOrigin}/.well-known/api-catalog`,
         openapi: `${context.siteOrigin}/openapi.json`,
         authentication: `${context.siteOrigin}/auth.md`,

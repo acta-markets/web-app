@@ -3,7 +3,7 @@ import { ActaLogo } from "@/components/acta-logo";
 import { LandingButton } from "./landing-primitives";
 
 const NAV = [
-  { label: "Docs", href: "/docs", external: false },
+  { label: "Docs", href: "https://docs.acta.markets", external: true },
   { label: "Markets", href: "/earn", external: false },
 ] as const;
 
