@@ -1,11 +1,14 @@
-import { getDeploymentContext, getRobotsText } from "@/lib/agent-discovery";
+import {
+  getRequestDeploymentContext,
+  getRobotsText,
+} from "@/lib/agent-discovery";
 import {
   getDocsRobotsText,
   isDocsRequest,
 } from "@/lib/docs-content";
 
 export function GET(request: Request) {
-  const context = getDeploymentContext(request.url);
+  const context = getRequestDeploymentContext(request);
   const body = isDocsRequest(request)
     ? getDocsRobotsText()
     : getRobotsText(context);

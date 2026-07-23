@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
+
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
@@ -8,7 +10,7 @@ export default defineConfig({
   workers: 1,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: externalBaseUrl ?? "http://localhost:3000",
     screenshot: "only-on-failure",
     trace: "on-first-retry"
   },
@@ -29,10 +31,12 @@ export default defineConfig({
       }
     }
   ],
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: true,
-    timeout: 30000
-  }
+  webServer: externalBaseUrl
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: "http://localhost:3000",
+        reuseExistingServer: true,
+        timeout: 30000,
+      },
 });

@@ -1,4 +1,8 @@
-import { getDocsCanonicalUrl, getDocsPage } from "@/lib/docs-content";
+import {
+  getDocsAgentMarkdown,
+  getDocsCanonicalUrl,
+  getDocsPage,
+} from "@/lib/docs-content";
 
 export const runtime = "nodejs";
 
@@ -19,7 +23,8 @@ export function GET(request: Request) {
   }
 
   const canonical = getDocsCanonicalUrl(page.slug);
-  return new Response(page.source, {
+  const markdown = getDocsAgentMarkdown(page);
+  return new Response(markdown, {
     status: 200,
     headers: {
       "Content-Type": "text/markdown; charset=utf-8",
@@ -27,8 +32,8 @@ export function GET(request: Request) {
       "Cache-Control": "public, max-age=300",
       "Access-Control-Allow-Origin": "*",
       Vary: "Accept",
-      Link: `<${canonical}>; rel="canonical"; type="text/html"`,
-      "x-markdown-tokens": String(Math.ceil(page.source.length / 4)),
+      Link: `<${canonical}>; rel="canonical"; type="text/html", <https://docs.acta.markets/llms.txt>; rel="describedby"; type="text/plain"`,
+      "x-markdown-tokens": String(Math.ceil(markdown.length / 4)),
     },
   });
 }

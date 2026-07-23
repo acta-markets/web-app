@@ -1,7 +1,10 @@
-import { getAuthMarkdown, getDeploymentContext } from "@/lib/agent-discovery";
+import {
+  getAuthMarkdown,
+  getRequestDeploymentContext,
+} from "@/lib/agent-discovery";
 
 export function GET(request: Request) {
-  const context = getDeploymentContext(request.url);
+  const context = getRequestDeploymentContext(request);
 
   return new Response(getAuthMarkdown(context), {
     status: 200,

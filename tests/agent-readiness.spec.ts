@@ -9,8 +9,8 @@ test.describe("agent discovery HTTP contracts", () => {
 
     expect(robots.status()).toBe(200);
     expect(robots.headers()["content-type"]).toContain("text/plain");
-    expect(await robots.text()).toContain(
-      "Sitemap: http://localhost:3000/sitemap.xml",
+    expect(await robots.text()).toMatch(
+      /Sitemap: http:\/\/(?:localhost|127\.0\.0\.1):\d+\/sitemap\.xml/,
     );
 
     expect(sitemap.status()).toBe(200);
@@ -68,6 +68,7 @@ test.describe("agent discovery HTTP contracts", () => {
     expect(htmlResponse.status()).toBe(200);
     expect(htmlResponse.headers()["content-type"]).toContain("text/html");
     expect(htmlResponse.headers()["link"]).toContain('rel="service-doc"');
+    expect(htmlResponse.headers()["vary"]).toContain("Accept");
     expect(await htmlResponse.text()).toContain("<!DOCTYPE html>");
   });
 
@@ -95,14 +96,23 @@ test.describe("agent discovery HTTP contracts", () => {
 
     expect(htmlResponse.status()).toBe(200);
     expect(htmlResponse.headers()["content-type"]).toContain("text/html");
-    expect(await htmlResponse.text()).toContain("Acta Protocol");
+    const html = await htmlResponse.text();
+    expect(html).toContain("Acta Protocol");
+    expect(html).toContain('type="text/markdown"');
 
     expect(markdownResponse.status()).toBe(200);
     expect(markdownResponse.headers()["content-type"]).toContain("text/markdown");
     expect(markdownResponse.headers()["content-location"]).toBe(
       "https://docs.acta.markets",
     );
-    expect(await markdownResponse.text()).toContain("# Acta Protocol");
+    const markdown = await markdownResponse.text();
+    expect(markdown).toContain("# Acta Protocol");
+    expect(markdown).toContain(
+      "https://docs.acta.markets/reference/protocol-flow",
+    );
+    expect(markdown).not.toMatch(
+      /\]\((?:\.\.?\/)?[^)\s]+\.md(?:[#?][^)]*)?\)/,
+    );
 
     expect(referenceResponse.status()).toBe(200);
     expect(await referenceResponse.text()).toContain("HTTP API");
@@ -110,21 +120,38 @@ test.describe("agent discovery HTTP contracts", () => {
 
   test("serves clean canonical paths on the docs host", async ({ request }) => {
     const headers = { Host: "docs.acta.markets" };
-    const [home, markdown, robots, sitemap, llms] = await Promise.all([
-      request.get("/", { headers: { ...headers, Accept: "text/html" } }),
-      request.get("/reference/http-api", {
-        headers: { ...headers, Accept: "text/markdown" },
-      }),
-      request.get("/robots.txt", { headers }),
-      request.get("/sitemap.xml", { headers }),
-      request.get("/llms.txt", { headers }),
-    ]);
+    const [home, markdown, markdownAlias, htmlAlias, robots, sitemap, llms] =
+      await Promise.all([
+        request.get("/", { headers: { ...headers, Accept: "text/html" } }),
+        request.get("/reference/http-api", {
+          headers: { ...headers, Accept: "text/markdown" },
+        }),
+        request.get("/reference/http-api.md", {
+          headers: { ...headers, Accept: "text/markdown" },
+        }),
+        request.get("/reference/http-api.md", {
+          headers: { ...headers, Accept: "text/html" },
+          maxRedirects: 0,
+        }),
+        request.get("/robots.txt", { headers }),
+        request.get("/sitemap.xml", { headers }),
+        request.get("/llms.txt", { headers }),
+      ]);
 
     expect(home.status()).toBe(200);
     expect(home.headers()["link"]).toContain('rel="service-doc"');
     expect(await home.text()).toContain("Acta Protocol");
     expect(markdown.headers()["content-type"]).toContain("text/markdown");
     expect(markdown.headers()["content-location"]).toBe(
+      "https://docs.acta.markets/reference/http-api",
+    );
+    expect(markdown.headers()["link"]).toContain('rel="describedby"');
+    expect(markdownAlias.status()).toBe(200);
+    expect(markdownAlias.headers()["content-location"]).toBe(
+      "https://docs.acta.markets/reference/http-api",
+    );
+    expect(htmlAlias.status()).toBe(308);
+    expect(htmlAlias.headers()["location"]).toBe(
       "https://docs.acta.markets/reference/http-api",
     );
     expect(await robots.text()).toContain(
@@ -138,4 +165,34 @@ test.describe("agent discovery HTTP contracts", () => {
     );
   });
 
+  test("keeps every docs sitemap page readable as HTML and Markdown", async ({
+    request,
+  }) => {
+    const headers = { Host: "docs.acta.markets" };
+    const sitemap = await request.get("/sitemap.xml", { headers });
+    const paths = [
+      ...(await sitemap
+        .text())
+        .matchAll(/<loc>https:\/\/docs\.acta\.markets([^<]*)<\/loc>/g),
+    ].map((match) => match[1] || "/");
+
+    expect(paths).toHaveLength(16);
+
+    for (const path of paths) {
+      const [html, markdown] = await Promise.all([
+        request.get(path, { headers: { ...headers, Accept: "text/html" } }),
+        request.get(path, {
+          headers: { ...headers, Accept: "text/markdown" },
+        }),
+      ]);
+
+      expect(html.status(), `HTML ${path}`).toBe(200);
+      expect(html.headers()["content-type"]).toContain("text/html");
+      expect(markdown.status(), `Markdown ${path}`).toBe(200);
+      expect(markdown.headers()["content-type"]).toContain("text/markdown");
+      expect(await markdown.text()).not.toMatch(
+        /\]\((?:\.\.?\/)?[^)\s]+\.md(?:[#?][^)]*)?\)/,
+      );
+    }
+  });
 });

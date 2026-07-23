@@ -11,7 +11,10 @@ export const metadata: Metadata = {
   title: "Acta Protocol Documentation",
   description:
     "Protocol, API, taker, and maker documentation for Acta Markets.",
-  alternates: { canonical: getDocsCanonicalUrl() },
+  alternates: {
+    canonical: getDocsCanonicalUrl(),
+    types: { "text/markdown": getDocsCanonicalUrl() },
+  },
 };
 
 export default function DocsHomePage() {

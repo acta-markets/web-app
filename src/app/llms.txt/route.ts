@@ -1,8 +1,11 @@
-import { getDeploymentContext, getLlmsText } from "@/lib/agent-discovery";
+import {
+  getLlmsText,
+  getRequestDeploymentContext,
+} from "@/lib/agent-discovery";
 import { getDocsLlmsText, isDocsRequest } from "@/lib/docs-content";
 
 export function GET(request: Request) {
-  const context = getDeploymentContext(request.url);
+  const context = getRequestDeploymentContext(request);
   const body = isDocsRequest(request)
     ? getDocsLlmsText()
     : getLlmsText(context);
