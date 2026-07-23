@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { Suspense, type ReactNode } from "react";
 import { RefCapture } from "@/components/referral/ref-capture";
+import { WebMcpProvider } from "@/components/webmcp-provider";
 import "./globals.css";
 import "@fontsource/syne/400.css";
 import "@fontsource/syne/600.css";
@@ -40,6 +41,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <RefCapture />
         </Suspense>
+        <WebMcpProvider />
         {children}
       </body>
     </html>

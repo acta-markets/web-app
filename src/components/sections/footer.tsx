@@ -2,10 +2,9 @@ import Link from "next/link";
 import { ActaLogo } from "@/components/acta-logo";
 
 const links = [
-  // { label: "Docs", href: "#" },
-  // { label: "Security", href: "#" },
-  { label: "Telegram", href: "https://t.me/+J3_R6jW-msc1MDU6" },
-  { label: "X", href: "#" },
+  { label: "Docs", href: "/docs", external: false },
+  { label: "GitHub", href: "https://github.com/acta-markets/public-docs", external: true },
+  { label: "Telegram", href: "https://t.me/+J3_R6jW-msc1MDU6", external: true },
 ];
 
 export function Footer() {
@@ -21,8 +20,8 @@ export function Footer() {
             <a
               key={link.label}
               href={link.href}
-              target="_blank"
-              rel="noreferrer noopener"
+              target={"external" in link && link.external ? "_blank" : undefined}
+              rel={"external" in link && link.external ? "noreferrer noopener" : undefined}
               className="text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-secondary transition-colors hover:text-content-primary"
             >
               {link.label}
