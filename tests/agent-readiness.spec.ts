@@ -88,11 +88,13 @@ test.describe("agent discovery HTTP contracts", () => {
   });
 
   test("serves self-hosted docs as HTML and source Markdown", async ({ request }) => {
-    const [htmlResponse, markdownResponse, referenceResponse] = await Promise.all([
-      request.get("/docs", { headers: { Accept: "text/html" } }),
-      request.get("/docs", { headers: { Accept: "text/markdown" } }),
-      request.get("/docs/reference/http-api"),
-    ]);
+    const [htmlResponse, markdownResponse, referenceResponse, takerResponse] =
+      await Promise.all([
+        request.get("/docs", { headers: { Accept: "text/html" } }),
+        request.get("/docs", { headers: { Accept: "text/markdown" } }),
+        request.get("/docs/reference/http-api"),
+        request.get("/docs/quickstart/taker-quickstart"),
+      ]);
 
     expect(htmlResponse.status()).toBe(200);
     expect(htmlResponse.headers()["content-type"]).toContain("text/html");
@@ -116,6 +118,10 @@ test.describe("agent discovery HTTP contracts", () => {
 
     expect(referenceResponse.status()).toBe(200);
     expect(await referenceResponse.text()).toContain("HTTP API");
+
+    const takerHtml = await takerResponse.text();
+    expect(takerHtml).toContain("Web client SDK");
+    expect(takerHtml).not.toContain(">web-client-ts-sdk.md<");
   });
 
   test("serves clean canonical paths on the docs host", async ({ request }) => {
@@ -190,9 +196,12 @@ test.describe("agent discovery HTTP contracts", () => {
       expect(html.headers()["content-type"]).toContain("text/html");
       expect(markdown.status(), `Markdown ${path}`).toBe(200);
       expect(markdown.headers()["content-type"]).toContain("text/markdown");
-      expect(await markdown.text()).not.toMatch(
+      const markdownText = await markdown.text();
+      expect(markdownText).not.toMatch(
         /\]\((?:\.\.?\/)?[^)\s]+\.md(?:[#?][^)]*)?\)/,
       );
+      expect(markdownText).not.toMatch(/\[[^\]]*\.md`?]\(/);
+      expect(markdownText).not.toMatch(/^---$/m);
     }
   });
 });

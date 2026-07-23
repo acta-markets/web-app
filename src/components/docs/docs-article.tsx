@@ -2,7 +2,11 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
-import type { DocsNavItem, DocsPage } from "@/lib/docs-content";
+import {
+  getDocsDisplayMarkdown,
+  type DocsNavItem,
+  type DocsPage,
+} from "@/lib/docs-content";
 
 interface DocsArticleProps {
   page: DocsPage;
@@ -68,6 +72,7 @@ export function DocsArticle({
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeSlug]}
           components={{
+            hr: () => null,
             a: ({ href = "", children, ...props }) => {
               const external = /^[a-z][a-z0-9+.-]*:/i.test(href);
               const normalizedHref = external
@@ -91,7 +96,7 @@ export function DocsArticle({
             },
           }}
         >
-          {page.source}
+          {getDocsDisplayMarkdown(page)}
         </ReactMarkdown>
       </article>
 
