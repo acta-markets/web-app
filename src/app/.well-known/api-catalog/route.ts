@@ -1,4 +1,7 @@
-import { getDeploymentContext } from "@/lib/agent-discovery";
+import {
+  DOCS_SITE_ORIGIN,
+  getDeploymentContext,
+} from "@/lib/agent-discovery";
 
 export function GET(request: Request) {
   const context = getDeploymentContext(request.url);
@@ -14,7 +17,7 @@ export function GET(request: Request) {
         ],
         "service-doc": [
           {
-            href: `${context.siteOrigin}/docs`,
+            href: DOCS_SITE_ORIGIN,
             type: "text/html",
           },
         ],

@@ -47,6 +47,9 @@ describe("agent discovery", () => {
     expect(robots).toContain("Content-Signal: ai-train=no, search=yes, ai-input=yes");
     expect(robots).toContain("Disallow: /portfolio");
     expect(robots).toContain("Sitemap: https://beta.acta.markets/sitemap.xml");
+    expect(robots).toContain(
+      "Sitemap: https://docs.acta.markets/sitemap-pages.xml",
+    );
   });
 
   it("lists only public canonical pages in the sitemap", () => {
@@ -54,7 +57,6 @@ describe("agent discovery", () => {
     expect(getSitemapUrls(context)).toEqual([
       "https://devnet.acta.markets/",
       "https://devnet.acta.markets/earn",
-      "https://devnet.acta.markets/docs",
     ]);
   });
 
@@ -79,7 +81,9 @@ describe("agent discovery", () => {
     const links = getDiscoveryLinkHeader();
     expect(links).toContain('rel="api-catalog"');
     expect(links).toContain('rel="service-desc"');
-    expect(links).toContain('rel="service-doc"');
+    expect(links).toContain(
+      '<https://docs.acta.markets>; rel="service-doc"',
+    );
     expect(links).toContain('rel="describedby"');
   });
 });

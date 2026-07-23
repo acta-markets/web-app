@@ -3,7 +3,6 @@ import {
   acceptsMarkdown,
   getDeploymentContext,
   getDiscoveryLinkHeader,
-  getDocsMarkdown,
   getEarnMarkdown,
   getHomeMarkdown,
 } from "@/lib/agent-discovery";
@@ -17,7 +16,7 @@ function isAppEnabled() {
 
 const BLOCKED_PAGE_PREFIXES = ["/earn", "/portfolio", "/market"];
 const BLOCKED_API_PREFIXES = ["/api/market", "/api/pyth", "/api/portfolio"];
-const MARKDOWN_PATHS = new Set(["/", "/docs", "/earn"]);
+const MARKDOWN_PATHS = new Set(["/", "/earn"]);
 
 function markdownForPath(req: NextRequest): string | null {
   const context = getDeploymentContext(req.url);
@@ -25,8 +24,6 @@ function markdownForPath(req: NextRequest): string | null {
   switch (req.nextUrl.pathname) {
     case "/":
       return getHomeMarkdown(context);
-    case "/docs":
-      return getDocsMarkdown(context);
     case "/earn":
       return getEarnMarkdown(context);
     default:

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ActaLogo } from "@/components/acta-logo";
 
 const links = [
-  { label: "Docs", href: "/docs", external: false },
+  { label: "Docs", href: "https://docs.acta.markets", external: true },
   { label: "GitHub", href: "https://github.com/acta-markets/public-docs", external: true },
   { label: "Telegram", href: "https://t.me/+J3_R6jW-msc1MDU6", external: true },
 ];
