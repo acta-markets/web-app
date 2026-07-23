@@ -10,7 +10,7 @@
 | HTTP API | `https://devnet-api.acta.markets` | `https://beta-api.acta.markets` |
 | Solana cluster | Devnet (`https://api.devnet.solana.com`) | Mainnet-beta (`https://api.mainnet-beta.solana.com`) |
 
-Both environments use the same message envelope and encodings. See `ws-common.md`. The getting-started walkthrough below uses **Devnet** (free test tokens); Mainnet uses real SOL/USDC and live markets — the registration flow and protocol are identical, see [Differences from production](#differences-from-production).
+Both environments use the same message envelope and encodings. See [WS common conventions](ws-common.md). The getting-started walkthrough below uses **Devnet** (free test tokens); Mainnet uses real SOL/USDC and live markets — the registration flow and protocol are identical, see [Differences from production](#differences-from-production).
 
 ## Getting started
 
@@ -116,7 +116,7 @@ Authentication uses the same Ed25519 challenge-response as production.
 |-----|-------|
 | Maker account | `["maker", maker_owner_pubkey]` |
 
-PDA derivation follows on-chain program logic. See `maker-api.md` and `maker-quickstart.md`.
+PDA derivation follows on-chain program logic. See the [Maker API reference](maker-api.md) and [Maker quickstart](../quickstart/maker-quickstart.md).
 
 ## Support
 

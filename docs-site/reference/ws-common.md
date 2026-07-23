@@ -273,7 +273,7 @@ echoes the client's `request_id` from the originating message:
 The inner `error` has the same `ServerError` shape as `Error.data`.
 
 Prefer `RequestError` handlers over `Error` handlers wherever you pass `request_id` in requests.
-Both events fire `error` in the TypeScript SDK (see `web-client-ts-sdk.md`).
+Both events fire `error` in the TypeScript SDK (see [Web client SDK](../quickstart/web-client-ts-sdk.md)).
 
 ### Parsing rule (applies to both `Error.data` and `RequestError.data.error`)
 
@@ -377,7 +377,7 @@ Use the same terms across all external docs:
 - `settled` — market finalized, assets distributed based on ITM/OTM outcome.
 - `liquidated` — an unfunded ITM position was closed by a liquidation transaction.
 
-Trade lifecycle and payoff: `protocol-flow.md`.
+Trade lifecycle and payoff: [Protocol flow](protocol-flow.md).
 
 ## Supported channels
 

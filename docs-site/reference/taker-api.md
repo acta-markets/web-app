@@ -494,7 +494,7 @@ type MarketDescriptorInfo = {
 - `(quantity - min_size) % step == 0`
 - if rule for market underlying mint is missing, server rejects RFQ (`Generic` error with `code: "missing_size_rule_for_underlying_mint"`)
 
-For cash-secured puts, the size_rule still constrains the underlying quantity on the wire, not the quote deposit amount. Frontends that collect user input in quote terms (e.g. USDC) must convert before sending `RfqRequest`. See `ws-common.md` "Quantity and collateral by position type" for conversion formulas and SDK helpers.
+For cash-secured puts, the size_rule still constrains the underlying quantity on the wire, not the quote deposit amount. Frontends that collect user input in quote terms (e.g. USDC) must convert before sending `RfqRequest`. See [WS common conventions](ws-common.md) "Quantity and collateral by position type" for conversion formulas and SDK helpers.
 
 `underlying_symbol`, `quote_symbol`, and token `symbol` are mandatory and non-null in discovery payloads.
 
@@ -926,7 +926,7 @@ Field semantics:
 ## Errors
 
 Two error message types: `Error` (connection-level) and `RequestError` (request-correlated).
-See `ws-common.md` "Error format" for the envelope.
+See [WS common conventions](ws-common.md) "Error format" for the envelope.
 
 Parsing rule for taker integrations:
 
