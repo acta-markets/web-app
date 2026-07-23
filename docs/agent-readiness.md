@@ -81,6 +81,8 @@ npm run check:docs
 
 ### Publication order
 
+Follow the detailed [GitBook rollout runbook](gitbook-rollout.md).
+
 Do not deploy the website changes before the documentation origin exists:
 
 1. connect `acta-markets/web-app` to a GitBook space using Git Sync;
