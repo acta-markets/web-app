@@ -51,6 +51,9 @@ describe("DocsShell", () => {
         .getByRole("link", { name: "Public HTTP API" })
         .getAttribute("aria-current"),
     ).toBe("page");
+    expect(
+      screen.getByRole("link", { name: "Back to Acta" }).getAttribute("href"),
+    ).toBe("/");
 
     await user.type(
       screen.getByRole("textbox", { name: "Search documentation" }),
