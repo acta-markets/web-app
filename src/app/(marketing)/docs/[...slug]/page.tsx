@@ -24,7 +24,10 @@ export function generateMetadata({ params }: DocsPageProps): Metadata {
   return {
     title: `${page.title} | Acta Docs`,
     description: page.description,
-    alternates: { canonical: getDocsCanonicalUrl(page.slug) },
+    alternates: {
+      canonical: getDocsCanonicalUrl(page.slug),
+      types: { "text/markdown": getDocsCanonicalUrl(page.slug) },
+    },
   };
 }
 

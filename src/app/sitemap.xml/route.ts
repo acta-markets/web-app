@@ -1,4 +1,7 @@
-import { getDeploymentContext, getSitemapUrls } from "@/lib/agent-discovery";
+import {
+  getRequestDeploymentContext,
+  getSitemapUrls,
+} from "@/lib/agent-discovery";
 import {
   getDocsSitemapUrls,
   isDocsRequest,
@@ -14,7 +17,7 @@ function escapeXml(value: string): string {
 }
 
 export function GET(request: Request) {
-  const context = getDeploymentContext(request.url);
+  const context = getRequestDeploymentContext(request);
   const sitemapUrls = isDocsRequest(request)
     ? getDocsSitemapUrls()
     : getSitemapUrls(context);

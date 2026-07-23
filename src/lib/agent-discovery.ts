@@ -40,6 +40,26 @@ export function getDeploymentContext(requestUrl: string): DeploymentContext {
   };
 }
 
+export function getRequestDeploymentContext(
+  request: Pick<Request, "headers" | "url">,
+): DeploymentContext {
+  const requestUrl = new URL(request.url);
+  const forwardedHost = request.headers
+    .get("x-forwarded-host")
+    ?.split(",", 1)[0]
+    ?.trim();
+  const host = forwardedHost ?? request.headers.get("host");
+  const hostname = host?.split(":", 1)[0]?.toLowerCase();
+
+  if (hostname === "beta.acta.markets" || hostname === "devnet.acta.markets") {
+    requestUrl.protocol = "https:";
+    requestUrl.hostname = hostname;
+    requestUrl.port = "";
+  }
+
+  return getDeploymentContext(requestUrl.toString());
+}
+
 export function acceptsMarkdown(acceptHeader: string | null): boolean {
   if (!acceptHeader) return false;
 

@@ -1,10 +1,10 @@
 import {
   DOCS_SITE_ORIGIN,
-  getDeploymentContext,
+  getRequestDeploymentContext,
 } from "@/lib/agent-discovery";
 
 export function GET(request: Request) {
-  const context = getDeploymentContext(request.url);
+  const context = getRequestDeploymentContext(request);
   const catalog = {
     linkset: [
       {

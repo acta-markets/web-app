@@ -5,6 +5,7 @@ import {
   getDeploymentContext,
   getDiscoveryLinkHeader,
   getHomeMarkdown,
+  getRequestDeploymentContext,
   getRobotsText,
   getSitemapUrls,
 } from "@/lib/agent-discovery";
@@ -27,6 +28,18 @@ describe("agent discovery", () => {
       apiOrigin: "https://beta-api.acta.markets",
       websocketOrigin: "wss://beta-api.acta.markets",
       solanaCluster: "mainnet-beta",
+    });
+  });
+
+  it("uses the public Host header behind a local proxy", () => {
+    const request = new Request("http://localhost:3000/openapi.json", {
+      headers: { Host: "beta.acta.markets" },
+    });
+
+    expect(getRequestDeploymentContext(request)).toMatchObject({
+      environment: "beta",
+      siteOrigin: "https://beta.acta.markets",
+      apiOrigin: "https://beta-api.acta.markets",
     });
   });
 

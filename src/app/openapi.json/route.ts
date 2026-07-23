@@ -1,8 +1,8 @@
-import { getDeploymentContext } from "@/lib/agent-discovery";
+import { getRequestDeploymentContext } from "@/lib/agent-discovery";
 import { getOpenApiDocument } from "@/lib/openapi";
 
 export function GET(request: Request) {
-  const context = getDeploymentContext(request.url);
+  const context = getRequestDeploymentContext(request);
 
   return new Response(JSON.stringify(getOpenApiDocument(context), null, 2), {
     status: 200,

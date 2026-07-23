@@ -33,7 +33,7 @@ async function exists(absolute) {
   }
 }
 
-function localMarkdownTargets(markdown) {
+function localMarkdownLinks(markdown) {
   return [...markdown.matchAll(/!?\[[^\]]*]\(([^)]+)\)/g)]
     .map((match) => match[1].trim())
     .filter(
@@ -43,27 +43,86 @@ function localMarkdownTargets(markdown) {
         !target.startsWith("/") &&
         !/^[a-z][a-z0-9+.-]*:/i.test(target),
     )
-    .map((target) => target.split("#", 1)[0].split("?", 1)[0])
-    .filter((target) => target.endsWith(".md"));
+    .map((target) => {
+      const [beforeFragment, fragment] = target.split("#", 2);
+      return {
+        target: beforeFragment.split("?", 1)[0],
+        fragment: fragment ? decodeURIComponent(fragment) : null,
+      };
+    });
+}
+
+function headingAnchors(markdown) {
+  const anchors = new Set();
+  const occurrences = new Map();
+  let fenced = false;
+
+  for (const line of markdown.split("\n")) {
+    if (/^\s*```/.test(line)) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+
+    const heading = line.match(/^#{1,6}\s+(.+?)\s*#*\s*$/)?.[1];
+    if (!heading) continue;
+
+    const base = heading
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
+      .replace(/<[^>]+>/g, "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+      .trim()
+      .replace(/\s+/g, "-");
+    const count = occurrences.get(base) ?? 0;
+    occurrences.set(base, count + 1);
+    anchors.add(count === 0 ? base : `${base}-${count}`);
+  }
+
+  return anchors;
 }
 
 const files = await markdownFiles(root);
+const anchorsByFile = new Map();
+
+for (const file of files) {
+  anchorsByFile.set(file, headingAnchors(await readFile(file, "utf8")));
+}
 
 for (const file of files) {
   const markdown = await readFile(file, "utf8");
 
-  for (const target of localMarkdownTargets(markdown)) {
-    const resolved = path.resolve(path.dirname(file), decodeURIComponent(target));
-    if (!resolved.startsWith(`${root}${path.sep}`) || !(await exists(resolved))) {
-      errors.push(`${relative(file)} links to missing ${target}`);
+  for (const link of localMarkdownLinks(markdown)) {
+    const resolved = link.target
+      ? path.resolve(path.dirname(file), decodeURIComponent(link.target))
+      : file;
+
+    if (
+      link.target.endsWith(".md") &&
+      (!resolved.startsWith(`${root}${path.sep}`) || !(await exists(resolved)))
+    ) {
+      errors.push(`${relative(file)} links to missing ${link.target}`);
+      continue;
+    }
+
+    if (
+      link.fragment &&
+      (link.target === "" || link.target.endsWith(".md")) &&
+      !anchorsByFile.get(resolved)?.has(link.fragment)
+    ) {
+      errors.push(
+        `${relative(file)} links to missing #${link.fragment} in ${relative(resolved)}`,
+      );
     }
   }
 }
 
 const summary = await readFile(summaryPath, "utf8");
-const summaryTargets = localMarkdownTargets(summary).map((target) =>
-  relative(path.resolve(root, target)),
-);
+const summaryTargets = localMarkdownLinks(summary)
+  .map((link) => link.target)
+  .filter((target) => target.endsWith(".md"))
+  .map((target) => relative(path.resolve(root, target)));
 const duplicateTargets = summaryTargets.filter(
   (target, index) => summaryTargets.indexOf(target) !== index,
 );

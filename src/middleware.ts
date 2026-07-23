@@ -2,10 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   acceptsMarkdown,
   DOCS_SITE_ORIGIN,
-  getDeploymentContext,
   getDiscoveryLinkHeader,
   getEarnMarkdown,
   getHomeMarkdown,
+  getRequestDeploymentContext,
 } from "@/lib/agent-discovery";
 
 function isAppEnabled() {
@@ -53,18 +53,21 @@ function isDocsReservedPath(pathname: string) {
 function docsSlug(pathname: string, docsHost: boolean): string | null {
   if (docsHost) {
     if (isDocsReservedPath(pathname)) return null;
-    return pathname.replace(/^\/+|\/+$/g, "");
+    return pathname.replace(/^\/+|\/+$/g, "").replace(/\.md$/i, "");
   }
 
   if (pathname === "/docs") return "";
   if (pathname.startsWith("/docs/")) {
-    return pathname.slice("/docs/".length).replace(/\/+$/g, "");
+    return pathname
+      .slice("/docs/".length)
+      .replace(/\/+$/g, "")
+      .replace(/\.md$/i, "");
   }
   return null;
 }
 
 function markdownForPath(req: NextRequest): string | null {
-  const context = getDeploymentContext(req.url);
+  const context = getRequestDeploymentContext(req);
 
   switch (req.nextUrl.pathname) {
     case "/":
@@ -93,10 +96,14 @@ function withDiscoveryHeaders(
 
   if (!docsHost && pathname === "/") {
     response.headers.set("Link", getDiscoveryLinkHeader());
-  } else if (docsHost && pathname === "/") {
+  } else if (docsHost) {
+    const slug = docsSlug(pathname, true) ?? "";
+    const canonical = slug
+      ? `${DOCS_SITE_ORIGIN}/${slug}`
+      : DOCS_SITE_ORIGIN;
     response.headers.set(
       "Link",
-      `<${DOCS_SITE_ORIGIN}>; rel="service-doc"; type="text/html", </llms.txt>; rel="describedby"; type="text/plain"`,
+      `<${canonical}>; rel="canonical"; type="text/html", <${DOCS_SITE_ORIGIN}>; rel="service-doc"; type="text/html", <${DOCS_SITE_ORIGIN}/llms.txt>; rel="describedby"; type="text/plain"`,
     );
   }
 
@@ -108,8 +115,23 @@ export function middleware(req: NextRequest) {
   const docsHost = isDocsHost(req);
 
   if (docsHost && (pathname === "/docs" || pathname.startsWith("/docs/"))) {
-    const canonicalUrl = req.nextUrl.clone();
+    const canonicalUrl = new URL(req.nextUrl.toString());
+    canonicalUrl.protocol = "https:";
+    canonicalUrl.hostname = DOCS_HOSTNAME;
+    canonicalUrl.port = "";
     canonicalUrl.pathname = pathname.slice("/docs".length) || "/";
+    return NextResponse.redirect(canonicalUrl, 308);
+  }
+
+  if (
+    pathname.toLowerCase().endsWith(".md") &&
+    !acceptsMarkdown(req.headers.get("accept")) &&
+    (docsHost || pathname.startsWith("/docs/"))
+  ) {
+    const canonicalUrl = docsHost
+      ? new URL(`${DOCS_SITE_ORIGIN}${pathname}`)
+      : req.nextUrl.clone();
+    canonicalUrl.pathname = pathname.slice(0, -3);
     return NextResponse.redirect(canonicalUrl, 308);
   }
 
