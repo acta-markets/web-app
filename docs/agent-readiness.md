@@ -55,22 +55,25 @@ Do not copy the full protocol documentation into `yuzu-web`.
 The intended publication flow is:
 
 ```text
-docs/external  →  docs/sync-public-docs.sh  →  public-docs
-                                                    │
-                                              GitBook Git Sync
-                                                    │
-                                            docs.acta.markets
-                                                    ↑
-                              yuzu-web service-doc + /docs redirect
+docs/external  →  yuzu-web/scripts/sync-docs.sh  →  yuzu-web/docs-site
+                                                           │
+                                                     GitBook Git Sync
+                                                           │
+                                                   docs.acta.markets
+                                                           ↑
+                                     service-doc + /docs redirect
 ```
 
-`docs/external` remains the authored public source, and `public-docs` remains its generated content mirror. GitBook-specific `.gitbook.yaml` and `SUMMARY.md` files live only in `public-docs` and are excluded from content synchronization. Full Markdown documentation is not copied into `yuzu-web`.
+`docs/external` remains the authored public source. This repository carries a synchronized copy under `docs-site` so the website change and GitBook publication can be reviewed in one PR. The root `.gitbook.yaml` points GitBook at that directory, while `docs-site/SUMMARY.md` defines the complete sidebar.
 
-The `public-docs` GitBook change:
+Run the following after editing the source documentation:
 
-- reconciles the previous drift in `reference/governance.md` and `reference/protocol-flow.md`;
-- defines the complete GitBook sidebar;
-- keeps every public Markdown page addressable from the table of contents.
+```bash
+npm run sync:docs
+npm run check:docs
+```
+
+`check:docs` fails on source drift, missing Markdown link targets, duplicate sidebar entries, or documentation pages omitted from the sidebar. The synchronized copy includes the latest `reference/governance.md` and `reference/protocol-flow.md`, resolving the previous public mirror drift.
 
 ### Documentation follow-up
 
@@ -80,13 +83,12 @@ The `public-docs` GitBook change:
 
 Do not deploy the website changes before the documentation origin exists:
 
-1. merge the `docs` sync-script change;
-2. merge the `public-docs` GitBook structure and synchronized content;
-3. connect `acta-markets/public-docs` to a GitBook space using Git Sync;
-4. create and publish a GitBook Docs Site;
-5. configure the GitBook-provided CNAME for `docs.acta.markets`;
-6. verify `https://docs.acta.markets/`, `/robots.txt`, and `/sitemap-pages.xml`;
-7. deploy the website change and verify its `service-doc` and sitemap links.
+1. connect `acta-markets/web-app` to a GitBook space using Git Sync;
+2. GitBook reads `.gitbook.yaml` and imports `docs-site`;
+3. create and publish a GitBook Docs Site;
+4. configure the GitBook-provided CNAME for `docs.acta.markets`;
+5. verify `https://docs.acta.markets/`, `/robots.txt`, and `/sitemap-pages.xml`;
+6. deploy the website change and verify its `service-doc` and sitemap links.
 
 ## Policy decision to confirm
 
