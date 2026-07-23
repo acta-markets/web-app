@@ -6,7 +6,6 @@ import {
   getDocsCanonicalUrl,
   getDocsNavigation,
   getDocsPage,
-  getDocsSourceUrl,
 } from "@/lib/docs-content";
 
 interface DocsPageProps {
@@ -43,7 +42,6 @@ export default function DocumentationPage({ params }: DocsPageProps) {
       page={page}
       previous={index > 0 ? items[index - 1] : undefined}
       next={index >= 0 ? items[index + 1] : undefined}
-      sourceUrl={getDocsSourceUrl(page.slug)}
     />
   );
 }

@@ -12,7 +12,6 @@ interface DocsArticleProps {
   page: DocsPage;
   previous?: DocsNavItem;
   next?: DocsNavItem;
-  sourceUrl: string;
 }
 
 function docsHref(slug: string) {
@@ -49,24 +48,9 @@ export function DocsArticle({
   page,
   previous,
   next,
-  sourceUrl,
 }: DocsArticleProps) {
   return (
     <>
-      <div className="mb-8 flex items-center justify-between gap-4 border-b border-bg-border pb-5">
-        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-accent-secondary">
-          Acta protocol documentation
-        </p>
-        <a
-          href={sourceUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="font-mono text-xs text-content-tertiary transition-colors hover:text-content-primary"
-        >
-          Edit on GitHub ↗
-        </a>
-      </div>
-
       <article className="docs-prose">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}

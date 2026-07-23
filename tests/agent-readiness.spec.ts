@@ -101,6 +101,8 @@ test.describe("agent discovery HTTP contracts", () => {
     const html = await htmlResponse.text();
     expect(html).toContain("Acta Protocol");
     expect(html).toContain('type="text/markdown"');
+    expect(html).not.toContain("Markdown source");
+    expect(html).not.toContain("Edit on GitHub");
 
     expect(markdownResponse.status()).toBe(200);
     expect(markdownResponse.headers()["content-type"]).toContain("text/markdown");
@@ -122,6 +124,8 @@ test.describe("agent discovery HTTP contracts", () => {
     const takerHtml = await takerResponse.text();
     expect(takerHtml).toContain("Web client SDK");
     expect(takerHtml).not.toContain(">web-client-ts-sdk.md<");
+    expect(takerHtml).not.toContain("Markdown source");
+    expect(takerHtml).not.toContain("Edit on GitHub");
   });
 
   test("serves clean canonical paths on the docs host", async ({ request }) => {
