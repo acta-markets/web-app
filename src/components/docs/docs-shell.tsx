@@ -16,6 +16,11 @@ interface DocsShellProps {
   searchIndex: DocsSearchItem[];
 }
 
+const DEPLOYMENT_SITE_ORIGIN =
+  process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet"
+    ? "https://beta.acta.markets"
+    : "https://devnet.acta.markets";
+
 function docsHref(slug: string) {
   return slug ? `/docs/${slug}` : "/docs";
 }
@@ -34,12 +39,19 @@ export function DocsShell({
   const activeSlug = slugFromPathname(pathname);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [siteHref, setSiteHref] = useState(DEPLOYMENT_SITE_ORIGIN);
   const normalizedQuery = query.trim().toLowerCase();
 
   useEffect(() => {
     setMobileOpen(false);
     setQuery("");
   }, [pathname]);
+
+  useEffect(() => {
+    if (window.location.hostname !== "docs.acta.markets") {
+      setSiteHref("/");
+    }
+  }, []);
 
   const results = useMemo(() => {
     if (normalizedQuery.length < 2) return [];
@@ -97,7 +109,11 @@ export function DocsShell({
     <div className="min-h-screen bg-bg-primary text-content-primary">
       <header className="fixed inset-x-0 top-0 z-40 h-16 border-b border-bg-border bg-bg-primary/95 backdrop-blur">
         <div className="mx-auto flex h-full max-w-[1440px] items-center gap-4 px-5 max-md:px-3">
-          <Link href="/docs" className="flex shrink-0 items-center gap-3" aria-label="Acta docs home">
+          <Link
+            href={siteHref}
+            className="flex shrink-0 items-center gap-3"
+            aria-label="Back to Acta"
+          >
             <ActaLogo className="h-7" />
             <span className="border-l border-bg-border pl-3 font-mono text-xs uppercase tracking-[0.12em] text-content-secondary">
               Docs
