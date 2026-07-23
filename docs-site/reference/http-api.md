@@ -1,5 +1,5 @@
 # Acta HTTP API
-> Trading is WebSocket-based. See `maker-api.md` and `taker-api.md`.
+> Trading is WebSocket-based. See the [Maker API reference](maker-api.md) and [Taker API reference](taker-api.md).
 
 ## Base URL
 
@@ -47,12 +47,6 @@ Returns readiness status.
 ### GET `/live`
 
 Returns process liveness.
-
-### GET `/metrics`
-
-Prometheus metrics endpoint.
-
----
 
 ## Markets
 
@@ -145,6 +139,6 @@ This differs from WS `GlobalStats` in `Snapshot` and `StatsUpdate`. HTTP include
 
 ## Related
 
-- WS common conventions: `ws-common.md`
-- Maker WS reference: `maker-api.md`
-- Taker WS reference: `taker-api.md`
+- [WS common conventions](ws-common.md)
+- [Maker API reference](maker-api.md)
+- [Taker API reference](taker-api.md)

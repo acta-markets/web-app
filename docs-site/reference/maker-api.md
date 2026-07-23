@@ -74,7 +74,7 @@ Protocol constraints:
 }
 ```
 
-`server_time_unix_ms` is optional and may be omitted. When present, use it for clock skew estimation (see `ws-common.md`).
+`server_time_unix_ms` is optional and may be omitted. When present, use it for clock skew estimation (see [WS common conventions](ws-common.md)).
 
 If the client's `protocol_version` is incompatible, the server sends `VersionMismatch` instead of `Welcome` and closes the connection.
 
@@ -1336,7 +1336,7 @@ If `MmSummary.positions_has_more` (or a `MakerPositions` response's `has_more`) 
 ## Errors
 
 Two error message types: `Error` (connection-level) and `RequestError` (request-correlated).
-See `ws-common.md` "Error format" for the envelope.
+See [WS common conventions](ws-common.md) "Error format" for the envelope.
 
 Parsing rule for maker integrations:
 
@@ -1515,12 +1515,12 @@ In the order-id preimage, `is_taker_buy` is always `0`. Reserved for future use.
 
 ### `gross_price` in preimage
 
-The `gross_price` at preimage offset 94 is the same value as `price` in the `Quote` message — gross premium per one underlying unit, 1e9 scale. `total_premium` in position data comes from on-chain state and is the net amount, not derivable from the wire `price` alone. The gross/net split is documented under the fee model in `ws-common.md`.
+The `gross_price` at preimage offset 94 is the same value as `price` in the `Quote` message — gross premium per one underlying unit, 1e9 scale. `total_premium` in position data comes from on-chain state and is the net amount, not derivable from the wire `price` alone. The gross/net split is documented under the fee model in [WS common conventions](ws-common.md).
 
 ---
 
 ## Related
 
-- Maker quickstart: `../quickstart/maker-quickstart.md`
-- Maker wire examples: `../quickstart/maker-wire-examples.md`
-- Shared WS conventions: `ws-common.md`
+- [Maker quickstart](../quickstart/maker-quickstart.md)
+- [Maker wire examples](../quickstart/maker-wire-examples.md)
+- [WS common conventions](ws-common.md)

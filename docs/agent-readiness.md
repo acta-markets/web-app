@@ -76,7 +76,7 @@ npm run check:docs-source
 
 ### Documentation follow-up
 
-- The public HTTP documentation lists `/metrics`, but both deployed API hosts currently return `404` for that path. The OpenAPI document in this change intentionally omits `/metrics` until the endpoint and documentation agree.
+- Resolved: `/metrics` was removed from the public HTTP documentation because both deployed API hosts return `404` for it. The OpenAPI document never listed it. Re-add both together if the endpoint ships.
 
 ### Publication order
 
