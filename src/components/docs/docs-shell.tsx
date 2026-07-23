@@ -142,15 +142,6 @@ export function DocsShell({
             )}
           </div>
 
-          <a
-            href="https://github.com/acta-markets/web-app/tree/main/docs-site"
-            target="_blank"
-            rel="noreferrer noopener"
-            className="shrink-0 font-mono text-xs text-content-secondary transition-colors hover:text-content-primary max-md:hidden"
-          >
-            Markdown source ↗
-          </a>
-
           <button
             type="button"
             onClick={() => setMobileOpen((open) => !open)}

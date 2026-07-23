@@ -9,8 +9,6 @@ export interface DeploymentContext {
 }
 
 export const DOCS_SITE_ORIGIN = "https://docs.acta.markets";
-const DOCS_SOURCE_REPOSITORY =
-  "https://github.com/acta-markets/web-app/tree/main/docs-site";
 
 function configuredEnvironment(): ActaEnvironment {
   return process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet" ? "beta" : "devnet";
@@ -105,7 +103,6 @@ Acta is a structured-yield and European-style options protocol on Solana. Takers
 - [OpenAPI description](${context.siteOrigin}/openapi.json)
 - [Authentication guide](${context.siteOrigin}/auth.md)
 - [Agent skill index](${context.siteOrigin}/.well-known/agent-skills/index.json)
-- [Markdown source](${DOCS_SOURCE_REPOSITORY})
 - [Service health](${context.apiOrigin}/health)
 
 ## Access model

@@ -4,7 +4,6 @@ import {
   getDocsCanonicalUrl,
   getDocsNavigation,
   getDocsPage,
-  getDocsSourceUrl,
 } from "@/lib/docs-content";
 
 export const metadata: Metadata = {
@@ -22,11 +21,5 @@ export default function DocsHomePage() {
   if (!page) return null;
 
   const items = getDocsNavigation().flatMap((group) => group.items);
-  return (
-    <DocsArticle
-      page={page}
-      next={items[1]}
-      sourceUrl={getDocsSourceUrl()}
-    />
-  );
+  return <DocsArticle page={page} next={items[1]} />;
 }

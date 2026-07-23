@@ -313,11 +313,6 @@ export function getDocsAgentMarkdown(page: DocsPage): string {
   );
 }
 
-export function getDocsSourceUrl(slug = ""): string {
-  const file = slug ? `${slug}.md` : "README.md";
-  return `https://github.com/acta-markets/web-app/blob/main/docs-site/${file}`;
-}
-
 export function getDocsMarkdownFiles(): string[] {
   const walk = (directory: string): string[] =>
     readdirSync(directory).flatMap((entry) => {
