@@ -130,7 +130,7 @@ test.describe("agent discovery HTTP contracts", () => {
 
   test("serves clean canonical paths on the docs host", async ({ request }) => {
     const headers = { Host: "docs.acta.markets" };
-    const [home, markdown, markdownAlias, htmlAlias, robots, sitemap, llms] =
+    const [home, markdown, markdownAlias, curlAlias, htmlAlias, robots, sitemap, llms] =
       await Promise.all([
         request.get("/", { headers: { ...headers, Accept: "text/html" } }),
         request.get("/reference/http-api", {
@@ -138,6 +138,9 @@ test.describe("agent discovery HTTP contracts", () => {
         }),
         request.get("/reference/http-api.md", {
           headers: { ...headers, Accept: "text/markdown" },
+        }),
+        request.get("/reference/http-api.md", {
+          headers: { ...headers, Accept: "*/*" },
         }),
         request.get("/reference/http-api.md", {
           headers: { ...headers, Accept: "text/html" },
@@ -160,6 +163,8 @@ test.describe("agent discovery HTTP contracts", () => {
     expect(markdownAlias.headers()["content-location"]).toBe(
       "https://docs.acta.markets/reference/http-api",
     );
+    expect(curlAlias.status()).toBe(200);
+    expect(curlAlias.headers()["content-type"]).toContain("text/markdown");
     expect(htmlAlias.status()).toBe(308);
     expect(htmlAlias.headers()["location"]).toBe(
       "https://docs.acta.markets/reference/http-api",

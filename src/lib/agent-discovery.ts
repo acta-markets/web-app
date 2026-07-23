@@ -14,6 +14,12 @@ function configuredEnvironment(): ActaEnvironment {
   return process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet" ? "beta" : "devnet";
 }
 
+export function configuredSiteOrigin(): string {
+  return configuredEnvironment() === "beta"
+    ? "https://beta.acta.markets"
+    : "https://devnet.acta.markets";
+}
+
 export function getDeploymentContext(requestUrl: string): DeploymentContext {
   const url = new URL(requestUrl);
   const hostname = url.hostname.toLowerCase();

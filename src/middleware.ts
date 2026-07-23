@@ -123,10 +123,16 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(canonicalUrl, 308);
   }
 
-  if (
+  const markdownPath =
     pathname.toLowerCase().endsWith(".md") &&
+    (docsHost || pathname.startsWith("/docs/"));
+
+  // Browsers navigating to a .md alias get the canonical HTML page; every
+  // other client (curl, agent fetchers) gets the Markdown itself.
+  if (
+    markdownPath &&
     !acceptsMarkdown(req.headers.get("accept")) &&
-    (docsHost || pathname.startsWith("/docs/"))
+    (req.headers.get("accept") ?? "").includes("text/html")
   ) {
     const canonicalUrl = docsHost
       ? new URL(`${DOCS_SITE_ORIGIN}${pathname}`)
@@ -139,7 +145,7 @@ export function middleware(req: NextRequest) {
 
   if (
     requestedDocsSlug !== null &&
-    acceptsMarkdown(req.headers.get("accept"))
+    (markdownPath || acceptsMarkdown(req.headers.get("accept")))
   ) {
     const markdownUrl = req.nextUrl.clone();
     markdownUrl.pathname = "/api/docs-markdown";
@@ -188,7 +194,6 @@ export function middleware(req: NextRequest) {
           "Content-Type": "text/markdown; charset=utf-8",
           "Cache-Control": "public, max-age=300",
           Vary: "Accept",
-          "x-markdown-tokens": String(Math.ceil(markdown.length / 4)),
         },
       });
 
@@ -204,5 +209,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/:path*"],
+  matcher: ["/((?!_next/|favicon\\.ico).*)"],
 };

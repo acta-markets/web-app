@@ -273,6 +273,50 @@ function readableMarkdownLabel(
   return label;
 }
 
+// Inline code spans match first so a `](` inside backticks never parses as a
+// link; fenced blocks are skipped line-by-line.
+const INLINE_CODE_OR_LINK = /(`+)[^`]*?\1|(?<!!)\[([^\]]+)]\(([^) \t\n]+)\)/g;
+
+function rewriteMarkdownLinks(
+  markdown: string,
+  rewrite: (label: string, href: string) => { label: string; href: string },
+): string {
+  let fenced = false;
+
+  return markdown
+    .split("\n")
+    .map((line) => {
+      if (/^\s*(?:```|~~~)/.test(line)) {
+        fenced = !fenced;
+        return line;
+      }
+      if (fenced) return line;
+
+      return line.replace(
+        INLINE_CODE_OR_LINK,
+        (match, code: string | undefined, label: string, href: string) => {
+          if (code !== undefined) return match;
+          const link = rewrite(label, href);
+          return `[${link.label}](${link.href})`;
+        },
+      );
+    })
+    .join("\n");
+}
+
+function docsLinkRewriter(page: DocsPage, canonicalize: boolean) {
+  const titles = new Map(
+    getDocsNavigation()
+      .flatMap((group) => group.items)
+      .map((item) => [item.slug, item.title]),
+  );
+
+  return (label: string, href: string) => ({
+    label: readableMarkdownLabel(page.slug, label, href, titles),
+    href: canonicalize ? canonicalizeMarkdownTarget(page.slug, href) : href,
+  });
+}
+
 function removeThematicBreaks(markdown: string): string {
   let fenced = false;
 
@@ -292,24 +336,16 @@ function removeThematicBreaks(markdown: string): string {
 }
 
 export function getDocsDisplayMarkdown(page: DocsPage): string {
-  const titles = new Map(
-    getDocsNavigation()
-      .flatMap((group) => group.items)
-      .map((item) => [item.slug, item.title]),
-  );
-
-  return removeThematicBreaks(page.source).replace(
-    /(?<!!)\[([^\]]+)]\(([^) \t\n]+)\)/g,
-    (_match, label: string, href: string) =>
-      `[${readableMarkdownLabel(page.slug, label, href, titles)}](${href})`,
+  return rewriteMarkdownLinks(
+    removeThematicBreaks(page.source),
+    docsLinkRewriter(page, false),
   );
 }
 
 export function getDocsAgentMarkdown(page: DocsPage): string {
-  return getDocsDisplayMarkdown(page).replace(
-    /(\]\()([^) \t\n]+)(\))/g,
-    (_match, opening: string, href: string, closing: string) =>
-      `${opening}${canonicalizeMarkdownTarget(page.slug, href)}${closing}`,
+  return rewriteMarkdownLinks(
+    removeThematicBreaks(page.source),
+    docsLinkRewriter(page, true),
   );
 }
 

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Menu, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ActaLogo } from "@/components/acta-logo";
+import { configuredSiteOrigin } from "@/lib/agent-discovery";
 import type {
   DocsNavGroup,
   DocsSearchItem,
@@ -16,10 +17,7 @@ interface DocsShellProps {
   searchIndex: DocsSearchItem[];
 }
 
-const DEPLOYMENT_SITE_ORIGIN =
-  process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet"
-    ? "https://beta.acta.markets"
-    : "https://devnet.acta.markets";
+const DEPLOYMENT_SITE_ORIGIN = configuredSiteOrigin();
 
 function docsHref(slug: string) {
   return slug ? `/docs/${slug}` : "/docs";
