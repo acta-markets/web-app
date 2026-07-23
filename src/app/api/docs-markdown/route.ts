@@ -33,7 +33,6 @@ export function GET(request: Request) {
       "Access-Control-Allow-Origin": "*",
       Vary: "Accept",
       Link: `<${canonical}>; rel="canonical"; type="text/html", <https://docs.acta.markets/llms.txt>; rel="describedby"; type="text/plain"`,
-      "x-markdown-tokens": String(Math.ceil(markdown.length / 4)),
     },
   });
 }

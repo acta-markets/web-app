@@ -11,7 +11,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "validate:docs": "node scripts/validate-docs.mjs",
     "sync:docs": "bash scripts/sync-docs.sh",
     "check:docs": "node scripts/validate-docs.mjs",
     "check:docs-source": "bash scripts/sync-docs.sh --check"
