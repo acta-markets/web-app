@@ -10,7 +10,10 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "validate:docs": "node scripts/validate-docs.mjs",
+    "sync:docs": "bash scripts/sync-docs.sh",
+    "check:docs": "bash scripts/sync-docs.sh --check && node scripts/validate-docs.mjs"
   },
   "dependencies": {
     "@acta-markets/ts-sdk": "^0.0.23-beta",
