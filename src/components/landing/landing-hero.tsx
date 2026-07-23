@@ -73,8 +73,7 @@ export function LandingHero() {
             <LandingButton
               variant="ghost"
               size="lg"
-              href="https://docs.acta.markets"
-              external
+              href="/docs"
             >
               Read docs
             </LandingButton>

@@ -48,7 +48,7 @@ describe("agent discovery", () => {
     expect(robots).toContain("Disallow: /portfolio");
     expect(robots).toContain("Sitemap: https://beta.acta.markets/sitemap.xml");
     expect(robots).toContain(
-      "Sitemap: https://docs.acta.markets/sitemap-pages.xml",
+      "Sitemap: https://docs.acta.markets/sitemap.xml",
     );
   });
 

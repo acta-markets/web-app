@@ -13,7 +13,8 @@
     "test:ui": "vitest --ui",
     "validate:docs": "node scripts/validate-docs.mjs",
     "sync:docs": "bash scripts/sync-docs.sh",
-    "check:docs": "bash scripts/sync-docs.sh --check && node scripts/validate-docs.mjs"
+    "check:docs": "node scripts/validate-docs.mjs",
+    "check:docs-source": "bash scripts/sync-docs.sh --check"
   },
   "dependencies": {
     "@acta-markets/ts-sdk": "^0.0.23-beta",
@@ -35,6 +36,9 @@
     "next": "^14.2.25",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "rehype-slug": "^6.0.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   acceptsMarkdown,
+  DOCS_SITE_ORIGIN,
   getDeploymentContext,
   getDiscoveryLinkHeader,
   getEarnMarkdown,
@@ -17,6 +18,50 @@ function isAppEnabled() {
 const BLOCKED_PAGE_PREFIXES = ["/earn", "/portfolio", "/market"];
 const BLOCKED_API_PREFIXES = ["/api/market", "/api/pyth", "/api/portfolio"];
 const MARKDOWN_PATHS = new Set(["/", "/earn"]);
+const DOCS_HOSTNAME = "docs.acta.markets";
+const DOCS_RESERVED_PATHS = [
+  "/_next",
+  "/.well-known",
+  "/api",
+  "/auth.md",
+  "/favicon",
+  "/fonts",
+  "/images",
+  "/llms.txt",
+  "/openapi.json",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/tokens",
+];
+
+function requestHostname(req: NextRequest) {
+  return (req.headers.get("host") ?? req.nextUrl.hostname)
+    .split(":")[0]
+    .toLowerCase();
+}
+
+function isDocsHost(req: NextRequest) {
+  return requestHostname(req) === DOCS_HOSTNAME;
+}
+
+function isDocsReservedPath(pathname: string) {
+  return DOCS_RESERVED_PATHS.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+function docsSlug(pathname: string, docsHost: boolean): string | null {
+  if (docsHost) {
+    if (isDocsReservedPath(pathname)) return null;
+    return pathname.replace(/^\/+|\/+$/g, "");
+  }
+
+  if (pathname === "/docs") return "";
+  if (pathname.startsWith("/docs/")) {
+    return pathname.slice("/docs/".length).replace(/\/+$/g, "");
+  }
+  return null;
+}
 
 function markdownForPath(req: NextRequest): string | null {
   const context = getDeploymentContext(req.url);
@@ -31,8 +76,13 @@ function markdownForPath(req: NextRequest): string | null {
   }
 }
 
-function withHomepageDiscoveryHeaders(response: NextResponse, pathname: string) {
-  if (MARKDOWN_PATHS.has(pathname)) {
+function withDiscoveryHeaders(
+  response: NextResponse,
+  pathname: string,
+  variesOnAccept: boolean,
+  docsHost = false,
+) {
+  if (variesOnAccept) {
     const vary = response.headers.get("Vary");
     if (!vary) {
       response.headers.set("Vary", "Accept");
@@ -41,8 +91,13 @@ function withHomepageDiscoveryHeaders(response: NextResponse, pathname: string) 
     }
   }
 
-  if (pathname === "/") {
+  if (!docsHost && pathname === "/") {
     response.headers.set("Link", getDiscoveryLinkHeader());
+  } else if (docsHost && pathname === "/") {
+    response.headers.set(
+      "Link",
+      `<${DOCS_SITE_ORIGIN}>; rel="service-doc"; type="text/html", </llms.txt>; rel="describedby"; type="text/plain"`,
+    );
   }
 
   return response;
@@ -50,6 +105,45 @@ function withHomepageDiscoveryHeaders(response: NextResponse, pathname: string) 
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const docsHost = isDocsHost(req);
+
+  if (docsHost && (pathname === "/docs" || pathname.startsWith("/docs/"))) {
+    const canonicalUrl = req.nextUrl.clone();
+    canonicalUrl.pathname = pathname.slice("/docs".length) || "/";
+    return NextResponse.redirect(canonicalUrl, 308);
+  }
+
+  const requestedDocsSlug = docsSlug(pathname, docsHost);
+
+  if (
+    requestedDocsSlug !== null &&
+    acceptsMarkdown(req.headers.get("accept"))
+  ) {
+    const markdownUrl = req.nextUrl.clone();
+    markdownUrl.pathname = "/api/docs-markdown";
+    markdownUrl.search = "";
+    if (requestedDocsSlug) {
+      markdownUrl.searchParams.set("slug", requestedDocsSlug);
+    }
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set("x-acta-docs-slug", requestedDocsSlug);
+    return NextResponse.rewrite(markdownUrl, {
+      request: { headers: requestHeaders },
+    });
+  }
+
+  if (docsHost && requestedDocsSlug !== null) {
+    const docsUrl = req.nextUrl.clone();
+    docsUrl.pathname = requestedDocsSlug
+      ? `/docs/${requestedDocsSlug}`
+      : "/docs";
+    return withDiscoveryHeaders(
+      NextResponse.rewrite(docsUrl),
+      pathname,
+      true,
+      true,
+    );
+  }
 
   const blocked =
     BLOCKED_PAGE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
@@ -76,11 +170,15 @@ export function middleware(req: NextRequest) {
         },
       });
 
-      return withHomepageDiscoveryHeaders(response, pathname);
+      return withDiscoveryHeaders(response, pathname, true);
     }
   }
 
-  return withHomepageDiscoveryHeaders(NextResponse.next(), pathname);
+  return withDiscoveryHeaders(
+    NextResponse.next(),
+    pathname,
+    MARKDOWN_PATHS.has(pathname) || requestedDocsSlug !== null,
+  );
 }
 
 export const config = {

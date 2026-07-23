@@ -9,10 +9,10 @@ This change targets both `devnet.acta.markets` and `beta.acta.markets` from one 
 
 ## Implemented in the application
 
-- `/robots.txt` with explicit general and AI crawler groups, private-path exclusions, Content Signals, the host sitemap, and the GitBook documentation sitemap.
+- `/robots.txt` with explicit general and AI crawler groups, private-path exclusions, Content Signals, the host sitemap, and the self-hosted documentation sitemap.
 - `/sitemap.xml` with public canonical pages only.
 - Homepage `Link` response headers for `api-catalog`, `service-desc`, `service-doc`, and `describedby`.
-- `Accept: text/markdown` negotiation for `/` and `/earn`, with `Vary: Accept`.
+- `Accept: text/markdown` negotiation for `/`, `/earn`, and every documentation page, with `Vary: Accept`.
 - `/.well-known/api-catalog` using the RFC 9727 JSON Linkset format.
 - `/openapi.json` for the public read-only HTTP API.
 - `/auth.md` documenting the actual Solana wallet challenge flow and its transaction-consent boundary.
@@ -20,7 +20,8 @@ This change targets both `devnet.acta.markets` and `beta.acta.markets` from one 
 - `/llms.txt` as a compact resource index.
 - WebMCP registration for two read-only tools: environment discovery and public market listing.
 - Direct `service-doc` discovery of `https://docs.acta.markets`.
-- `/docs` as a permanent compatibility redirect to the canonical documentation site.
+- A self-hosted `/docs` interface with sidebar navigation, full-text search, GFM rendering, canonical metadata, and previous/next navigation.
+- Host-aware routing so `docs.acta.markets/reference/...` serves the same content as `/docs/reference/...` without a second deployment.
 
 ## Intentionally not published
 
@@ -50,30 +51,28 @@ DNS changes are outside this repository and must be reviewed separately.
 
 ## Documentation source of truth
 
-Do not copy the full protocol documentation into `yuzu-web`.
-
 The intended publication flow is:
 
 ```text
 docs/external  →  yuzu-web/scripts/sync-docs.sh  →  yuzu-web/docs-site
                                                            │
-                                                     GitBook Git Sync
+                                                   Next.js renderer
                                                            │
                                                    docs.acta.markets
-                                                           ↑
-                                     service-doc + /docs redirect
+                                                     and /docs
 ```
 
-`docs/external` remains the authored public source. This repository carries a synchronized copy under `docs-site` so the website change and GitBook publication can be reviewed in one PR. The root `.gitbook.yaml` points GitBook at that directory, while `docs-site/SUMMARY.md` defines the complete sidebar.
+`docs/external` remains the authored public source. This repository carries a synchronized copy under `docs-site` so the website and documentation can be reviewed, built, and deployed in one PR. `docs-site/SUMMARY.md` defines the complete sidebar.
 
 Run the following after editing the source documentation:
 
 ```bash
 npm run sync:docs
 npm run check:docs
+npm run check:docs-source
 ```
 
-`check:docs` fails on source drift, missing Markdown link targets, duplicate sidebar entries, or documentation pages omitted from the sidebar. The synchronized copy includes the latest `reference/governance.md` and `reference/protocol-flow.md`, resolving the previous public mirror drift.
+`check:docs` works in an isolated checkout and fails on missing Markdown link targets, duplicate sidebar entries, or documentation pages omitted from the sidebar. `check:docs-source` additionally checks drift when the sibling `docs/external` source is available. The synchronized copy includes the latest `reference/governance.md` and `reference/protocol-flow.md`, resolving the previous public mirror drift.
 
 ### Documentation follow-up
 
@@ -81,16 +80,15 @@ npm run check:docs
 
 ### Publication order
 
-Follow the detailed [GitBook rollout runbook](gitbook-rollout.md).
+Follow the detailed [self-hosted docs rollout runbook](self-hosted-docs-rollout.md).
 
-Do not deploy the website changes before the documentation origin exists:
+The documentation origin is served by the existing web application:
 
-1. connect `acta-markets/web-app` to a GitBook space using Git Sync;
-2. GitBook reads `.gitbook.yaml` and imports `docs-site`;
-3. create and publish a GitBook Docs Site;
-4. configure the GitBook-provided CNAME for `docs.acta.markets`;
-5. verify `https://docs.acta.markets/`, `/robots.txt`, and `/sitemap-pages.xml`;
-6. deploy the website change and verify its `service-doc` and sitemap links.
+1. merge and deploy the web application;
+2. add `docs.acta.markets` to the same Vercel project;
+3. configure the exact DNS record Vercel provides;
+4. verify `https://docs.acta.markets/`, `/robots.txt`, `/sitemap.xml`, and `/llms.txt`;
+5. scan the devnet, beta, and docs hosts.
 
 ## Policy decision to confirm
 
