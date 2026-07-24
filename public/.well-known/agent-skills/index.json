@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "use-acta-public-api",
+      "type": "skill-md",
+      "description": "Discover and use Acta's read-only public HTTP API on devnet or beta. Use for current market discovery, maker listings, protocol statistics, service health, endpoint selection, OpenAPI inspection, or locating Acta integration documentation. Do not use this skill to initiate trades, authenticate wallets, request signatures, or submit transactions.",
+      "url": "/.well-known/agent-skills/use-acta-public-api/SKILL.md",
+      "digest": "sha256:e00ebd63fadcefa4490e027b5f384ed3db110d5793c783c1c7f2038279ffdd06"
+    }
+  ]
+}
