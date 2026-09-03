@@ -1,5 +1,5 @@
 import {
-  CAP_NOTE,
+  aprLegs,
   LANDING_VAULTS,
   totalApr,
   type LandingVault,
@@ -62,7 +62,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
 
   return (
     <div
-      className={`flex flex-col justify-between gap-8 p-7 max-md:p-5 ${
+      className={`flex h-full flex-col justify-between gap-8 p-7 max-md:p-5 ${
         vault.status === "soon" ? "opacity-[0.55]" : ""
       }`}
     >
@@ -105,30 +105,36 @@ function VaultCard({ vault }: { vault: LandingVault }) {
                 className="mt-2.5 font-mono text-[13px] text-content-secondary"
                 style={{ letterSpacing: "-0.02em" }}
               >
-                staking + premium
+                {aprLegs(vault)}
               </div>
 
               <div className="mt-6 flex flex-col gap-4">
-                <LandingBar
-                  value={vault.apr.staking}
-                  max={total}
-                  color="#2AA286"
-                  caption={`Staking ~${vault.apr.staking}%`}
-                />
-                <LandingBar
-                  value={vault.apr.premium}
-                  max={total}
-                  color="#80C9B6"
-                  caption={`Desk premium ~${vault.apr.premium}%`}
-                />
+                {vault.apr.staking > 0 && (
+                  <LandingBar
+                    value={vault.apr.staking}
+                    max={total}
+                    color="#2AA286"
+                    caption={`Staking ~${vault.apr.staking}%`}
+                  />
+                )}
+                {vault.apr.premium > 0 && (
+                  <LandingBar
+                    value={vault.apr.premium}
+                    max={total}
+                    color="#80C9B6"
+                    caption={`Desk premium ~${vault.apr.premium}%`}
+                  />
+                )}
               </div>
 
-              <div
-                className="mt-5 font-mono text-[12px] text-content-tertiary"
-                style={{ letterSpacing: "-0.02em" }}
-              >
-                {CAP_NOTE}
-              </div>
+              {vault.riskNote && (
+                <div
+                  className="mt-5 font-mono text-[12px] text-content-tertiary"
+                  style={{ letterSpacing: "-0.02em" }}
+                >
+                  {vault.riskNote}
+                </div>
+              )}
               {vault.note && (
                 <div
                   className="mt-2 font-mono text-[12px] text-content-secondary"
@@ -171,7 +177,7 @@ export function LandingVaults() {
       id="vaults"
       className="scroll-mt-[88px] py-[120px] max-md:scroll-mt-[76px] max-md:py-20"
     >
-      <div className="mx-auto w-full max-w-[1200px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
+      <div className="mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
         <SectionMarker label="// Vaults" />
         <h2
           className="mb-12 font-space font-semibold text-content-primary"
@@ -184,27 +190,18 @@ export function LandingVaults() {
           Pick a vault.
         </h2>
 
-        <div className="grid grid-cols-1 border-t border-bg-border md:grid-cols-2 lg:grid-cols-3">
-          {LANDING_VAULTS.map((vault, i) => {
-            // vertical grid lines: 2 columns at md, 3 at lg
-            const mdLeft = i % 2 !== 0;
-            const lgLeft = i % 3 !== 0;
-            return (
-              <div
-                key={vault.id}
-                className={[
-                  "border-b border-bg-border",
-                  mdLeft ? "md:border-l" : "",
-                  lgLeft && !mdLeft ? "lg:border-l" : "",
-                  mdLeft && !lgLeft ? "lg:border-l-0" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                <VaultCard vault={vault} />
-              </div>
-            );
-          })}
+        {/* auto-rows-fr keeps every card the same height across both rows */}
+        <div className="grid auto-rows-fr grid-cols-1 border-t border-bg-border md:grid-cols-2">
+          {LANDING_VAULTS.map((vault, i) => (
+            <div
+              key={vault.id}
+              className={`border-b border-bg-border ${
+                i % 2 !== 0 ? "md:border-l" : ""
+              }`}
+            >
+              <VaultCard vault={vault} />
+            </div>
+          ))}
         </div>
       </div>
     </section>

@@ -1,9 +1,9 @@
-import { CAP_NOTE, LIVE_VAULT, totalApr } from "@/lib/landing-vaults";
+import { CAP_NOTE, SOL_VAULT, totalApr } from "@/lib/landing-vaults";
 import { LandingBar, SectionMarker } from "./landing-primitives";
 
 export function LandingYieldSource() {
-  const staking = LIVE_VAULT?.apr?.staking ?? 0;
-  const total = (LIVE_VAULT && totalApr(LIVE_VAULT)) || 0;
+  const staking = SOL_VAULT?.apr?.staking ?? 0;
+  const total = (SOL_VAULT && totalApr(SOL_VAULT)) || 0;
 
   return (
     <section className="py-[120px] max-md:py-20">
