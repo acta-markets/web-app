@@ -68,8 +68,7 @@ export function LandingHero() {
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
             Acta runs curated yield vaults for SOL and tokenized stocks on its own options
-            venue. Deposit what you already hold, keep your exposure, get paid weekly in
-            USDC by trading desks. No leverage, no liquidations.
+            venue. Trading desks pay you weekly in USDC. No leverage, no liquidations.
           </p>
           <div className="inline-flex flex-wrap gap-3">
             <LandingButton variant="primary" size="lg" href="/#vaults">
