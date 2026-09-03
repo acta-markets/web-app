@@ -17,7 +17,7 @@ export function LandingYieldSource() {
             letterSpacing: "-0.03em",
           }}
         >
-          Two bars.
+          Two bars
         </h2>
 
         <div className="flex flex-col gap-6">
@@ -55,8 +55,8 @@ export function LandingYieldSource() {
           className="mt-4 max-w-[620px] font-mono leading-[1.55] text-content-secondary"
           style={{ fontSize: 16, letterSpacing: "-0.02em" }}
         >
-          The same covered-call strategy TradFi runs on the S&amp;P — we run it on-chain,
-          on assets with more vol.
+          The same strategy TradFi runs on the S&amp;P. We run it on-chain, on assets
+          with more vol.
         </p>
       </div>
     </section>

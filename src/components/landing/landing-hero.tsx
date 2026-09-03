@@ -61,14 +61,15 @@ export function LandingHero() {
             Hold and
             <br />
             get paid{" "}
-            <span className="italic text-accent-secondary">more.</span>
+            <span className="italic text-accent-secondary">more</span>
           </h1>
           <p
             className="mb-9 mt-12 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
-            Acta runs curated yield vaults for SOL and tokenized stocks on its own options
-            venue. Trading desks pay you weekly in USDC. No leverage, no liquidations.
+            Acta runs curated yield vaults for the assets you already hold, on its own
+            options venue. Trading desks pay you weekly in USDC. No leverage, no
+            liquidations.
           </p>
           <div className="inline-flex flex-wrap gap-3">
             <LandingButton variant="primary" size="lg" href="/#vaults">

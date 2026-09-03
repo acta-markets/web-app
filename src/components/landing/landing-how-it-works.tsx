@@ -7,6 +7,7 @@ type Step = {
   bg: string;
   accent: string;
   offset: [number, number];
+  joke?: boolean;
 };
 
 const STEPS: Step[] = [
@@ -27,12 +28,14 @@ const STEPS: Step[] = [
     offset: [30, 20],
   },
   {
+    // the punchline: there is no step three
     n: "03",
-    title: "Withdraw",
-    copy: "Exit at the end of any cycle. Staking rewards and premium stack the whole time you are in.",
+    title: "Oh wait",
+    copy: "Sorry, it's actually two steps. Deposit, get paid, withdraw at the end of any cycle. There is no step three.",
     bg: "#2A1A00",
     accent: "#FF8A3C",
     offset: [60, 40],
+    joke: true,
   },
 ];
 
@@ -49,7 +52,7 @@ export function LandingHowItWorks() {
             letterSpacing: "-0.03em",
           }}
         >
-          Three steps.
+          Three steps
         </h2>
         <div className="grid grid-cols-1 gap-0">
           {STEPS.map((step, i) => (
@@ -82,6 +85,7 @@ export function LandingHowItWorks() {
                     letterSpacing: "-0.05em",
                     lineHeight: 1,
                     mixBlendMode: "screen",
+                    opacity: step.joke ? 0.4 : 1,
                   }}
                 >
                   {step.n}
@@ -96,7 +100,11 @@ export function LandingHowItWorks() {
                     letterSpacing: "-0.03em",
                   }}
                 >
-                  {step.title}.
+                  {step.joke ? (
+                    <span className="italic text-content-secondary">{step.title}</span>
+                  ) : (
+                    <>{step.title}</>
+                  )}
                 </div>
                 <div
                   className="max-w-[620px] font-mono text-content-secondary"

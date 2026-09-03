@@ -42,7 +42,7 @@ export function LandingCta() {
           Put your assets
           <br />
           <span className="italic" style={{ color: "#B0E8D6" }}>
-            to work.
+            to work
           </span>
         </div>
         <div className="flex flex-wrap justify-start gap-3">

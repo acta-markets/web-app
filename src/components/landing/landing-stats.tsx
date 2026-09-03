@@ -1,5 +1,5 @@
 const STATS: Array<{ label: string; value: string; sub: string }> = [
-  { label: "APR range", value: "8% – 41%", sub: "across 12 markets" },
+  { label: "APR range", value: "8% to 41%", sub: "across 12 markets" },
   { label: "Premium paid", value: "$1.2M", sub: "last 30 days" },
   { label: "Total volume", value: "$48.3M", sub: "all-time, on-chain" },
 ];

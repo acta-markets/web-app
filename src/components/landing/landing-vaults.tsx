@@ -187,7 +187,7 @@ export function LandingVaults() {
             letterSpacing: "-0.03em",
           }}
         >
-          Pick a vault.
+          Pick a vault
         </h2>
 
         {/* auto-rows-fr keeps every card the same height across both rows */}
