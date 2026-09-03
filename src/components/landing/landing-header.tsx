@@ -3,8 +3,9 @@ import { ActaLogo } from "@/components/acta-logo";
 import { LandingButton } from "./landing-primitives";
 
 const NAV = [
-  { label: "Docs", href: "/docs", external: false },
-  { label: "Markets", href: "/earn", external: false },
+  { label: "Vaults", href: "/#vaults", external: false },
+  { label: "Docs", href: "https://docs.acta.markets", external: true },
+  { label: "Pro", href: "/earn", external: false },
 ] as const;
 
 export function LandingHeader() {
@@ -38,6 +39,7 @@ export function LandingHeader() {
             ),
           )}
         </nav>
+        {/* TODO(tim): retarget to /vaults once the vault route exists */}
         <LandingButton variant="primary" size="sm" href="/earn">
           Launch app ↗
         </LandingButton>

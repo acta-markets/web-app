@@ -47,7 +47,7 @@ export function LandingHero() {
               className="inline-block h-1.5 w-1.5 rounded-full"
               style={{ background: "#2AA286", boxShadow: "0 0 10px #2AA286" }}
             />
-            Live in beta
+            Live on Solana mainnet
           </div>
           <h1
             className="m-0 font-space font-semibold text-content-primary"
@@ -57,23 +57,33 @@ export function LandingHero() {
               letterSpacing: "-0.04em",
             }}
           >
-            Earn
+            Extra yield
             <br />
-            <span className="italic text-accent-secondary">yield</span>
+            {/* line 2 is much longer than line 1, so it steps down to hold two lines on desktop */}
+            <span
+              className="italic text-accent-secondary"
+              style={{ fontSize: "clamp(32px, 5vw, 60px)", lineHeight: 1.1 }}
+            >
+              on what you already hold.
+            </span>
           </h1>
           <p
-            className="mb-9 mt-12 max-w-[520px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
+            className="mb-9 mt-12 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
-            Get paid upfront to sell higher or commit to buy lower. <br /> Keep the yield either way.          </p>
+            Acta is curated yield vaults for SOL and tokenized stocks. Deposit, keep your
+            exposure, get paid weekly in cash by trading desks. No leverage, no
+            liquidations.
+          </p>
           <div className="inline-flex flex-wrap gap-3">
-            <LandingButton variant="primary" size="lg" href="/earn">
-              Launch app ↗
+            <LandingButton variant="primary" size="lg" href="/#vaults">
+              Explore vaults
             </LandingButton>
             <LandingButton
               variant="ghost"
               size="lg"
-              href="/docs"
+              href="https://docs.acta.markets"
+              external
             >
               Read docs
             </LandingButton>

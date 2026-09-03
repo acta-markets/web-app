@@ -46,13 +46,14 @@ export function LandingCta() {
           </span>
         </div>
         <div className="flex flex-wrap justify-start gap-3">
-          <LandingButton variant="primary" size="lg" href="/earn">
-            Launch app ↗
+          <LandingButton variant="primary" size="lg" href="/#vaults">
+            Explore vaults
           </LandingButton>
           <LandingButton
             variant="ghost"
             size="lg"
-            href="/docs"
+            href="https://docs.acta.markets"
+            external
           >
             Read docs
           </LandingButton>
