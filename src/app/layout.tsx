@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     template: "%s | Acta"
   },
   description:
-    "Curated yield vaults for SOL and tokenized stocks. Weekly cash income from trading desks, no leverage, no liquidations."
+    "Curated yield vaults for the assets you already hold. Weekly cash income from trading desks, no leverage, no liquidations."
 };
 
 export default function RootLayout({

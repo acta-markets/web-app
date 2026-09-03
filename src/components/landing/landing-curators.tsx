@@ -23,7 +23,7 @@ export function LandingCurators() {
             letterSpacing: "-0.03em",
           }}
         >
-          Launch a vault.
+          Launch a vault
         </h2>
 
         <p

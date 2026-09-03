@@ -36,6 +36,18 @@ Adding one means updating this table.
 No em dashes (`—`) and no en dashes (`–`) anywhere in copy. Use a comma, a period, or
 "and". This includes copy inside JSX and inside `*.ts` config files.
 
+### No trailing periods on headings
+
+Display headings do not end in a period: `Pick a vault`, `Three steps`, `Two bars`,
+`Launch a vault`, `FAQ`, and the step titles `Deposit`, `Get paid`. Same for the hero
+h1 and the CTA headline. Body copy, card captions and FAQ answers punctuate normally.
+
+### Name assets generally
+
+Do not enumerate supported assets in prose. The vault grid is the list, and it changes.
+Prose says `the assets you already hold`, never `SOL and tokenized stocks`, so copy does
+not go stale when a vault is added or pulled.
+
 ### Numbers
 
 - **Never invent a figure.** No TVL, volume, premium paid, or yield that did not come

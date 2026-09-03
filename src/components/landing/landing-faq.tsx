@@ -6,7 +6,7 @@ import { ChevronDownIcon, SectionMarker } from "./landing-primitives";
 const ITEMS = [
   {
     q: "What is Acta?",
-    a: "Curated yield vaults for SOL and tokenized stocks. Deposit an asset you already hold and get paid weekly cash income on top of it by trading desks.",
+    a: "Curated yield vaults running on Acta's own options venue. Deposit an asset you already hold and get paid weekly cash income on top of it by trading desks.",
   },
   {
     q: "How is the yield generated?",
@@ -45,7 +45,7 @@ export function LandingFaq() {
             letterSpacing: "-0.03em",
           }}
         >
-          FAQ.
+          FAQ
         </h2>
         <div className="border border-bg-border">
           {ITEMS.map((item, i) => {

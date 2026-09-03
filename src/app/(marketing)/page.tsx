@@ -13,9 +13,9 @@ import { LandingCta } from "@/components/landing/landing-cta";
 
 export const metadata: Metadata = {
   // root layout applies the "%s | Acta" template, so the brand is not repeated here
-  title: "Extra yield on SOL and tokenized stocks",
+  title: "Curated yield vaults on a Solana options venue",
   description:
-    "Curated yield vaults for SOL and tokenized stocks. Deposit, keep your exposure, get paid weekly in cash by trading desks. No leverage, no liquidations.",
+    "Curated yield vaults for the assets you already hold, on Acta's own options venue. Trading desks pay you weekly in USDC. No leverage, no liquidations.",
 };
 
 export default function HomePage() {
@@ -24,7 +24,7 @@ export default function HomePage() {
       <LandingHeader />
       <main>
         <LandingHero />
-        {/* <LandingStats /> — hidden until we have real historical data */}
+        {/* <LandingStats /> hidden until we have real historical data */}
         <LandingVaults />
         <LandingHowItWorks />
         <LandingYieldSource />
