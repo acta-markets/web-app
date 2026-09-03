@@ -13,23 +13,23 @@ const STEPS: Step[] = [
   {
     n: "01",
     title: "Deposit",
-    copy: "Pick an asset and put it to work. Call side earns on upside targets, put side earns on downside.",
+    copy: "Pick a curated vault and deposit the asset you already hold. Fully collateralized, still yours.",
     bg: "#072C28",
     accent: "#2AA286",
     offset: [0, 0],
   },
   {
     n: "02",
-    title: "Pick a target",
-    copy: "Choose the price you'd sell or buy at. Further targets pay less premium but are less likely to settle at expiry. Closer targets pay more premium, but are more likely to settle.",
+    title: "Get paid",
+    copy: "Trading desks pay a cash premium upfront, every week, in USDC. One hot week in twelve, your upside caps. Every other week, pure income.",
     bg: "#2C0C23",
     accent: "#FF60BD",
     offset: [30, 20],
   },
   {
     n: "03",
-    title: "Earn premium",
-    copy: "Paid upfront, instantly. At expiry you either get your asset back or settle into the target price you chose.",
+    title: "Withdraw",
+    copy: "Exit at the end of any cycle. Staking rewards and premium stack the whole time you are in.",
     bg: "#2A1A00",
     accent: "#FF8A3C",
     offset: [60, 40],
@@ -40,7 +40,7 @@ export function LandingHowItWorks() {
   return (
     <section className="py-[120px] max-md:py-20">
       <div className="mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-        <SectionMarker label="// Mechanism" />
+        <SectionMarker label="// How it works" />
         <h2
           className="mb-12 font-space font-semibold text-content-primary"
           style={{
@@ -111,6 +111,18 @@ export function LandingHowItWorks() {
               </div>
             </div>
           ))}
+        </div>
+        <div
+          className="mt-6 font-mono text-content-secondary"
+          style={{ fontSize: 14, letterSpacing: "-0.02em" }}
+        >
+          Want to set your own targets?{" "}
+          <a
+            href="/earn"
+            className="text-accent-secondary transition-colors hover:text-content-primary"
+          >
+            Pro ↗
+          </a>
         </div>
       </div>
     </section>
