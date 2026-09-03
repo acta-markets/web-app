@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     template: "%s | Acta"
   },
   description:
-    "Earn upfront yield with up to 180% APY. Trustless on-chain options with zero liquidation risk."
+    "Curated yield vaults for SOL and tokenized stocks. Weekly cash income from trading desks, no leverage, no liquidations."
 };
 
 export default function RootLayout({

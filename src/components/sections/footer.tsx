@@ -29,6 +29,12 @@ export function Footer() {
           ))}
         </nav>
       </div>
+      <div className="border-t border-bg-border">
+        <p className="mx-auto w-full max-w-[850px] px-[71px] py-4 font-mono text-[12px] leading-[1.5] text-content-tertiary max-lg:px-6 max-md:px-3">
+          Yield is variable and not guaranteed. Upside may be capped. Nothing here is
+          financial advice.
+        </p>
+      </div>
     </footer>
   );
 }
