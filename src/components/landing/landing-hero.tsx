@@ -71,9 +71,9 @@ export function LandingHero() {
             className="mb-9 mt-12 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
-            Acta is curated yield vaults for SOL and tokenized stocks. Deposit, keep your
-            exposure, get paid weekly in cash by trading desks. No leverage, no
-            liquidations.
+            Acta runs curated yield vaults for SOL and tokenized stocks. Deposit what you
+            already hold, keep your exposure, get paid weekly in USDC by trading desks. No
+            leverage, no liquidations.
           </p>
           <div className="inline-flex flex-wrap gap-3">
             <LandingButton variant="primary" size="lg" href="/#vaults">

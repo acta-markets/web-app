@@ -7,7 +7,9 @@ export type LandingVault = {
   curator: string; // "Acta" for now
   cycle: "Weekly";
   status: VaultStatus;
-  apr?: { staking: number; premium: number }; // ONLY for status "live"
+  // Indicative on a "soon" vault, actual on a "live" one. Never invented:
+  // every figure here comes from the desk.
+  apr?: { staking: number; premium: number };
   riskNote?: string; // the one-liner describing what the vault gives up
   note?: string;
   ctaLabel: string;
@@ -51,13 +53,18 @@ export const LANDING_VAULTS: LandingVault[] = [
     ctaHref: VAULT_ACCESS_URL,
   },
   {
-    // TODO(tim): confirm the third asset
-    id: "tbd",
-    asset: "TBD",
-    ticker: "TBD",
+    id: "xtsla",
+    asset: "Tesla",
+    ticker: "xTSLA",
+    // TODO(tim): confirm the curator for the tokenized stock vault
     curator: "TBA",
     cycle: "Weekly",
     status: "soon",
+    // indicative until the vault opens; no staking leg on a tokenized stock
+    apr: { staking: 0, premium: 70 },
+    // TODO(tim): needs its own risk one-liner. The cadence in the SOL sentence
+    // ("one week in twelve") is specific to SOL, so nothing is shown here
+    // rather than a number that was not measured on this asset.
     ctaLabel: "Quoting soon",
     ctaHref: "#",
   },
