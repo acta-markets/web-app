@@ -54,7 +54,7 @@ export const LANDING_VAULTS: LandingVault[] = [
   },
   {
     id: "xtsla",
-    asset: "Tesla",
+    asset: "xTSLA",
     ticker: "xTSLA",
     // TODO(tim): confirm the curator for the tokenized stock vault
     curator: "TBA",

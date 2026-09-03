@@ -52,28 +52,24 @@ export function LandingHero() {
           <h1
             className="m-0 font-space font-semibold text-content-primary"
             style={{
-              fontSize: "clamp(64px, 12vw, 140px)",
-              lineHeight: 0.9,
+              // sized so "get paid more." holds one line in the 720px hero column
+              fontSize: "clamp(48px, 9vw, 96px)",
+              lineHeight: 0.95,
               letterSpacing: "-0.04em",
             }}
           >
-            Extra yield
+            Hold and
             <br />
-            {/* line 2 is much longer than line 1, so it steps down to hold two lines on desktop */}
-            <span
-              className="italic text-accent-secondary"
-              style={{ fontSize: "clamp(32px, 5vw, 60px)", lineHeight: 1.1 }}
-            >
-              on what you already hold.
-            </span>
+            get paid{" "}
+            <span className="italic text-accent-secondary">more.</span>
           </h1>
           <p
             className="mb-9 mt-12 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
-            Acta runs curated yield vaults for SOL and tokenized stocks. Deposit what you
-            already hold, keep your exposure, get paid weekly in USDC by trading desks. No
-            leverage, no liquidations.
+            Acta runs curated yield vaults for SOL and tokenized stocks on its own options
+            venue. Deposit what you already hold, keep your exposure, get paid weekly in
+            USDC by trading desks. No leverage, no liquidations.
           </p>
           <div className="inline-flex flex-wrap gap-3">
             <LandingButton variant="primary" size="lg" href="/#vaults">

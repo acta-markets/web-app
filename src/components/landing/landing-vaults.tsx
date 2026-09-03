@@ -69,7 +69,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
       <div>
         <div className="mb-5 flex items-center justify-between gap-3">
           <span
-            className="font-mono text-[11px] uppercase text-content-secondary"
+            className="font-mono text-[11px] text-content-secondary"
             style={{ letterSpacing: "0.12em" }}
           >
             {vault.ticker}
