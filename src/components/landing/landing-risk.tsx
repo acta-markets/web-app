@@ -13,13 +13,13 @@ const LINE = "#282828";
  */
 function PayoffDiagram() {
   // viewBox units: 0..100 across, 0..100 down. Geometry leaves room under the holding
-  // line for its label, and the target sits left of centre so the gap above it is wide
+  // line for its label, and the cap sits left of centre so the gap above it is wide
   // enough to read.
-  const targetX = 55;
+  const capX = 55;
   const premium = 14; // vertical lift of the vault line over just holding
 
   const holdY = (x: number) => 80 - x * 0.58;
-  const vaultY = (x: number) => Math.max(holdY(Math.min(x, targetX)) - premium, 8);
+  const vaultY = (x: number) => Math.max(holdY(Math.min(x, capX)) - premium, 8);
 
   return (
     <div className="relative mt-10 aspect-[16/9] w-full max-md:aspect-[1/1]">
@@ -39,20 +39,20 @@ function PayoffDiagram() {
           strokeWidth="1"
           vectorEffect="non-scaling-stroke"
         />
-        {/* target marker */}
+        {/* cap marker */}
         <line
-          x1={targetX}
+          x1={capX}
           y1="8"
-          x2={targetX}
+          x2={capX}
           y2="92"
           stroke={LINE}
           strokeWidth="1"
           strokeDasharray="3 3"
           vectorEffect="non-scaling-stroke"
         />
-        {/* the gap above the target: what you give up */}
+        {/* the gap above the cap: what you give up */}
         <path
-          d={`M ${targetX} ${vaultY(targetX)} L 100 ${holdY(100)} L 100 ${vaultY(100)} Z`}
+          d={`M ${capX} ${vaultY(capX)} L 100 ${holdY(100)} L 100 ${vaultY(100)} Z`}
           fill={MINT}
           opacity="0.10"
         />
@@ -66,9 +66,9 @@ function PayoffDiagram() {
           strokeWidth="1"
           vectorEffect="non-scaling-stroke"
         />
-        {/* in the vault: lifted by the premium, flat past the target */}
+        {/* in the vault: lifted by the premium, flat past the cap */}
         <path
-          d={`M 0 ${vaultY(0)} L ${targetX} ${vaultY(targetX)} L 100 ${vaultY(targetX)}`}
+          d={`M 0 ${vaultY(0)} L ${capX} ${vaultY(capX)} L 100 ${vaultY(capX)}`}
           fill="none"
           stroke={MINT}
           strokeWidth="2"
@@ -80,9 +80,9 @@ function PayoffDiagram() {
       <div className="pointer-events-none absolute inset-0 font-mono text-[11px] uppercase">
         <span
           className="absolute -translate-x-1/2 whitespace-nowrap text-content-secondary"
-          style={{ left: `${targetX}%`, top: "-3%", letterSpacing: "0.12em" }}
+          style={{ left: `${capX}%`, top: "-3%", letterSpacing: "0.12em" }}
         >
-          Target
+          Cap
         </span>
         {/* legend, not inline annotation: both lines are steep enough to cross any
             horizontal label placed against them. This corner stays empty at every
@@ -137,9 +137,10 @@ export function LandingRisk() {
           className="max-w-[620px] font-mono leading-[1.55] text-[#E8E8E8]"
           style={{ fontSize: 16, letterSpacing: "-0.02em" }}
         >
-          The premium is yours either way. What you trade for it is the gain above a
-          weekly target. Below the target the premium keeps you ahead of simply holding.
-          Above it, you keep the target price.
+          Most weeks nothing happens to your deposit. You hold the asset, the premium
+          lands, the cycle closes. In a week where the asset rips, your deposit is
+          swapped at the cap and bought back after. You keep the premium and everything
+          up to the cap. The run above it is what you give up.
         </p>
 
         <PayoffDiagram />
