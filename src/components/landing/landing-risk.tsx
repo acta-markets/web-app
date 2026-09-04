@@ -83,17 +83,47 @@ function CapChart() {
       </svg>
 
       <div className="pointer-events-none absolute inset-0 font-mono text-[11px] uppercase">
+        {/* the two ends of the flat: the swap, and the buy-back that follows it. Square
+            markers rather than circles because the SVG stretches and would turn a circle
+            into an ellipse, so these live in HTML instead. */}
         <span
           className="absolute -translate-x-1/2 whitespace-nowrap"
           style={{
-            left: `${x(CAP_WEEK - 1) - 3}%`,
-            top: `${y(VAULT[CAP_WEEK]) - 8}%`,
+            left: `${x(CAP_WEEK - 1) - 4}%`,
+            top: `${y(VAULT[CAP_WEEK]) - 9}%`,
             color: MINT,
             letterSpacing: "0.12em",
           }}
         >
-          Cap
+          Swapped
         </span>
+        <span
+          className="absolute whitespace-nowrap"
+          style={{
+            left: `${x(CAP_WEEK) + 2}%`,
+            top: `${y(VAULT[CAP_WEEK]) + 6}%`,
+            color: MINT,
+            letterSpacing: "0.12em",
+          }}
+        >
+          Bought back
+        </span>
+        <span
+          className="absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2"
+          style={{
+            left: `${x(CAP_WEEK - 1)}%`,
+            top: `${y(VAULT[CAP_WEEK - 1])}%`,
+            background: MINT,
+          }}
+        />
+        <span
+          className="absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2"
+          style={{
+            left: `${x(CAP_WEEK)}%`,
+            top: `${y(VAULT[CAP_WEEK])}%`,
+            background: MINT,
+          }}
+        />
         <span
           className="absolute whitespace-nowrap text-content-secondary"
           style={{ right: "1%", top: "10%", letterSpacing: "0.12em" }}
@@ -151,7 +181,7 @@ export function LandingRisk() {
           style={{ fontSize: 16, letterSpacing: "-0.02em" }}
         >
           Most weeks nothing happens to your deposit. In a week where the asset rips, it
-          is swapped at the cap and bought back after.
+          is swapped at the agreed price and bought back after.
         </p>
 
         <CapChart />
