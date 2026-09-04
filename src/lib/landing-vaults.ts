@@ -39,7 +39,7 @@ export const LANDING_VAULTS: LandingVault[] = [
   {
     id: "usdc",
     asset: "USDC",
-    type: "Stablecoin",
+    type: "Dollars",
     // TODO(tim): confirm curator and CTA for the USDC vault, copied from SOL for now
     curator: "Acta",
     cycle: "Weekly",
