@@ -31,7 +31,7 @@ const STEPS: Step[] = [
     // the punchline: there is no step three
     n: "03",
     title: "Oh wait",
-    copy: "Withdraw at the end of any cycle. There is no step three.",
+    copy: "There is no step three. You can withdraw at the end of any cycle.",
     bg: "#2A1A00",
     accent: "#FF8A3C",
     offset: [60, 40],
