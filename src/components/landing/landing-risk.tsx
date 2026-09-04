@@ -137,10 +137,8 @@ export function LandingRisk() {
           className="max-w-[620px] font-mono leading-[1.55] text-[#E8E8E8]"
           style={{ fontSize: 16, letterSpacing: "-0.02em" }}
         >
-          Most weeks nothing happens to your deposit. You hold the asset, the premium
-          lands, the cycle closes. In a week where the asset rips, your deposit is
-          swapped at the cap and bought back after. You keep the premium and everything
-          up to the cap. The run above it is what you give up.
+          Most weeks nothing happens to your deposit. In a week where the asset rips,
+          it is swapped at the cap and bought back after.
         </p>
 
         <PayoffDiagram />
