@@ -73,7 +73,7 @@ export function LandingHero() {
           </p>
           <div className="inline-flex flex-wrap gap-3">
             <LandingButton variant="primary" size="lg" href="/#vaults">
-              Explore vaults
+              Deposit
             </LandingButton>
             <LandingButton
               variant="ghost"

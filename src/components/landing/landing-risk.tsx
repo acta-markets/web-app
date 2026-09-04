@@ -151,12 +151,6 @@ function CapChart() {
             Just holding
           </span>
         </div>
-        <span
-          className="absolute whitespace-nowrap text-content-tertiary"
-          style={{ right: "1%", top: "94%", letterSpacing: "0.12em" }}
-        >
-          Twelve weeks
-        </span>
       </div>
     </div>
   );
