@@ -17,6 +17,10 @@ const ITEMS = [
     a: "Roughly one hot week in twelve, SOL runs past the target and your upside for that week is capped at the target price. You keep the premium and the staking rewards regardless. Every other week it is pure income.",
   },
   {
+    q: "What if the asset falls?",
+    a: "You hold the asset, so you carry its price. If it drops, your position drops with it. The premium cushions the fall, it does not stop it. This is the same risk you carry holding it in your own wallet.",
+  },
+  {
     q: "Where is my collateral?",
     a: "In the vault, on-chain, fully collateralized. Nobody can move it, lever it, or lend it out. Settlement happens on-chain at the end of each cycle.",
   },

@@ -26,7 +26,7 @@ the outcome.
 | `options` | naming the venue, e.g. "on its own options venue". Acta is a yield-vault product **on top of** an options venue, never the reverse. |
 | `leverage` | only in the exact phrase `No leverage, no liquidations` |
 | `put` | only in the CTA headline `Put your assets to work.` |
-| `target` | four places only: the How-it-works Pro line, the risk section's upside-cap row, and FAQ items 2 and 3 |
+| `target` | the How-it-works Pro line, the risk section body and its diagram labels, and FAQ items 2 and 3 |
 
 Anything not on the exception list is a deliberate decision, not a drive-by edit.
 Adding one means updating this table.
@@ -60,8 +60,8 @@ not go stale when a vault is added or pulled.
 - **Never hardcode a total.** A headline rate is computed from its parts. See
   `totalApr()` in `src/lib/landing-vaults.ts`. The `~18%` on the SOL card is
   `staking + premium`, never the literal `18`.
-- **The upside-cap caveat lives in the risk section**, in the "Your upside caps" row and
-  in FAQ "What is the catch?". It is deliberately off the vault card: the card is a
+- **The upside-cap caveat lives in the risk section**, in its lead and diagram, and in
+  FAQ "What is the catch?". It is deliberately off the vault card: the card is a
   summary, the caveat is one section down.
 - A vault carries its own `riskNote` in the data. Do not reuse one vault's caveat on
   another: the "one week in twelve" cadence is measured on SOL and is false for USDC and
@@ -75,10 +75,10 @@ markers and eyebrow text such as the vault card's asset type.
 
 ### Risk copy is never hidden or softened
 
-Risk lives in a visible list, never behind an accordion or a hover. Order it by how much
-money is at stake, not by how it reads. Put the unflattering part in the first sentence
-of the row. If a risk cannot be described honestly because the model is not settled,
-leave it out and record the gap in the PR. Do not ship a vague version.
+Risk is never behind an accordion or a hover, and the unflattering part leads. The
+medium is free: a list, a paragraph, or a diagram, whichever explains it fastest. If a
+risk cannot be described honestly because the model is not settled, leave it out and
+record the gap in the PR. Do not ship a vague version.
 
 ### Voice
 
