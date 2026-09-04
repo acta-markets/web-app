@@ -47,28 +47,32 @@ export function LandingHero() {
               className="inline-block h-1.5 w-1.5 rounded-full"
               style={{ background: "#2AA286", boxShadow: "0 0 10px #2AA286" }}
             />
-            Live in beta
+            Live on Solana mainnet
           </div>
           <h1
             className="m-0 font-space font-semibold text-content-primary"
             style={{
-              fontSize: "clamp(64px, 12vw, 140px)",
-              lineHeight: 0.9,
+              // sized so "get paid more" holds one line in the 720px hero column
+              fontSize: "clamp(48px, 9vw, 96px)",
+              lineHeight: 0.95,
               letterSpacing: "-0.04em",
             }}
           >
-            Earn
+            Hold and
             <br />
-            <span className="italic text-accent-secondary">yield</span>
+            get paid{" "}
+            <span className="italic text-accent-secondary">more</span>
           </h1>
           <p
-            className="mb-9 mt-12 max-w-[520px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
+            className="mb-9 mt-12 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
-            Get paid upfront to sell higher or commit to buy lower. <br /> Keep the yield either way.          </p>
+            Deposit what you already hold into curated vaults on Acta&apos;s own options
+            venue with no liquidations
+          </p>
           <div className="inline-flex flex-wrap gap-3">
-            <LandingButton variant="primary" size="lg" href="/earn">
-              Launch app ↗
+            <LandingButton variant="primary" size="lg" href="/#vaults">
+              Deposit
             </LandingButton>
             <LandingButton
               variant="ghost"

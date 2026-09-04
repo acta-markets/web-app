@@ -70,6 +70,41 @@ export function LandingButton({
   );
 }
 
+export function LandingBar({
+  value,
+  max,
+  color,
+  caption,
+  height = 8,
+}: {
+  value: number;
+  max: number;
+  color: string;
+  caption: string;
+  height?: number;
+}) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  return (
+    <div>
+      <div
+        className="mb-2 font-mono text-[12px] text-content-secondary"
+        style={{ letterSpacing: "-0.02em" }}
+      >
+        {caption}
+      </div>
+      <div
+        className="w-full"
+        style={{ height, background: "rgba(240,240,240,0.06)" }}
+      >
+        <div
+          className="h-full"
+          style={{ width: `${pct}%`, background: color, borderRadius: 0 }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function ChevronDownIcon({
   size = 16,
   stroke = "#8A8A8A",

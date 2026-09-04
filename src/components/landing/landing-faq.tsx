@@ -6,23 +6,32 @@ import { ChevronDownIcon, SectionMarker } from "./landing-primitives";
 const ITEMS = [
   {
     q: "What is Acta?",
-    a: "Acta is a structured yield and options protocol on Solana. European-style, RFQ-based, on-chain settlement.",
+    a: "Curated yield vaults running on Acta's own options venue. Deposit an asset you already hold and the vault earns USDC on top of it from trading desks.",
   },
   {
-    q: "How is yield generated?",
-    a: "You earn option premium. The counterparty pays up front for the right to buy or sell at a target price at expiry date.",
+    q: "How is the yield generated?",
+    a: "Two sources. Your SOL stays staked and keeps earning staking rewards. On top, trading desks pay a weekly cash premium for exposure to the upside past an agreed price, paid upfront in USDC every cycle.",
   },
   {
-    q: "What happens at expiry?",
-    a: "If the option expires out of the money, you keep your original collateral and the premium. If it expires in the money, the position settles at the target price you selected.",
+    q: "What is the catch?",
+    a: "Roughly one hot week in twelve, SOL runs past the agreed price and your upside for that week stops there. You keep the premium and the staking rewards regardless. Every other week it is pure income.",
   },
   {
+    q: "What if the asset falls?",
+    a: "You hold the asset, so you carry its price. If it drops, your position drops with it. The premium cushions the fall, it does not stop it. This is the same risk you carry holding it in your own wallet.",
+  },
+  {
+    q: "Where is my collateral?",
+    a: "In the vault, on-chain, fully collateralized. Nobody can move it, lever it, or lend it out. Settlement happens on-chain at the end of each cycle.",
+  },
+  {
+    q: "When can I withdraw?",
+    a: "At the end of any weekly cycle. Deposits and withdrawals are processed at cycle boundaries so every position stays fully collateralized for the whole week.",
+  },
+  {
+    // TODO(tim): confirm
     q: "Is it audited?",
-    a: "Audit reports are linked in the docs. Markets are non-custodial and settle on-chain.",
-  },
-  {
-    q: "What assets are supported?",
-    a: "We plan to expand supported collateral and markets over time. For now it is: SOL, jitoSOL, JLP, BTC for calls; USDC for puts.",
+    a: "Audit is in progress. The protocol is non-custodial and settles on-chain. Reports will be linked in the docs when complete.",
   },
 ];
 
@@ -40,7 +49,7 @@ export function LandingFaq() {
             letterSpacing: "-0.03em",
           }}
         >
-          FAQ.
+          FAQ
         </h2>
         <div className="border border-bg-border">
           {ITEMS.map((item, i) => {

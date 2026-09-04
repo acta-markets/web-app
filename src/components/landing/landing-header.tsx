@@ -38,6 +38,7 @@ export function LandingHeader() {
             ),
           )}
         </nav>
+        {/* TODO(tim): retarget to /vaults once the vault route exists */}
         <LandingButton variant="primary" size="sm" href="/earn">
           Launch app ↗
         </LandingButton>
