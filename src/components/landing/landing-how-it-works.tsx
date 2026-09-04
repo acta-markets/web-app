@@ -120,18 +120,6 @@ export function LandingHowItWorks() {
             </div>
           ))}
         </div>
-        <div
-          className="mt-6 font-mono text-content-secondary"
-          style={{ fontSize: 14, letterSpacing: "-0.02em" }}
-        >
-          Want to set your own targets?{" "}
-          <a
-            href="/earn"
-            className="text-accent-secondary transition-colors hover:text-content-primary"
-          >
-            Pro ↗
-          </a>
-        </div>
       </div>
     </section>
   );
