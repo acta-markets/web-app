@@ -12,9 +12,9 @@ const LINE = "#282828";
  * VAULT is the same line as HOLD until the swap, so the mint path is drawn over the
  * grey one and the two read as one line. They fork at the swap: holding carries on at
  * full size while the vault, now only partly exposed, moves with it but dampened. The
- * buy-back puts the collateral back on the token one for one, so from there the two
- * paths move in lockstep, separated by what the swap cost. That gap is what was given
- * up, and it does not close.
+ * buy-back returns the collateral whole, so the paths rejoin and run as one line again.
+ * What was given up is the lens between them, bounded by the swap at one end and the
+ * buy-back at the other.
  *
  * The SVG stretches to fill its box so percentage-positioned HTML labels stay aligned
  * and keep the page's mono type size, and every stroke is non-scaling so lines stay 1px
@@ -24,11 +24,12 @@ const HOLD = [
   100, 104, 101, 107, 110, 106, 113, 116, 134, 137, 133, 140, 145, 138, 143, 136, 141,
   148, 142, 149,
 ];
-// identical to HOLD until the swap, dampened while partly exposed, then move for move
-// again from the buy-back on: same shape, held down by what the swap cost
+// identical to HOLD until the swap, dampened while partly exposed, and identical again
+// from the buy-back on. The collateral comes back whole, so the paths rejoin instead of
+// running parallel: the only thing given up is the gap between those two points.
 const VAULT = [
-  100, 104, 101, 107, 110, 106, 113, 116, 122, 123, 122, 129, 134, 127, 132, 125, 130,
-  137, 131, 138,
+  100, 104, 101, 107, 110, 106, 113, 116, 122, 123, 133, 140, 145, 138, 143, 136, 141,
+  148, 142, 149,
 ];
 const SWAP_WEEK = 7; // the asset rips through here and the deposit is swapped
 const BUYBACK_WEEK = 10; // partly exposed until here, then back in step with HOLD
@@ -40,14 +41,14 @@ function CapChart() {
   const path = (vals: number[]) =>
     vals.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
 
-  // wedge between the two paths, from where holding pulls ahead to the end
+  // the lens between the two paths: it opens at the swap and closes at the buy-back
   const givenUp = [
-    ...HOLD.slice(DIVERGE_WEEK).map(
+    ...HOLD.slice(DIVERGE_WEEK, BUYBACK_WEEK + 1).map(
       (v, i) => `${i === 0 ? "M" : "L"} ${x(i + DIVERGE_WEEK)} ${y(v)}`,
     ),
-    ...VAULT.slice(DIVERGE_WEEK)
+    ...VAULT.slice(DIVERGE_WEEK, BUYBACK_WEEK + 1)
       .reverse()
-      .map((v, i) => `L ${x(HOLD.length - 1 - i)} ${y(v)}`),
+      .map((v, i) => `L ${x(BUYBACK_WEEK - i)} ${y(v)}`),
     "Z",
   ].join(" ");
 
@@ -138,7 +139,7 @@ function CapChart() {
         />
         <span
           className="absolute whitespace-nowrap text-content-secondary"
-          style={{ right: "1%", top: "10%", letterSpacing: "0.12em" }}
+          style={{ left: "40%", top: "22%", letterSpacing: "0.12em" }}
         >
           Given up
         </span>
