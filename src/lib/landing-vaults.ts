@@ -20,7 +20,7 @@ export type LandingVault = {
 export const VAULT_ACCESS_URL = "https://t.me/+J3_R6jW-msc1MDU6";
 export const PARTNER_EMAIL = "connect@acta.markets";
 
-export const CAP_NOTE = "Upside caps roughly one week in twelve.";
+export const CAP_NOTE = "Your upside stops roughly one week in twelve.";
 
 export const LANDING_VAULTS: LandingVault[] = [
   {

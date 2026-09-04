@@ -6,15 +6,15 @@ import { ChevronDownIcon, SectionMarker } from "./landing-primitives";
 const ITEMS = [
   {
     q: "What is Acta?",
-    a: "Curated yield vaults running on Acta's own options venue. Deposit an asset you already hold and get paid weekly cash income on top of it by trading desks.",
+    a: "Curated yield vaults running on Acta's own options venue. Deposit an asset you already hold and the vault earns USDC on top of it from trading desks.",
   },
   {
     q: "How is the yield generated?",
-    a: "Two sources. Your SOL stays staked and keeps earning staking rewards. On top, trading desks pay a weekly cash premium for exposure to the upside past a target price, paid upfront in USDC every cycle.",
+    a: "Two sources. Your SOL stays staked and keeps earning staking rewards. On top, trading desks pay a weekly cash premium for exposure to the upside past an agreed price, paid upfront in USDC every cycle.",
   },
   {
     q: "What is the catch?",
-    a: "Roughly one hot week in twelve, SOL runs past the target and your upside for that week is capped at the target price. You keep the premium and the staking rewards regardless. Every other week it is pure income.",
+    a: "Roughly one hot week in twelve, SOL runs past the agreed price and your upside for that week stops there. You keep the premium and the staking rewards regardless. Every other week it is pure income.",
   },
   {
     q: "What if the asset falls?",

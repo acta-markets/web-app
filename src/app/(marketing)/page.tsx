@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   // root layout applies the "%s | Acta" template, so the brand is not repeated here
   title: "Curated yield vaults on a Solana options venue",
   description:
-    "Curated yield vaults for the assets you already hold, on Acta's own options venue. Trading desks pay you weekly in USDC. No leverage, no liquidations.",
+    "Curated yield vaults for the assets you already hold, on Acta's own options venue. Vaults earn USDC from trading desks. No leverage, no liquidations.",
 };
 
 export default function HomePage() {
