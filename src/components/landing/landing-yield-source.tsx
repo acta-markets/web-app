@@ -48,15 +48,17 @@ export function LandingYieldSource() {
           className="mt-10 max-w-[620px] font-mono leading-[1.55] text-[#E8E8E8]"
           style={{ fontSize: 16, letterSpacing: "-0.02em" }}
         >
-          Desks pay for exposure. You keep the asset, they pay for the upside past a
-          weekly target.
+          Trading desks pay for exposure. You keep the asset, they pay for the upside
+          past a weekly target. Nothing here is minted, farmed or subsidised. The yield
+          is someone else&apos;s money, paid upfront.
         </p>
         <p
           className="mt-4 max-w-[620px] font-mono leading-[1.55] text-content-secondary"
           style={{ fontSize: 16, letterSpacing: "-0.02em" }}
         >
-          The same strategy TradFi runs on the S&amp;P. We run it on-chain, on assets
-          with more vol.
+          Derivative income is not a crypto invention. Pension funds and asset managers
+          have run this trade on equities for decades. We run it on-chain, on assets with
+          more vol.
         </p>
       </div>
     </section>

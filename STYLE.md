@@ -68,6 +68,13 @@ Asset names and tickers are names, not labels. Never apply `uppercase` to them:
 `xTSLA` must not render as `XTSLA`. Uppercase styling is for labels only: status
 badges, section markers, eyebrow text.
 
+### Risk copy is never hidden or softened
+
+Risk lives in a visible list, never behind an accordion or a hover. Order it by how much
+money is at stake, not by how it reads. Put the unflattering part in the first sentence
+of the row. If a risk cannot be described honestly because the model is not settled,
+leave it out and record the gap in the PR. Do not ship a vague version.
+
 ### Voice
 
 Sentence case. No marketing filler. Say the thing and stop. If a sentence restates
