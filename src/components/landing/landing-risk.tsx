@@ -19,8 +19,10 @@ const LINE = "#282828";
  * through that stretch.
  */
 const HOLD = [100, 104, 101, 107, 110, 106, 113, 116, 134, 137, 133, 140, 145];
-const VAULT = [100, 105, 103, 110, 114, 111, 119, 123, 123, 127, 124, 132, 138];
-const CAP_WEEK = 8; // the week the asset rips past the cap
+const VAULT = [100, 105, 103, 110, 114, 111, 119, 123, 123, 123, 123, 131, 137];
+const SWAP_WEEK = 7; // the asset rips through here and the deposit is swapped
+const BUYBACK_WEEK = 10; // it sits in cash for a few weeks before going back in
+const DIVERGE_WEEK = 8; // where holding pulls ahead and the wedge opens
 
 function CapChart() {
   const x = (i: number) => (i / (HOLD.length - 1)) * 100;
@@ -28,12 +30,12 @@ function CapChart() {
   const path = (vals: number[]) =>
     vals.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
 
-  // wedge between the two paths from the capped week to the end
+  // wedge between the two paths, from where holding pulls ahead to the end
   const givenUp = [
-    ...HOLD.slice(CAP_WEEK).map(
-      (v, i) => `${i === 0 ? "M" : "L"} ${x(i + CAP_WEEK)} ${y(v)}`,
+    ...HOLD.slice(DIVERGE_WEEK).map(
+      (v, i) => `${i === 0 ? "M" : "L"} ${x(i + DIVERGE_WEEK)} ${y(v)}`,
     ),
-    ...VAULT.slice(CAP_WEEK)
+    ...VAULT.slice(DIVERGE_WEEK)
       .reverse()
       .map((v, i) => `L ${x(HOLD.length - 1 - i)} ${y(v)}`),
     "Z",
@@ -58,9 +60,9 @@ function CapChart() {
         />
         {/* the hot week */}
         <rect
-          x={x(CAP_WEEK - 1)}
+          x={x(SWAP_WEEK)}
           y="4"
-          width={x(CAP_WEEK) - x(CAP_WEEK - 1)}
+          width={x(SWAP_WEEK + 1) - x(SWAP_WEEK)}
           height={88}
           fill={MUTED}
           opacity="0.05"
@@ -89,8 +91,8 @@ function CapChart() {
         <span
           className="absolute -translate-x-1/2 whitespace-nowrap"
           style={{
-            left: `${x(CAP_WEEK - 1) - 4}%`,
-            top: `${y(VAULT[CAP_WEEK]) - 9}%`,
+            left: `${x(SWAP_WEEK) - 4}%`,
+            top: `${y(VAULT[SWAP_WEEK]) - 9}%`,
             color: MINT,
             letterSpacing: "0.12em",
           }}
@@ -100,8 +102,8 @@ function CapChart() {
         <span
           className="absolute whitespace-nowrap"
           style={{
-            left: `${x(CAP_WEEK) + 2}%`,
-            top: `${y(VAULT[CAP_WEEK]) + 6}%`,
+            left: `${x(BUYBACK_WEEK) - 2}%`,
+            top: `${y(VAULT[BUYBACK_WEEK]) + 7}%`,
             color: MINT,
             letterSpacing: "0.12em",
           }}
@@ -111,16 +113,16 @@ function CapChart() {
         <span
           className="absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2"
           style={{
-            left: `${x(CAP_WEEK - 1)}%`,
-            top: `${y(VAULT[CAP_WEEK - 1])}%`,
+            left: `${x(SWAP_WEEK)}%`,
+            top: `${y(VAULT[SWAP_WEEK])}%`,
             background: MINT,
           }}
         />
         <span
           className="absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2"
           style={{
-            left: `${x(CAP_WEEK)}%`,
-            top: `${y(VAULT[CAP_WEEK])}%`,
+            left: `${x(BUYBACK_WEEK)}%`,
+            top: `${y(VAULT[BUYBACK_WEEK])}%`,
             background: MINT,
           }}
         />
