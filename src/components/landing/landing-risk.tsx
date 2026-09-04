@@ -6,30 +6,44 @@ const MUTED = "#8A8A8A";
 const LINE = "#282828";
 
 /**
- * Schematic payoff, not plotted data. The SVG carries geometry only and stretches to
- * fill its box (preserveAspectRatio="none"), so percentage-positioned HTML labels stay
- * aligned to it at every width and keep the page's mono type size instead of shrinking
- * with the viewBox. Strokes use non-scaling-stroke to stay 1px through that stretch.
+ * Schematic portfolio paths over twelve weeks, not data. There are no axis numbers
+ * because none of these values were measured. The shape is the point: the vault runs
+ * ahead of holding while the premium accrues, the cap binds in the hot week, and the
+ * gap that opens after it is what was given up.
+ *
+ * The SVG stretches to fill its box so percentage-positioned HTML labels stay aligned
+ * and keep the page's mono type size, and every stroke is non-scaling so lines stay 1px
+ * through that stretch.
  */
-function PayoffDiagram() {
-  // viewBox units: 0..100 across, 0..100 down. Geometry leaves room under the holding
-  // line for its label, and the cap sits left of centre so the gap above it is wide
-  // enough to read.
-  const capX = 55;
-  const premium = 14; // vertical lift of the vault line over just holding
+const HOLD = [100, 104, 101, 107, 110, 106, 113, 116, 134, 137, 133, 140, 145];
+const VAULT = [100, 106, 104, 111, 115, 112, 120, 124, 128, 132, 129, 137, 143];
+const CAP_WEEK = 8; // the week the asset rips past the cap
 
-  const holdY = (x: number) => 80 - x * 0.58;
-  const vaultY = (x: number) => Math.max(holdY(Math.min(x, capX)) - premium, 8);
+function CapChart() {
+  const x = (i: number) => (i / (HOLD.length - 1)) * 100;
+  const y = (v: number) => 88 - (v - 96) * (78 / 54);
+  const path = (vals: number[]) =>
+    vals.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
+
+  // wedge between the two paths from the capped week to the end
+  const givenUp = [
+    ...HOLD.slice(CAP_WEEK).map(
+      (v, i) => `${i === 0 ? "M" : "L"} ${x(i + CAP_WEEK)} ${y(v)}`,
+    ),
+    ...VAULT.slice(CAP_WEEK)
+      .reverse()
+      .map((v, i) => `L ${x(HOLD.length - 1 - i)} ${y(v)}`),
+    "Z",
+  ].join(" ");
 
   return (
-    <div className="relative mt-10 aspect-[16/9] w-full max-md:aspect-[1/1]">
+    <div className="relative mt-10 aspect-[16/9] w-full max-md:aspect-[4/3]">
       <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
         className="absolute inset-0 h-full w-full"
         aria-hidden
       >
-        {/* baseline */}
         <line
           x1="0"
           y1="92"
@@ -39,36 +53,27 @@ function PayoffDiagram() {
           strokeWidth="1"
           vectorEffect="non-scaling-stroke"
         />
-        {/* cap marker */}
+        <path d={givenUp} fill={MINT} opacity="0.10" />
+        {/* the level the deposit is swapped at */}
         <line
-          x1={capX}
-          y1="8"
-          x2={capX}
-          y2="92"
-          stroke={LINE}
+          x1={x(CAP_WEEK) - 4}
+          y1={y(VAULT[CAP_WEEK])}
+          x2={x(CAP_WEEK) + 5}
+          y2={y(VAULT[CAP_WEEK])}
+          stroke={MINT}
           strokeWidth="1"
-          strokeDasharray="3 3"
+          strokeDasharray="2 2"
           vectorEffect="non-scaling-stroke"
         />
-        {/* the gap above the cap: what you give up */}
         <path
-          d={`M ${capX} ${vaultY(capX)} L 100 ${holdY(100)} L 100 ${vaultY(100)} Z`}
-          fill={MINT}
-          opacity="0.10"
-        />
-        {/* just holding */}
-        <line
-          x1="0"
-          y1={holdY(0)}
-          x2="100"
-          y2={holdY(100)}
+          d={path(HOLD)}
+          fill="none"
           stroke={MUTED}
           strokeWidth="1"
           vectorEffect="non-scaling-stroke"
         />
-        {/* in the vault: lifted by the premium, flat past the cap */}
         <path
-          d={`M 0 ${vaultY(0)} L ${capX} ${vaultY(capX)} L 100 ${vaultY(capX)}`}
+          d={path(VAULT)}
           fill="none"
           stroke={MINT}
           strokeWidth="2"
@@ -76,41 +81,47 @@ function PayoffDiagram() {
         />
       </svg>
 
-      {/* labels live in HTML so they keep mono 11px at every breakpoint */}
       <div className="pointer-events-none absolute inset-0 font-mono text-[11px] uppercase">
         <span
-          className="absolute -translate-x-1/2 whitespace-nowrap text-content-secondary"
-          style={{ left: `${capX}%`, top: "-3%", letterSpacing: "0.12em" }}
+          className="absolute whitespace-nowrap"
+          style={{
+            left: `${x(CAP_WEEK) - 4}%`,
+            top: `${y(VAULT[CAP_WEEK]) - 8}%`,
+            color: MINT,
+            letterSpacing: "0.12em",
+          }}
         >
           Cap
         </span>
-        {/* legend, not inline annotation: both lines are steep enough to cross any
-            horizontal label placed against them. This corner stays empty at every
-            aspect ratio. */}
-        <div
-          className="absolute flex flex-col gap-2"
-          style={{ left: "58%", top: "58%" }}
+        <span
+          className="absolute whitespace-nowrap text-content-secondary"
+          style={{ right: "2%", top: "12%", letterSpacing: "0.12em" }}
         >
-          <span className="flex items-center gap-2 whitespace-nowrap" style={{ color: MINT, letterSpacing: "0.12em" }}>
+          Given up
+        </span>
+        {/* legend, not inline annotation: the paths wander, so nothing sits safely
+            against them at every aspect ratio. This corner stays clear. */}
+        <div className="absolute flex flex-col gap-2" style={{ left: "2%", top: "4%" }}>
+          <span
+            className="flex items-center gap-2 whitespace-nowrap"
+            style={{ color: MINT, letterSpacing: "0.12em" }}
+          >
             <span className="inline-block h-[2px] w-4" style={{ background: MINT }} />
             In the vault
           </span>
-          <span className="flex items-center gap-2 whitespace-nowrap text-content-secondary" style={{ letterSpacing: "0.12em" }}>
+          <span
+            className="flex items-center gap-2 whitespace-nowrap text-content-secondary"
+            style={{ letterSpacing: "0.12em" }}
+          >
             <span className="inline-block h-px w-4" style={{ background: MUTED }} />
             Just holding
           </span>
         </div>
         <span
-          className="absolute whitespace-nowrap text-content-secondary"
-          style={{ right: "1%", top: "11%", letterSpacing: "0.12em" }}
-        >
-          Given up
-        </span>
-        <span
           className="absolute whitespace-nowrap text-content-tertiary"
           style={{ left: "0%", top: "96%", letterSpacing: "0.12em" }}
         >
-          Price at the end of the cycle
+          Twelve weeks
         </span>
       </div>
     </div>
@@ -137,16 +148,12 @@ export function LandingRisk() {
           className="max-w-[620px] font-mono leading-[1.55] text-[#E8E8E8]"
           style={{ fontSize: 16, letterSpacing: "-0.02em" }}
         >
-          Most weeks nothing happens to your deposit. In a week where the asset rips,
-          it is swapped at the cap and bought back after.
+          Most weeks nothing happens to your deposit. In a week where the asset rips, it
+          is swapped at the cap and bought back after.
         </p>
 
-        <PayoffDiagram />
+        <CapChart />
 
-        {/* TODO(tim): link this once a page documents the cadence. It needs the
-            measurement window and the asset it was measured on. Note that
-            docs-site/reference/caps.md is NOT it: that page is capacity limits on quote
-            submission, not upside caps. */}
         {/* accent-coloured on purpose, and deliberately NOT a link: there is no page
             documenting the cadence yet. Do not add an href here without a destination
             that actually shows the measurement, and do not "fix" the colour back to
