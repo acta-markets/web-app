@@ -63,15 +63,23 @@ function VaultCard({ vault }: { vault: LandingVault }) {
         <div className="mt-7">
           {vault.apr && total ? (
             <>
-              <div
-                className="font-space font-medium text-content-primary"
-                style={{
-                  fontSize: "clamp(40px, 6vw, 54px)",
-                  lineHeight: 0.95,
-                  letterSpacing: "-0.03em",
-                }}
-              >
-                ~{total}%
+              <div className="flex items-baseline gap-2">
+                <span
+                  className="font-space font-medium text-content-primary"
+                  style={{
+                    fontSize: "clamp(40px, 6vw, 54px)",
+                    lineHeight: 0.95,
+                    letterSpacing: "-0.03em",
+                  }}
+                >
+                  ~{total}%
+                </span>
+                <span
+                  className="font-mono text-[11px] uppercase text-content-secondary"
+                  style={{ letterSpacing: "0.12em" }}
+                >
+                  APR
+                </span>
               </div>
               <div
                 className="mt-2.5 font-mono text-[13px] text-content-secondary"
