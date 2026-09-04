@@ -9,20 +9,20 @@ const LINE = "#282828";
  * Schematic portfolio paths over twelve weeks, not data. No axis numbers, because none
  * of these values were measured.
  *
- * VAULT tracks HOLD move for move and pulls further ahead each week as the premium
- * accrues, so the widening gap before the cap is the reason to be in the vault at all.
- * In the hot week it goes flat: the deposit is swapped at the cap. After the buy-back it
- * resumes tracking, and the premium starts closing the gap again.
+ * VAULT is the same line as HOLD until the swap, so the mint path is drawn over the
+ * grey one and the two read as one line. They fork at the swap: holding carries on, the
+ * vault goes flat while the deposit sits in cash, and the wedge that opens between them
+ * is what was given up.
  *
  * The SVG stretches to fill its box so percentage-positioned HTML labels stay aligned
  * and keep the page's mono type size, and every stroke is non-scaling so lines stay 1px
  * through that stretch.
  */
 const HOLD = [100, 104, 101, 107, 110, 106, 113, 116, 134, 137, 133, 140, 145];
-const VAULT = [100, 105, 103, 110, 114, 111, 119, 123, 123, 123, 123, 131, 137];
+const VAULT = [100, 104, 101, 107, 110, 106, 113, 116, 116, 116, 116, 123, 128];
 const SWAP_WEEK = 7; // the asset rips through here and the deposit is swapped
 const BUYBACK_WEEK = 10; // it sits in cash for a few weeks before going back in
-const DIVERGE_WEEK = 8; // where holding pulls ahead and the wedge opens
+const DIVERGE_WEEK = 7; // the paths are one line until here, then they fork
 
 function CapChart() {
   const x = (i: number) => (i / (HOLD.length - 1)) * 100;
