@@ -62,7 +62,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
 
   return (
     <div
-      className={`flex h-full flex-col justify-between gap-8 p-7 max-md:p-5 ${
+      className={`flex h-full min-h-[520px] flex-col justify-between gap-8 p-7 max-md:min-h-[440px] max-md:p-5 ${
         vault.status === "soon" ? "opacity-[0.55]" : ""
       }`}
     >
@@ -127,22 +127,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
                 )}
               </div>
 
-              {vault.riskNote && (
-                <div
-                  className="mt-5 font-mono text-[12px] text-content-tertiary"
-                  style={{ letterSpacing: "-0.02em" }}
-                >
-                  {vault.riskNote}
-                </div>
-              )}
-              {vault.note && (
-                <div
-                  className="mt-2 font-mono text-[12px] text-content-secondary"
-                  style={{ letterSpacing: "-0.02em" }}
-                >
-                  {vault.note}
-                </div>
-              )}
+              {/* riskNote and note are held in the data, not shown on the card yet */}
             </>
           ) : (
             <div
