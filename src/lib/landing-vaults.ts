@@ -2,8 +2,8 @@ export type VaultStatus = "live" | "soon" | "launch";
 
 export type LandingVault = {
   id: string;
-  asset: string; // display name, e.g. "SOL"
-  ticker: string; // e.g. "SOL", "USDC"
+  asset: string; // display name and the only name, e.g. "SOL"
+  type: string; // asset class shown as the card eyebrow, e.g. "Crypto"
   curator: string; // "Acta" for now
   cycle: "Weekly";
   status: VaultStatus;
@@ -26,7 +26,7 @@ export const LANDING_VAULTS: LandingVault[] = [
   {
     id: "sol",
     asset: "SOL",
-    ticker: "SOL",
+    type: "Crypto",
     curator: "Acta",
     cycle: "Weekly",
     status: "live",
@@ -39,7 +39,7 @@ export const LANDING_VAULTS: LandingVault[] = [
   {
     id: "usdc",
     asset: "USDC",
-    ticker: "USDC",
+    type: "Stablecoin",
     // TODO(tim): confirm curator and CTA for the USDC vault, copied from SOL for now
     curator: "Acta",
     cycle: "Weekly",
@@ -55,7 +55,7 @@ export const LANDING_VAULTS: LandingVault[] = [
   {
     id: "xtsla",
     asset: "xTSLA",
-    ticker: "xTSLA",
+    type: "Stock",
     // TODO(tim): confirm the curator for the tokenized stock vault
     curator: "TBA",
     cycle: "Weekly",
@@ -71,7 +71,7 @@ export const LANDING_VAULTS: LandingVault[] = [
   {
     id: "launch",
     asset: "Your vaults",
-    ticker: "",
+    type: "Any asset",
     curator: "You",
     cycle: "Weekly",
     status: "launch",
