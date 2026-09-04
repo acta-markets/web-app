@@ -10,18 +10,19 @@ const LINE = "#282828";
  * of these values were measured.
  *
  * VAULT is the same line as HOLD until the swap, so the mint path is drawn over the
- * grey one and the two read as one line. They fork at the swap: holding carries on, the
- * vault goes flat while the deposit sits in cash, and the wedge that opens between them
- * is what was given up.
+ * grey one and the two read as one line. They fork at the swap: holding carries on at
+ * full size while the vault, now only partly exposed, moves with it but dampened. The
+ * buy-back puts them back in step, moving together with the gap the swap opened. That
+ * gap is what was given up, and it does not close.
  *
  * The SVG stretches to fill its box so percentage-positioned HTML labels stay aligned
  * and keep the page's mono type size, and every stroke is non-scaling so lines stay 1px
  * through that stretch.
  */
 const HOLD = [100, 104, 101, 107, 110, 106, 113, 116, 134, 137, 133, 140, 145];
-const VAULT = [100, 104, 101, 107, 110, 106, 113, 116, 116, 116, 116, 123, 128];
+const VAULT = [100, 104, 101, 107, 110, 106, 113, 116, 122, 123, 122, 129, 134];
 const SWAP_WEEK = 7; // the asset rips through here and the deposit is swapped
-const BUYBACK_WEEK = 10; // it sits in cash for a few weeks before going back in
+const BUYBACK_WEEK = 10; // partly exposed until here, then back in step with HOLD
 const DIVERGE_WEEK = 7; // the paths are one line until here, then they fork
 
 function CapChart() {
@@ -152,7 +153,7 @@ function CapChart() {
           className="absolute whitespace-nowrap"
           style={{ right: "1%", top: "94%", color: MINT, opacity: 0.8, letterSpacing: "0.12em" }}
         >
-          Premium paid every week
+          Premium paid
         </span>
 
         {/* legend, not inline annotation: the paths wander, so nothing sits safely
