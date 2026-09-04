@@ -26,7 +26,7 @@ the outcome.
 | `options` | naming the venue, e.g. "on its own options venue". Acta is a yield-vault product **on top of** an options venue, never the reverse. |
 | `leverage` | only in the exact phrase `No leverage, no liquidations` |
 | `put` | only in the CTA headline `Put your assets to work.` |
-| `target` | the How-it-works Pro line, the risk section body and its diagram labels, and FAQ items 2 and 3 |
+| `target` | the How-it-works Pro line only. Everywhere else the level is the **agreed price**: `cap` collides with capacity limits in docs-site/reference/caps.md, and `target` is the desk's word, not a depositor's |
 
 Anything not on the exception list is a deliberate decision, not a drive-by edit.
 Adding one means updating this table.
@@ -38,8 +38,8 @@ No em dashes (`—`) and no en dashes (`–`) anywhere in copy. Use a comma, a p
 
 ### No trailing periods on headings
 
-Display headings do not end in a period: `Pick a vault`, `Three steps`, `Someone else
-pays`, `How you lose money`, `FAQ`, and the step titles `Deposit`, `Get paid`. Same for
+Display headings do not end in a period: `Pick a vault`, `Three steps`, `Premium
+income`, `What you give up`, `FAQ`, and the step titles `Deposit`, `Get paid`. Same for
 the hero h1 and the CTA headline. Body copy, card captions and FAQ answers punctuate normally.
 
 Same idea one level down in the How-it-works steps: single-clause step copy takes no
@@ -60,12 +60,14 @@ not go stale when a vault is added or pulled.
 - **Never hardcode a total.** A headline rate is computed from its parts. See
   `totalApr()` in `src/lib/landing-vaults.ts`. The `~18%` on the SOL card is
   `staking + premium`, never the literal `18`.
-- **The upside-cap caveat lives in the risk section**, in its lead and diagram, and in
-  FAQ "What is the catch?". It is deliberately off the vault card: the card is a
-  summary, the caveat is one section down.
-- A vault carries its own `riskNote` in the data. Do not reuse one vault's caveat on
-  another: the "one week in twelve" cadence is measured on SOL and is false for USDC and
-  xTSLA. No note is better than a wrong note.
+- **The upside caveat lives in the risk section**, in its lead, its diagram and
+  `CAP_NOTE` beneath it, and in FAQ "What is the catch?". It is deliberately off the
+  vault card: the card is a summary, the caveat is one section down.
+- `riskNote` and `note` sit in the vault data and are deliberately not rendered. Do not
+  reuse one vault's caveat on another: the "one week in twelve" cadence is measured on
+  SOL and is false for USDC and xTSLA. No note is better than a wrong note.
+- **Never say a depositor is paid weekly.** The desk pays the vault weekly; a depositor's
+  return accrues. Cadence belongs only to the desk's side of the trade.
 
 ### Names render verbatim
 

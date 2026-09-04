@@ -52,7 +52,7 @@ export function LandingHero() {
           <h1
             className="m-0 font-space font-semibold text-content-primary"
             style={{
-              // sized so "get paid more." holds one line in the 720px hero column
+              // sized so "get paid more" holds one line in the 720px hero column
               fontSize: "clamp(48px, 9vw, 96px)",
               lineHeight: 0.95,
               letterSpacing: "-0.04em",
@@ -67,9 +67,8 @@ export function LandingHero() {
             className="mb-9 mt-12 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
-            Deposit what you already hold into curated vaults on Acta&apos;s own options
-            venue. Trading desks pay you weekly in USDC. No leverage, no
-            liquidations.
+            Deposit what you already hold into curated vaults that earn USDC on
+            Acta&apos;s own options venue, with no leverage and no liquidations.
           </p>
           <div className="inline-flex flex-wrap gap-3">
             <LandingButton variant="primary" size="lg" href="/#vaults">
@@ -78,8 +77,7 @@ export function LandingHero() {
             <LandingButton
               variant="ghost"
               size="lg"
-              href="https://docs.acta.markets"
-              external
+              href="/docs"
             >
               Read docs
             </LandingButton>
