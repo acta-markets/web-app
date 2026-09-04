@@ -20,8 +20,7 @@ export function LandingYieldSource() {
           className="max-w-[620px] font-mono leading-[1.55] text-[#E8E8E8]"
           style={{ fontSize: 16, letterSpacing: "-0.02em" }}
         >
-          Paid in USDC, every week, by the desks on the other side of the trade. Nothing
-          here is minted, farmed or subsidised.
+          Paid in USDC by the desks on the other side of the trade. None of the yield is minted, farmed or subsidised
         </p>
         <p
           className="mt-4 max-w-[620px] font-mono leading-[1.55] text-content-secondary"
@@ -36,7 +35,7 @@ export function LandingYieldSource() {
             Derivative income
           </a>{" "}
           is not a crypto invention. Institutions have run this trade on equities for
-          decades. We run it on-chain, on any tokenized asset.
+          decades. We run it on-chain, on any tokenized asset
         </p>
       </div>
     </section>
