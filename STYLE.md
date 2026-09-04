@@ -26,7 +26,7 @@ the outcome.
 | `options` | naming the venue, e.g. "on its own options venue". Acta is a yield-vault product **on top of** an options venue, never the reverse. |
 | `leverage` | only in the exact phrase `No leverage, no liquidations` |
 | `put` | only in the CTA headline `Put your assets to work.` |
-| `target` | four places only: the How-it-works Pro line, the yield-source paragraph, and FAQ items 2 and 3 |
+| `target` | four places only: the How-it-works Pro line, the risk section's upside-cap row, and FAQ items 2 and 3 |
 
 Anything not on the exception list is a deliberate decision, not a drive-by edit.
 Adding one means updating this table.
@@ -38,9 +38,9 @@ No em dashes (`—`) and no en dashes (`–`) anywhere in copy. Use a comma, a p
 
 ### No trailing periods on headings
 
-Display headings do not end in a period: `Pick a vault`, `Three steps`, `Two bars`,
-`Launch a vault`, `FAQ`, and the step titles `Deposit`, `Get paid`. Same for the hero
-h1 and the CTA headline. Body copy, card captions and FAQ answers punctuate normally.
+Display headings do not end in a period: `Pick a vault`, `Three steps`, `Someone else
+pays`, `How you lose money`, `FAQ`, and the step titles `Deposit`, `Get paid`. Same for
+the hero h1 and the CTA headline. Body copy, card captions and FAQ answers punctuate normally.
 
 ### Name assets generally
 
@@ -56,17 +56,18 @@ not go stale when a vault is added or pulled.
 - **Never hardcode a total.** A headline rate is computed from its parts. See
   `totalApr()` in `src/lib/landing-vaults.ts`. The `~18%` on the SOL card is
   `staking + premium`, never the literal `18`.
-- **A rate never appears without its caveat in the same component.** Wherever the SOL
-  headline rate renders, `CAP_NOTE` renders with it.
-- A vault carries its own `riskNote`. Do not reuse one vault's caveat on another: the
-  "one week in twelve" cadence is measured on SOL and is false for USDC and xTSLA. No
-  note is better than a wrong note.
+- **The upside-cap caveat lives in the risk section**, in the "Your upside caps" row and
+  in FAQ "What is the catch?". It is deliberately off the vault card: the card is a
+  summary, the caveat is one section down.
+- A vault carries its own `riskNote` in the data. Do not reuse one vault's caveat on
+  another: the "one week in twelve" cadence is measured on SOL and is false for USDC and
+  xTSLA. No note is better than a wrong note.
 
 ### Names render verbatim
 
 Asset names and tickers are names, not labels. Never apply `uppercase` to them:
-`xTSLA` must not render as `XTSLA`. Uppercase styling is for labels only: status
-badges, section markers, eyebrow text.
+`xTSLA` must not render as `XTSLA`. Uppercase styling is for labels only: section
+markers and eyebrow text such as the vault card's asset type.
 
 ### Risk copy is never hidden or softened
 
@@ -117,9 +118,9 @@ The literal hexes below are the exception, because they are chart and accent val
 with no token:
 
 ```
-#2AA286  green   live dot, staking bar
+#2AA286  green   staking bar, hero badge dot
 #80C9B6  mint    accent, premium bar, section markers
-#FF60BD  pink    curators marker, step 02
+#FF60BD  pink    step 02
 #FF8A3C  orange  step 03
 ```
 

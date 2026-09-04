@@ -67,7 +67,7 @@
     --additional-violet-secondary: #1C1145;
   }
 
-  /* landing anchors (/#vaults, /#curators) glide instead of jumping */
+  /* landing anchors (/#vaults) glide instead of jumping */
   html {
     scroll-behavior: smooth;
   }

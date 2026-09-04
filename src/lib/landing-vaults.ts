@@ -19,7 +19,6 @@ export type LandingVault = {
 // TODO(tim): confirm access link. Defaults to the Telegram invite already used in the footer.
 export const VAULT_ACCESS_URL = "https://t.me/+J3_R6jW-msc1MDU6";
 export const PARTNER_EMAIL = "connect@acta.markets";
-export const CURATOR_CONTACT_URL = "https://t.me/+J3_R6jW-msc1MDU6";
 
 export const CAP_NOTE = "Upside caps roughly one week in twelve.";
 

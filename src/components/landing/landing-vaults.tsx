@@ -38,9 +38,8 @@ function VaultCard({ vault }: { vault: LandingVault }) {
 
   return (
     <div
-      className={`flex h-full min-h-[520px] flex-col justify-between gap-8 p-7 max-md:min-h-[440px] max-md:p-5 ${
-        vault.status === "soon" ? "opacity-[0.55]" : ""
-      }`}
+      className={`flex h-full min-h-[520px] flex-col justify-between gap-8 p-7 max-md:min-h-[440px] max-md:p-5 ${vault.status === "soon" ? "opacity-[0.55]" : ""
+        }`}
     >
       <div>
         <div
@@ -108,7 +107,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
               style={{ letterSpacing: "-0.02em" }}
             >
               {vault.status === "launch"
-                ? "Your asset, your users, your validator."
+                ? "Become a curator, market maker, or launch in private"
                 : "Quoting soon"}
             </div>
           )}
@@ -146,9 +145,8 @@ export function LandingVaults() {
           {LANDING_VAULTS.map((vault, i) => (
             <div
               key={vault.id}
-              className={`border-b border-bg-border ${
-                i % 2 !== 0 ? "md:border-l" : ""
-              }`}
+              className={`border-b border-bg-border ${i % 2 !== 0 ? "md:border-l" : ""
+                }`}
             >
               <VaultCard vault={vault} />
             </div>
