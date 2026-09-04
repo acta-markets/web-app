@@ -21,15 +21,15 @@ const LINE = "#282828";
  * through that stretch.
  */
 const HOLD = [
-  100, 104, 101, 107, 110, 106, 113, 116, 134, 137, 133, 140, 145, 138, 143, 136, 141,
-  148, 142, 149,
+  100, 106, 99, 104, 112, 105, 110, 118, 132, 128, 135, 143, 136, 144, 138, 147, 140,
+  150, 142, 152,
 ];
 // identical to HOLD until the swap, dampened while partly exposed, and identical again
 // from the buy-back on. The collateral comes back whole, so the paths rejoin instead of
 // running parallel: the only thing given up is the gap between those two points.
 const VAULT = [
-  100, 104, 101, 107, 110, 106, 113, 116, 122, 123, 133, 140, 145, 138, 143, 136, 141,
-  148, 142, 149,
+  100, 106, 99, 104, 112, 105, 110, 118, 123, 122, 135, 143, 136, 144, 138, 147, 140,
+  150, 142, 152,
 ];
 const SWAP_WEEK = 7; // the asset rips through here and the deposit is swapped
 const BUYBACK_WEEK = 10; // partly exposed until here, then back in step with HOLD
@@ -37,7 +37,7 @@ const DIVERGE_WEEK = 7; // the paths are one line until here, then they fork
 
 function CapChart() {
   const x = (i: number) => (i / (HOLD.length - 1)) * 100;
-  const y = (v: number) => 72 - (v - 100) * (56 / 49);
+  const y = (v: number) => 72 - (v - 100) * (56 / 52);
   const path = (vals: number[]) =>
     vals.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
 
