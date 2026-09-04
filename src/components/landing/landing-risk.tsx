@@ -144,6 +144,10 @@ export function LandingRisk() {
 
         <PayoffDiagram />
 
+        {/* TODO(tim): link this once a page documents the cadence. It needs the
+            measurement window and the asset it was measured on. Note that
+            docs-site/reference/caps.md is NOT it: that page is capacity limits on quote
+            submission, not upside caps. */}
         <p
           className="mt-8 max-w-[620px] font-mono text-[12px] text-content-tertiary"
           style={{ letterSpacing: "-0.02em" }}
