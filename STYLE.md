@@ -42,6 +42,10 @@ Display headings do not end in a period: `Pick a vault`, `Three steps`, `Someone
 pays`, `How you lose money`, `FAQ`, and the step titles `Deposit`, `Get paid`. Same for
 the hero h1 and the CTA headline. Body copy, card captions and FAQ answers punctuate normally.
 
+Same idea one level down in the How-it-works steps: single-clause step copy takes no
+terminal period, multi-sentence copy punctuates normally. Step 03 keeps its full stop
+because the punchline needs it.
+
 ### Name assets generally
 
 Do not enumerate supported assets in prose. The vault grid is the list, and it changes.
