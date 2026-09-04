@@ -68,7 +68,7 @@ export function LandingHero() {
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
             Deposit what you already hold into curated vaults on Acta&apos;s own options
-            venue with no leverage and no liquidations.
+            venue with no liquidations
           </p>
           <div className="inline-flex flex-wrap gap-3">
             <LandingButton variant="primary" size="lg" href="/#vaults">
