@@ -26,7 +26,7 @@ const DIVERGE_WEEK = 7; // the paths are one line until here, then they fork
 
 function CapChart() {
   const x = (i: number) => (i / (HOLD.length - 1)) * 100;
-  const y = (v: number) => 88 - (v - 96) * (78 / 54);
+  const y = (v: number) => 72 - (v - 100) * (56 / 45);
   const path = (vals: number[]) =>
     vals.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
 
@@ -132,25 +132,25 @@ function CapChart() {
         >
           Given up
         </span>
-        {/* one tick per week: the premium lands whatever the line is doing, including
-            while the deposit sits in cash. No amounts, because none are measured. */}
-        {HOLD.slice(0, -1).map((_, i) => (
+        {/* premium accrues under the paths, one step per week, anchored to the same
+            vertices as the line above. A stack says "this only goes up" where a row of
+            identical marks says nothing. No amounts: none are measured. */}
+        {HOLD.map((_, i) => (
           <span
             key={i}
-            className="absolute -translate-x-1/2"
+            className="absolute w-1 -translate-x-1/2"
             style={{
-              left: `${(x(i) + x(i + 1)) / 2}%`,
-              top: "84%",
-              color: MINT,
-              opacity: 0.8,
+              left: `${x(i)}%`,
+              bottom: "8%",
+              height: `${5 + i * 1.6}%`,
+              background: MINT,
+              opacity: 0.5,
             }}
-          >
-            +
-          </span>
+          />
         ))}
         <span
           className="absolute whitespace-nowrap"
-          style={{ right: "1%", top: "93%", color: MINT, opacity: 0.8, letterSpacing: "0.12em" }}
+          style={{ right: "1%", top: "94%", color: MINT, opacity: 0.8, letterSpacing: "0.12em" }}
         >
           Premium paid every week
         </span>
