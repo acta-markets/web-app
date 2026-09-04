@@ -7,32 +7,35 @@ type Step = {
   bg: string;
   accent: string;
   offset: [number, number];
+  joke?: boolean;
 };
 
 const STEPS: Step[] = [
   {
     n: "01",
     title: "Deposit",
-    copy: "Pick an asset and put it to work. Call side earns on upside targets, put side earns on downside.",
+    copy: "Pick a curated vault and deposit the asset you already hold",
     bg: "#072C28",
     accent: "#2AA286",
     offset: [0, 0],
   },
   {
     n: "02",
-    title: "Pick a target",
-    copy: "Choose the price you'd sell or buy at. Further targets pay less premium but are less likely to settle at expiry. Closer targets pay more premium, but are more likely to settle.",
+    title: "Get paid",
+    copy: "USDC yield on top of the asset",
     bg: "#2C0C23",
     accent: "#FF60BD",
     offset: [30, 20],
   },
   {
+    // the punchline: there is no step three
     n: "03",
-    title: "Earn premium",
-    copy: "Paid upfront, instantly. At expiry you either get your asset back or settle into the target price you chose.",
+    title: "Oh wait",
+    copy: "There is no step three. You can withdraw at the end of any cycle.",
     bg: "#2A1A00",
     accent: "#FF8A3C",
     offset: [60, 40],
+    joke: true,
   },
 ];
 
@@ -40,7 +43,7 @@ export function LandingHowItWorks() {
   return (
     <section className="py-[120px] max-md:py-20">
       <div className="mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-        <SectionMarker label="// Mechanism" />
+        <SectionMarker label="// How it works" />
         <h2
           className="mb-12 font-space font-semibold text-content-primary"
           style={{
@@ -49,7 +52,7 @@ export function LandingHowItWorks() {
             letterSpacing: "-0.03em",
           }}
         >
-          Three steps.
+          Three steps
         </h2>
         <div className="grid grid-cols-1 gap-0">
           {STEPS.map((step, i) => (
@@ -82,6 +85,7 @@ export function LandingHowItWorks() {
                     letterSpacing: "-0.05em",
                     lineHeight: 1,
                     mixBlendMode: "screen",
+                    opacity: step.joke ? 0.4 : 1,
                   }}
                 >
                   {step.n}
@@ -96,7 +100,11 @@ export function LandingHowItWorks() {
                     letterSpacing: "-0.03em",
                   }}
                 >
-                  {step.title}.
+                  {step.joke ? (
+                    <span className="italic text-content-secondary">{step.title}</span>
+                  ) : (
+                    <>{step.title}</>
+                  )}
                 </div>
                 <div
                   className="max-w-[620px] font-mono text-content-secondary"
@@ -111,6 +119,18 @@ export function LandingHowItWorks() {
               </div>
             </div>
           ))}
+        </div>
+        <div
+          className="mt-6 font-mono text-content-secondary"
+          style={{ fontSize: 14, letterSpacing: "-0.02em" }}
+        >
+          Want to set your own targets?{" "}
+          <a
+            href="/earn"
+            className="text-accent-secondary transition-colors hover:text-content-primary"
+          >
+            Pro ↗
+          </a>
         </div>
       </div>
     </section>

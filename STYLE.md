@@ -1,0 +1,243 @@
+# STYLE.md
+
+House rules for Acta's visual system and landing-page copy. Applies to any agent or
+person editing `src/app/(marketing)/*` or `src/components/landing/*`. The app routes
+(`(app)`, `src/components/app-ui/*`) share the design tokens but not the copy rules.
+
+Read this before writing copy or a new section. Most of it exists because something
+went wrong once.
+
+---
+
+## 1. Copy rules
+
+### Banned words
+
+These do not appear in landing-page copy. They describe the mechanism; the page sells
+the outcome.
+
+`strike` · `call` · `put` · `RFQ` · `European` · `expiry` · `premium range` · `APY` ·
+`Phantom` · `without touching`
+
+**Standing exceptions**, and the only ones:
+
+| word | where it is allowed |
+|---|---|
+| `options` | naming the venue, e.g. "on its own options venue". Acta is a yield-vault product **on top of** an options venue, never the reverse. |
+| `put` | only in the CTA headline `Put your assets to work.` |
+| `target` | the How-it-works Pro line only. Everywhere else the level is the **agreed price**: `cap` collides with capacity limits in docs-site/reference/caps.md, and `target` is the desk's word, not a depositor's |
+
+Anything not on the exception list is a deliberate decision, not a drive-by edit.
+Adding one means updating this table.
+
+### No dashes
+
+No em dashes (`—`) and no en dashes (`–`) anywhere in copy. Use a comma, a period, or
+"and". This includes copy inside JSX and inside `*.ts` config files.
+
+### No trailing periods on headings
+
+Display headings do not end in a period: `Pick a vault`, `Three steps`, `Premium
+income`, `What you give up`, `FAQ`, and the step titles `Deposit`, `Get paid`. Same for
+the hero h1 and the CTA headline. Body copy, card captions and FAQ answers punctuate normally.
+
+Same idea one level down in the How-it-works steps: single-clause step copy takes no
+terminal period, multi-sentence copy punctuates normally. Step 03 keeps its full stop
+because the punchline needs it.
+
+### Name assets generally
+
+Do not enumerate supported assets in prose. The vault grid is the list, and it changes.
+Prose says `the assets you already hold`, never `SOL and tokenized stocks`, so copy does
+not go stale when a vault is added or pulled.
+
+### Numbers
+
+- **Never invent a figure.** No TVL, volume, premium paid, or yield that did not come
+  from the desk. If you need one and do not have it, leave a `TODO(tim):` and ship
+  without it.
+- **Never hardcode a total.** A headline rate is computed from its parts. See
+  `totalApr()` in `src/lib/landing-vaults.ts`. The `~18%` on the SOL card is
+  `staking + premium`, never the literal `18`.
+- **The upside caveat lives in the risk section**, in its lead, its diagram and
+  `CAP_NOTE` beneath it, and in FAQ "What is the catch?". It is deliberately off the
+  vault card: the card is a summary, the caveat is one section down.
+- `riskNote` and `note` sit in the vault data and are deliberately not rendered. Do not
+  reuse one vault's caveat on another: the "one week in twelve" cadence is measured on
+  SOL and is false for USDC and xTSLA. No note is better than a wrong note.
+- **Never say a depositor is paid weekly.** The desk pays the vault weekly; a depositor's
+  return accrues. Cadence belongs only to the desk's side of the trade.
+
+### Names render verbatim
+
+Asset names and tickers are names, not labels. Never apply `uppercase` to them:
+`xTSLA` must not render as `XTSLA`. Uppercase styling is for labels only: section
+markers and eyebrow text such as the vault card's asset type.
+
+### Risk copy is never hidden or softened
+
+Risk is never behind an accordion or a hover, and the unflattering part leads. The
+medium is free: a list, a paragraph, or a diagram, whichever explains it fastest. If a
+risk cannot be described honestly because the model is not settled, leave it out and
+record the gap in the PR. Do not ship a vague version.
+
+### Voice
+
+Sentence case. No marketing filler. Say the thing and stop. If a sentence restates
+what the headline directly above it already said, cut it.
+
+---
+
+## 2. Visual system
+
+Do not introduce new fonts, colours, dependencies, images, or analytics. Everything
+below already exists.
+
+### Type
+
+| | |
+|---|---|
+| Headings | `font-space` (Space Grotesk) |
+| Body, labels, buttons, all UI text | `font-mono` (JetBrains Mono) |
+
+The body default is **mono**, not sans. That is intentional.
+
+Standard scales:
+
+```
+section h2      clamp(44px, 7vw, 80px)   lineHeight 0.95   tracking -0.03em
+big stat/rate   clamp(40px, 6vw, 54px)   lineHeight 0.95   tracking -0.03em
+card title      clamp(32px, 3.4vw, 40px) lineHeight 1      tracking -0.03em
+body copy       16px  lineHeight 1.55  tracking -0.02em
+micro/caption   12px  tracking -0.02em
+eyebrow/label   11px  uppercase  tracking 0.12em
+```
+
+### Colour
+
+Use the CSS variables in `globals.css` through Tailwind utilities: `bg-bg-primary`,
+`text-content-secondary`, `border-bg-border`, `text-accent-secondary`. Never hardcode a
+theme colour.
+
+The literal hexes below are the exception, because they are chart and accent values
+with no token:
+
+```
+#2AA286  green   staking bar, hero badge dot
+#80C9B6  mint    accent, premium bar, section markers
+#FF60BD  pink    step 02
+#FF8A3C  orange  step 03
+```
+
+### Shape
+
+- `borderRadius: 0` everywhere. No rounded corners.
+- No drop shadows on landing components.
+- Structure is drawn with 1px `border-bg-border` lines, never with gaps or cards that
+  float.
+
+### Layout
+
+```
+standard container   mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3
+section spacing      py-[120px] max-md:py-20
+anchored section     scroll-mt-[88px] max-md:scroll-mt-[76px]
+```
+
+The `850px` container is the page's spine. Every section heading lines up on it. A
+wider container makes that section's h2 visibly break the alignment, so do not widen
+one without a reason.
+
+`scroll-mt` exists because the header is sticky (68px desktop, 60px mobile). Any
+section with an `id` needs it or its heading lands under the header.
+
+### Grids
+
+Divider lines with no gaps, sized per breakpoint by index. Do **not** use
+`gap-px` with a coloured parent background: a grid whose last row is short renders the
+empty cell as a solid block.
+
+```tsx
+// wrapper
+<div className="grid auto-rows-fr grid-cols-1 border-t border-bg-border md:grid-cols-2">
+  {items.map((item, i) => (
+    <div className={`border-b border-bg-border ${i % 2 !== 0 ? "md:border-l" : ""}`}>
+```
+
+`auto-rows-fr` is what makes every card the same height across rows.
+
+For a 3-column layout the index maths needs both breakpoints:
+
+```tsx
+const mdLeft = i % 2 !== 0;   // 2 columns at md
+const lgLeft = i % 3 !== 0;   // 3 columns at lg
+// md:border-l when mdLeft, lg:border-l when lgLeft && !mdLeft, lg:border-l-0 when mdLeft && !lgLeft
+```
+
+### Nothing renders after a button
+
+A CTA is the last element in its container. Metadata, captions and disclaimers go above
+it, never below. Text trailing a button reads as an afterthought and breaks the block's
+bottom edge.
+
+### Components
+
+Server components by default. `landing-faq.tsx` is the only `"use client"` file on the
+landing page; keep it that way. Reuse `SectionMarker`, `LandingButton` and `LandingBar`
+from `landing-primitives.tsx` rather than restyling inline.
+
+Smooth anchor scrolling comes from `html { scroll-behavior: smooth }` in `globals.css`,
+guarded by `prefers-reduced-motion`. It is there so anchor buttons can stay plain `<a>`
+tags and the page can stay server-rendered.
+
+---
+
+## 3. Before you commit
+
+### Measure headline text, do not eyeball it
+
+The hero column is **720px**. A headline that overflows it wraps to an extra line and
+the hero silently breaks. Measure in the browser at the real font before choosing a
+size:
+
+```js
+const h1 = document.querySelector('h1');
+const probe = document.createElement('span');
+probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-weight:600;letter-spacing:-0.04em;';
+probe.style.fontFamily = getComputedStyle(h1).fontFamily;
+document.body.appendChild(probe);
+probe.style.fontSize = '96px';
+probe.textContent = 'Your headline';
+probe.getBoundingClientRect().width;   // must be <= 720
+```
+
+Rough envelope: at 140px a line holds about 11 characters; at 96px, about 16.
+
+### Check the copy that actually ships
+
+Grep the served HTML, not the diff. Banned words hide in metadata, in collapsed FAQ
+answers and in strings assembled at runtime.
+
+```bash
+curl -s localhost:3000/ \
+  | grep -oiE '\b(options?|strikes?|calls?|puts?|RFQ|European|expiry|APY|leverage|Phantom)\b' \
+  | sort | uniq -c
+```
+
+Every hit must be on the exceptions table above. Check for `—` and `–` in the same pass.
+
+### Check three widths
+
+375, 768 and 1440. `document.documentElement.scrollWidth === clientWidth` at each, the
+h1 within two lines at 1440, and grid dividers closing correctly on a short last row.
+
+### Do not run `next build` against a live dev server
+
+`next build` overwrites `.next/`, and the running dev server then 404s every
+`/_next/static/*` asset. The page loads with no CSS and looks catastrophically broken
+for reasons that have nothing to do with your change. Stop dev first, or let CI build.
+
+### Housekeeping
+
+`tsconfig.tsbuildinfo` is tracked and churns on every build. Stage explicit paths;
+never `git add -A`.
