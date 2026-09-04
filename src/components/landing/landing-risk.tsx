@@ -15,8 +15,11 @@ const LINE = "#282828";
  * and keep the page's mono type size, and every stroke is non-scaling so lines stay 1px
  * through that stretch.
  */
+// VAULT tracks HOLD move for move, offset by the premium, until the hot week. There it
+// goes flat: that is the cap binding. After the buy-back it resumes tracking, and the
+// gap it never closes is what was given up.
 const HOLD = [100, 104, 101, 107, 110, 106, 113, 116, 134, 137, 133, 140, 145];
-const VAULT = [100, 106, 104, 111, 115, 112, 120, 124, 128, 132, 129, 137, 143];
+const VAULT = [104, 108, 105, 111, 114, 110, 117, 120, 120, 124, 120, 127, 132];
 const CAP_WEEK = 8; // the week the asset rips past the cap
 
 function CapChart() {
@@ -54,17 +57,6 @@ function CapChart() {
           vectorEffect="non-scaling-stroke"
         />
         <path d={givenUp} fill={MINT} opacity="0.10" />
-        {/* the level the deposit is swapped at */}
-        <line
-          x1={x(CAP_WEEK) - 4}
-          y1={y(VAULT[CAP_WEEK])}
-          x2={x(CAP_WEEK) + 5}
-          y2={y(VAULT[CAP_WEEK])}
-          stroke={MINT}
-          strokeWidth="1"
-          strokeDasharray="2 2"
-          vectorEffect="non-scaling-stroke"
-        />
         <path
           d={path(HOLD)}
           fill="none"
@@ -85,7 +77,7 @@ function CapChart() {
         <span
           className="absolute whitespace-nowrap"
           style={{
-            left: `${x(CAP_WEEK) - 4}%`,
+            left: `${x(CAP_WEEK) - 9}%`,
             top: `${y(VAULT[CAP_WEEK]) - 8}%`,
             color: MINT,
             letterSpacing: "0.12em",
