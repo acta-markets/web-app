@@ -22,7 +22,7 @@ const STEPS: Step[] = [
   {
     n: "02",
     title: "Get paid",
-    copy: "Trading desks pay a cash premium upfront, every week, in USDC. One hot week in twelve, your upside caps. Every other week, pure income.",
+    copy: "Cash arrives upfront, every week, in USDC",
     bg: "#2C0C23",
     accent: "#FF60BD",
     offset: [30, 20],
