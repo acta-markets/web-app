@@ -67,8 +67,8 @@ export function LandingHero() {
             className="mb-9 mt-12 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
-            Deposit what you already hold into curated vaults that earn USDC on
-            Acta&apos;s own options venue, with no leverage and no liquidations.
+            Deposit what you already hold into curated vaults on Acta&apos;s own options
+            venue with no leverage and no liquidations.
           </p>
           <div className="inline-flex flex-wrap gap-3">
             <LandingButton variant="primary" size="lg" href="/#vaults">
