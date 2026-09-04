@@ -3,32 +3,8 @@ import {
   LANDING_VAULTS,
   totalApr,
   type LandingVault,
-  type VaultStatus,
 } from "@/lib/landing-vaults";
 import { LandingBar, LandingButton, SectionMarker } from "./landing-primitives";
-
-const STATUS_LABEL: Record<VaultStatus, string> = {
-  live: "Live",
-  soon: "Next",
-  launch: "Open",
-};
-
-function StatusBadge({ status }: { status: VaultStatus }) {
-  return (
-    <span
-      className="inline-flex items-center gap-[8px] font-mono text-[11px] uppercase text-content-secondary"
-      style={{ letterSpacing: "0.12em" }}
-    >
-      {status === "live" && (
-        <span
-          className="inline-block h-1.5 w-1.5 rounded-full"
-          style={{ background: "#2AA286", boxShadow: "0 0 10px #2AA286" }}
-        />
-      )}
-      {STATUS_LABEL[status]}
-    </span>
-  );
-}
 
 function VaultCta({ vault }: { vault: LandingVault }) {
   if (vault.status === "soon") {
@@ -67,14 +43,11 @@ function VaultCard({ vault }: { vault: LandingVault }) {
       }`}
     >
       <div>
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <span
-            className="font-mono text-[11px] text-content-secondary"
-            style={{ letterSpacing: "0.12em" }}
-          >
-            {vault.ticker}
-          </span>
-          <StatusBadge status={vault.status} />
+        <div
+          className="mb-5 font-mono text-[11px] uppercase text-content-secondary"
+          style={{ letterSpacing: "0.12em" }}
+        >
+          {vault.type}
         </div>
 
         <div
