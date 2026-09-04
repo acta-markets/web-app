@@ -168,6 +168,12 @@ const lgLeft = i % 3 !== 0;   // 3 columns at lg
 // md:border-l when mdLeft, lg:border-l when lgLeft && !mdLeft, lg:border-l-0 when mdLeft && !lgLeft
 ```
 
+### Nothing renders after a button
+
+A CTA is the last element in its container. Metadata, captions and disclaimers go above
+it, never below. Text trailing a button reads as an afterthought and breaks the block's
+bottom edge.
+
 ### Components
 
 Server components by default. `landing-faq.tsx` is the only `"use client"` file on the

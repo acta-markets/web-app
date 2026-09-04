@@ -116,14 +116,15 @@ function VaultCard({ vault }: { vault: LandingVault }) {
       </div>
 
       <div>
-        <VaultCta vault={vault} />
+        {/* meta sits above the CTA: nothing renders after a button */}
         <div
-          className="mt-5 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[12px] text-content-secondary"
+          className="mb-5 flex flex-wrap gap-x-5 gap-y-1 font-mono text-[12px] text-content-secondary"
           style={{ letterSpacing: "-0.02em" }}
         >
           <span>Curator: {vault.curator}</span>
           <span>Cycle: {vault.cycle}</span>
         </div>
+        <VaultCta vault={vault} />
       </div>
     </div>
   );
