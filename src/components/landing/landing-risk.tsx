@@ -132,6 +132,29 @@ function CapChart() {
         >
           Given up
         </span>
+        {/* one tick per week: the premium lands whatever the line is doing, including
+            while the deposit sits in cash. No amounts, because none are measured. */}
+        {HOLD.slice(0, -1).map((_, i) => (
+          <span
+            key={i}
+            className="absolute -translate-x-1/2"
+            style={{
+              left: `${(x(i) + x(i + 1)) / 2}%`,
+              top: "84%",
+              color: MINT,
+              opacity: 0.8,
+            }}
+          >
+            +
+          </span>
+        ))}
+        <span
+          className="absolute whitespace-nowrap"
+          style={{ right: "1%", top: "93%", color: MINT, opacity: 0.8, letterSpacing: "0.12em" }}
+        >
+          Premium paid every week
+        </span>
+
         {/* legend, not inline annotation: the paths wander, so nothing sits safely
             against them at every aspect ratio. Both start low-left, so this corner
             stays clear. */}
