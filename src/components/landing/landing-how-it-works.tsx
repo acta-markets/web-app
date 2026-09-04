@@ -14,7 +14,7 @@ const STEPS: Step[] = [
   {
     n: "01",
     title: "Deposit",
-    copy: "Pick a curated vault and deposit the asset you already hold. Fully collateralized, still yours.",
+    copy: "Pick a curated vault and deposit the asset you already hold",
     bg: "#072C28",
     accent: "#2AA286",
     offset: [0, 0],

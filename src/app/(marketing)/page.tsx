@@ -8,7 +8,6 @@ import { LandingVaults } from "@/components/landing/landing-vaults";
 import { LandingHowItWorks } from "@/components/landing/landing-how-it-works";
 import { LandingYieldSource } from "@/components/landing/landing-yield-source";
 import { LandingRisk } from "@/components/landing/landing-risk";
-import { LandingCurators } from "@/components/landing/landing-curators";
 import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingCta } from "@/components/landing/landing-cta";
 
@@ -30,7 +29,6 @@ export default function HomePage() {
         <LandingHowItWorks />
         <LandingYieldSource />
         <LandingRisk />
-        <LandingCurators />
         <LandingFaq />
         <LandingCta />
       </main>
