@@ -24,7 +24,6 @@ the outcome.
 | word | where it is allowed |
 |---|---|
 | `options` | naming the venue, e.g. "on its own options venue". Acta is a yield-vault product **on top of** an options venue, never the reverse. |
-| `leverage` | only in the exact phrase `No leverage, no liquidations` |
 | `put` | only in the CTA headline `Put your assets to work.` |
 | `target` | the How-it-works Pro line only. Everywhere else the level is the **agreed price**: `cap` collides with capacity limits in docs-site/reference/caps.md, and `target` is the desk's word, not a depositor's |
 
