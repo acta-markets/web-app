@@ -94,6 +94,3 @@ export function aprLegs(vault: LandingVault): string {
   if (vault.apr.premium > 0) legs.push("premium");
   return legs.join(" + ");
 }
-
-/** The SOL vault backs the numbers used by the yield-source section. */
-export const SOL_VAULT = LANDING_VAULTS.find((v) => v.id === "sol");
