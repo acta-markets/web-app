@@ -12,22 +12,31 @@ const LINE = "#282828";
  * VAULT is the same line as HOLD until the swap, so the mint path is drawn over the
  * grey one and the two read as one line. They fork at the swap: holding carries on at
  * full size while the vault, now only partly exposed, moves with it but dampened. The
- * buy-back puts them back in step, moving together with the gap the swap opened. That
- * gap is what was given up, and it does not close.
+ * buy-back puts the collateral back on the token one for one, so from there the two
+ * paths move in lockstep, separated by what the swap cost. That gap is what was given
+ * up, and it does not close.
  *
  * The SVG stretches to fill its box so percentage-positioned HTML labels stay aligned
  * and keep the page's mono type size, and every stroke is non-scaling so lines stay 1px
  * through that stretch.
  */
-const HOLD = [100, 104, 101, 107, 110, 106, 113, 116, 134, 137, 133, 140, 145];
-const VAULT = [100, 104, 101, 107, 110, 106, 113, 116, 122, 123, 122, 129, 134];
+const HOLD = [
+  100, 104, 101, 107, 110, 106, 113, 116, 134, 137, 133, 140, 145, 138, 143, 136, 141,
+  148, 142, 149,
+];
+// identical to HOLD until the swap, dampened while partly exposed, then move for move
+// again from the buy-back on: same shape, held down by what the swap cost
+const VAULT = [
+  100, 104, 101, 107, 110, 106, 113, 116, 122, 123, 122, 129, 134, 127, 132, 125, 130,
+  137, 131, 138,
+];
 const SWAP_WEEK = 7; // the asset rips through here and the deposit is swapped
 const BUYBACK_WEEK = 10; // partly exposed until here, then back in step with HOLD
 const DIVERGE_WEEK = 7; // the paths are one line until here, then they fork
 
 function CapChart() {
   const x = (i: number) => (i / (HOLD.length - 1)) * 100;
-  const y = (v: number) => 72 - (v - 100) * (56 / 45);
+  const y = (v: number) => 72 - (v - 100) * (56 / 49);
   const path = (vals: number[]) =>
     vals.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
 
@@ -143,7 +152,7 @@ function CapChart() {
             style={{
               left: `${x(i)}%`,
               bottom: "8%",
-              height: `${5 + i * 1.6}%`,
+              height: `${5 + i * 0.9}%`,
               background: MINT,
               opacity: 0.5,
             }}
