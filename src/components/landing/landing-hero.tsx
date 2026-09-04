@@ -67,7 +67,7 @@ export function LandingHero() {
             className="mb-9 mt-12 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
-            Deposit into curated yield vaults for the assets you already hold, hosted on Acta's own
+            Deposit into curated yield vaults for the assets you already hold, hosted on Acta&apos;s own
             options venue. Trading desks pay you weekly in USDC. No leverage, no
             liquidations.
           </p>
