@@ -26,7 +26,7 @@ export const LANDING_VAULTS: LandingVault[] = [
   {
     id: "sol",
     asset: "SOL",
-    type: "Crypto",
+    type: "Majors",
     curator: "Acta",
     cycle: "Weekly",
     status: "live",
@@ -39,7 +39,7 @@ export const LANDING_VAULTS: LandingVault[] = [
   {
     id: "usdc",
     asset: "USDC",
-    type: "Dollars",
+    type: "Stables",
     // TODO(tim): confirm curator and CTA for the USDC vault, copied from SOL for now
     curator: "Acta",
     cycle: "Weekly",
@@ -55,7 +55,7 @@ export const LANDING_VAULTS: LandingVault[] = [
   {
     id: "xtsla",
     asset: "xTSLA",
-    type: "Stock",
+    type: "Stocks",
     // TODO(tim): confirm the curator for the tokenized stock vault
     curator: "TBA",
     cycle: "Weekly",
