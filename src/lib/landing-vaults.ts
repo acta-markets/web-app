@@ -33,7 +33,7 @@ export const LANDING_VAULTS: LandingVault[] = [
     apr: { staking: 7, premium: 11 },
     riskNote: CAP_NOTE,
     note: "Public deposits open after audit.",
-    ctaLabel: "Get allocation",
+    ctaLabel: "Deposit",
     ctaHref: VAULT_ACCESS_URL,
   },
   {
@@ -49,7 +49,7 @@ export const LANDING_VAULTS: LandingVault[] = [
     // TODO(tim): needs its own risk one-liner. The upside-cap sentence describes
     // the SOL vault and does not apply here, so nothing is shown rather than
     // shipping a sentence that is wrong.
-    ctaLabel: "Get allocation",
+    ctaLabel: "Deposit",
     ctaHref: VAULT_ACCESS_URL,
   },
   {
