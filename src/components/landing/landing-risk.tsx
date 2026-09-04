@@ -147,8 +147,12 @@ export function LandingRisk() {
             measurement window and the asset it was measured on. Note that
             docs-site/reference/caps.md is NOT it: that page is capacity limits on quote
             submission, not upside caps. */}
+        {/* accent-coloured on purpose, and deliberately NOT a link: there is no page
+            documenting the cadence yet. Do not add an href here without a destination
+            that actually shows the measurement, and do not "fix" the colour back to
+            tertiary either. */}
         <p
-          className="mt-8 max-w-[620px] font-mono text-[12px] text-content-tertiary"
+          className="mt-8 max-w-[620px] font-mono text-[12px] text-accent-secondary"
           style={{ letterSpacing: "-0.02em" }}
         >
           {CAP_NOTE}
