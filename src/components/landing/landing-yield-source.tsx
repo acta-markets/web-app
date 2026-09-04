@@ -27,8 +27,16 @@ export function LandingYieldSource() {
           className="mt-4 max-w-[620px] font-mono leading-[1.55] text-content-secondary"
           style={{ fontSize: 16, letterSpacing: "-0.02em" }}
         >
-          Derivative income is not a crypto invention. Pension funds have run this trade
-          on equities for decades. We run it on-chain, on assets with more vol.
+          <a
+            href="https://am.jpmorgan.com/us/en/asset-management/adv/investment-strategies/etf-investing/understanding-jp-morgans-derivative-income-offerings/"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-accent-secondary transition-colors hover:text-content-primary"
+          >
+            Derivative income
+          </a>{" "}
+          is not a crypto invention. Pension funds have run this trade on equities for
+          decades. We run it on-chain, on assets with more vol.
         </p>
       </div>
     </section>
