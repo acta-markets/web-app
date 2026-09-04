@@ -6,39 +6,28 @@ const MUTED = "#8A8A8A";
 const LINE = "#282828";
 
 /**
- * Schematic portfolio paths over twelve weeks, not data. There are no axis numbers
- * because none of these values were measured. The shape is the point: the vault runs
- * ahead of holding while the premium accrues, the cap binds in the hot week, and the
- * gap that opens after it is what was given up.
+ * Payoff shape, schematic. Below the cap the vault is the same line as holding, so the
+ * mint path is drawn over the grey one and they read as one. Above the cap the vault
+ * goes flat and the two separate: that gap is what was given up.
+ *
+ * The bars are texture, not measured data, which is why nothing labels or scales them.
  *
  * The SVG stretches to fill its box so percentage-positioned HTML labels stay aligned
  * and keep the page's mono type size, and every stroke is non-scaling so lines stay 1px
  * through that stretch.
  */
-// VAULT tracks HOLD move for move, offset by the premium, until the hot week. There it
-// goes flat: that is the cap binding. After the buy-back it resumes tracking, and the
-// gap it never closes is what was given up.
-const HOLD = [100, 104, 101, 107, 110, 106, 113, 116, 134, 137, 133, 140, 145];
-const VAULT = [104, 108, 105, 111, 114, 110, 117, 120, 120, 124, 120, 127, 132];
-const CAP_WEEK = 8; // the week the asset rips past the cap
+const AXIS_Y = 64;
+const CAP_X = 56;
+const START = { x: 4, y: 92 };
+const END_Y = 12; // where holding finishes at the right edge
+const capY = START.y + ((END_Y - START.y) * (CAP_X - START.x)) / (96 - START.x);
+
+const BARS = [
+  10, 16, 12, 22, 18, 28, 24, 33, 27, 36, 31, 40, 35, 32, 38, 30, 34, 26, 30, 22, 26, 18,
+  22, 14, 17, 11,
+];
 
 function CapChart() {
-  const x = (i: number) => (i / (HOLD.length - 1)) * 100;
-  const y = (v: number) => 88 - (v - 96) * (78 / 54);
-  const path = (vals: number[]) =>
-    vals.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
-
-  // wedge between the two paths from the capped week to the end
-  const givenUp = [
-    ...HOLD.slice(CAP_WEEK).map(
-      (v, i) => `${i === 0 ? "M" : "L"} ${x(i + CAP_WEEK)} ${y(v)}`,
-    ),
-    ...VAULT.slice(CAP_WEEK)
-      .reverse()
-      .map((v, i) => `L ${x(HOLD.length - 1 - i)} ${y(v)}`),
-    "Z",
-  ].join(" ");
-
   return (
     <div className="relative mt-10 aspect-[16/9] w-full max-md:aspect-[4/3]">
       <svg
@@ -47,25 +36,62 @@ function CapChart() {
         className="absolute inset-0 h-full w-full"
         aria-hidden
       >
+        {BARS.map((h, i) => {
+          const w = 100 / BARS.length;
+          return (
+            <rect
+              key={i}
+              x={i * w + w * 0.15}
+              y={AXIS_Y - h}
+              width={w * 0.7}
+              height={h}
+              fill={MINT}
+              opacity="0.07"
+            />
+          );
+        })}
+
+        {/* zero line */}
         <line
           x1="0"
-          y1="92"
+          y1={AXIS_Y}
           x2="100"
-          y2="92"
+          y2={AXIS_Y}
           stroke={LINE}
           strokeWidth="1"
           vectorEffect="non-scaling-stroke"
         />
-        <path d={givenUp} fill={MINT} opacity="0.10" />
+        {/* the cap */}
+        <line
+          x1={CAP_X}
+          y1="6"
+          x2={CAP_X}
+          y2={AXIS_Y}
+          stroke={LINE}
+          strokeWidth="1"
+          strokeDasharray="3 3"
+          vectorEffect="non-scaling-stroke"
+        />
+        {/* what the flat line gives up to the diagonal */}
         <path
-          d={path(HOLD)}
-          fill="none"
+          d={`M ${CAP_X} ${capY} L 96 ${END_Y} L 96 ${capY} Z`}
+          fill={MINT}
+          opacity="0.12"
+        />
+        {/* just holding: one diagonal all the way across */}
+        <line
+          x1={START.x}
+          y1={START.y}
+          x2="96"
+          y2={END_Y}
           stroke={MUTED}
           strokeWidth="1"
           vectorEffect="non-scaling-stroke"
         />
+        {/* in the vault: the same line, then flat. Drawn over the grey below the cap so
+            the two read as one until they separate. */}
         <path
-          d={path(VAULT)}
+          d={`M ${START.x} ${START.y} L ${CAP_X} ${capY} L 96 ${capY}`}
           fill="none"
           stroke={MINT}
           strokeWidth="2"
@@ -75,24 +101,17 @@ function CapChart() {
 
       <div className="pointer-events-none absolute inset-0 font-mono text-[11px] uppercase">
         <span
-          className="absolute whitespace-nowrap"
-          style={{
-            left: `${x(CAP_WEEK) - 9}%`,
-            top: `${y(VAULT[CAP_WEEK]) - 8}%`,
-            color: MINT,
-            letterSpacing: "0.12em",
-          }}
+          className="absolute -translate-x-1/2 whitespace-nowrap"
+          style={{ left: `${CAP_X}%`, top: "-3%", color: MINT, letterSpacing: "0.12em" }}
         >
           Cap
         </span>
         <span
           className="absolute whitespace-nowrap text-content-secondary"
-          style={{ right: "2%", top: "12%", letterSpacing: "0.12em" }}
+          style={{ right: "1%", top: "3%", letterSpacing: "0.12em" }}
         >
           Given up
         </span>
-        {/* legend, not inline annotation: the paths wander, so nothing sits safely
-            against them at every aspect ratio. This corner stays clear. */}
         <div className="absolute flex flex-col gap-2" style={{ left: "2%", top: "4%" }}>
           <span
             className="flex items-center gap-2 whitespace-nowrap"
@@ -111,9 +130,9 @@ function CapChart() {
         </div>
         <span
           className="absolute whitespace-nowrap text-content-tertiary"
-          style={{ left: "0%", top: "96%", letterSpacing: "0.12em" }}
+          style={{ right: "1%", top: `${AXIS_Y + 2}%`, letterSpacing: "0.12em" }}
         >
-          Twelve weeks
+          Price at the end of the cycle
         </span>
       </div>
     </div>
