@@ -4,7 +4,7 @@ import {
   totalApr,
   type LandingVault,
 } from "@/lib/landing-vaults";
-import { LandingBar, LandingButton, SectionMarker } from "./landing-primitives";
+import { LandingBar, LandingButton } from "./landing-primitives";
 
 function VaultCta({ vault }: { vault: LandingVault }) {
   if (vault.status === "soon") {
@@ -94,7 +94,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
                     value={vault.apr.staking}
                     max={total}
                     color="#2AA286"
-                    caption={`Staking ~${vault.apr.staking}%`}
+                    caption={`Staking rewards ~${vault.apr.staking}%`}
                   />
                 )}
                 {vault.apr.premium > 0 && (
@@ -102,7 +102,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
                     value={vault.apr.premium}
                     max={total}
                     color="#80C9B6"
-                    caption={`Desk premium ~${vault.apr.premium}%`}
+                    caption={`Premium ~${vault.apr.premium}%`}
                   />
                 )}
               </div>
@@ -136,7 +136,6 @@ export function LandingVaults() {
       className="scroll-mt-[88px] py-[120px] max-md:scroll-mt-[76px] max-md:py-20"
     >
       <div className="mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-        <SectionMarker label="// Vaults" />
         <h2
           className="mb-12 font-space font-semibold text-content-primary"
           style={{

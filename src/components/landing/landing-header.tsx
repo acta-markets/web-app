@@ -4,6 +4,7 @@ import { LandingButton } from "./landing-primitives";
 
 const NAV = [
   { label: "Docs", href: "/docs", external: false },
+  { label: "Partners", href: "/partners", external: false },
   { label: "Markets", href: "/earn", external: false },
 ] as const;
 
