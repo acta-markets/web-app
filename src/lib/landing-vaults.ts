@@ -44,7 +44,7 @@ export const LANDING_VAULTS: LandingVault[] = [
     curator: "Acta",
     cycle: "Weekly",
     status: "live",
-    // no staking leg: the whole rate is desk premium
+    // no staking leg: the whole rate is premium
     apr: { staking: 0, premium: 20 },
     // TODO(tim): needs its own risk one-liner. The upside-cap sentence describes
     // the SOL vault and does not apply here, so nothing is shown rather than
@@ -75,9 +75,9 @@ export const LANDING_VAULTS: LandingVault[] = [
     curator: "You",
     cycle: "Weekly",
     status: "launch",
-    // partners get an address, not a trip through the depositor pitch
-    ctaLabel: PARTNER_EMAIL,
-    ctaHref: `mailto:${PARTNER_EMAIL}`,
+    // the partners page carries the full pitch; the address lives there too
+    ctaLabel: "Partner with us",
+    ctaHref: "/partners",
   },
 ];
 

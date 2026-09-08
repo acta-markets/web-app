@@ -1,4 +1,4 @@
-import { LandingButton, SectionMarker } from "./landing-primitives";
+import { LandingButton } from "./landing-primitives";
 
 export function LandingCta() {
   return (
@@ -30,7 +30,6 @@ export function LandingCta() {
         }}
       />
       <div className="relative mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-        <SectionMarker label="// Get started" color="#B0E8D6" />
         <div
           className="mb-5 text-left font-space font-semibold text-content-primary"
           style={{
@@ -39,10 +38,11 @@ export function LandingCta() {
             letterSpacing: "-0.03em",
           }}
         >
-          Put your assets
+          Hold and
           <br />
+          get paid{" "}
           <span className="italic" style={{ color: "#B0E8D6" }}>
-            to work
+            more
           </span>
         </div>
         <div className="flex flex-wrap justify-start gap-3">
