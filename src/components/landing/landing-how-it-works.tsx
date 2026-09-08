@@ -1,5 +1,3 @@
-import { SectionMarker } from "./landing-primitives";
-
 type Step = {
   n: string;
   title: string;
@@ -22,7 +20,7 @@ const STEPS: Step[] = [
   {
     n: "02",
     title: "Get paid",
-    copy: "USDC yield on top of the asset",
+    copy: "Yield on top of the asset you already hold",
     bg: "#2C0C23",
     accent: "#FF60BD",
     offset: [30, 20],
@@ -43,7 +41,6 @@ export function LandingHowItWorks() {
   return (
     <section className="py-[120px] max-md:py-20">
       <div className="mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-        <SectionMarker label="// How it works" />
         <h2
           className="mb-12 font-space font-semibold text-content-primary"
           style={{

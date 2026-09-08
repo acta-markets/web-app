@@ -52,16 +52,15 @@ export function LandingHero() {
           <h1
             className="m-0 font-space font-semibold text-content-primary"
             style={{
-              // sized so "get paid more" holds one line in the 720px hero column
+              // sized so "Put your assets" holds one line in the 720px hero column
               fontSize: "clamp(48px, 9vw, 96px)",
               lineHeight: 0.95,
               letterSpacing: "-0.04em",
             }}
           >
-            Hold and
+            Put your assets
             <br />
-            get paid{" "}
-            <span className="italic text-accent-secondary">more</span>
+            <span className="italic text-accent-secondary">to work</span>
           </h1>
           <p
             className="mb-9 mt-12 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"

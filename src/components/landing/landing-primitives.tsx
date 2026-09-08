@@ -1,23 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
 
-export function SectionMarker({
-  label,
-  color = "#80C9B6",
-}: {
-  label: string;
-  color?: string;
-}) {
-  return (
-    <div
-      className="mb-5 inline-flex items-center gap-[10px] font-mono text-[11px] uppercase"
-      style={{ color, letterSpacing: "0.12em" }}
-    >
-      <span className="inline-block h-px w-8" style={{ background: color }} />
-      {label}
-    </div>
-  );
-}
-
 type Variant = "primary" | "ghost" | "outline";
 type Size = "sm" | "md" | "lg";
 

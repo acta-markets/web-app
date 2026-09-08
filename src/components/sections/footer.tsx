@@ -3,6 +3,7 @@ import { ActaLogo } from "@/components/acta-logo";
 
 const links = [
   { label: "Docs", href: "/docs", external: false },
+  { label: "Partners", href: "/partners", external: false },
   { label: "GitHub", href: "https://github.com/acta-markets/web-app/tree/main/docs-site", external: true },
   { label: "Telegram", href: "https://t.me/+J3_R6jW-msc1MDU6", external: true },
 ];

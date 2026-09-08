@@ -1,5 +1,4 @@
 import { CAP_NOTE } from "@/lib/landing-vaults";
-import { SectionMarker } from "./landing-primitives";
 
 const MINT = "#80C9B6";
 const MUTED = "#8A8A8A";
@@ -194,7 +193,6 @@ export function LandingRisk() {
   return (
     <section className="py-[120px] max-md:py-20">
       <div className="mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-        <SectionMarker label="// Risk" color="#FF8A3C" />
         <h2
           className="mb-10 font-space font-semibold text-content-primary"
           style={{
