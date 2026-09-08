@@ -1,6 +1,7 @@
 import { LandingButton } from "./landing-primitives";
+import { PARTNERS_CONTACT_URL } from "./landing-partners-contact";
 
-export function LandingHero() {
+export function LandingPartnersHero() {
   return (
     <section className="relative overflow-hidden" style={{ backgroundColor: "#000" }}>
       {/* layer 1: ASCII noise */}
@@ -43,41 +44,43 @@ export function LandingHero() {
             className="mb-8 inline-flex items-center gap-[10px] font-mono text-[12px] uppercase text-accent-secondary"
             style={{ letterSpacing: "0.18em" }}
           >
+            {/* square rather than the hero's pulsing dot: a label, not a status */}
             <span
-              className="inline-block h-1.5 w-1.5 rounded-full"
+              className="inline-block h-1.5 w-1.5"
               style={{ background: "#2AA286", boxShadow: "0 0 10px #2AA286" }}
             />
-            Live on Solana mainnet
+            Partnerships
           </div>
           <h1
             className="m-0 font-space font-semibold text-content-primary"
             style={{
-              // sized so "Put your assets" holds one line in the 720px hero column
+              // matches the home hero so the two entry points read as one site
               fontSize: "clamp(48px, 9vw, 96px)",
               lineHeight: 0.95,
               letterSpacing: "-0.04em",
             }}
           >
-            Put your assets
+            Plug into
             <br />
-            <span className="italic text-accent-secondary">to work</span>
+            <span className="italic text-accent-secondary">the venue</span>
           </h1>
           <p
             className="mb-9 mt-12 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8] max-md:mt-8"
             style={{ fontSize: 16, letterSpacing: "-0.02em" }}
           >
-            Deposit what you already hold into curated vaults on Acta&apos;s own options
-            venue with no liquidations
+            Acta runs its own options venue on Solana. Desks quote the flow, apps route
+            deposits into curated vaults, treasuries put idle assets to work
           </p>
           <div className="inline-flex flex-wrap gap-3">
-            <LandingButton variant="primary" size="lg" href="/#vaults">
-              Deposit
-            </LandingButton>
             <LandingButton
-              variant="ghost"
+              variant="primary"
               size="lg"
-              href="/docs"
+              href={PARTNERS_CONTACT_URL}
+              external
             >
+              Get in touch ↗
+            </LandingButton>
+            <LandingButton variant="ghost" size="lg" href="/docs">
               Read docs
             </LandingButton>
           </div>

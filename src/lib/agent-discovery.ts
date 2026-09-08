@@ -248,5 +248,5 @@ Sitemap: ${DOCS_SITE_ORIGIN}/sitemap.xml
 }
 
 export function getSitemapUrls(context: DeploymentContext): string[] {
-  return ["/", "/earn"].map((path) => `${context.siteOrigin}${path}`);
+  return ["/", "/earn", "/partners"].map((path) => `${context.siteOrigin}${path}`);
 }

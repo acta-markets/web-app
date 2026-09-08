@@ -1,16 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDownIcon, SectionMarker } from "./landing-primitives";
+import { ChevronDownIcon } from "./landing-primitives";
 
 const ITEMS = [
   {
     q: "What is Acta?",
-    a: "Curated yield vaults running on Acta's own options venue. Deposit an asset you already hold and the vault earns USDC on top of it from trading desks.",
+    a: "Curated yield vaults running on Acta's own options venue. Deposit an asset you already hold and the vault earns yield on top of it from trading desks.",
   },
   {
     q: "How is the yield generated?",
-    a: "Two sources. Your SOL stays staked and keeps earning staking rewards. On top, trading desks pay a weekly cash premium for exposure to the upside past an agreed price, paid upfront in USDC every cycle.",
+    a: "Two sources. Your SOL stays staked and keeps earning staking rewards. On top, trading desks pay a weekly cash premium for exposure to the upside past an agreed price, paid upfront every cycle.",
   },
   {
     q: "What is the catch?",
@@ -40,7 +40,6 @@ export function LandingFaq() {
   return (
     <section className="pb-[120px] max-md:pb-20">
       <div className="mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-        <SectionMarker label="// Questions" />
         <h2
           className="mb-10 font-space font-semibold text-content-primary"
           style={{

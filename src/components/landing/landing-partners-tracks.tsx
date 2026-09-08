@@ -1,43 +1,40 @@
-type Step = {
-  n: string;
+type Track = {
+  glyph: string;
   title: string;
   copy: string;
   bg: string;
   accent: string;
   offset: [number, number];
-  joke?: boolean;
 };
 
-const STEPS: Step[] = [
+const TRACKS: Track[] = [
   {
-    n: "01",
-    title: "Deposit",
-    copy: "Pick a curated vault and deposit the asset you already hold",
+    glyph: "≈",
+    title: "Trading desks",
+    copy: "Quote the other side. Vault cycles reach connected desks over the RFQ WebSocket, priced and filled on Solana, settled in USDC",
     bg: "#072C28",
     accent: "#2AA286",
     offset: [0, 0],
   },
   {
-    n: "02",
-    title: "Get paid",
-    copy: "Yield on top of the asset you already hold",
+    glyph: "◧",
+    title: "Apps and wallets",
+    copy: "Give your users yield on what they already hold. Route idle balances into curated vaults and keep your own front end",
     bg: "#2C0C23",
     accent: "#FF60BD",
     offset: [30, 20],
   },
   {
-    // the punchline: there is no step three
-    n: "03",
-    title: "Oh wait",
-    copy: "There is no step three. You can withdraw at the end of any cycle.",
+    glyph: "▣",
+    title: "Treasuries",
+    copy: "Put a token treasury to work without selling it. Covered calls and cash-secured puts on the assets you already hold",
     bg: "#2A1A00",
     accent: "#FF8A3C",
     offset: [60, 40],
-    joke: true,
   },
 ];
 
-export function LandingHowItWorks() {
+export function LandingPartnersTracks() {
   return (
     <section className="py-[120px] max-md:py-20">
       <div className="mx-auto w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
@@ -49,19 +46,19 @@ export function LandingHowItWorks() {
             letterSpacing: "-0.03em",
           }}
         >
-          Three steps
+          Three ways in
         </h2>
         <div className="grid grid-cols-1 gap-0">
-          {STEPS.map((step, i) => (
+          {TRACKS.map((track, i) => (
             <div
-              key={step.n}
+              key={track.title}
               className={`grid items-stretch max-md:grid-cols-1 md:grid-cols-[140px_1fr] ${i === 0 ? "border-t border-bg-border" : ""
                 } border-b border-bg-border`}
             >
-              {/* tinted ASCII numeral */}
+              {/* tinted ASCII glyph */}
               <div
                 className="relative overflow-hidden max-md:h-[140px] md:min-h-[180px]"
-                style={{ backgroundColor: step.bg }}
+                style={{ backgroundColor: track.bg }}
               >
                 <div
                   aria-hidden
@@ -69,23 +66,23 @@ export function LandingHowItWorks() {
                   style={{
                     backgroundImage: "url(/landing/ascii-mountain.png)",
                     backgroundSize: "180% 180%",
-                    backgroundPosition: `${step.offset[0]}% ${step.offset[1]}%`,
+                    backgroundPosition: `${track.offset[0]}% ${track.offset[1]}%`,
                     mixBlendMode: "color-dodge",
                     opacity: 0.9,
                   }}
                 />
                 <div
+                  aria-hidden
                   className="absolute inset-0 flex items-center justify-center font-space font-bold"
                   style={{
                     fontSize: 96,
-                    color: step.accent,
+                    color: track.accent,
                     letterSpacing: "-0.05em",
                     lineHeight: 1,
                     mixBlendMode: "screen",
-                    opacity: step.joke ? 0.4 : 1,
                   }}
                 >
-                  {step.n}
+                  {track.glyph}
                 </div>
               </div>
               <div className="flex flex-col justify-center px-12 py-10 max-md:px-5 max-md:py-8">
@@ -97,11 +94,7 @@ export function LandingHowItWorks() {
                     letterSpacing: "-0.03em",
                   }}
                 >
-                  {step.joke ? (
-                    <span className="italic text-content-secondary">{step.title}</span>
-                  ) : (
-                    <>{step.title}</>
-                  )}
+                  {track.title}
                 </div>
                 <div
                   className="max-w-[620px] font-mono text-content-secondary"
@@ -111,7 +104,7 @@ export function LandingHowItWorks() {
                     lineHeight: 1.55,
                   }}
                 >
-                  {step.copy}
+                  {track.copy}
                 </div>
               </div>
             </div>

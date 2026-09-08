@@ -1,10 +1,10 @@
+import { PARTNER_EMAIL } from "@/lib/landing-vaults";
 import { LandingButton } from "./landing-primitives";
+import { PARTNERS_CONTACT_URL } from "./landing-partners-contact";
 
-export function LandingCta() {
+export function LandingPartnersCta() {
   return (
-    <section
-      className="relative overflow-hidden border-t border-bg-border py-[140px] max-md:py-24"
-    >
+    <section className="relative overflow-hidden border-t border-bg-border py-[140px] max-md:py-24">
       <div
         aria-hidden
         className="absolute inset-0"
@@ -38,25 +38,45 @@ export function LandingCta() {
             letterSpacing: "-0.03em",
           }}
         >
-          Hold and
+          Come quote
           <br />
-          get paid{" "}
+          the{" "}
           <span className="italic" style={{ color: "#B0E8D6" }}>
-            more
+            flow
           </span>
         </div>
+        <p
+          className="mb-9 max-w-[560px] font-mono leading-[1.55] text-[#E8E8E8]"
+          style={{ fontSize: 16, letterSpacing: "-0.02em" }}
+        >
+          Tell us which side you are on and we will get you connected
+        </p>
         <div className="flex flex-wrap justify-start gap-3">
-          <LandingButton variant="primary" size="lg" href="/#vaults">
-            Deposit
-          </LandingButton>
           <LandingButton
-            variant="ghost"
+            variant="primary"
             size="lg"
-            href="/docs"
+            href={PARTNERS_CONTACT_URL}
+            external
           >
+            Get in touch ↗
+          </LandingButton>
+          <LandingButton variant="ghost" size="lg" href="/docs">
             Read docs
           </LandingButton>
         </div>
+        {/* the address the vault card used to point at, kept reachable */}
+        <p
+          className="mt-6 font-mono text-[#B0E8D6]"
+          style={{ fontSize: 14, letterSpacing: "-0.02em" }}
+        >
+          or email{" "}
+          <a
+            href={`mailto:${PARTNER_EMAIL}`}
+            className="underline underline-offset-4 transition-colors hover:text-content-primary"
+          >
+            {PARTNER_EMAIL}
+          </a>
+        </p>
       </div>
     </section>
   );

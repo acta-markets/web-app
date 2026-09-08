@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     template: "%s | Acta"
   },
   description:
-    "Curated yield vaults for the assets you already hold. Vaults earn USDC from trading desks. No liquidations."
+    "Curated yield vaults for the assets you already hold. Vaults earn yield from trading desks. No liquidations."
 };
 
 export default function RootLayout({
