@@ -70,6 +70,7 @@ describe("agent discovery", () => {
     expect(getSitemapUrls(context)).toEqual([
       "https://devnet.acta.markets/",
       "https://devnet.acta.markets/earn",
+      "https://devnet.acta.markets/partners",
     ]);
   });
 
