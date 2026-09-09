@@ -29,6 +29,7 @@ export type {
   TokenCapsMessage,
   ServerMessage,
   ServerError,
+  ActaWsClientError,
   EarnAssetSummary,
   EarnSummaryData,
   TokenMarketsInfoData,
@@ -78,101 +79,6 @@ function normalizeWsUrl(url: string): string {
   return url;
 }
 
-function createRequestId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function patchQueryMessagesForServer(client: ActaWsClient): void {
-  const c = client as unknown as {
-    send: (message: unknown) => void;
-    getMarkets: () => void;
-    getPositions: () => void;
-    getMyActiveRfqs: () => void;
-    getOrderStatus: (orderIdHex: string) => void;
-    getMarketDescriptors: (args?: { active_only?: boolean }) => void;
-    getExpiries: (args?: {
-      underlying_mint?: string;
-      quote_mint?: string;
-      is_put?: boolean | null;
-    }) => void;
-    getTokens: (args?: { active_only?: boolean }) => void;
-    getTokenCaps: (args?: { include_markets?: boolean }) => void;
-    getIndicativePrices: (req: { market: string; position_type: "covered_call" | "cash_secured_put" }) => void;
-    getTokenMarketsInfo: (underlyingMint: string) => void;
-  };
-
-  // Server on oracle-update branch requires `request_id` in query-style messages.
-  c.getMarkets = () => {
-    c.send({ type: "GetMarkets", data: { request_id: createRequestId() } });
-  };
-  c.getPositions = () => {
-    c.send({ type: "GetPositions", data: { request_id: createRequestId() } });
-  };
-  c.getMyActiveRfqs = () => {
-    c.send({ type: "GetMyActiveRfqs", data: { request_id: createRequestId() } });
-  };
-  c.getOrderStatus = (orderIdHex: string) => {
-    c.send({
-      type: "GetOrderStatus",
-      data: { request_id: createRequestId(), order_id: orderIdHex },
-    });
-  };
-  c.getMarketDescriptors = (args?: { active_only?: boolean }) => {
-    c.send({
-      type: "GetMarketDescriptors",
-      data: { request_id: createRequestId(), active_only: args?.active_only ?? true },
-    });
-  };
-  c.getExpiries = (args?: {
-    underlying_mint?: string;
-    quote_mint?: string;
-    is_put?: boolean | null;
-  }) => {
-    c.send({
-      type: "GetExpiries",
-      data: {
-        request_id: createRequestId(),
-        underlying_mint: args?.underlying_mint,
-        quote_mint: args?.quote_mint,
-        is_put: args?.is_put ?? null,
-      },
-    });
-  };
-  c.getTokens = (args?: { active_only?: boolean }) => {
-    c.send({
-      type: "GetTokens",
-      data: { request_id: createRequestId(), active_only: args?.active_only ?? true },
-    });
-  };
-  c.getTokenCaps = (args?: { include_markets?: boolean }) => {
-    c.send({
-      type: "GetTokenCaps",
-      data: { request_id: createRequestId(), include_markets: args?.include_markets ?? false },
-    });
-  };
-  c.getIndicativePrices = (req: { market: string; position_type: "covered_call" | "cash_secured_put" }) => {
-    c.send({
-      type: "GetIndicativePrices",
-      data: { request_id: createRequestId(), ...req },
-    });
-  };
-  (c as unknown as { getEarnSummary: () => void }).getEarnSummary = () => {
-    c.send({
-      type: "GetEarnSummary",
-      data: { request_id: createRequestId() },
-    });
-  };
-  c.getTokenMarketsInfo = (underlyingMint: string) => {
-    c.send({
-      type: "GetTokenMarketsInfo",
-      data: { request_id: createRequestId(), underlying_mint: underlyingMint },
-    });
-  };
-}
-
 // ============================================================================
 // Factory function for creating client
 // ============================================================================
@@ -180,20 +86,12 @@ function patchQueryMessagesForServer(client: ActaWsClient): void {
 export function createRfqClient(options?: CreateClientOptions): ActaWsClient {
   const configuredUrl = options?.url || RFQ_WS_URL;
   const url = normalizeWsUrl(configuredUrl);
-  console.log("[RFQ] Creating ActaWsClient with URL:", url);
-  console.log("[RFQ] Options:", { role: "taker", autoReconnect: true, debug: true });
-  
-  const client = new ActaWsClient({
-    url, 
+  return new ActaWsClient({
+    url,
     role: "taker",
     autoReconnect: true,
-    debug: true,
+    debug: options?.debug ?? false,
   });
-
-  patchQueryMessagesForServer(client);
-  
-  console.log("[RFQ] Client created:", client);
-  return client;
 }
 
 // ============================================================================

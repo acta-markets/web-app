@@ -71,24 +71,21 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
 - `src/components/solana/solana-connect-button.tsx` - Connect button component
 - Supports Phantom, Solflare, and other Wallet Standard wallets
 
-**Price Feeds**: Pyth Network oracle integration:
-- `src/lib/pyth-ids.ts` - Price feed IDs for supported assets
-- `/api/pyth/stream` - SSE proxy to Hermes for real-time prices
-- `/api/pyth/latest` - Latest price snapshots
+**Market prices and APR**: The market page uses the configured RFQ backend’s `GetTokenMarketsInfo.reference_price` and indicative premiums, refreshed together every 30 seconds. APR uses the existing SDK formula and is unavailable for stale indicatives. The backend owns oracle access; the frontend has no direct Hermes integration.
 
 **Markets**: Static market definitions in `src/lib/markets.ts` with call/CSP (cash-secured put) types, APR ranges, and price options.
 
 **Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
 - Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)
-- Pyth price feed IDs
 - Token metadata (decimals, logos)
-- Helper functions: `getToken()`, `getTokenMint()`, `getTokenLogo()`, `getTokenPythId()`
+- Helper functions: `getToken()`, `getTokenMint()`, `getTokenLogo()`
 
 **Database**: MongoDB via `src/lib/mongodb.ts` with global connection caching for dev HMR.
 
 **RFQ Infrastructure**: WebSocket client using `@acta-markets/ts-sdk` (see `package.json` for the pinned version):
 - `src/lib/rfq-client.ts` - Thin wrapper around SDK's `ActaWsClient`
-- `src/lib/use-rfq.ts` - React hook for component integration
+- `src/components/rfq/rfq-provider.tsx` - Shared React connection, discovery and RFQ request state; token metadata is bound to its underlying mint and request ID
+- `src/components/market/use-rfq-order.ts` - Preserves selected order identity and whether its signature was sent. After same-credential resume, `GetMyActiveRfqs` can authorize repeating `AcceptQuote` for the same pending order to retrieve its signing payload. Submitted transactions are never replayed; `GetOrderStatus` reconciles execution.
 - Connects via `NEXT_PUBLIC_RFQ_WS_URL` env variable
 - Auth flow: `connectAnonymous()` → user clicks connect → `authenticate(walletAuthProvider)`
 - Challenge is human-readable text signed as UTF-8 bytes

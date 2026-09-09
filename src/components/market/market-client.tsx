@@ -9,14 +9,13 @@ import { AppCard } from "@/components/app-ui/app-card";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { AppPill } from "@/components/app-ui/app-pill";
-// import { MarketChart } from "@/components/market/market-chart";
 import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getTokenMint, getToken } from "@/lib/tokens";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { getCapFilledPct } from "@/lib/token-caps";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
-import type { QuoteReceivedMessage, IndicativePricesMessage } from "@/lib/rfq-client";
+import type { QuoteReceivedMessage } from "@/lib/rfq-client";
 import {
   computeApyFromScaledPrices,
   quoteAmountToQuantity,
@@ -30,7 +29,6 @@ import {
   formatPct,
   formatUsdSmart
 } from "@/lib/markets";
-import { usePythPrice } from "@/lib/use-pyth-price";
 
 function formatDate(d: Date) {
   return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
@@ -166,17 +164,21 @@ export function MarketClient({ asset }: { asset: string }) {
   const [priceIdx, setPriceIdx] = useState(0);
   const [deposit, setDeposit] = useState("");
   const depositInputRef = useRef<HTMLInputElement>(null);
-  const pythId = market?.pythId;
-  const { price: livePrice, publishTime: livePt, livePoints } = usePythPrice(pythId);
-  const live = livePrice != null ? { price: livePrice, publishTime: livePt! } : null;
-  const [baseSpot, setBaseSpot] = useState<number | null>(null);
-  const spotForHooks = livePrice ?? 0;
 
   // RFQ Flow state
   const [rfqModalOpen, setRfqModalOpen] = useState(false);
   const [rfqRequestNonce, setRfqRequestNonce] = useState(0);
   const [isRequestingQuote, setIsRequestingQuote] = useState(false);
   const [modalInitialQuote, setModalInitialQuote] = useState<QuoteReceivedMessage | null>(null);
+  const [orderPreview, setOrderPreview] = useState<{
+    asset: string;
+    positionType: "covered_call" | "cash_secured_put";
+    strike: number;
+    quantity: number;
+    strikeDisplay: string;
+    quantityDisplay: string;
+    lockedAprPct: number;
+  } | null>(null);
   const [indicativeRequestedKey, setIndicativeRequestedKey] = useState<string | null>(null);
 
   // Global RFQ context (markets already fetched on app load)
@@ -188,9 +190,7 @@ export function MarketClient({ asset }: { asset: string }) {
     error: rfqError,
     submitRfq,
     clearTransientState,
-    getIndicativePrices,
-    getIndicativePricesCached,
-    tokenMarketsInfo,
+    tokenMarketsInfo: tokenMarketsSnapshot,
     getTokenMarketsInfo,
     isConnected: rfqConnected,
     isAuthenticated: rfqAuthenticated,
@@ -198,6 +198,8 @@ export function MarketClient({ asset }: { asset: string }) {
     referralStatus,
     openReferralGate,
   } = useRfqContext();
+  const tokenMarketsInfo = tokenMarketsSnapshot && tokenMarketsSnapshot.underlyingMint === getTokenMint(market?.asset ?? asset)
+    ? tokenMarketsSnapshot.data : null;
   const isReferralGated = referralStatus === "required";
 
   // All RFQ markets matching this asset+type, sorted by expiry (nearest first).
@@ -273,29 +275,16 @@ export function MarketClient({ asset }: { asset: string }) {
   }, [matchingMarkets.length, strikeIdx]);
 
   const positionType = type === "call" ? "covered_call" : "cash_secured_put";
-  const currentIndicativePrices = useMemo(() => {
-    if (!rfqMarketPda) return null;
-    const cached = getIndicativePricesCached(rfqMarketPda, positionType);
-    if (cached) return cached;
-    if (tokenMarketsInfo?.markets) {
-      const mkt = tokenMarketsInfo.markets.find(m => m.market_pda === rfqMarketPda);
-      const ind = mkt?.indicatives?.find(i => i.position_type === positionType);
-      if (ind?.strikes?.length) {
-        return {
-          market: rfqMarketPda,
-          position_type: positionType,
-          strikes: ind.strikes,
-          updated_at: ind.updated_at,
-        } as IndicativePricesMessage;
-      }
-    }
-    return null;
-  }, [rfqMarketPda, positionType, getIndicativePricesCached, tokenMarketsInfo]);
+  const currentIndicativePrices = tokenMarketsInfo?.markets
+    .find(m => m.market_pda === rfqMarketPda)?.indicatives
+    .find(i => i.position_type === positionType);
+  const referencePrice = tokenMarketsInfo?.reference_price;
+  const spot = referencePrice != null && Number(referencePrice) > 0
+    ? Number(referencePrice) / 1_000_000_000 : null;
 
   const currentIndicativeKey = rfqMarketPda ? `${rfqMarketPda}:${positionType}` : null;
   const hasCurrentIndicativePrices = !!(
     currentIndicativePrices &&
-    currentIndicativePrices.market === rfqMarketPda &&
     currentIndicativePrices.position_type === positionType &&
     currentIndicativePrices.strikes &&
     currentIndicativePrices.strikes.length > 0
@@ -314,23 +303,16 @@ export function MarketClient({ asset }: { asset: string }) {
   );
   const expiryFromMarket = strikeDates.length > 0 ? strikeDates[strikeIdx] ?? strikeDates[0] : null;
 
-  // Initial load: single GetTokenMarketsInfo for markets + decimals + size_rule + indicatives.
+  // Refresh spot and indicative premiums together from the selected backend.
   const wsReady = connectionState === "connected" || connectionState === "authenticated";
   useEffect(() => {
     if (!wsReady || !market) return;
     const underlyingMint = (getTokenMint(market.asset) ?? "").trim();
     if (!underlyingMint) return;
     getTokenMarketsInfo(underlyingMint);
-  }, [wsReady, market, getTokenMarketsInfo]);
-
-  // 30s refresh: lightweight GetIndicativePrices for current market only.
-  useEffect(() => {
-    if (!wsReady || !rfqMarketPda) return;
-    const id = window.setInterval(() => {
-      getIndicativePrices(rfqMarketPda, positionType);
-    }, 30_000);
+    const id = window.setInterval(() => getTokenMarketsInfo(underlyingMint), 30_000);
     return () => window.clearInterval(id);
-  }, [wsReady, rfqMarketPda, positionType, getIndicativePrices]);
+  }, [wsReady, market, getTokenMarketsInfo]);
 
   // Mark indicative as requested when market PDA is resolved.
   useEffect(() => {
@@ -376,35 +358,24 @@ export function MarketClient({ asset }: { asset: string }) {
     };
   }, [assetOpen]);
 
-  useEffect(() => {
-    if (baseSpot == null && Number.isFinite(spotForHooks) && spotForHooks > 0) {
-      setBaseSpot(spotForHooks);
-      return;
-    }
-    if (baseSpot != null && live?.price && baseSpot !== live.price) {
-      setBaseSpot(live.price);
-    }
-  }, [baseSpot, live?.price, spotForHooks]);
-
   // Price options with APR calculated from indicative prices
   const priceOptionsWithApr = useMemo(() => {
-    const spotPrice = baseSpot ?? spotForHooks ?? 0;
     const expiryTs = matchingMarkets[strikeIdx]?.expiry_ts ? Number(matchingMarkets[strikeIdx].expiry_ts) : 0;
     const secondsToExpiry = expiryTs > 0 ? expiryTs - Math.floor(Date.now() / 1000) : 0;
 
     if (hasCurrentIndicativePrices && currentIndicativePrices?.strikes) {
       const options = currentIndicativePrices.strikes.map(s => {
         const strike = Number(s.strike) / 1_000_000_000;
-        const bestPrice = s.best_price ? Number(s.best_price) : null;
-        let apr = 0;
-        if (bestPrice && secondsToExpiry > 0) {
+        const bestPrice = !currentIndicativePrices.is_stale && s.best_price != null ? Number(s.best_price) : null;
+        let apr: number | null = null;
+        if (bestPrice != null && spot != null && secondsToExpiry > 0) {
           try {
             const result = computeApyFromScaledPrices({
               positionType,
               underlyingAmount: 1,
               grossPremiumPerUnit1e9: bestPrice,
               strike1e9: Number(s.strike),
-              spotPrice1e9: Math.round(spotPrice * 1_000_000_000),
+              spotPrice1e9: Number(referencePrice),
               secondsToExpiry,
             });
             apr = result.apr;
@@ -421,11 +392,11 @@ export function MarketClient({ asset }: { asset: string }) {
     return [];
   }, [
     hasCurrentIndicativePrices,
-    currentIndicativePrices?.strikes,
+    currentIndicativePrices,
     matchingMarkets,
     strikeIdx,
-    baseSpot,
-    spotForHooks,
+    referencePrice,
+    spot,
     positionType,
     type,
   ]);
@@ -510,7 +481,6 @@ export function MarketClient({ asset }: { asset: string }) {
   const isSameDay = termDays <= 1 || hoursToExpiry < 24;
   const termDisplay = isSameDay ? `${hoursToExpiry} hour${hoursToExpiry !== 1 ? "s" : ""}` : `${termDays} days`;
   const termDisplayShort = isSameDay ? `${hoursToExpiry}h` : `${termDays}d`;
-  const spot = live?.price ?? 0;
 
   const depositNum = Number(deposit);
   const quantityLamportsFromInput = useMemo(() => {
@@ -544,8 +514,8 @@ export function MarketClient({ asset }: { asset: string }) {
     quantityLamportsFromInput >= wireSizeRule.min_size &&
     quantityLamportsFromInput <= wireSizeRule.max_size;
   const notionalUsd =
-    type === "call" ? (depositOk ? depositNum * spot : 0) : depositOk ? depositNum : 0;
-  const selectedApr = (selectedPriceOption?.apr ?? 0) * 100;
+    type === "call" ? (depositOk ? depositNum * (spot ?? 0) : 0) : depositOk ? depositNum : 0;
+  const selectedApr = selectedPriceOption?.apr != null ? selectedPriceOption.apr * 100 : null;
 
   // Premium directly from indicative best_price (per-unit, 1e9 scale).
   const bestPricePerUnit = selectedPriceOption?.bestPrice
@@ -567,6 +537,7 @@ export function MarketClient({ asset }: { asset: string }) {
     rfqConnected &&
     rfqAuthenticated &&
     !shouldShowIndicativeLoading &&
+    selectedApr != null &&
     !isRfqAuthPending;
 
   const ctaLabel = !walletAddress
@@ -579,6 +550,8 @@ export function MarketClient({ asset }: { asset: string }) {
           ? (sizeRuleViolationMessage ?? "Choose size")
           : shouldShowIndicativeLoading
             ? "Loading prices..."
+            : selectedApr == null
+              ? "Prices unavailable"
             : isRfqAuthPending
               ? "Connecting..."
               : isRequestingQuote
@@ -661,19 +634,27 @@ export function MarketClient({ asset }: { asset: string }) {
       });
       return;
     }
-    if (!marketPda) return;
+    if (!marketPda || selectedApr == null) return;
 
     const alignedQuantity = alignQuantityToRule(quantityLamportsFromInput, wireSizeRule);
+    const alignedDeposit = type === "call"
+      ? alignedQuantity / 10 ** underlyingDecimals
+      : quantityToQuoteAmount(alignedQuantity, selectedStrikeLamports, underlyingDecimals);
     if (alignedQuantity !== quantityLamportsFromInput) {
-      const alignedDeposit =
-        type === "call"
-          ? alignedQuantity / 10 ** underlyingDecimals
-          : quantityToQuoteAmount(alignedQuantity, selectedStrikeLamports, underlyingDecimals);
       setDeposit(formatInputValue(alignedDeposit, depositInputDecimals));
     }
 
     clearTransientState();
     setModalInitialQuote(null);
+    setOrderPreview({
+      asset: market?.asset ?? asset,
+      positionType,
+      strike: selectedStrikeLamports,
+      quantity: alignedQuantity,
+      strikeDisplay: formatUsdSmart(selectedPrice),
+      quantityDisplay: `${alignedDeposit.toLocaleString("en-US")} ${type === "call" ? (market?.asset ?? asset) : "USDC"}`,
+      lockedAprPct: selectedApr,
+    });
     submitRfq({
       market: marketPda,
       positionType,
@@ -700,6 +681,7 @@ export function MarketClient({ asset }: { asset: string }) {
     type,
     underlyingDecimals,
     depositInputDecimals,
+    asset, market?.asset, selectedPrice, selectedApr,
   ]);
 
   if (!market) {
@@ -775,19 +757,6 @@ export function MarketClient({ asset }: { asset: string }) {
 
   const n = priceOptions.length;
 
-  // const chartEl = (
-  //   <MarketChart
-  //     symbol={market.asset}
-  //     strikePrice={selectedPrice}
-  //     expiryLabel={formatDate(expiryDate)}
-  //     expiryTs={Math.round(expiryDate.getTime() / 1000)}
-  //     range={chartRange}
-  //     onRangeChange={setChartRange}
-  //     onClose={() => setChartOpen(false)}
-  //     livePoints={livePoints}
-  //   />
-  // );
-
   return (
     <div>
       {/* Header */}
@@ -828,7 +797,7 @@ export function MarketClient({ asset }: { asset: string }) {
                 Spot price
               </span>
               <span className="font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
-                {formatUsdSmart(spot)}
+                {spot != null ? formatUsdSmart(spot) : "\u2014"}
               </span>
             </div>
             <div className="h-6 w-px bg-[#323038]" />
@@ -858,7 +827,7 @@ export function MarketClient({ asset }: { asset: string }) {
               Spot price
             </span>
             <span className="font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
-              {formatUsdSmart(spot)}
+              {spot != null ? formatUsdSmart(spot) : "\u2014"}
             </span>
           </div>
           <div className="h-6 w-px bg-[#323038]" />
@@ -962,7 +931,7 @@ export function MarketClient({ asset }: { asset: string }) {
                         <span className="flex w-full items-center justify-center gap-1.5 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
                           <span className={active ? "text-content-primary" : "text-content-secondary"}>APR</span>
                           <span className="text-content-primary">
-                            {aprForIdx > 0 ? formatPct(aprForIdx * 100) : "\u2014"}
+                            {aprForIdx != null ? formatPct(aprForIdx * 100) : "\u2014"}
                           </span>
                         </span>
                       </button>
@@ -1104,12 +1073,12 @@ export function MarketClient({ asset }: { asset: string }) {
                   <div className="flex items-center gap-1.5">
                     <span className="text-content-secondary">APR</span>
                     <span className="text-content-primary">
-                      {shouldShowIndicativeLoading || livePrice == null ? "Loading..." : formatPct(selectedApr)}
+                      {selectedApr != null ? formatPct(selectedApr) : shouldShowIndicativeLoading ? "Loading..." : "Unavailable"}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-content-secondary">Upfront</span>
-                    <span className="text-content-primary">{depositOk ? formatUsdc(displayedPremiumUsd) : "\u2014"}</span>
+                    <span className="text-content-primary">{depositOk && selectedApr != null ? formatUsdc(displayedPremiumUsd) : "\u2014"}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-content-secondary">Term</span>
@@ -1130,12 +1099,11 @@ export function MarketClient({ asset }: { asset: string }) {
             </h3>
             <div className="flex flex-col gap-2 border border-bg-border bg-[rgba(18,18,18,0.01)] p-4 backdrop-blur-[4px] max-md:p-3">
               <span className="font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
-                {shouldShowIndicativeLoading || livePrice == null
-                  ? "Loading..."
-                  : `You earn ${formatPct(selectedApr)} APR`}
+                {selectedApr != null ? `You earn ${formatPct(selectedApr)} APR`
+                  : shouldShowIndicativeLoading ? "Loading..." : "APR unavailable"}
               </span>
               <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-primary opacity-50">
-                {depositOk
+                {depositOk && selectedApr != null
                   ? `${formatUsdc(displayedPremiumUsd)} upfront`
                   : sizeRuleViolationMessage
                     ? `${sizeRuleViolationMessage} to see your upfront premium`
@@ -1229,7 +1197,8 @@ export function MarketClient({ asset }: { asset: string }) {
       </div>
 
       {/* RFQ Flow Modal */}
-      <RfqFlowModal
+      {orderPreview && <RfqFlowModal
+        {...orderPreview}
         open={rfqModalOpen}
         onClose={() => {
           setRfqModalOpen(false);
@@ -1237,19 +1206,9 @@ export function MarketClient({ asset }: { asset: string }) {
           setModalInitialQuote(null);
         }}
         requestNonce={rfqRequestNonce}
-        marketPda={rfqMarketPda}
-        asset={market.asset}
-        positionType={type === "call" ? "covered_call" : "cash_secured_put"}
-        strike={Math.round(selectedPrice * 1_000_000_000)}
-        quantity={(depositOk && wireSizeRule && quantityLamportsFromInput != null)
-          ? alignQuantityToRule(quantityLamportsFromInput, wireSizeRule)
-          : 0}
-        strikeDisplay={formatUsdSmart(selectedPrice)}
-        quantityDisplay={`${depositNum.toLocaleString("en-US")} ${type === "call" ? market.asset : "USDC"}`}
         initialQuote={modalInitialQuote}
-        lockedAprPct={selectedApr}
         signTransaction={walletAddress ? solanaSignTransaction : undefined}
-      />
+      />}
     </div>
   );
 }
