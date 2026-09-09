@@ -288,6 +288,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
     client.on("stateChange", (state) => {
       console.log("[RfqProvider] State change:", state);
       setConnectionState(state);
+      if (state === "disconnected") {
+        tokenMarketsRequest.current = null;
+        setTokenMarketsInfo(null);
+      }
     });
 
     client.on("authenticated", (sessionId, expiresAt) => {
@@ -438,11 +442,13 @@ export function RfqProvider({ children }: RfqProviderProps) {
           const pt = ind.position_type as "covered_call" | "cash_secured_put";
           const key = getIndicativeKey(mkt.market_pda, pt);
           updates[key] = {
-            market: mkt.market_pda,
+            request_id: data.request_id,
+            market: mkt.market_pda as IndicativePricesMessage["market"],
             position_type: pt,
             strikes: ind.strikes,
             updated_at: ind.updated_at,
-          } as IndicativePricesMessage;
+            is_stale: ind.is_stale,
+          };
         }
       }
       if (Object.keys(updates).length > 0) {
@@ -710,10 +716,18 @@ export function RfqProvider({ children }: RfqProviderProps) {
   );
 
   const getTokenMarketsInfo = useCallback((underlyingMint: string) => {
-    tokenMarketsRequest.current = null;
-    setTokenMarketsInfo(null);
-    const requestId = clientRef.current?.getTokenMarketsInfo(underlyingMint);
-    if (requestId) tokenMarketsRequest.current = { requestId, underlyingMint };
+    const client = clientRef.current;
+    if (!client) return;
+    const requestId = crypto.randomUUID();
+    tokenMarketsRequest.current = { requestId, underlyingMint };
+    setTokenMarketsInfo(previous => previous?.underlyingMint === underlyingMint ? previous : null);
+    void client.request("TokenMarketsInfo", {
+      type: "GetTokenMarketsInfo", data: { request_id: requestId, underlying_mint: underlyingMint },
+    }).catch(() => {
+      if (tokenMarketsRequest.current?.requestId !== requestId) return;
+      tokenMarketsRequest.current = null;
+      setTokenMarketsInfo(null);
+    });
   }, []);
 
   const getEarnSummary = useCallback(() => {
