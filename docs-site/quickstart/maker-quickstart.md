@@ -6,7 +6,7 @@ JSON-layer path for a maker connection: auth, subscribe, quote, handle fills, re
 
 ## Connection and authentication
 
-The first message from the client is `Hello`. Version compatibility is semver-based: the server accepts any client `protocol_version` that is `>= min_supported_version`, otherwise it replies with `VersionMismatch` and closes the connection. `features` is an opt-in list. The `quote_expired` feature, when enabled, causes the server to emit explicit `QuoteExpired` events in place of silent expiry.
+The first message from the client is `Hello`. Version compatibility is semver-based: the server accepts any client `protocol_version` that is `>= min_supported_version`, otherwise it replies with `VersionMismatch` and closes the connection. `features` is an opt-in list. The `quote_expired` feature, when enabled, causes the server to emit explicit `QuoteExpired` events in place of silent expiry. The `cancel_on_disconnect` feature makes the engine cancel all of the session's open quotes when the connection ends; without it, resting quotes stay live while the maker is offline. Check `Welcome.enabled_features` to confirm what the server accepted.
 
 ```json
 {
@@ -33,11 +33,11 @@ The server responds with `Welcome` (`server_time_unix_ms` is for clock sync), th
 }
 ```
 
-`pubkey` is the `maker_owner` wallet registered on-chain, not the `quote_signing` key. The server looks up the registered signing key from `maker_owner` and verifies against it. Auth must finish within 15 seconds of the challenge; after three failed attempts the server closes the connection.
+`pubkey` is the `maker_owner` wallet registered on-chain, not the `quote_signing` key. The server looks up the registered signing key from `maker_owner` and verifies against it. Auth must finish within 15 seconds of the challenge; the default limit allows three failed attempts and closes the connection on the fourth.
 
 ## Subscription
 
-Subscriptions do not persist across disconnects. The client must reissue `Subscribe` after each successful authentication. A `null` mints filter selects all mints.
+A resumed maker auth session restores server-side routing and mint scope. Omitted or null mint fields leave the saved scope unchanged; explicit empty lists clear mint filters. After fresh auth, establish subscriptions again. The managed SDK restores its own desired target after either path, sending both mint lists explicitly, including empty lists.
 
 ```json
 {
@@ -45,8 +45,8 @@ Subscriptions do not persist across disconnects. The client must reissue `Subscr
   "data": {
     "request_id": "<uuid>",
     "channels": ["rfqs", "chain_events"],
-    "underlying_mints": null,
-    "quote_mints": null
+    "underlying_mints": [],
+    "quote_mints": []
   }
 }
 ```
@@ -57,7 +57,7 @@ Subscriptions do not persist across disconnects. The client must reissue `Subscr
 
 ## Quoting
 
-On `RfqBroadcast`, pick a strike from `rfq.strike` or `rfq.order_options`, compute the premium, set `valid_until >= now + 310s`, build the 182-byte order preimage from [`../reference/maker-api.md`](../reference/maker-api.md) (Quote rules), hash it to `order_id`, sign the 32-byte hash with `quote_signing`, and send `Quote`:
+On `RfqBroadcast`, pick a strike from `rfq.strike` or `rfq.order_options`, compute the premium, set `now + 310s <= valid_until <= market.expiry_ts`, build the 182-byte order preimage from [`../reference/maker-api.md`](../reference/maker-api.md) (Quote rules), hash it to `order_id`, sign the 32-byte hash with `quote_signing`, and send `Quote`:
 
 ```json
 {
@@ -66,7 +66,7 @@ On `RfqBroadcast`, pick a strike from `rfq.strike` or `rfq.order_options`, compu
     "rfq_id": "...",
     "strike": 160000000000,
     "price": 50000000,
-    "valid_until": 1710000310,
+    "valid_until": 1710000350,
     "nonce": 42,
     "order_id": "0x<64 hex>",
     "signature": "<base58 of ed25519(order_id)>"
@@ -93,9 +93,9 @@ Lifecycle events are keyed by `order_id`. `RfqClosed` is the terminal event for 
 | `QuoteBestStatus` | Quote is currently the best in the book. |
 | `QuoteOutbid` | Quote has been displaced by a better one. |
 | `QuoteRefreshRequested` | Settlement-buffer cutoff is approaching; resubmit with `valid_until ≥ min_valid_until` before the cutoff. |
-| `QuoteSelected` | Taker selected this quote; sponsored-tx settlement is in flight. |
+| `QuoteSelected` | Quote locked; awaiting the taker signature. |
 | `QuoteFilled` | Position opened on-chain. Carries `position_pda` and `tx_signature`. |
-| `QuoteCancelled` | Terminal. `reason` ∈ {`requested`, `risk_check`, `rfq_accepted`}. |
+| `QuoteCancelled` | Terminal. `reason` ∈ {`requested`, `risk_check`, `rfq_accepted`, `maker_disconnected`}. |
 | `QuoteExpired` | Emitted only when `quote_expired` was enabled in `Hello`. |
 | `RfqAvailableAgain` | Settlement reverted; the auction has reopened. The maker may re-quote with a fresh `order_id`. |
 | `RfqClosed` | Terminal RFQ event. Drop per-RFQ state. |
@@ -130,19 +130,19 @@ If the account is enrolled in pre-trade pricing, the server periodically emits `
 
 ## Reconnection
 
-Quotes survive disconnects until `valid_until` or `RfqClosed`. Subscriptions do not; resend them after auth. The server does not replay events missed during the disconnect window. Events already in flight can arrive again after recovery, so process lifecycle events idempotently by `order_id`.
+Cancel-on-disconnect (COD) applies when the client requests `cancel_on_disconnect` in `Hello.features` and the server includes it in `Welcome.enabled_features`. On disconnect, Core removes the connection's active and retained non-winning quotes; selected/executing obligations survive. Without COD, resting quotes can remain fillable while offline. Resume restores server subscriptions; fresh auth requires restoring them. The server does not replay events missed during the disconnect window. Events already in flight can arrive again after recovery, so process lifecycle events idempotently by `order_id`.
 
 After reauthentication, use `/maker/data` for recovery reads and `/maker` for
 quote-plane subscription state:
 
 ```json
-{ "type": "GetMyQuotes",       "data": { "request_id": "...", "active_only": true } }
+{ "type": "GetMyQuotes",       "data": { "request_id": "...", "scope": "live" } }
 { "type": "GetActiveRfqs",     "data": { "request_id": "..." } }
 { "type": "GetMakerPositions", "data": { "request_id": "..." } }
 { "type": "GetMyTrades",       "data": { "request_id": "..." } }
 ```
 
-`GetMyQuotes` with `active_only: true` returns live quotes. With `active_only: false`, the backend also appends historical quotes from DB; pass `limit` to cap the historical slice. `GetMyTrades` supports keyset pagination via `cursor` and `cursor_id`, and a `market` filter; see [`../reference/maker-api.md`](../reference/maker-api.md).
+`GetMyQuotes { scope: "live" }` returns the full unpaged owner set, including retained/selected/executing quotes. `scope: "history"` returns only the paginated DB projection. An empty Live response is not proof of nonexecution for an order whose ACK was lost; use `GetOrderStatus` and retain unresolved obligations. `GetMyTrades` supports keyset pagination via `cursor` and `cursor_id`, and a `market` filter; see [`../reference/maker-api.md`](../reference/maker-api.md).
 
 For MM dashboard bootstrap, send `GetMmSummary` on `/maker/data` after auth or reconnect. Do not poll it; use manual refresh or drift recovery if a full snapshot is needed later.
 If many maker workers can reconnect at once, add a small random delay before expensive recovery
@@ -167,7 +167,7 @@ Fetch static metadata on `/maker/data` at startup and refresh it when markets or
 |---|---|
 | Application Ping | Approximately every 30 seconds. Each `Pong` carries an updated `server_time_unix_ms`. |
 | Reconnect backoff | Exponential with jitter, e.g. 250 ms initial, 5 s cap, ±20%. |
-| `valid_until` margin | `now + 320..360s`. Values below 310s are rejected; values significantly above 360s increase the maker's exposure window without functional benefit. |
+| `valid_until` margin | `now + 320..360s`, capped at `market.expiry_ts`. Values below 310s or after market expiry are rejected; values significantly above 360s increase the maker's exposure window without functional benefit. |
 | Clock skew | Track `offset = server_time − local_time` from `Welcome` and `Pong`. Apply when computing `valid_until`. |
 | Quote concurrency | One active quote per `(rfq_id, strike)`. Repricing via `ReplaceQuote`. |
 | Message rate | `30 msg/s` sustained, `60` burst per WebSocket connection. |

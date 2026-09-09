@@ -60,7 +60,7 @@ Sign the **raw UTF-8 bytes** of the challenge with your wallet key (Ed25519, no 
 }
 ```
 
-The signature is verified directly against `pubkey`. Auth must finish within 15 seconds of the challenge; after three failed attempts the connection is closed. On success the server sends `AuthSuccess { session_id, expires_at }` followed by `Snapshot`.
+The signature is verified directly against `pubkey`. Auth must finish within 15 seconds of the challenge; the default limit allows three failed attempts and closes the connection on the fourth. On success the server sends `AuthSuccess { session_id, expires_at }` followed by `Snapshot`.
 
 ### Session resume
 
@@ -127,7 +127,7 @@ Makers stream `QuoteReceived`. Each quote is firm and hash-bound via `order_id`:
     "maker": "<maker owner pubkey, base58>",
     "price": 50000000,
     "net_price": 49750000,
-    "valid_until": 1710000310,
+    "valid_until": 1710000350,
     "nonce": 42,
     "order_id": "0x<64 hex>"
   }
@@ -154,7 +154,7 @@ Name the winning quote by `order_id`:
 }
 ```
 
-The server locks the quote (`OrderAccepted`) and returns a pre-built transaction to sign:
+The server locks the quote and builds a transaction to sign:
 
 ```json
 {
@@ -220,7 +220,7 @@ The server relays keeper progress:
 
 | Event | Meaning |
 |---|---|
-| `OrderAccepted` | Quote locked; sponsored tx being built. |
+| `OrderAccepted` | Signed transaction accepted into Core's Enqueued state. An exact AcceptQuote retry may also receive it as a liveness ACK. It does not confirm chain execution. |
 | `OrderSubmitted` | Tx sent to Solana. Carries `tx_signature`, `order_version`. |
 | `OrderConfirmed` | Position opened on-chain. Carries `position_pda`, `order_version`. |
 | `OrderFailed` | Settlement failed. Carries `reason`, `order_version`. |
@@ -230,11 +230,11 @@ Apply updates only when `order_version` / `rfq_version` increases; ignore stale 
 
 ### 5. Failure and retry
 
-`OrderFailed.reason` classifies recoverability:
+`OrderFailed.reason` describes the failure; it alone does not authorize another trade:
 
 | Reason | Retryable? |
 |---|---|
-| `blockhash_expired` | Yes. The server retries internally up to 5×; if all fail it emits `OrderFailed(blockhash_expired)` then `RfqAvailableAgain`. Re-send `AcceptQuote` on the reopened RFQ. |
+| `blockhash_expired` | Keeper may retry within five attempts. This does not guarantee rollback; reconcile `GetOrderStatus` and wait for `RfqAvailableAgain` or `RfqClosed`. Do not replay the old order. |
 | `on_chain`, `submission_rejected`, `safety_timeout`, `shutdown` | No. Surface to the user. |
 
 On a signature timeout or tx-build failure, only the winning quote is discarded; still-valid losing quotes are restored and the RFQ reverts to active if not expired.
@@ -286,7 +286,7 @@ The authenticated session proves wallet ownership; no separate signature is need
 
 | Topic | Value |
 |---|---|
-| Application `Ping` | ~every 30s. Server closes idle connections after 90s. Each `Pong` carries `server_time_unix_ms`. |
+| Application `Ping` | Optional clock sample, e.g. every 30s; `Pong` carries `server_time_unix_ms`. Transport pongs maintain liveness; the default idle timeout is 90s. |
 | Server WS ping | every 30s; raw clients must answer protocol pings. |
 | Reconnect backoff | Exponential with jitter, e.g. 1s initial, 30s cap, ±20%. |
 | Clock skew | Track `offset = server_time − local_time` from `Welcome` / `Pong`; apply to `expires_at`, `signature_deadline`. |
@@ -315,3 +315,9 @@ No on-chain RPC is required for the RFQ flow itself — markets, quotes, positio
 - [Capacity limits](../reference/caps.md) — OI and notional caps
 - [Sandbox / Devnet](../reference/sandbox.md) — endpoints, faucets, program addresses
 - [FAQ](../reference/faq.md)
+
+## Recovery after reconnect
+
+After `AuthSuccess`, reconcile `GetMyActiveRfqs`, `GetPositions` and `GetOrderStatus`. Only a successful resume of the same credential transfers ownership of an unfinished signature. For the same pending order whose signature was not sent, repeat the exact `AcceptQuote` to retrieve the signing payload. For a submitted/enqueued order, query status without replaying trading commands.
+
+`OrderStatus` carries `{ request_id, order_id, state }`, with `state` equal to `{ "type": "pending" }`, `{ "type": "confirmed", "position_pda": "..." }` or `{ "type": "unknown" }`. It has no `order_version`; versions apply to lifecycle pushes. `unknown`, missing positions and timeouts leave the outcome unresolved. See [Delivery & recovery](../reference/taker-api.md#delivery-and-recovery).

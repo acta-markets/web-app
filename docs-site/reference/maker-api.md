@@ -19,8 +19,8 @@ wss://beta-api.acta.markets/maker/data
 Use `/maker` for RFQ subscriptions, quote submission, quote replacement, and
 quote cancellation. Use `/maker/data` for private maker reads and recovery
 queries such as `GetMyQuotes`, `GetMakerPositions`, `GetMyTrades`, and
-`GetMmSummary`. During the migration, `/maker` still accepts those read
-queries for backward compatibility; new clients should split the connections.
+`GetMmSummary`. These reads are also accepted on `/maker`. Use a separate data
+connection to keep read requests off the quote connection.
 
 `GetMmSummary` is for dashboard bootstrap and recovery on `/maker/data`. Do not
 call it from a timer loop. Use it after connect/auth, reconnect, explicit manual
@@ -33,9 +33,16 @@ push is expected.
 Connect -> Hello -> Welcome -> AuthRequest -> AuthChallenge -> AuthSuccess -> Snapshot -> Subscribe -> ...
 ```
 
-Makers are auto-challenged on connect. The server sends `AuthRequest` immediately after `Welcome` without waiting for `StartAuth`. Makers do not use `StartAuth` or `ResumeAuth`.
+Makers are auto-challenged on a fresh connection. The server sends `AuthRequest`
+immediately after `Welcome`; `StartAuth` is unnecessary and ignored on maker
+endpoints. A reconnect may instead send `ResumeAuth` with the previous maker
+session ID. Resume credentials are endpoint-role bound: a maker credential is
+rejected on the taker endpoint.
 
-`AuthSuccess.expires_at` is always `null` for makers (makers authenticate via challenge/signature on every connect and do not support session resume).
+`AuthSuccess.expires_at` is the Unix-second deadline for starting another
+connection with that maker resume credential. An already-authenticated
+connection remains live until disconnect, replacement, logout, blacklist, or
+server shutdown.
 
 ### Hello (first message)
 
@@ -74,9 +81,16 @@ Protocol constraints:
 }
 ```
 
-`server_time_unix_ms` is optional and may be omitted. When present, use it for clock skew estimation (see [WS common conventions](ws-common.md)).
+`server_time_unix_ms` is required. Use it for clock skew estimation (see [WS common conventions](ws-common.md)).
 
 If the client's `protocol_version` is incompatible, the server sends `VersionMismatch` instead of `Welcome` and closes the connection.
+
+`features` is an opt-in list; the server echoes the subset it enabled in `Welcome.enabled_features`. A feature that is absent from `enabled_features` is not active, so a client that requires one must check the echo before quoting.
+
+| Feature | Effect |
+|---------|--------|
+| `quote_expired` | The server emits explicit `QuoteExpired` events instead of silent expiry. |
+| `cancel_on_disconnect` | On an actual disconnect (socket close or liveness timeout), Core removes active and retained non-winning quotes still owned by that physical session, including retained quotes in locked RFQs. Ownership takeover preserves quotes; late cleanup of the replaced connection cannot cancel the new owner's book. Quotes a taker has already accepted (`QuoteSelected`) stay locked and settle or expire on their own timers. Without this feature, resting quotes survive a disconnect and can be filled while the maker is offline. Session resume does not restore cancelled quotes; re-quote after reconnecting. |
 
 ### Subscribe
 
@@ -95,7 +109,7 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
 `request_id` is required. The server always responds with `SubscribeAck` echoing the
 `request_id` and the channels that were newly added.
 
-`underlying_mints` (optional): filter broadcast events to markets with specific underlying mints. `quote_mints` (optional): filter by quote mint. If both are omitted, subscriptions apply to all markets.
+`underlying_mints` and `quote_mints` filter market broadcasts. Omitting both preserves the current scope (unrestricted on a fresh session). Providing either replaces both: an omitted peer or an empty list means unrestricted for that dimension. To preserve one dimension while changing the other, send both lists.
 
 ### Connection policy defaults
 
@@ -141,7 +155,7 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
 - `AddMints`, `RemoveMints`, `AddChannels`, `RemoveChannels`
 - `Quote`, `ReplaceQuote`, `BatchQuotes`, `CancelQuote`, `CancelAllQuotes`
 - `IndicativePricesResponse`
-- `GetMyQuotes`, `GetMakerPositions`, `GetMarketsForMaker`, `GetMmSummary`, `GetMyTrades`, `GetTokenCaps`, `GetMyCaps`, `GetSubscriptions`
+- `GetOrderStatus`, `GetMyQuotes`, `GetMakerPositions`, `GetMarketsForMaker`, `GetMmSummary`, `GetMyTrades`, `GetTokenCaps`, `GetMyCaps`, `GetSubscriptions`
 - `GetActiveRfqs`, `GetMarkets`, `GetMarketDescriptors`, `GetExpiries`, `GetTokens`
 
 ### Server -> Maker (direct)
@@ -152,7 +166,7 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
 - `RfqBroadcast`, `RfqSkipped`
 - `QuoteRefreshRequested`, `QuoteAcknowledged`, `QuoteBestStatus`, `QuoteOutbid`, `QuoteSelected`
 - `QuoteRejected`, `QuoteFilled`, `QuoteCancelled`, `QuoteExpired`, `RfqAvailableAgain`, `RfqClosed`
-- `CancelAllQuotesAck`, `BatchQuotesAck`
+- `CancelQuoteAck`, `CancelAllQuotesAck`, `BatchQuotesAck`
 - `IndicativePricesRequest`
 - `SubscriptionUpdated`
 - `Error`, `RequestError`, `Pong`
@@ -160,14 +174,13 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
 
 ### Server -> Maker (responses / query results)
 
-- `MyQuotes`, `MakerPositions`, `MakerMarkets`, `MmSummary`, `MyTrades`, `TokenCaps`, `MyCaps`, `Subscriptions`
+- `OrderStatus`, `MyQuotes`, `MakerPositions`, `MakerMarkets`, `MmSummary`, `MyTrades`, `TokenCaps`, `MyCaps`, `Subscriptions`
 - `ActiveRfqs`, `Markets`, `MarketDescriptors`, `Expiries`, `Tokens`
 
 ### Server -> Maker (broadcast if subscribed)
 
 - `TradeExecuted`, `StatsUpdate`, `PositionUpdated`, `ChainEvent`
 - `MarketCreated`, `MarketFinalized`
-- `QuotesUpdate`
 
 ---
 
@@ -196,7 +209,15 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
     "quantity": 1000000000,
     "expires_at": 1710000050,
     "taker": "TakerPubkeyBase58",
-    "order_options": [{ "strike": 150000000000 }, { "strike": 160000000000 }]
+    "order_options": [
+      {
+        "strike": 150000000000
+      },
+      {
+        "strike": 160000000000
+      }
+    ],
+    "sent_at_unix_ms": 1710000000123
   }
 }
 ```
@@ -228,7 +249,7 @@ Sent instead of `RfqBroadcast` when cap limits pre-filter the maker. `reason` is
     "rfq_id": "uuid",
     "strike": 160000000000,
     "price": 50000000,
-    "valid_until": 1710000310,
+    "valid_until": 1710000350,
     "nonce": 42,
     "order_id": "0x...64chars",
     "signature": "base58sig"
@@ -238,6 +259,7 @@ Sent instead of `RfqBroadcast` when cap limits pre-filter the maker. `reason` is
 
 Rules:
 - `valid_until` MUST be >= `now + 310` seconds (server rejects shorter expiries with `quote_expiry_too_short`)
+- `valid_until` MUST be <= the market's `expiry_ts` (later expiries are rejected with `market_expired`)
 - The server applies a **300-second settlement buffer**. Your quote is considered active for trading until `valid_until - 300` seconds. Set `valid_until` at least 310 seconds from now to allow a minimum 10-second trading window.
 - `order_id = sha256(preimage182)`
 - maker signs only 32-byte `order_id`
@@ -275,7 +297,7 @@ Atomic cancel-and-resubmit for a specific quote. Cancels the quote identified by
     "rfq_id": "uuid",
     "strike": 160000000000,
     "price": 55000000,
-    "valid_until": 1710000310,
+    "valid_until": 1710000350,
     "nonce": 43,
     "order_id": "0x...new64chars",
     "signature": "base58sig"
@@ -303,7 +325,7 @@ Submit multiple quotes in one message. A batch must contain at most `ws.max_batc
         "rfq_id": "uuid-1",
         "strike": 150000000000,
         "price": 45000000,
-        "valid_until": 1710000310,
+        "valid_until": 1710000350,
         "nonce": 42,
         "order_id": "0x...64chars-a",
         "signature": "base58sig-a"
@@ -312,7 +334,7 @@ Submit multiple quotes in one message. A batch must contain at most `ws.max_batc
         "rfq_id": "uuid-2",
         "strike": 160000000000,
         "price": 50000000,
-        "valid_until": 1710000310,
+        "valid_until": 1710000350,
         "nonce": 43,
         "order_id": "0x...64chars-b",
         "signature": "base58sig-b"
@@ -326,7 +348,7 @@ Each entry in `quotes` has the same schema as a standalone `Quote` message. Quot
 
 ### QuoteRejected (server -> maker)
 
-Sent when a quote fails server-side validation. Replaces generic `Error` for quote-specific rejections, providing a typed `reason` for programmatic handling.
+`QuoteRejected` is sent for quote-specific validation failures and carries a typed `reason` for programmatic handling.
 
 ```json
 {
@@ -334,13 +356,31 @@ Sent when a quote fails server-side validation. Replaces generic `Error` for quo
   "data": {
     "rfq_id": "uuid",
     "order_id": "0x...64chars",
-    "reason": "cap_exceeded",
+    "reason": "invalid_strike",
     "message": "optional detail"
   }
 }
 ```
 
-`message` is optional and may be omitted.
+`message` is optional and may be omitted. A cap rejection carries the failing
+dimension inside the reason instead of a bare string, so it cannot arrive
+without its detail:
+
+```json
+{
+  "type": "QuoteRejected",
+  "data": {
+    "rfq_id": "uuid",
+    "order_id": "0x...64chars",
+    "reason": { "cap_exceeded": { "maker_position_cap_exceeded": { "current": 3, "limit": 3 } } },
+    "message": "Maker position cap exceeded (3/3)"
+  }
+}
+```
+
+The value under `cap_exceeded` is a `CapError`: a bare string for
+`caps_unavailable`, otherwise an object keyed by the cap code (see
+[caps.md](caps.md) for the codes and amounts).
 
 ### QuoteRejectReason
 
@@ -352,7 +392,7 @@ Sent when a quote fails server-side validation. Replaces generic `Error` for quo
 | `invalid_signature` | Maker signature verification failed |
 | `maker_not_registered` | Maker not found in on-chain registry |
 | `order_id_mismatch` | `order_id` does not match `sha256(preimage)` |
-| `cap_exceeded` | Platform or maker cap limit exceeded (see `message` for detail) |
+| `{ "cap_exceeded": CapError }` | Platform or maker cap limit exceeded; the failing dimension with `current`/`limit` is the payload |
 | `rfq_not_found` | RFQ does not exist |
 | `rfq_not_active` | RFQ is no longer accepting quotes |
 | `duplicate_order_id` | `order_id` already submitted |
@@ -365,7 +405,7 @@ Sent when a quote fails server-side validation. Replaces generic `Error` for quo
   "data": {
     "rfq_id": "uuid",
     "strike": 160000000000,
-    "min_valid_until": 1710000035,
+    "min_valid_until": 1710000350,
     "reason": "expiring_soon"
   }
 }
@@ -498,7 +538,7 @@ Feature-gated: only sent if the client includes `"quote_expired"` in `Hello.feat
 }
 ```
 
-`reason` values: `requested` (maker requested), `risk_check` (server-side risk), `rfq_accepted` (RFQ accepted another quote).
+`reason` values: `requested` (maker requested), `risk_check` (server-side risk), `rfq_accepted` (RFQ accepted another quote), `maker_disconnected` (the session enabled `cancel_on_disconnect` and disconnected; sent to the session that is gone, so a reconnecting maker sees the cancellation through `GetMyQuotes`).
 
 ### RfqClosed (server -> maker)
 
@@ -550,28 +590,6 @@ Sent when a previously locked RFQ becomes available for new quotes (e.g. taker f
 
 `reason` values: `signature_timeout`, `tx_failed`, `tx_build_failed`.
 
-### QuotesUpdate (server -> maker)
-
-```json
-{
-  "type": "QuotesUpdate",
-  "data": {
-    "rfq_id": "uuid",
-    "quotes": [
-      {
-        "rfq_id": "uuid",
-        "strike": 160000000000,
-        "maker": "MakerOwnerPubkeyBase58",
-        "price": 50000000,
-        "valid_until": 1710000310,
-        "nonce": 42,
-        "order_id": "0x...64chars"
-      }
-    ]
-  }
-}
-```
-
 ### VersionMismatch (server -> maker)
 
 Sent instead of `Welcome` when the client's `protocol_version` is not compatible.
@@ -606,7 +624,22 @@ Connection is closed after this message.
 }
 ```
 
-Cancels **all** of this maker's active quotes on the given RFQ (across all strikes). There is no per-order_id cancel — use `CancelQuote` per rfq_id. Server responds with `QuoteCancelled` (containing all removed `order_ids`) on success, or `Error` (e.g. `QuoteNotFound`, `QuoteLocked`).
+Cancels **all** of this connection's active quotes on the given RFQ (across all strikes). There is no per-order_id cancel — use `CancelQuote` per rfq_id. Server responds after Core applies the command with `CancelQuoteAck { request_id, rfq_id, cancelled_order_ids }`, or a correlated `RequestError` (for example `RfqNotFound`, `RfqNotActive`, `QuoteLocked`). `QuoteCancelled` is a lifecycle notification, not the command receipt.
+
+### CancelQuoteAck (server -> maker)
+
+```json
+{
+  "type": "CancelQuoteAck",
+  "data": {
+    "request_id": "uuid",
+    "rfq_id": "uuid",
+    "cancelled_order_ids": ["0x...64chars"]
+  }
+}
+```
+
+On an Active RFQ an empty list is an idempotent no-op: the connection has no quote to remove there. `PendingSignature` and `Enqueued` reject single-RFQ cancellation as a whole with `QuoteLocked`, even for a non-winning maker.
 
 ### CancelAllQuotes (maker -> server)
 
@@ -620,9 +653,9 @@ Cancels **all** of this maker's active quotes on the given RFQ (across all strik
 }
 ```
 
-`market` is optional. If provided, cancels only quotes on that market. If omitted, cancels all active quotes.
+`market` is optional. If provided, it filters cancellation to that market; otherwise all markets are considered. CancelAll removes this connection's active and retained non-winning quotes, including those inside locked RFQs. Removed retained quotes cannot return on rollback. Selected/awaiting-signature and executing orders are preserved. COD applies the same cleanup after Core processes the disconnect. Neither operation is an account-wide persistent halt.
 
-Server responds with `CancelAllQuotesAck` immediately, followed by individual `QuoteCancelled` messages as the kernel processes each cancellation.
+Server responds with `CancelAllQuotesAck` after Core applies the cancellation. An invalid `market` returns `RequestError` with `InvalidMarket`; it does not broaden cancellation to all markets.
 
 ### CancelAllQuotesAck (server -> maker)
 
@@ -637,9 +670,11 @@ Server responds with `CancelAllQuotesAck` immediately, followed by individual `Q
 }
 ```
 
-`CancelAllQuotesAck` is sent immediately as acknowledgment that the bulk cancellation was dispatched. `cancelled_count` and `cancelled_order_ids` reflect quotes confirmed cancelled at ack time (may be `0` / empty). Individual `QuoteCancelled` messages follow asynchronously with actual order IDs as the kernel processes each cancellation.
+`cancelled_count` equals `cancelled_order_ids.length`; both report the orders actually removed by Core. An empty list means this command removed no quotes; it does not establish that no selected or executing obligations remain. Lifecycle `QuoteCancelled` messages are separate from the receipt and must not complete another request's await.
 
-Recommendation: after `CancelAllQuotes`, call `GetMyQuotes` after 100–500ms to confirm all quotes are cancelled, in case some `QuoteCancelled` messages were lost in best-effort delivery.
+Quote, batch, replacement and cancellation commands from one connection retain FIFO order through the SDK writer, socket actor and Core request queue. Commands before a cancellation may execute first; commands sent afterward may create new quotes. Cancellation is not a persistent account halt.
+
+If the connection drops before the ACK, retain an unknown outcome and reconcile instead of automatically replaying the command.
 
 ### Dynamic subscription management
 
@@ -660,13 +695,12 @@ All four respond with `SubscriptionUpdated` containing the subscription state:
   "data": {
     "request_id": "uuid",
     "channels": ["rfqs", "trades"],
-    "underlying_mints": ["MintBase58"],
-    "quote_mints": null
+    "underlying_mints": ["MintBase58"]
   }
 }
 ```
 
-`underlying_mints` and `quote_mints` are `null` when unfiltered (all mints).
+In subscription responses, an omitted mint list means that dimension is unfiltered. In requests, omission/null preserves the current filter; an explicit empty list clears it.
 
 ### Unsubscribe (maker -> server)
 
@@ -699,7 +733,8 @@ Unit variant, no `data` field. Server responds with `Pong`.
 All discovery requests require `request_id` (UUID). The server echoes `request_id` in the corresponding response. Maker-private and recovery reads should be sent on `/maker/data`; `GetSubscriptions` stays on `/maker` because it describes the live quote-plane subscription state.
 
 ```json
-{ "type": "GetMyQuotes", "data": { "request_id": "uuid", "active_only": true } }
+{ "type": "GetMyQuotes", "data": { "request_id": "uuid", "scope": "live" } }
+{ "type": "GetOrderStatus", "data": { "request_id": "uuid", "order_id": "0x...64chars" } }
 { "type": "GetMakerPositions", "data": { "request_id": "uuid" } }
 { "type": "GetMarketsForMaker", "data": { "request_id": "uuid" } }
 { "type": "GetMmSummary", "data": { "request_id": "uuid" } }
@@ -714,9 +749,9 @@ All discovery requests require `request_id` (UUID). The server echoes `request_i
 ```
 
 `active_only` behavior:
-- default is `true` when omitted (wire default for `GetMyQuotes`, `GetMarketDescriptors`, `GetTokens`)
-- `GetMyQuotes` with `active_only=true` returns live kernel quotes
-- `GetMyQuotes` with `active_only=false` also appends historical quotes from DB; `limit` is optional, defaults to 200, and is capped at 1000
+- default is `true` when omitted (wire default for `GetMarketDescriptors`, `GetTokens`)
+- `GetMyQuotes` requires `scope: "live"` or `scope: "history"`; it has no `active_only` field. Live is the complete, unpaged Core set of this owner's unfinished quotes across previous connections, including retained and selected quotes. A missing/incomplete source returns an error, not a successful partial set.
+- History contains only persisted historical rows. `limit` defaults to 200 and is capped at 1000. Pass `cursor` (last row's `created_at`, Unix seconds) together with `cursor_id` (hex `order_id`) — both or neither. Stop when `has_more` is false. History is not a substitute for Live or execution lookup.
 - for `GetMarketDescriptors`/`GetTokens`, `active_only=true` means **tradable** markets — non-finalized, non-disabled, and before the pre-expiry trading cutoff; `active_only=false` returns all markets/tokens.
 - `GetExpiries` has **no** `active_only` field — it always returns the tradable set (same predicate as above).
 - `GetMarketsForMaker` uses the wider active set (non-finalized, non-disabled, `expiry_ts > now`), so it still lists a market during its final pre-expiry no-trade window.
@@ -739,8 +774,8 @@ Optional filters for `GetMakerPositions`:
 
 All filter fields are optional. If omitted, all filters match. `limit` is optional,
 defaults to `100`, and is clamped to `[1, 500]`. The `MakerPositions` response sets
-`has_more: true` when the result was truncated at `limit`; page by narrowing filters
-(there is no cursor). Avoid using this request as a high-frequency refresh path.
+`has_more: true` when the result was truncated at `limit`; page with the keyset cursor: pass `cursor` (the `created_at` of the last row, unix seconds) together with `cursor_id` (its `pda`) — both or neither. Ordering is second-granular with `pda` as the tie-break; stop when `has_more` is `false`.
+Avoid using this request as a high-frequency refresh path.
 
 Optional filters for `GetMarketsForMaker`:
 
@@ -864,9 +899,13 @@ type MarketDescriptorInfo = {
 }
 ```
 
-`has_more`: `true` when the result was truncated at `limit` (default 100, max 500). Narrow the filters to see the rest; there is no cursor.
+`has_more`: `true` when the result was truncated at `limit` (default 100, max 500). To page with the keyset cursor: pass `cursor` (the `created_at` of the last row, unix seconds) together with `cursor_id` (its `pda`) — both or neither. Ordering is second-granular with `pda` as the tie-break; stop when `has_more` is `false`.
 
 `status` values: `none`, `open`, `funded`, `liquidated`, `settled` (see [PositionStatus](#positionstatus)).
+
+`reconciliation_status` is normally omitted. During lifecycle repair the server
+may expose `orphan_pending` or `orphaned_closed` while retaining public
+`status = "settled"`.
 
 `is_otm` is `null` for open/funded positions. Set to `true` (out-of-the-money) or `false` (in-the-money) after settlement or liquidation. Omitted from the wire when `null`.
 
@@ -885,34 +924,54 @@ Field semantics:
   "type": "MyQuotes",
   "data": {
     "request_id": "uuid",
-    "quotes": [
-      {
-        "rfq_id": "uuid",
-        "order_id": "0x...64chars",
-        "market": "MarketPdaBase58",
-        "underlying_mint": "UnderlyingMintBase58",
-        "underlying_symbol": "SOL",
-        "underlying_decimals": 9,
-        "quote_mint": "QuoteMintBase58",
-        "quote_symbol": "USDC",
-        "quote_decimals": 6,
-        "strike": 160000000000,
-        "price": 50000000,
-        "quantity": 1000000000,
-        "valid_until": 1710000310,
-        "status": "best",
-        "created_at": 1710000010
-      }
-    ]
+    "has_more": false,
+    "quotes": [{
+      "rfq_id": "uuid",
+      "order_id": "0x...64chars",
+      "market": "MarketPdaBase58",
+      "underlying_mint": "UnderlyingMintBase58",
+      "underlying_symbol": "SOL",
+      "underlying_decimals": 9,
+      "quote_mint": "QuoteMintBase58",
+      "quote_symbol": "USDC",
+      "quote_decimals": 6,
+      "strike": 160000000000,
+      "price": 50000000,
+      "quantity": 1000000000,
+      "valid_until": 1710000350,
+      "state": { "type": "active", "rank": "best", "rfq_version": 1 },
+      "created_at": 1710000010
+    }]
   }
 }
 ```
 
-`status` values: `pending`, `best`, `outbid`, `filled`, `expired`.
+| `state.type` | Fields | Meaning |
+|---|---|---|
+| `active` | `rank` (`best` or `outbid`), `rfq_version` | In the active book. |
+| `retained` | `rfq_version` | Non-selectable quote: a locked non-winner or a frozen refresh quote. It may return on rollback/requote unless removed. |
+| `awaiting_signature` | `rfq_version` | Selected quote awaiting the taker signature. |
+| `executing` | `rfq_version` | Selected quote whose execution is unresolved. |
+| `historical` | `status` | History only; persisted projection, not live authority. |
 
-`selected` is present only for historical quotes (`active_only=false`) — `true` if the taker selected this quote, `false` otherwise. Omitted from the wire for live quotes.
+Historical `status` is one of `submitted`, `filled`, `cancelled`, `replaced`, `expired`, `lost`. There is no top-level `status` or `selected`. `has_more` is required; it is always false for Live.
 
-Pre-resolved token metadata (`underlying_*`, `quote_*`) is included so the maker can render quotes without a separate `GetTokens` lookup.
+```json
+{ "type": "GetMyQuotes", "data": { "request_id": "uuid", "scope": "history", "limit": 200 } }
+```
+
+A History row uses the same identity/amount fields with, for example, `"state": { "type": "historical", "status": "filled" }`. Live and History never mix in one response.
+
+### GetOrderStatus / OrderStatus
+
+```json
+{ "type": "GetOrderStatus", "data": { "request_id": "uuid", "order_id": "0x...64chars" } }
+{ "type": "OrderStatus", "data": { "request_id": "uuid", "order_id": "0x...64chars", "state": { "type": "pending" } } }
+```
+
+Available to the authenticated owner on `/maker`, `/maker/data`, and `/taker`. Makers should use `/maker/data` to keep execution lookups off the quote connection. `state` is `pending`, `confirmed` (with `position_pda`), or `unknown`, encoded as a tagged object. See the shared [execution lookup contract](taker-api.md#orderstatus-server---taker).
+
+A lost ACK leaves the command outcome unknown. Keep unresolved orders in strategy state across reconnect; neither an empty Live response, a missing position, a timeout nor `unknown` proves nonexecution. Execution lookup failures return `RequestError` with the request ID.
 
 ### MakerMarkets payload
 
@@ -930,8 +989,7 @@ Pre-resolved token metadata (`underlying_*`, `quote_*`) is included so the maker
         "is_put": false,
         "is_finalized": false,
         "underlying_symbol": "SOL",
-        "quote_symbol": "USDC",
-        "stats": null
+        "quote_symbol": "USDC"
       }
     ]
   }
@@ -996,7 +1054,7 @@ Field semantics:
 - `markets`: `MakerMarketInfo[]` — see [MakerMarkets payload](#makermarkets-payload)
 - `tokens`: `TokenInfo[]` — see [Tokens payload](#tokens-payload)
 - `computed_at`: server-side snapshot timestamp (Unix seconds)
-- `positions_has_more`: `true` when the embedded `positions` were capped at 500. Retrieve more via `GetMakerPositions` (raise `limit` up to 500 and/or narrow filters — there is no cursor for exhaustive pagination). The rest of the snapshot is complete.
+- `positions_has_more`: `true` when the embedded `positions` were capped at 500. Retrieve the rest via `GetMakerPositions` — page with the keyset cursor: pass `cursor` (the `created_at` of the last row, unix seconds) together with `cursor_id` (its `pda`) — both or neither. Ordering is second-granular with `pda` as the tie-break; stop when `has_more` is `false`. The rest of the snapshot is complete.
 
 All balance values are in their respective token atomic units (use `decimals` from `caps.balances` to format).
 
@@ -1011,6 +1069,7 @@ All balance values are in their respective token atomic units (use `decimals` fr
       {
         "rfq_id": "uuid",
         "market": "MarketPdaBase58",
+        "taker": "TakerPubkeyBase58",
         "position_type": "covered_call",
         "strike": 160000000000,
         "quantity": 1000000000,
@@ -1103,14 +1162,12 @@ Per-maker position count, notional, and balance caps. Full schema (fields, `deci
   "type": "Subscriptions",
   "data": {
     "request_id": "uuid",
-    "channels": ["rfqs", "chain_events"],
-    "underlying_mints": null,
-    "quote_mints": null
+    "channels": ["rfqs", "chain_events"]
   }
 }
 ```
 
-`underlying_mints` and `quote_mints` are `null` when subscribed to all mints, or a list of base58 mint addresses when filtered.
+Subscription responses omit mint lists when unfiltered; filtered lists contain base58 mint addresses.
 
 ---
 
@@ -1172,16 +1229,15 @@ Received when subscribed to the corresponding channel.
       "underlying_mint": "UnderlyingMintBase58",
       "quote_mint": "QuoteMintBase58",
       "position_type": "covered_call",
-      "status": "open",
+      "status": "funded",
       "strike": 160000000000,
       "quantity": 1000000000,
       "price": 50000000,
       "total_premium": 123456789,
       "created_at": 1710000042,
-      "expiry_ts": 1710600000,
-      "is_otm": null
+      "expiry_ts": 1710600000
     },
-    "update_type": "created",
+    "update_type": "funded",
     "caps_snapshot": {
       "positions": { "current": 6, "limit": 100 },
       "notional": [
@@ -1207,7 +1263,7 @@ Received when subscribed to the corresponding channel.
 }
 ```
 
-`update_type` values: `created`, `funded`, `liquidated`, `settled`.
+The type admits `created`, `funded`, `liquidated`, `settled`; the server emits this push for funding (`funded`) only. Do not rely on it for fills or settlement notifications: reconcile via `GetMyCaps` / position queries or the relevant `ChainEvent`.
 
 `caps_snapshot` is the maker's caps **after** this update was applied. It has the same shape as the `caps` portion of [`MmSummary`](#mmsummary-payload), without the inner `request_id`. Use it to keep local caps in sync without calling `GetMyCaps` after every fill.
 
@@ -1257,7 +1313,8 @@ Received when subscribed to the corresponding channel.
     "strike": 160000000000,
     "quantity": 1000000000,
     "price": 50000000,
-    "order_id": "0x...64chars"
+    "order_id": "0x...64chars",
+    "instruction_index": 0
   }
 }
 ```
@@ -1273,21 +1330,21 @@ Variants:
 | `PositionSettled` | `position` |
 | `PositionLiquidated` | `position` |
 
-All variants include `signature` (tx signature, base58) and `slot` (Solana slot number).
+All variants require `signature` (tx signature, base58), `instruction_index` (instruction coordinate) and `slot` (Solana slot number). Deduplicate by `(signature, instruction_index)`; one transaction may contain multiple events.
 
 ---
 
-## Delivery & recovery
+## Delivery and recovery
 
-Delivery is **best-effort, with loss surfaced as a disconnect**. Every *critical* message is delivered reliably or — if it cannot be delivered under backpressure — dropped, after which the server **closes the connection**. Critical means the owner-direct pushes (`PositionUpdated`, `TradeExecuted`) plus the critical broadcasts a maker receives: `RfqBroadcast` and the quote/order lifecycle (`QuoteReceived`, `QuoteAcknowledged`, and the `SponsoredTxToSign`/`OrderAccepted`/`OrderSubmitted`/`OrderConfirmed`/`OrderFailed` progression). A lost critical message therefore always surfaces as a disconnect — never silent staleness. Only non-critical broadcasts (`StatsUpdate`) may drop silently.
+Delivery is **best-effort, with loss surfaced as a disconnect**. Every *critical* message is delivered reliably or — if it cannot be delivered under backpressure — dropped, after which the server **closes the connection**. Critical means the owner-direct pushes (`PositionUpdated`, `TradeExecuted`), `RfqBroadcast`, and the maker quote-lifecycle messages listed above. `QuoteReceived`, `QuotesUpdate`, and the order-signing lifecycle are taker-only. A lost critical message therefore always surfaces as a disconnect — never silent staleness. Only non-critical broadcasts (`StatsUpdate`) may drop silently.
 
-Recovery is one rule: **on every (re)connect, re-read authoritative state** — `GetMmSummary` (positions, caps, active quotes) and `GetActiveRfqs`. Between reconnects, apply pushes optimistically as they arrive; they are already in delivery order on a live connection. On any disconnect, reconcile by re-reading. (The official SDKs send both reconcile reads automatically after each successful (re)auth.)
+On every (re)connect read `GetMmSummary`, `GetActiveRfqs` and complete `GetMyQuotes { scope: Live }`; query `GetOrderStatus` for unresolved orders. Managed Rust SDK requires all three recovery reads before `Ready`. These observations span Core live state and persistent projections; they are not an atomic snapshot. `ActiveRfqs` supplies each RFQ's taker and market PDA for the quote preimage.
 
-**No client-side sequence numbers — by design.** There is nothing to gap-detect. On a live connection the server emits messages in order through a single effect worker, so an in-order stream needs no client-side reordering or replay log. Across reconnects, recovery is a re-read of authoritative DB-backed state, not replay of a delta stream: entities carry versions (e.g. `rfq_version`) so you reconcile against the current snapshot rather than replaying intermediate events. Together with close-on-critical-drop above, this is the whole contract — you either receive a critical message in order, or the connection drops and you re-read; you never silently miss state.
+The wire has no replay cursor or stream sequence number. Apply entity versions on a live connection and re-read state after disconnect; do not infer execution from absent events. SDK receiver sequence gaps are local delivery gaps, distinct from the wire.
 
 `TradeExecuted` is a UI hint, not authoritative. The DB-backed reads — `GetMmSummary`, `GetMakerPositions`, `GetMyTrades` — are the recovery authority: on any doubt, re-read rather than trusting the last live push. A fill's `PositionUpdated` can occasionally be deferred to a later snapshot rather than pushed, so also reconcile periodically (and after your own transactions) via `GetMmSummary`.
 
-If `MmSummary.positions_has_more` (or a `MakerPositions` response's `has_more`) is `true`, the position list was truncated at 500 — retrieve more via `GetMakerPositions` (raise `limit` up to 500 and/or narrow filters; there is no cursor).
+If `MmSummary.positions_has_more` (or a `MakerPositions` response's `has_more`) is `true`, the position list was truncated at 500 — retrieve the rest via `GetMakerPositions`: page with the keyset cursor: pass `cursor` (the `created_at` of the last row, unix seconds) together with `cursor_id` (its `pda`) — both or neither. Ordering is second-granular with `pda` as the tie-break; stop when `has_more` is `false`.
 
 ---
 
@@ -1361,7 +1418,7 @@ Important typed `ServerError` variants for makers (PascalCase on the wire):
 - `ServerShuttingDown`
 - `Unauthenticated`, `Unauthorized`
 
-Note: Some quote-specific validation errors (e.g. `InvalidStrike`, `OrderIdMismatch`, `CapExceeded`) are now returned as `QuoteRejected` messages rather than `Error`. See the `QuoteRejected` section above for the typed reason enum.
+Quote-specific validation failures are sent as `QuoteRejected` with a typed `reason`. See the `QuoteRejected` section above for its variants.
 
 Common `Generic` variant `code` values in maker/runtime flows (non-exhaustive; match on `code`):
 - Connection / handshake: `hello_required`, `hello_timeout`, `hello_already_sent`, `session_replaced`, `session_expired`, `already_authenticated`
@@ -1405,6 +1462,7 @@ Operational handling recommendations:
 | `requested` | Maker requested cancellation |
 | `risk_check` | Server-side risk check triggered |
 | `rfq_accepted` | RFQ accepted another quote |
+| `maker_disconnected` | Session had `cancel_on_disconnect` enabled and disconnected |
 
 ### RfqAvailableAgainReason
 
@@ -1440,7 +1498,7 @@ Discriminant values for `MakerPositionInfo.status`:
 | `liquidated` | Unfunded ITM position seized by a third-party liquidator. |
 | `settled` | Position settled at expiry; assets distributed per ITM/OTM outcome. |
 
-Wire form is lowercase snake_case. The legacy numeric encoding (4|5|6 -> `settled`) has been removed; clients must accept the string form.
+Position status is a lowercase snake_case string on the wire.
 
 ### PositionUpdateType (in `PositionUpdated`)
 
@@ -1489,9 +1547,11 @@ Both require a `request_id`. The ack carries the *diff* of channels added or rem
 
 ### Sessions and disconnects
 
-One active WebSocket per maker pubkey. A second connection atomically replaces the first; the displaced session gets `Error { generic.code = "session_replaced" }` and is closed.
+One active quote connection per maker pubkey. A new quote connection replaces the previous quote connection; the separate data connection is for reads. On replacement, the displaced session gets `Error { generic.code = "session_replaced" }` and is closed.
 
-Quotes survive disconnects — they live until `valid_until` or `RfqClosed`. Subscriptions don't survive — re-`Subscribe` after every auth. Use `GetMyQuotes` after reconnect to reconcile live state.
+The client requests `cancel_on_disconnect` in `Hello.features`; the server enables it by including it in `Welcome.enabled_features`. The managed quote SDK requests it by default. Selected and executing quotes remain obligations. Reconcile `GetMyQuotes { scope: "live" }` and execution status after reconnect.
+
+A resumed maker auth session restores server-side routing and mint scope. Omitted or null mint fields leave the saved scope unchanged; explicit empty lists clear mint filters. After fresh auth, establish subscriptions again. The managed SDK restores its own desired target after either path, sending both mint lists explicitly, including empty lists.
 
 ### Max message size
 

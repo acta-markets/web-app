@@ -17,7 +17,7 @@ Cold authority operations:
 - lower the global timelock delay only through the timelock
 - rotate the hot wallet immediately
 - set, rotate, or clear the guardian immediately
-- set, rotate, or revoke the settlement attestor immediately
+- set, rotate, or revoke the settlement attestor through the timelock
 - toggle pause immediately
 - queue and execute pending actions
 - cancel pending actions
@@ -73,8 +73,8 @@ Settlement and liquidation are permissionless. Any signer may settle an expired 
 | Create / close concrete oracle | Hot wallet | Immediate |
 | Publish settlement price (`UpdateOraclePrice`, op 16) | Hot wallet (only while no attestor is set) or cold | Immediate after expiry |
 | Publish attested settlement price (`UpdateOraclePriceAttested`, op 31) | Hot wallet + attestor Ed25519 proof (2-of-2) | After expiry, attestor set |
-| Set / rotate settlement attestor (`SetSettlementAttestor`, op 29) | Cold | Immediate |
-| Revoke settlement attestor (`RevokeSettlementAttestor`, op 30) | Cold | Immediate |
+| Set / rotate settlement attestor (`SetSettlementAttestor`, op 29) | Cold | Timelocked |
+| Revoke settlement attestor (`RevokeSettlementAttestor`, op 30) | Cold | Timelocked |
 | Withdraw protocol fees | Hot wallet | Immediate |
 | Open position | Hot wallet + taker tx signer + maker Ed25519 quote | Immediate |
 | Settle position | Permissionless | After market finalization |
@@ -96,9 +96,11 @@ Timelockable wrapped opcodes:
 | 17 | `CreateOracleSource` |
 | 18 | `UpdateOracleSource` |
 | 20 | `CloseConfig` |
+| 29 | `SetSettlementAttestor` |
+| 30 | `RevokeSettlementAttestor` |
 | 26 | `UpdateActionTimelock` |
 
-In production, the first six reject direct calls with `DirectCallDisabled`; they must go through queue -> execute. `UpdateActionTimelock` is special: raising or keeping the delay is immediate; lowering it must be queued and waited out under the current delay.
+In production, all listed operations except the immediate raise/keep form of `UpdateActionTimelock` reject direct calls with `DirectCallDisabled`; they must go through queue -> execute. `UpdateActionTimelock` is special: raising or keeping the delay is immediate; lowering it must be queued and waited out under the current delay.
 
 ### Wire Shape
 

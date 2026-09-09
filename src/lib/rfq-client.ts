@@ -1,15 +1,10 @@
 /**
- * RFQ Client - Thin wrapper around @acta-markets/ts-sdk
- *
- * Uses the official SDK for WebSocket communication with the RFQ server.
- * 
  * Auth flow:
  * 1. Server sends `AuthRequest { challenge: <human-readable text> }`
  * 2. Client signs UTF-8 bytes of challenge text
  * 3. Client responds with `AuthChallenge { challenge, signature: base58(ed25519), pubkey }`
  */
 
-// Re-export SDK client and types
 export { ActaClient } from "@acta-markets/ts-sdk";
 export {
   ActaWsClient,
@@ -59,10 +54,6 @@ export type {
 
 import { ActaWsClient, WalletAuthProvider, type WalletLike } from "@acta-markets/ts-sdk/ws";
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
 const RFQ_WS_URL = process.env.NEXT_PUBLIC_RFQ_WS_URL || "wss://beta-api.acta.markets";
 
 export interface CreateClientOptions {
@@ -79,10 +70,6 @@ function normalizeWsUrl(url: string): string {
   return url;
 }
 
-// ============================================================================
-// Factory function for creating client
-// ============================================================================
-
 export function createRfqClient(options?: CreateClientOptions): ActaWsClient {
   const configuredUrl = options?.url || RFQ_WS_URL;
   const url = normalizeWsUrl(configuredUrl);
@@ -94,10 +81,6 @@ export function createRfqClient(options?: CreateClientOptions): ActaWsClient {
   });
 }
 
-// ============================================================================
-// Helper to create wallet auth provider
-// ============================================================================
-
 export interface WalletAdapter {
   /** Wallet address (base58 public key) */
   address: string;
@@ -106,7 +89,6 @@ export interface WalletAdapter {
 }
 
 export function createWalletAuthProvider(wallet: WalletAdapter): WalletAuthProvider {
-  // Adapt our interface to SDK's WalletLike
   const walletLike: WalletLike = {
     publicKeyBase58: wallet.address,
     signMessage: async (message: Uint8Array): Promise<Uint8Array> => {
@@ -123,7 +105,6 @@ export function createWalletAuthProvider(wallet: WalletAdapter): WalletAuthProvi
         console.log("  (raw bytes, not UTF-8)");
       }
 
-      // Prevent blank/invalid wallet popups when challenge is empty.
       if (challengeText != null && challengeText.trim().length === 0) {
         throw new Error("RFQ auth challenge is empty. Please retry in a few seconds.");
       }
@@ -134,10 +115,6 @@ export function createWalletAuthProvider(wallet: WalletAdapter): WalletAuthProvi
   
   return new WalletAuthProvider(walletLike);
 }
-
-// ============================================================================
-// Singleton instance (optional, for simple use cases)
-// ============================================================================
 
 let clientInstance: ActaWsClient | null = null;
 

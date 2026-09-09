@@ -1,6 +1,6 @@
 # Acta Web (Next.js + Tailwind)
 
-This repo ports the original `index.html` landing page into a **Next.js (App Router) + Tailwind + TypeScript** project and extracts a small **design system** out of the repeated design patterns.
+Acta's website and options trading app, built with Next.js App Router, Tailwind and TypeScript. Shared UI components live in `src/components/ui/`.
 
 ## Run locally
 
@@ -8,6 +8,21 @@ This repo ports the original `index.html` landing page into a **Next.js (App Rou
 npm install
 npm run dev
 ```
+
+## RFQ integration
+
+The app uses `@acta-markets/ts-sdk/ws`; its exact version is pinned in
+`package.json` and `package-lock.json`. `NEXT_PUBLIC_RFQ_WS_URL` selects the
+backend, and `NEXT_PUBLIC_SOLANA_NETWORK` selects the matching token addresses.
+Market prices and indicative premiums come from that backend.
+
+Resume credentials require a future expiry in Unix seconds. Missing or expired
+stored credentials start fresh authentication; reconnect recovery preserves the
+selected order and never resubmits an already sent transaction.
+
+Public documentation lives in the sibling `public-docs` repository. After editing
+it, run `npm run sync:docs`, `npm run check:docs-source`, and `npm run check:docs`
+to update and validate the site's copy in `docs-site`.
 
 ## MongoDB (whitelist)
 
@@ -23,5 +38,4 @@ See `ENV_SETUP.md` to set `MONGODB_URI` / `MONGODB_DB` and `NEXT_PUBLIC_PRIVY_AP
   - `Navbar`, `Hero`, `Marquee`, `Architecture`, `Solution`, `Whitelist`, `Team`, `Footer`
 - **Global styles + legacy effects**: `src/app/globals.css`
 - **Legacy snapshots**: `legacy/oldindex.html` (original) and `legacy/index.html` (whitelist version)
-
 
