@@ -42,11 +42,31 @@ Returns service health and metadata.
 
 ### GET `/ready`
 
-Returns readiness status.
+Returns readiness status: `200` when every gated component is healthy, `503`
+otherwise. Which components gate depends on how the server is configured; the
+table is rendered from the server's own selector, so it cannot drift from the
+code.
+
+<!-- generated:rfq-ready -->
+| Configuration | `/ready` gates on |
+|---|---|
+| database + DB feed ids + caps (production) | redis, kernel, maker_registry, market_metadata, postgres, feed_mapping, price_stream, caps |
+| database + caps, static feed ids | redis, kernel, maker_registry, market_metadata, postgres, caps |
+| database only | redis, kernel, maker_registry, market_metadata, postgres |
+| no database (local demo) | redis, kernel, maker_registry, market_metadata |
+
+`kernel` is also the `/live` gate: a closed kernel channel needs a restart.
+<!-- /generated:rfq-ready -->
 
 ### GET `/live`
 
 Returns process liveness.
+
+### GET `/metrics`
+
+Prometheus metrics endpoint.
+
+---
 
 ## Markets
 
@@ -57,7 +77,7 @@ List markets.
 Query:
 - `underlying` (optional symbol string)
 
-`GET /api/v1/markets` returns tradable markets only: not finalized, not disabled, and before the effective trading cutoff. `underlying` filters by symbol before that tradability filter. There is no `active=false` mode; use `/api/v1/markets/:pda` for a specific market.
+`GET /api/v1/markets` returns tradable markets only: not finalized, not disabled, and before the effective trading cutoff. `underlying` filters by symbol before that tradability filter. There is no `active=false` mode; use `/api/v1/markets/{pda}` for a specific market.
 
 Response:
 
@@ -81,7 +101,7 @@ Response:
 
 `underlying_feed_id_hex` / `quote_feed_id_hex` are not part of current HTTP `MarketDto`.
 
-### GET `/api/v1/markets/:pda`
+### GET `/api/v1/markets/{pda}`
 
 Get a single market DTO.
 
@@ -106,7 +126,7 @@ Get a single market DTO.
 }
 ```
 
-### GET `/api/v1/makers/:pda`
+### GET `/api/v1/makers/{pda}`
 
 Get a single maker DTO.
 

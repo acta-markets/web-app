@@ -183,7 +183,7 @@ function loadStoredSessionId(walletAddress: string): string | null {
     };
     if (!parsed.sessionId || !parsed.walletAddress) return null;
     if (parsed.walletAddress !== walletAddress) return null;
-    if (typeof parsed.expiresAt === "number" && parsed.expiresAt > 0 && parsed.expiresAt < Math.floor(Date.now() / 1000)) {
+    if (typeof parsed.expiresAt !== "number" || !Number.isFinite(parsed.expiresAt) || parsed.expiresAt <= Math.floor(Date.now() / 1000)) {
       return null;
     }
     return parsed.sessionId;
@@ -192,7 +192,7 @@ function loadStoredSessionId(walletAddress: string): string | null {
   }
 }
 
-function persistSession(walletAddress: string, sessionId: string, expiresAt: number | null) {
+function persistSession(walletAddress: string, sessionId: string, expiresAt: number) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(
@@ -301,7 +301,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setWsHealth("healthy");
       setWsSilentSeconds(0);
       if (walletAddressRef.current) {
-        persistSession(walletAddressRef.current, sessionId, expiresAt ?? null);
+        persistSession(walletAddressRef.current, sessionId, expiresAt);
       }
       // Markets arrive via SDK Snapshot on auth — no explicit GetMarkets needed.
       // Positions are fetched by portfolio page on mount (avoids duplicate).

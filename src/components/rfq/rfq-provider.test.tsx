@@ -125,3 +125,25 @@ describe("token market response ownership", () => {
   });
 
 });
+
+describe("stored resume credential expiry", () => {
+  afterEach(() => window.localStorage.removeItem("acta_rfq_ws_session"));
+
+  it.each([undefined, null, 0, 1_000, 4_000_000_000])(
+    "resumes only with a future expiry (%s)", async expiresAt => {
+      const h = setup();
+      const wallet = "11111111111111111111111111111111";
+      window.localStorage.setItem("acta_rfq_ws_session", JSON.stringify({
+        walletAddress: wallet, sessionId: "stored", expiresAt,
+      }));
+      vi.spyOn(h.client, "getMyReferralInfo").mockImplementation(() => {});
+      const connect = vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {
+        h.emit("authenticated", "fresh", 4_000_000_000);
+      });
+      await act(() => h.result.current.authenticate(wallet, async () => new Uint8Array(64)));
+      expect(connect.mock.lastCall?.[1]).toEqual(
+        expiresAt === 4_000_000_000 ? { sessionId: "stored" } : undefined,
+      );
+    },
+  );
+});
