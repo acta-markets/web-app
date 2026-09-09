@@ -1,5 +1,3 @@
-import { getTokenPythId } from "@/lib/tokens";
-
 export type MarketType = "call" | "csp";
 
 export type Market = {
@@ -9,7 +7,6 @@ export type Market = {
   maxApr: number;
   capFilledPct: number; // 0..100
   spotPrice: number;
-  pythId?: string;
   // price options are the "I’m ok to sell/buy at" prices
   priceOptions: number[];
 };
@@ -22,7 +19,6 @@ export const MARKETS: Market[] = [
     maxApr: 0,
     capFilledPct: 0,
     spotPrice: 0,
-    pythId: getTokenPythId("SOL"),
     priceOptions: [0]
   },
   {
@@ -32,7 +28,6 @@ export const MARKETS: Market[] = [
     maxApr: 0,
     capFilledPct: 0,
     spotPrice: 0,
-    pythId: getTokenPythId("SOL"),
     priceOptions: [0]
   },
   {
@@ -42,7 +37,6 @@ export const MARKETS: Market[] = [
     maxApr: 34,
     capFilledPct: 54,
     spotPrice: 236.42,
-    pythId: getTokenPythId("JITOSOL"),
     priceOptions: [250, 270, 295]
   },
   {
@@ -52,7 +46,6 @@ export const MARKETS: Market[] = [
     maxApr: 29,
     capFilledPct: 61,
     spotPrice: 236.42,
-    pythId: getTokenPythId("JITOSOL"),
     priceOptions: [225, 210, 195]
   },
   {
@@ -62,7 +55,6 @@ export const MARKETS: Market[] = [
     maxApr: 42,
     capFilledPct: 33,
     spotPrice: 1.53,
-    pythId: getTokenPythId("JLP"),
     priceOptions: [1.6, 1.75, 2.0]
   },
   {
@@ -72,7 +64,6 @@ export const MARKETS: Market[] = [
     maxApr: 38,
     capFilledPct: 48,
     spotPrice: 1.53,
-    pythId: getTokenPythId("JLP"),
     priceOptions: [1.45, 1.35, 1.2]
   },
   {
@@ -82,7 +73,6 @@ export const MARKETS: Market[] = [
     maxApr: 36,
     capFilledPct: 28,
     spotPrice: 3925.12,
-    pythId: getTokenPythId("ETH"),
     priceOptions: [4100, 4300, 4600]
   },
   {
@@ -92,7 +82,6 @@ export const MARKETS: Market[] = [
     maxApr: 33,
     capFilledPct: 71,
     spotPrice: 3925.12,
-    pythId: getTokenPythId("ETH"),
     priceOptions: [3800, 3600, 3400]
   },
   {
@@ -102,7 +91,6 @@ export const MARKETS: Market[] = [
     maxApr: 22,
     capFilledPct: 19,
     spotPrice: 98000,
-    pythId: getTokenPythId("ZBTC"),
     priceOptions: [102000, 108000, 115000]
   },
   {
@@ -112,7 +100,6 @@ export const MARKETS: Market[] = [
     maxApr: 19,
     capFilledPct: 41,
     spotPrice: 98000,
-    pythId: getTokenPythId("ZBTC"),
     priceOptions: [95000, 90000, 82000]
   },
   {
@@ -122,7 +109,6 @@ export const MARKETS: Market[] = [
     maxApr: 180,
     capFilledPct: 22,
     spotPrice: 0.0124,
-    pythId: getTokenPythId("PUMP"),
     priceOptions: [0.014, 0.016, 0.02, 0.03]
   },
   {
@@ -132,7 +118,6 @@ export const MARKETS: Market[] = [
     maxApr: 140,
     capFilledPct: 47,
     spotPrice: 0.0124,
-    pythId: getTokenPythId("PUMP"),
     priceOptions: [0.011, 0.0095, 0.008, 0.006]
   },
   {
@@ -142,7 +127,6 @@ export const MARKETS: Market[] = [
     maxApr: 95,
     capFilledPct: 35,
     spotPrice: 0.000031,
-    pythId: getTokenPythId("BONK"),
     priceOptions: [0.000034, 0.000038, 0.000045]
   },
   {
@@ -152,7 +136,6 @@ export const MARKETS: Market[] = [
     maxApr: 74,
     capFilledPct: 58,
     spotPrice: 0.000031,
-    pythId: getTokenPythId("BONK"),
     priceOptions: [0.000029, 0.000026, 0.000022]
   }
 ];
