@@ -16,7 +16,7 @@ function isAppEnabled() {
 }
 
 const BLOCKED_PAGE_PREFIXES = ["/earn", "/portfolio", "/market"];
-const BLOCKED_API_PREFIXES = ["/api/market", "/api/pyth", "/api/portfolio"];
+const BLOCKED_API_PREFIXES = ["/api/market", "/api/portfolio"];
 const MARKDOWN_PATHS = new Set(["/", "/earn"]);
 const DOCS_HOSTNAME = "docs.acta.markets";
 const DOCS_RESERVED_PATHS = [

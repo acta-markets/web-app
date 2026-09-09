@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { PythPoint } from "@/lib/use-pyth-price";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppPill } from "@/components/app-ui/app-pill";
 import { formatUsdSmart } from "@/lib/markets";
 
-type Point = PythPoint;
+type Point = { t: number; v: number };
 type Range = "1w" | "1m" | "3m";
 
 function formatPctDelta(p: number) {
