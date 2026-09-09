@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppModal } from "@/components/app-ui/app-modal";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import type { QuoteReceivedMessage } from "@/lib/rfq-client";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { useRfqOrder } from "./use-rfq-order";
+import type { VersionedTransaction } from "@solana/web3.js";
 import { IS_MAINNET } from "@/lib/tokens";
 
 type PositionType = "covered_call" | "cash_secured_put";
@@ -18,15 +20,16 @@ type FlowStep =
   | "signing"
   | "submitting"
   | "confirmed"
-  | "failed";
+  | "failed"
+  | "recovering"
+  | "pending"
+  | "unknown";
 
 interface RfqFlowModalProps {
   open: boolean;
   onClose: () => void;
   /** Incremented by parent whenever a new quote is requested */
   requestNonce: number;
-  /** Market PDA to request quote for */
-  marketPda?: string;
   /** Asset symbol for display */
   asset: string;
   /** Position type */
@@ -46,14 +49,13 @@ interface RfqFlowModalProps {
   /** Locked total premium from market page at click time */
   lockedPremiumUsd?: number | null;
   /** Sign transaction function from wallet */
-  signTransaction?: (tx: any) => Promise<any>;
+  signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
 }
 
 export function RfqFlowModal({
   open,
   onClose,
   requestNonce,
-  marketPda,
   asset,
   positionType,
   strike,
@@ -67,20 +69,23 @@ export function RfqFlowModal({
 }: RfqFlowModalProps) {
   const {
     currentQuote,
+    isAuthenticated,
     error: rfqError,
     acceptQuote,
     submitSignedTx,
     getClient,
   } = useRfqContext();
 
-  const [step, setStep] = useState<FlowStep>("idle");
+  const [quoteStep, setStep] = useState<"idle" | "requesting_quote" | "quote_received" | "failed">("idle");
   const [error, setError] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteReceivedMessage | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const [orderId, setOrderId] = useState<string | null>(null);
-  const [txSignature, setTxSignature] = useState<string | null>(null);
-  const [positionPda, setPositionPda] = useState<string | null>(null);
-  const [quoteSecondsLeft, setQuoteSecondsLeft] = useState<number | null>(null);
+  const { flow, accept, reset, checkStatus, txSignature } = useRfqOrder({
+    getClient, acceptQuote, submitSignedTx, signTransaction,
+  });
+  const step: FlowStep = flow.type === "idle" ? quoteStep
+    : flow.type === "awaiting_signature" ? "accepting_quote" : flow.type;
+  const positionPda = flow.type === "confirmed" ? flow.positionPda : null;
+  const flowError = flow.type === "failed" ? flow.message : error;
 
   // Reset state when modal opens
   useEffect(() => {
@@ -88,12 +93,9 @@ export function RfqFlowModal({
       setStep(initialQuote ? "quote_received" : "requesting_quote");
       setError(null);
       setQuote(initialQuote ?? null);
-      setRetryCount(0);
-      setOrderId(null);
-      setTxSignature(null);
-      setPositionPda(null);
+      reset();
     }
-  }, [open, requestNonce, initialQuote]);
+  }, [open, requestNonce, initialQuote, reset]);
 
   // Handle quote received
   useEffect(() => {
@@ -109,7 +111,7 @@ export function RfqFlowModal({
 
   // Handle RFQ errors
   useEffect(() => {
-    if (!rfqError || step === "idle" || step === "confirmed") {
+    if (!rfqError || flow.type !== "idle" || step === "idle") {
       return;
     }
 
@@ -121,7 +123,6 @@ export function RfqFlowModal({
       lower.includes("quote_refresh_required");
 
     if (isRecoverableQuoteError) {
-      setRetryCount((c) => c + 1);
       setQuote(null);
       setError("Quote expired. Close this modal and click Deposit again to request a fresh quote.");
       setStep("failed");
@@ -130,137 +131,32 @@ export function RfqFlowModal({
 
     setError(message);
     setStep("failed");
-  }, [rfqError, step, retryCount]);
+  }, [rfqError, step, flow.type]);
 
-  // Ticking countdown for quote expiry.
-  // Subtracts 300s settlement buffer — the user's real acceptance window
-  // is valid_until minus the on-chain settlement overhead.
-  const SETTLEMENT_BUFFER_S = 300;
   useEffect(() => {
-    if (!quote?.valid_until || step !== "quote_received") {
-      setQuoteSecondsLeft(null);
-      return;
-    }
-
-    const calcRemaining = () => {
-      const deadline = Number(quote.valid_until) - SETTLEMENT_BUFFER_S;
-      return Math.max(0, Math.floor(deadline - Date.now() / 1000));
-    };
-
-    setQuoteSecondsLeft(calcRemaining());
-    const id = window.setInterval(() => {
-      const left = calcRemaining();
-      setQuoteSecondsLeft(left);
-      if (left <= 0) {
-        window.clearInterval(id);
-        setQuote(null);
-        setError("Quote expired. Close this modal and click Deposit again to request a fresh quote.");
-        setStep("failed");
-      }
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [quote?.valid_until, step]);
-
-  // Handle accepting quote
-  const handleAcceptQuote = useCallback(async () => {
-    if (!quote) return;
-
-    setStep("accepting_quote");
-    setOrderId(quote.order_id);
-
-    try {
-      acceptQuote(quote.rfq_id, quote.maker, quote.order_id);
-      setStep("signing");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to accept quote");
+    if (flow.type !== "idle" || quoteStep !== "quote_received") return;
+    if (!isAuthenticated) {
+      setError("Connection lost. Request a fresh quote after reconnect.");
       setStep("failed");
     }
-  }, [quote, acceptQuote]);
+  }, [isAuthenticated, flow.type, quoteStep]);
 
-  // Listen for sponsored tx to sign
-  // Listen for sponsored tx to sign (active during signing step)
   useEffect(() => {
     const client = getClient();
-    if (!client || step !== "signing") return;
-
-    const handleSponsoredTx = async (orderIdHex: string, txBase64: string) => {
-      console.log("[RFQ] Got sponsored tx to sign:", orderIdHex);
-      
-      if (!signTransaction) {
-        setError("Wallet does not support transaction signing");
-        setStep("failed");
-        return;
-      }
-
-      try {
-        // Import web3.js for tx deserialization
-        const { VersionedTransaction } = await import("@solana/web3.js");
-        
-        // Decode base64 -> VersionedTransaction
-        const txBytes = Uint8Array.from(atob(txBase64), (c) => c.charCodeAt(0));
-        const tx = VersionedTransaction.deserialize(txBytes);
-        
-        console.log("[RFQ] Signing transaction with wallet...");
-        // Sign with wallet (shows preview UI)
-        const signedTx = await signTransaction(tx);
-        
-        // Serialize back to base64
-        const signedBytes = signedTx.serialize();
-        const signedTxBase64 = btoa(String.fromCharCode(...signedBytes));
-        
-        console.log("[RFQ] Sending signed tx back to server...");
-        // Submit signed tx back to server (server will submit to blockchain)
-        setStep("submitting");
-        submitSignedTx(orderIdHex, signedTxBase64);
-      } catch (e) {
-        console.error("[RFQ] Failed to sign tx:", e);
-        setError(e instanceof Error ? e.message : "Failed to sign transaction");
-        setStep("failed");
-      }
-    };
-
-    client.on("sponsoredTxToSign", handleSponsoredTx);
-
-    return () => {
-      client.off("sponsoredTxToSign", handleSponsoredTx);
-    };
-  }, [step, signTransaction, submitSignedTx, getClient]);
-  
-  // Listen for order confirmation (active during signing and submitting)
-  useEffect(() => {
-    const client = getClient();
-    if (!client || (step !== "signing" && step !== "submitting")) return;
-
-    const handleConfirmed = (orderIdHex: string, pda: string) => {
-      console.log("[RFQ] Order confirmed:", orderIdHex, pda);
-      setPositionPda(pda);
-      setStep("confirmed");
-    };
-
-    const handleSubmitted = (orderIdHex: string, sig: string) => {
-      console.log("[RFQ] Order submitted:", orderIdHex, sig);
-      setTxSignature(sig);
-    };
-    
-    const handleFailed = (orderIdHex: string, reason: string) => {
-      console.error("[RFQ] Order failed:", orderIdHex, reason);
-      setError(reason);
+    if (!client || flow.type !== "idle" || !quote) return;
+    const onClosed = (msg: { rfq_id: string }) => {
+      if (msg.rfq_id !== quote.rfq_id) return;
+      setError("RFQ closed. Request a fresh quote.");
       setStep("failed");
     };
+    client.on("rfqClosed", onClosed);
+    return () => { client.off("rfqClosed", onClosed); };
+  }, [getClient, flow.type, quote]);
 
-    client.on("orderConfirmed", handleConfirmed);
-    client.on("orderSubmitted", handleSubmitted);
-    client.on("orderFailed", handleFailed);
-
-    return () => {
-      client.off("orderConfirmed", handleConfirmed);
-      client.off("orderSubmitted", handleSubmitted);
-      client.off("orderFailed", handleFailed);
-    };
-  }, [step, getClient]);
+  const handleAcceptQuote = () => { if (quote) void accept(quote); };
 
   const handleClose = () => {
-    if (step === "signing" || step === "submitting") {
+    if (flow.type !== "idle" && flow.type !== "confirmed" && flow.type !== "failed") {
       return;
     }
     onClose();
@@ -298,7 +194,7 @@ export function RfqFlowModal({
           ? "Sign & submit transaction"
           : step === "confirmed"
             ? "Order confirmed"
-            : "Order failed";
+            : step === "failed" ? "Order failed" : "Checking order status";
   const panelClass = "border border-bg-border bg-action-primary/30 p-4";
 
   return (
@@ -383,12 +279,6 @@ export function RfqFlowModal({
                 <span className="text-content-tertiary">APR</span>
                 <span className="text-content-secondary">{displayedAprPct != null ? `${displayedAprPct.toFixed(2)}%` : "—"}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-content-tertiary">Expires in</span>
-                <span className="text-content-secondary">
-                  {quoteSecondsLeft != null ? `${quoteSecondsLeft}s` : "—"}
-                </span>
-              </div>
             </div>
           </div>
         )}
@@ -419,15 +309,26 @@ export function RfqFlowModal({
         )}
 
         {/* Error State */}
-        {step === "failed" && error && (
+        {step === "failed" && flowError && (
           <div className={panelClass}>
             <div className="flex items-start gap-3">
               <XCircle className="h-5 w-5 shrink-0 text-additional-red-primary" />
               <div>
                 <div className="font-mono font-semibold text-content-primary">Order Failed</div>
-                <div className="mt-1 font-mono text-sm text-content-secondary">{error}</div>
+                <div className="mt-1 font-mono text-sm text-content-secondary">{flowError}</div>
               </div>
             </div>
+          </div>
+        )}
+
+        {(step === "recovering" || step === "pending" || step === "unknown") && (
+          <div className={panelClass}>
+            <p className="font-mono text-sm text-content-secondary">
+              {step === "recovering" ? "Connection lost. Your order will be checked after reconnect."
+                : step === "pending" ? "Your order is still pending. Waiting for execution confirmation."
+                : "The order outcome is not yet known. Check its status before placing another order."}
+            </p>
+            <AppButton className="mt-3" onClick={checkStatus}>Check order status</AppButton>
           </div>
         )}
 

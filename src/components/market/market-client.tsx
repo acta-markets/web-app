@@ -177,6 +177,15 @@ export function MarketClient({ asset }: { asset: string }) {
   const [rfqRequestNonce, setRfqRequestNonce] = useState(0);
   const [isRequestingQuote, setIsRequestingQuote] = useState(false);
   const [modalInitialQuote, setModalInitialQuote] = useState<QuoteReceivedMessage | null>(null);
+  const [orderPreview, setOrderPreview] = useState<{
+    asset: string;
+    positionType: "covered_call" | "cash_secured_put";
+    strike: number;
+    quantity: number;
+    strikeDisplay: string;
+    quantityDisplay: string;
+    lockedAprPct: number;
+  } | null>(null);
   const [indicativeRequestedKey, setIndicativeRequestedKey] = useState<string | null>(null);
 
   // Global RFQ context (markets already fetched on app load)
@@ -190,7 +199,7 @@ export function MarketClient({ asset }: { asset: string }) {
     clearTransientState,
     getIndicativePrices,
     getIndicativePricesCached,
-    tokenMarketsInfo,
+    tokenMarketsInfo: tokenMarketsSnapshot,
     getTokenMarketsInfo,
     isConnected: rfqConnected,
     isAuthenticated: rfqAuthenticated,
@@ -198,6 +207,8 @@ export function MarketClient({ asset }: { asset: string }) {
     referralStatus,
     openReferralGate,
   } = useRfqContext();
+  const tokenMarketsInfo = tokenMarketsSnapshot && tokenMarketsSnapshot.underlyingMint === getTokenMint(market?.asset ?? asset)
+    ? tokenMarketsSnapshot.data : null;
   const isReferralGated = referralStatus === "required";
 
   // All RFQ markets matching this asset+type, sorted by expiry (nearest first).
@@ -664,16 +675,24 @@ export function MarketClient({ asset }: { asset: string }) {
     if (!marketPda) return;
 
     const alignedQuantity = alignQuantityToRule(quantityLamportsFromInput, wireSizeRule);
+    const alignedDeposit = type === "call"
+      ? alignedQuantity / 10 ** underlyingDecimals
+      : quantityToQuoteAmount(alignedQuantity, selectedStrikeLamports, underlyingDecimals);
     if (alignedQuantity !== quantityLamportsFromInput) {
-      const alignedDeposit =
-        type === "call"
-          ? alignedQuantity / 10 ** underlyingDecimals
-          : quantityToQuoteAmount(alignedQuantity, selectedStrikeLamports, underlyingDecimals);
       setDeposit(formatInputValue(alignedDeposit, depositInputDecimals));
     }
 
     clearTransientState();
     setModalInitialQuote(null);
+    setOrderPreview({
+      asset: market?.asset ?? asset,
+      positionType,
+      strike: selectedStrikeLamports,
+      quantity: alignedQuantity,
+      strikeDisplay: formatUsdSmart(selectedPrice),
+      quantityDisplay: `${alignedDeposit.toLocaleString("en-US")} ${type === "call" ? (market?.asset ?? asset) : "USDC"}`,
+      lockedAprPct: selectedApr,
+    });
     submitRfq({
       market: marketPda,
       positionType,
@@ -700,6 +719,7 @@ export function MarketClient({ asset }: { asset: string }) {
     type,
     underlyingDecimals,
     depositInputDecimals,
+    asset, market?.asset, selectedPrice, selectedApr,
   ]);
 
   if (!market) {
@@ -1229,7 +1249,8 @@ export function MarketClient({ asset }: { asset: string }) {
       </div>
 
       {/* RFQ Flow Modal */}
-      <RfqFlowModal
+      {orderPreview && <RfqFlowModal
+        {...orderPreview}
         open={rfqModalOpen}
         onClose={() => {
           setRfqModalOpen(false);
@@ -1237,19 +1258,9 @@ export function MarketClient({ asset }: { asset: string }) {
           setModalInitialQuote(null);
         }}
         requestNonce={rfqRequestNonce}
-        marketPda={rfqMarketPda}
-        asset={market.asset}
-        positionType={type === "call" ? "covered_call" : "cash_secured_put"}
-        strike={Math.round(selectedPrice * 1_000_000_000)}
-        quantity={(depositOk && wireSizeRule && quantityLamportsFromInput != null)
-          ? alignQuantityToRule(quantityLamportsFromInput, wireSizeRule)
-          : 0}
-        strikeDisplay={formatUsdSmart(selectedPrice)}
-        quantityDisplay={`${depositNum.toLocaleString("en-US")} ${type === "call" ? market.asset : "USDC"}`}
         initialQuote={modalInitialQuote}
-        lockedAprPct={selectedApr}
         signTransaction={walletAddress ? solanaSignTransaction : undefined}
-      />
+      />}
     </div>
   );
 }

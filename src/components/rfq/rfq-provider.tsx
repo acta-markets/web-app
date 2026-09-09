@@ -13,8 +13,7 @@ import {
   type IndicativePricesMessage,
   type TokenCapInfo,
   type EarnAssetSummary,
-  type ServerMessage,
-  type ServerError,
+  type ActaWsClientError,
   type ConnectionState,
   type TokenMarketsInfoData,
   type MyReferralInfoData,
@@ -27,12 +26,9 @@ import { ReferralGateModal } from "@/components/referral/referral-gate-modal";
 import { clearPendingRefCode } from "@/components/referral/ref-capture";
 import { useToast } from "@/components/app-ui/toast";
 
-/** SDK ConnectionState + "connected" (WS open but not yet authenticating). */
-type AppConnectionState = ConnectionState | "connected";
-
 interface RfqContextValue {
   /** Connection state */
-  connectionState: AppConnectionState;
+  connectionState: ConnectionState;
   /** Whether WebSocket is connected */
   isConnected: boolean;
   /** Whether user is authenticated with wallet */
@@ -57,7 +53,7 @@ interface RfqContextValue {
     positionType: "covered_call" | "cash_secured_put"
   ) => IndicativePricesMessage | null;
   /** Token markets info (single-request bootstrap for market page) */
-  tokenMarketsInfo: TokenMarketsInfoData | null;
+  tokenMarketsInfo: { underlyingMint: string; data: TokenMarketsInfoData } | null;
   /** Fetch token markets info for an underlying */
   getTokenMarketsInfo: (underlyingMint: string) => void;
   /** Fetch earn summary */
@@ -81,9 +77,9 @@ interface RfqContextValue {
     timeoutSeconds?: number;
   }) => void;
   /** Accept a quote */
-  acceptQuote: (rfqId: string, maker: string, orderIdHex: string) => void;
+  acceptQuote: (rfqId: string, maker: string, orderIdHex: string) => Promise<void>;
   /** Submit signed transaction */
-  submitSignedTx: (orderIdHex: string, txBase64: string) => void;
+  submitSignedTx: (orderIdHex: string, txBase64: string) => Promise<void>;
   /** Clear transient RFQ UI state (quote/error) */
   clearTransientState: () => void;
   /** Get the underlying client */
@@ -109,6 +105,7 @@ interface RfqContextValue {
 export type ReferralStatus = "unknown" | "required" | "redeemed";
 
 const INVITE_COPY: Record<InviteErrorReason, string> = {
+  code_disabled: "This invite code has been disabled.",
   invalid_code: "We couldn't find that invite code.",
   code_exhausted: "This invite code has no slots left.",
   code_expired: "This invite code has expired.",
@@ -149,37 +146,13 @@ interface RfqProviderProps {
 
 const RFQ_SESSION_KEY = "acta_rfq_ws_session";
 
-function clearPendingAuthState(client: ActaWsClient) {
-  const internal = client as unknown as {
-    authRequested?: boolean;
-    authProvider?: unknown;
-    startAuthSent?: boolean;
-  };
-  internal.authRequested = false;
-  internal.authProvider = null;
-  internal.startAuthSent = false;
-}
-
-function isAuthFailureError(err: ServerError): boolean {
+function isAuthFailureError(err: ActaWsClientError): boolean {
   return err.type === "Unauthenticated" || err.type === "Unauthorized" ||
-    (err.type === "generic" && (
+    ((err.type === "generic" || err.type === "Generic") && (
       err.data.code === "unauthenticated" ||
       err.data.message.toLowerCase().includes("user rejected") ||
       err.data.message.toLowerCase().includes("auth timeout")
     ));
-}
-
-function isRecoverableRfqBusinessError(err: ServerError): boolean {
-  const code = err.type === "generic" ? err.data.code : err.type;
-  return (
-    code === "quote_not_found" ||
-    code === "quote_expired" ||
-    code === "quote_refresh_required" ||
-    code === "rfq_expired" ||
-    code === "rfq_closed" ||
-    code === "market_metadata_incomplete" ||
-    code === "token_metadata_incomplete"
-  );
 }
 
 function isMissingMarketDescriptorError(message: string): boolean {
@@ -191,7 +164,6 @@ function isMissingMarketDescriptorError(message: string): boolean {
 }
 
 function resetToAnonymous(client: ActaWsClient) {
-  clearPendingAuthState(client);
   client.disconnect();
   // Reconnect without auth intent so market data keeps working.
   window.setTimeout(() => {
@@ -237,16 +209,22 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const { selectedAccount, isConnected: walletConnected, signMessage, disconnectWallet } = useSolana();
   const clientRef = useRef<ActaWsClient | null>(null);
   const walletAddressRef = useRef<string | null>(null);
-  const [connectionState, setConnectionState] = useState<AppConnectionState>("disconnected");
+  const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [markets, setMarkets] = useState<MarketInfo[]>([]);
   const [tokenCaps, setTokenCaps] = useState<TokenCapInfo[]>([]);
   const [earnSummary, setEarnSummary] = useState<EarnAssetSummary[] | null>(null);
   const [marketDescriptors, setMarketDescriptors] = useState<MarketDescriptorInfo[]>([]);
   const [positions, setPositions] = useState<PositionInfo[]>([]);
+  const pendingRfqRef = useRef<
+    | { type: "requested"; clientRequestId: string; strike: number }
+    | { type: "created"; rfqId: string; strike: number }
+    | null
+  >(null);
   const [currentQuote, setCurrentQuote] = useState<QuoteReceivedMessage | null>(null);
   const [indicativePrices, setIndicativePrices] = useState<IndicativePricesMessage | null>(null);
   const [indicativePricesByKey, setIndicativePricesByKey] = useState<Record<string, IndicativePricesMessage>>({});
-  const [tokenMarketsInfo, setTokenMarketsInfo] = useState<TokenMarketsInfoData | null>(null);
+  const [tokenMarketsInfo, setTokenMarketsInfo] = useState<RfqContextValue["tokenMarketsInfo"]>(null);
+  const tokenMarketsRequest = useRef<{ requestId: string; underlyingMint: string } | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const pendingRfqAuthWalletRef = useRef<string | null>(null);
   const authInFlightRef = useRef(false);
@@ -254,8 +232,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [authWarmupDone, setAuthWarmupDone] = useState(false);
   const prefetchedIndicativeKeysRef = useRef<Set<string>>(new Set());
   const lastWsMessageAtRef = useRef<number>(Date.now());
-  const lastWsPingAtRef = useRef<number>(0);
-  const lastForcedReconnectAtRef = useRef<number>(0);
   const [wsHealth, setWsHealth] = useState<"healthy" | "quiet" | "recovering">("healthy");
   const [wsSilentSeconds, setWsSilentSeconds] = useState(0);
   const [showAuthSignModal, setShowAuthSignModal] = useState(false);
@@ -304,7 +280,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setConnectionState("connected");
       setError(null);
       lastWsMessageAtRef.current = Date.now();
-      lastWsPingAtRef.current = 0;
       setWsHealth("healthy");
       setWsSilentSeconds(0);
       client.getEarnSummary();
@@ -319,7 +294,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       console.log("[RfqProvider] Authenticated, session:", sessionId);
       setConnectionState("authenticated");
       lastWsMessageAtRef.current = Date.now();
-      lastWsPingAtRef.current = 0;
       setWsHealth("healthy");
       setWsSilentSeconds(0);
       if (walletAddressRef.current) {
@@ -338,9 +312,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
       console.log("[RfqProvider] Disconnected:", code, reason);
       setConnectionState("disconnected");
       prefetchedIndicativeKeysRef.current.clear();
+      tokenMarketsRequest.current = null;
+      setTokenMarketsInfo(null);
+      pendingRfqRef.current = null;
+      setCurrentQuote(null);
       // Drop in-flight referral request ids — replies after reconnect cannot be matched anyway.
       pendingReferralReqsRef.current.clear();
-      lastWsPingAtRef.current = 0;
       setWsHealth("recovering");
     });
 
@@ -349,7 +326,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
       // session_replaced means another tab/connection took over — stop
       // reconnecting to avoid an infinite error loop.
-      if (serverErr.type === "generic" && serverErr.data.code === "session_replaced") {
+      if ((serverErr.type === "generic" || serverErr.type === "Generic") && serverErr.data.code === "session_replaced") {
         console.warn("[RfqProvider] Session replaced by newer connection, disconnecting.");
         client.disconnect();
         return;
@@ -365,12 +342,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
       if (isAuthFailureError(serverErr)) {
         resetToAnonymous(client);
       }
-      const message = serverErr.type === "generic" ? serverErr.data.message : serverErr.type;
+      const message = (serverErr.type === "generic" || serverErr.type === "Generic") ? serverErr.data.message : serverErr.type;
       setError(new Error(message));
-      // Keep connection state for recoverable business-level RFQ errors.
-      if (!isRecoverableRfqBusinessError(serverErr)) {
-        setConnectionState("error");
-      }
     });
 
     client.on("requireInvite", () => {
@@ -418,23 +391,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
     });
 
     // Data events
-    client.on("message", (message: ServerMessage) => {
+    client.on("message", () => {
       lastWsMessageAtRef.current = Date.now();
       setWsHealth("healthy");
       setWsSilentSeconds(0);
-      if (message.type === "TokenCaps") {
-        setTokenCaps(message.data.tokens ?? []);
-      }
-      const messageType = ((message as unknown as { type?: string }).type ?? "").toLowerCase();
-      if (messageType.includes("earnsummary")) {
-        const payload = message as unknown as {
-          data?: { assets?: EarnAssetSummary[]; data?: { assets?: EarnAssetSummary[] } };
-          assets?: EarnAssetSummary[];
-        };
-        const assets = payload.data?.assets ?? payload.data?.data?.assets ?? payload.assets ?? [];
-        setEarnSummary(Array.isArray(assets) ? assets : []);
-      }
     });
+    client.on("tokenCaps", (data) => setTokenCaps(data.tokens));
 
     client.on("earnSummary", (data) => {
       console.log("[RfqProvider] Earn summary received:", data.assets?.length ?? 0, "assets");
@@ -465,7 +427,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
     client.on("tokenMarketsInfo", (data: TokenMarketsInfoData) => {
       console.log("[RfqProvider] TokenMarketsInfo received:", data.markets?.length ?? 0, "markets");
-      setTokenMarketsInfo(data);
+      const pending = tokenMarketsRequest.current;
+      if (!pending || pending.requestId !== data.request_id) return;
+      tokenMarketsRequest.current = null;
+      setTokenMarketsInfo({ underlyingMint: pending.underlyingMint, data });
       // Populate indicativePricesByKey so getIndicativePricesCached works transparently.
       const updates: Record<string, IndicativePricesMessage> = {};
       for (const mkt of data.markets ?? []) {
@@ -491,15 +456,21 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setIndicativePricesByKey((prev) => ({ ...prev, [key]: msg }));
     });
 
-    client.on("quoteReceived", (q) => {
-      console.log("[RfqProvider] Quote received:", q);
-      setCurrentQuote(q);
+    client.on("rfqCreated", (msg) => {
+      const pending = pendingRfqRef.current;
+      if (pending?.type === "requested" && msg.client_request_id === pending.clientRequestId) {
+        pendingRfqRef.current = { type: "created", rfqId: msg.rfq_id, strike: pending.strike };
+      }
     });
-
+    client.on("quoteReceived", (quote) => {
+      const pending = pendingRfqRef.current;
+      if (pending?.type === "created" && quote.rfq_id === pending.rfqId && quote.strike === pending.strike) setCurrentQuote(quote);
+    });
     client.on("rfqClosed", (msg) => {
-      console.log("[RfqProvider] RFQ closed:", msg.rfq_id);
+      const pending = pendingRfqRef.current;
+      if (pending?.type !== "created" || msg.rfq_id !== pending.rfqId) return;
+      pendingRfqRef.current = null;
       setCurrentQuote(null);
-      setError(new Error("rfq_closed"));
     });
 
     // Order events
@@ -552,40 +523,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
         setWsHealth("healthy");
       }
 
-      // Soft recovery: ping when socket is quiet for too long.
-      if (silentForMs > 35_000 && now - lastWsPingAtRef.current > 20_000) {
-        try {
-          client.ping();
-          lastWsPingAtRef.current = now;
-          console.warn("[RfqProvider] WS quiet; sent heartbeat ping", { silentForMs });
-        } catch (err) {
-          console.warn("[RfqProvider] WS ping failed:", err);
-        }
-      }
-
-      // Hard recovery: force reconnect if no traffic for extended period.
-      if (silentForMs > 75_000 && now - lastForcedReconnectAtRef.current > 60_000) {
-        lastForcedReconnectAtRef.current = now;
-        console.warn("[RfqProvider] WS appears stale; forcing reconnect", { silentForMs });
-        resetToAnonymous(client);
-      }
     }, 10_000);
 
     return () => window.clearInterval(intervalId);
-  }, [connectionState]);
-
-  useEffect(() => {
-    const onOnline = () => {
-      const client = clientRef.current;
-      if (!client) return;
-      if (connectionState === "disconnected" || connectionState === "error") {
-        console.log("[RfqProvider] Browser back online; reconnecting WS...");
-        client.connectAnonymous();
-      }
-    };
-
-    window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
   }, [connectionState]);
 
   // Authenticate with wallet
@@ -627,7 +567,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
             resolve();
           };
 
-          const onError = (serverErr: ServerError) => {
+          const onError = (serverErr: ActaWsClientError) => {
             cleanup();
             reject(serverErr);
           };
@@ -638,11 +578,11 @@ export function RfqProvider({ children }: RfqProviderProps) {
         });
       } catch (err) {
         console.error("[RfqProvider] Authentication failed:", err);
-        const serverErr = err as ServerError;
+        const serverErr = err as ActaWsClientError;
         if (isAuthFailureError(serverErr)) {
           resetToAnonymous(client);
         }
-        const message = serverErr?.type === "generic" ? serverErr.data.message : String(err);
+        const message = (serverErr?.type === "generic" || serverErr?.type === "Generic") ? serverErr.data.message : String(err);
         setError(new Error(message));
         throw err;
       }
@@ -727,6 +667,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     setReferralError(null);
     pendingReferralReqsRef.current.clear();
     setPositions([]);
+    pendingRfqRef.current = null;
     setCurrentQuote(null);
     setError(null);
 
@@ -769,7 +710,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
   );
 
   const getTokenMarketsInfo = useCallback((underlyingMint: string) => {
-    clientRef.current?.getTokenMarketsInfo(underlyingMint);
+    tokenMarketsRequest.current = null;
+    setTokenMarketsInfo(null);
+    const requestId = clientRef.current?.getTokenMarketsInfo(underlyingMint);
+    if (requestId) tokenMarketsRequest.current = { requestId, underlyingMint };
   }, []);
 
   const getEarnSummary = useCallback(() => {
@@ -814,7 +758,13 @@ export function RfqProvider({ children }: RfqProviderProps) {
         setError(new Error("Market metadata is still loading. Please retry in a moment."));
         return;
       }
-      void client.createRfq(rfqRequest).catch((err) => {
+      const clientRequestId = crypto.randomUUID();
+      pendingRfqRef.current = { type: "requested", clientRequestId, strike: params.strike };
+      setCurrentQuote(null);
+      void client.createRfq({ ...rfqRequest, clientRequestId }).catch((err) => {
+        const pending = pendingRfqRef.current;
+        if (pending?.type !== "requested" || pending.clientRequestId !== clientRequestId) return;
+        pendingRfqRef.current = null;
         const message = err instanceof Error ? err.message : String(err);
         if (isMissingMarketDescriptorError(message)) {
           client.getMarketDescriptors({ active_only: true });
@@ -827,19 +777,22 @@ export function RfqProvider({ children }: RfqProviderProps) {
     [marketDescriptors]
   );
 
-  const acceptQuote = useCallback((rfqId: string, maker: string, orderIdHex: string) => {
+  const acceptQuote = useCallback(async (rfqId: string, maker: string, orderIdHex: string) => {
     const client = clientRef.current;
-    if (!client) return;
-    client.acceptQuote(rfqId, maker as any, orderIdHex);
+    if (!client) throw new Error("RFQ connection is unavailable");
+    if (!client.isAuthenticated()) throw new Error("RFQ connection is not authenticated");
+    await client.acceptQuote(rfqId, maker as any, orderIdHex);
   }, []);
 
-  const submitSignedTx = useCallback((orderIdHex: string, txBase64: string) => {
+  const submitSignedTx = useCallback(async (orderIdHex: string, txBase64: string) => {
     const client = clientRef.current;
-    if (!client) return;
-    client.submitSignedSponsoredTx({ orderIdHex, txBase64 });
+    if (!client) throw new Error("RFQ connection is unavailable");
+    if (!client.isAuthenticated()) throw new Error("RFQ connection is not authenticated");
+    await client.submitSignedSponsoredTx({ orderIdHex, txBase64 });
   }, []);
 
   const clearTransientState = useCallback(() => {
+    pendingRfqRef.current = null;
     setCurrentQuote(null);
     setError(null);
   }, []);
