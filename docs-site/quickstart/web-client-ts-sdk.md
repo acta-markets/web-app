@@ -7,13 +7,14 @@ Wire messages, errors, and enums are in [`../reference/taker-api.md`](../referen
 ## Installation
 
 ```bash
-yarn add @acta-markets/ts-sdk@0.1.3
+yarn add @acta-markets/ts-sdk@0.1.5
 ```
 
 The client requires these fields in server messages:
 `Welcome.server_time_unix_ms`, `AuthSuccess.expires_at`,
-`RfqBroadcast.sent_at_unix_ms`, and `instruction_index` on every known chain
-event. Frames missing these fields or containing `null` are rejected before
+`RfqBroadcast.sent_at_unix_ms`, `order_version` on order lifecycle events,
+and `instruction_index` on every known chain event.
+Frames missing these fields or containing `null` are rejected before
 dispatch. `server_time_unix_ms` and `sent_at_unix_ms` use milliseconds;
 `expires_at` uses Unix seconds. The WS protocol version is `1.0.0`.
 
@@ -24,6 +25,8 @@ Taker-only apps should import **`@acta-markets/ts-sdk/ws`**: client, auth, RFQ a
 ## Quick start
 
 ### 1. Auth provider
+
+`wallet` is a connected wallet adapter exposing its current `publicKey` and `signMessage`; `walletPublicKeyBase58` is the account used for this client's authentication. Recreate the client when that account changes.
 
 ```typescript
 import { WalletAuthProvider } from "@acta-markets/ts-sdk/ws";
@@ -58,13 +61,16 @@ The client appends `/taker` to the base URL from `role`. Alternative: `ws.connec
 ### 3. Authenticate with session resume
 
 ```typescript
+const sessionKey = `acta_session:${wssEndpoint}:${walletPublicKeyBase58}`;
+const expiryKey = `${sessionKey}:expires_at`;
+
 ws.on("authenticated", (sessionId, expiresAt) => {
-  localStorage.setItem("acta_session_id", sessionId);
-  localStorage.setItem("acta_session_expires_at", String(expiresAt));
+  localStorage.setItem(sessionKey, sessionId);
+  localStorage.setItem(expiryKey, String(expiresAt));
 });
 
-const savedSessionId = localStorage.getItem("acta_session_id");
-const savedExpiresAt = Number(localStorage.getItem("acta_session_expires_at") || "0");
+const savedSessionId = localStorage.getItem(sessionKey);
+const savedExpiresAt = Number(localStorage.getItem(expiryKey) || "0");
 
 const sessionId = savedSessionId && Date.now() / 1000 < savedExpiresAt
   ? savedSessionId
@@ -130,7 +136,7 @@ ws.createRfq({
   strike: 136_000_000_000,
   quantity: 5_000_000_000, // 5 SOL in lamports
   timeoutSeconds: 30,
-  clientRequestId: uuid(), // optional idempotency key, scoped per taker
+  clientRequestId: crypto.randomUUID(), // optional idempotency key, scoped per taker
 });
 ```
 
@@ -148,27 +154,38 @@ ws.cancelRfq(rfqId);
 ```typescript
 import { signSponsoredTxBase64 } from "@acta-markets/ts-sdk/ws";
 
-ws.on("sponsoredTxToSign", async (orderIdHex, txBase64, signatureDeadline) => {
-  // No @solana/web3.js: the helper signs the tx message bytes into the taker's
-  // signature slot with ed25519. Sign before signatureDeadline (unix seconds).
-  // `taker` is a KeypairSigner (bots) or a wallet exposing signMessage(bytes).
-  const signedTxBase64 = await signSponsoredTxBase64({ txBase64, taker });
+let connectionEpoch = 0;
+ws.on("stateChange", () => { connectionEpoch++; });
 
-  await ws.submitSignedSponsoredTx({ orderIdHex, txBase64: signedTxBase64 });
+ws.on("sponsoredTxToSign", async (id, txBase64, signatureDeadline) => {
+  if (id !== orderIdHex || !ws.isAuthenticated()) return;
+  const epoch = connectionEpoch;
+  const walletMatches = () => wallet.publicKey?.toBase58() === walletPublicKeyBase58;
+  const expired = () => Date.now() / 1000 >= signatureDeadline;
+  if (!walletMatches() || expired()) return;
+  try {
+    const signedTxBase64 = await signSponsoredTxBase64({ txBase64, taker: wallet });
+    if (epoch !== connectionEpoch || id !== orderIdHex || !walletMatches() || expired()) return;
+    await ws.submitSignedSponsoredTx({ orderIdHex: id, txBase64: signedTxBase64 });
+  } catch (error) {
+    console.error(id, error);
+  }
 });
 
 ws.acceptQuote(rfqId, makerPubkey, orderIdHex);
 ```
+
+`orderIdHex` is the application's selected order. If the wallet, connection or selection changes during signing, discard that result. Track sent state before submitting and use the recovery rules below when the result is uncertain.
 
 **Browser wallets.** To show the wallet's own transaction preview/simulation, deserialize with `@solana/web3.js` and call `wallet.signTransaction(tx)` instead. `@solana/web3.js` is only needed for that UX path — it's the wallet adapter's own dependency, not the SDK's.
 
 ### 9. Track order status
 
 ```typescript
-ws.on("orderAccepted", (orderIdHex) => {});
-ws.on("orderSubmitted", (orderIdHex, txSignature) => {});
-ws.on("orderConfirmed", (orderIdHex, positionPda) => {});
-ws.on("orderFailed", (orderIdHex, reason) => {});
+ws.on("orderAccepted", (orderIdHex, orderVersion) => {});
+ws.on("orderSubmitted", (orderIdHex, txSignature, orderVersion) => {});
+ws.on("orderConfirmed", (orderIdHex, positionPda, orderVersion) => {});
+ws.on("orderFailed", (orderIdHex, reason, orderVersion) => {});
 
 ws.on("rfqClosed", (data) => {
   // Terminal — clean up RFQ state. data.reason: "taker_cancelled" | "expired" | "filled" | ...
@@ -177,7 +194,7 @@ ws.on("rfqClosed", (data) => {
 
 ### 10. Recover an interrupted order
 
-Retain the selected `rfq_id`, maker, `order_id`, auth session and whether `SubmitSignedSponsoredTx` was sent. Keep these separate from the browsing cache.
+Persist the selected `rfq_id`, maker, `order_id`, auth session and whether `SubmitSignedSponsoredTx` was sent, scoped to the wallet and backend. Keep them across reconnect and page reload, separately from the browsing cache. Do not persist signed transaction payloads for replay.
 
 After successful resume of the same auth session, reconcile with `GetMyActiveRfqs`. If the same order is still `pending_signature`, repeat only that exact `AcceptQuote` to retrieve its signing payload; respect the original signature deadline. If it is `enqueued`, or the transaction was already sent, query `GetOrderStatus` instead of signing or submitting again.
 
@@ -237,8 +254,8 @@ Transport note: during reconnect, WebSocket control frames (`Ping`/`Pong`) may a
 
 ```typescript
 ws.on("error", (e) => {
-  // ServerError object (not a JS Error). Check e.type: typed variants have e.type !== "generic";
-  // generic errors carry e.data.code and e.data.message.
+  if (e.type === "Generic") console.error(e.data.code, e.data.message);
+  else console.error(e.type);
 });
 
 ws.on("requestError", (envelope) => {

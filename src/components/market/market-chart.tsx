@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppPill } from "@/components/app-ui/app-pill";
-import { formatUsdSmart } from "@/lib/markets";
+import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 
 type Point = { t: number; v: number };
 type Range = "1w" | "1m" | "3m";
@@ -263,7 +263,7 @@ export function MarketChart({
                 fontSize="10"
                 fontFamily="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
               >
-                Strike {formatUsdSmart(strikePrice)} {svg.strikeOff === "above" ? "\u2191" : svg.strikeOff === "below" ? "\u2193" : ""}
+                Strike {formatStrikePrice(strikePrice)} {svg.strikeOff === "above" ? "\u2191" : svg.strikeOff === "below" ? "\u2193" : ""}
               </text>
             </g>
 

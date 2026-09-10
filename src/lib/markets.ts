@@ -153,6 +153,15 @@ export function formatUsd(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
+export function formatStrikePrice(n: number) {
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 9,
+  });
+}
+
 /**
  * Smart USD formatting for token prices:
  * - Avoid thousands grouping for large prices (e.g. zBTC) to reduce visual noise.
@@ -208,5 +217,4 @@ export function formatUsdSmart(n: number) {
     useGrouping
   });
 }
-
 
