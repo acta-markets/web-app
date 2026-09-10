@@ -342,7 +342,7 @@ Typed variant examples:
 
 This list grows over time; keep a fallback branch for unknown codes.
 
-JavaScript integrators must preserve integer precision: a wire `u64` can exceed `Number.MAX_SAFE_INTEGER`. TS SDK `0.1.3` represents most WS amounts as `number`; it reports `unsafe_integer` for oversized non-nonce literals but still dispatches the message. Do not use such rounded values for signing or accounting. Inbound nonces have separate lossless handling. For full-range raw JSON amounts, use lossless parsing and bigint arithmetic; `BigInt(JSON.parse(...).amount)` cannot repair precision already lost. This does not change the wire encoding or the `1e9` scale.
+JavaScript integrators must preserve integer precision: a wire `u64` can exceed `Number.MAX_SAFE_INTEGER`. TS SDK `0.1.5` represents most WS amounts as `number`; it reports `unsafe_integer` for oversized amount literals but still dispatches the message. Do not use such rounded values for signing or accounting. Inbound nonces have separate lossless handling. For full-range raw JSON amounts, use lossless parsing and bigint arithmetic; `BigInt(JSON.parse(...).amount)` cannot repair precision already lost. This does not change the wire encoding or the `1e9` scale.
 
 ## Correlation semantics
 

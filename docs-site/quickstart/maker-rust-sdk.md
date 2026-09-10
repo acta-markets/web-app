@@ -12,7 +12,7 @@ For JSON-layer integrations, see [`maker-quickstart.md`](maker-quickstart.md). M
 
 ```toml
 [dependencies]
-acta-maker-sdk = { version = "0.4.0", features = ["ws-client"] }
+acta-maker-sdk = { version = "0.4.2", features = ["ws-client"] }
 ```
 
 Quote-only integrations need `ws-client`. `chain` adds Solana instruction builders; `chain-rpc` adds on-chain reads.
@@ -21,16 +21,18 @@ Quote-only integrations need `ws-client`. `chain` adds Solana instruction builde
 
 ## Connection
 
-This fragment runs inside an async function returning `Result`. Supply your endpoint `url: String`, `hello: HelloData`, `subscribe_data: SubscribeData`, and `quote_signing_secret: [u8; 32]`.
+This fragment runs inside an async function returning `Result`. Supply `url: String`, `hello: HelloData`, `subscribe_data: SubscribeData`, `maker_owner: [u8; 32]`, and `quote_signing_secret: [u8; 32]`. The signing key must be registered for authentication and quote signing under that maker owner.
 
 ```rust
-use acta_maker_sdk::BytesSigner;
+use acta_maker_sdk::{BytesSigner, encode_base58};
 use acta_maker_sdk::ws::managed::{ManagedWsConfig, MakerWsEndpoint, spawn_managed_ws};
 use std::sync::Arc;
 
 let signer = Arc::new(BytesSigner::from_secret(quote_signing_secret));
+let maker_owner_base58 = encode_base58(&maker_owner);
 
 let quote_config = ManagedWsConfig::new(url.clone(), hello.clone(), signer.clone())
+    .with_auth_pubkey(maker_owner_base58.clone())
     .with_cancel_on_disconnect(true)
     .low_latency()
     .with_initial_subscribe(subscribe_data);
@@ -39,6 +41,7 @@ let quote_handle = spawn_managed_ws(quote_config)?;
 let mut messages = quote_handle.subscribe_messages(); // Consume recovery before quoting.
 
 let data_config = ManagedWsConfig::new(url, hello, signer.clone())
+    .with_auth_pubkey(maker_owner_base58)
     .with_endpoint(MakerWsEndpoint::Data);
 
 let data_handle = spawn_managed_ws(data_config)?;
@@ -46,7 +49,7 @@ let data_handle = spawn_managed_ws(data_config)?;
 
 `url` accepts `http(s)://` and `ws(s)://` interchangeably. The default endpoint appends `/maker`; `with_endpoint(MakerWsEndpoint::Data)` appends `/maker/data`. `hello` carries the protocol version (use `WS_PROTOCOL_VERSION`), opt-in `features`, and `client_name` / `client_version` strings.
 
-The signer is an `Arc<dyn SignerLike + Send + Sync>`; it signs the auth challenge on every attempt and its public key is the identity the session authenticates as. When quotes are signed by a delegated key, name the owner with `.with_auth_pubkey(owner_base58)` and set `QuoteBuilder::maker_owner` on each quote. `ManagedWsConfig::new_async` takes an `AsyncSignerLike` for HSM- or KMS-backed keys. `BytesSigner` holds an ed25519 keypair in memory and zeroes it on drop.
+The signer is an `Arc<dyn SignerLike + Send + Sync>`. It signs the auth challenge with the registered key; `.with_auth_pubkey(...)` identifies the maker owner. Use that same owner in `QuoteBuilder::maker_owner`. `ManagedWsConfig::new_async` takes an `AsyncSignerLike` for HSM- or KMS-backed keys. `BytesSigner` holds an ed25519 keypair in memory and zeroes it on drop.
 
 The managed quote client requests cancel-on-disconnect (COD) by default: the server cancels the connection's active and retained non-winning quotes on disconnect. Selected/executing orders remain obligations. To disable COD, set `.with_cancel_on_disconnect(false)` and omit `cancel_on_disconnect` from `HelloData.features`; the setter preserves manually supplied features. The data client does not add this feature automatically. If a required feature is absent from `Welcome.enabled_features`, the session terminates with `FeatureUnsupported`.
 
@@ -60,7 +63,7 @@ Resume can restore a server-side mint scope. The SDK explicitly sends both mint 
 
 ## Quoting
 
-After applying recovery for the current connection epoch, build a quote from its `RfqBroadcast`. `RfqBinding` derives the preimage and wire message from the same values:
+After applying recovery, retain that `recovery_epoch: u64` with the strategy state and build quotes from its `RfqBroadcast`. `RfqBinding` derives the preimage and wire message from the same values:
 
 ```rust
 use acta_maker_sdk::{AtomicNonceGenerator, Nonce, Price, QuoteExpiry, RfqBinding};
@@ -72,15 +75,18 @@ static NONCE_GEN: AtomicNonceGenerator = AtomicNonceGenerator::new();
 // Choose `valid_until: QuoteExpiry` within the market and settlement deadlines.
 let quote = RfqBinding::from_broadcast(rfq)?
     .quote()
+    .maker_owner(maker_owner)
     .price(Price::new(price))
     .valid_until(valid_until)
     .nonce(Nonce::new(NONCE_GEN.next_u64()?))
     .sign(signer.as_ref())?;
 
-quote_handle.send(ClientMessage::Quote(quote)).await?;
+quote_handle.send_in_epoch(ClientMessage::Quote(quote), recovery_epoch).await?;
 ```
 
 `QuoteExpiry` stores whole Unix seconds; use `QuoteExpiry::from_unix_seconds(...)` or `QuoteExpiry::after(...)` rather than putting a fractional `SystemTime` into a signed order. `RfqBinding` also supports choosing a permitted strike from `order_options`. See the maintained [`managed_quote` example](https://github.com/acta-markets/rust-maker-sdk/blob/main/examples/managed_quote.rs) for receiving recovery responses, checking epochs and handling stream gaps.
+
+`send_in_epoch` rejects if the connection has changed. Do not replace the applied recovery epoch with the latest transport epoch just before sending.
 
 Constraints:
 
@@ -110,10 +116,10 @@ Lifecycle events arrive through the managed message receiver with a connection e
 Use `ReplaceQuote` for repricing. The prior quote is removed only after the replacement validates, so the swap is single-RTT. `CancelQuote` followed by `Quote` creates a gap and adds a round-trip.
 
 ```rust
-quote_handle.send(ClientMessage::ReplaceQuote(ReplaceQuoteMessage {
+quote_handle.send_in_epoch(ClientMessage::ReplaceQuote(ReplaceQuoteMessage {
     old_order_id,
     rfq_id, strike, price, valid_until, nonce, order_id, signature,
-})).await?;
+}), recovery_epoch).await?;
 ```
 
 The preimage is constructed identically to a fresh `Quote` with a new `nonce` and `order_id`. The server confirms with `QuoteAcknowledged { replaced_order_id: Some(old_order_id) }`. Retain `old_order_id` until the replacement is acknowledged, since events keyed to the old id may still be in flight.

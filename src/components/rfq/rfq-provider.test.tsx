@@ -62,6 +62,15 @@ describe("RFQ request ownership", () => {
     h.emit("rfqClosed", { rfq_id: "ours" }); expect(h.result.current.currentQuote).toBeNull();
     expect(h.result.current.error).toBeNull();
   });
+  it("does not turn an unrelated order failure into a global RFQ error", () => {
+    const h = setup();
+    const requestId = h.submit();
+    h.emit("orderFailed", "old-order", "relay error");
+    expect(h.result.current.error).toBeNull();
+    h.emit("rfqCreated", { rfq_id: "new-rfq", client_request_id: requestId });
+    h.emit("quoteReceived", h.quote("new-rfq"));
+    expect(h.result.current.currentQuote?.rfq_id).toBe("new-rfq");
+  });
   it("discards pre-disconnect quotes and their late replies", () => {
     const h = setup(); const id = h.submit();
     h.emit("rfqCreated", { rfq_id: "ours", client_request_id: id }); h.emit("quoteReceived", h.quote("ours"));
@@ -136,7 +145,7 @@ describe("stored resume credential expiry", () => {
       window.localStorage.setItem("acta_rfq_ws_session", JSON.stringify({
         walletAddress: wallet, sessionId: "stored", expiresAt,
       }));
-      vi.spyOn(h.client, "getMyReferralInfo").mockImplementation(() => {});
+      vi.spyOn(h.client, "getMyReferralInfo").mockReturnValue("referral-request");
       const connect = vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {
         h.emit("authenticated", "fresh", 4_000_000_000);
       });

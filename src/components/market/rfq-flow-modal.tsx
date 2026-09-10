@@ -12,6 +12,17 @@ import { IS_MAINNET } from "@/lib/tokens";
 
 type PositionType = "covered_call" | "cash_secured_put";
 
+export type RfqOrderPreview = {
+  asset: string;
+  positionType: PositionType;
+  strike: number;
+  quantity: number;
+  strikeDisplay: string;
+  quantityDisplay: string;
+  lockedAprPct?: number | null;
+  lockedPremiumUsd?: number | null;
+};
+
 type FlowStep = 
   | "idle"
   | "requesting_quote"
@@ -30,24 +41,11 @@ interface RfqFlowModalProps {
   onClose: () => void;
   /** Incremented by parent whenever a new quote is requested */
   requestNonce: number;
-  /** Asset symbol for display */
-  asset: string;
-  /** Position type */
-  positionType: PositionType;
-  /** Strike price in smallest units */
-  strike: number;
-  /** Quantity in smallest units */
-  quantity: number;
-  /** Display strike price */
-  strikeDisplay: string;
-  /** Display quantity */
-  quantityDisplay: string;
+  preview: RfqOrderPreview | null;
+  walletAddress: string | null;
+  backendUrl: string;
   /** Optional quote to lock modal to exact market-page preview */
   initialQuote?: QuoteReceivedMessage | null;
-  /** Locked APR from market page at click time */
-  lockedAprPct?: number | null;
-  /** Locked total premium from market page at click time */
-  lockedPremiumUsd?: number | null;
   /** Sign transaction function from wallet */
   signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
 }
@@ -56,15 +54,10 @@ export function RfqFlowModal({
   open,
   onClose,
   requestNonce,
-  asset,
-  positionType,
-  strike,
-  quantity,
-  strikeDisplay,
-  quantityDisplay,
+  preview,
+  walletAddress,
+  backendUrl,
   initialQuote,
-  lockedAprPct,
-  lockedPremiumUsd,
   signTransaction,
 }: RfqFlowModalProps) {
   const {
@@ -79,35 +72,47 @@ export function RfqFlowModal({
   const [quoteStep, setStep] = useState<"idle" | "requesting_quote" | "quote_received" | "failed">("idle");
   const [error, setError] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteReceivedMessage | null>(null);
-  const { flow, accept, reset, checkStatus, txSignature } = useRfqOrder({
+  const [recoveredOpen, setRecoveredOpen] = useState(false);
+  const { flow, accept, reset, checkStatus, txSignature, restored } = useRfqOrder({
     getClient, acceptQuote, submitSignedTx, signTransaction,
+    scope: { walletAddress, backendUrl },
   });
   const step: FlowStep = flow.type === "idle" ? quoteStep
     : flow.type === "awaiting_signature" ? "accepting_quote" : flow.type;
   const positionPda = flow.type === "confirmed" ? flow.positionPda : null;
   const flowError = flow.type === "failed" ? flow.message : error;
+  const isRestoredOrder = restored;
+  const modalOpen = open || recoveredOpen;
+
+  useEffect(() => {
+    if (flow.type === "idle") setRecoveredOpen(false);
+  }, [backendUrl, flow.type, walletAddress]);
+
+  useEffect(() => {
+    if (isRestoredOrder && isAuthenticated && flow.type !== "idle") setRecoveredOpen(true);
+  }, [flow.type, isAuthenticated, isRestoredOrder]);
 
   // Reset state when modal opens
   useEffect(() => {
-    if (open) {
+    if (open && preview && !isRestoredOrder) {
       setStep(initialQuote ? "quote_received" : "requesting_quote");
       setError(null);
       setQuote(initialQuote ?? null);
       reset();
     }
-  }, [open, requestNonce, initialQuote, reset]);
+  }, [open, requestNonce, initialQuote, preview, isRestoredOrder, reset]);
 
   // Handle quote received
   useEffect(() => {
     if (
-      currentQuote &&
+      preview && currentQuote &&
       step === "requesting_quote" &&
-      Number(currentQuote.strike) === strike
+      Number(currentQuote.strike) === preview.strike
     ) {
       setQuote(currentQuote);
       setStep("quote_received");
     }
-  }, [currentQuote, step, strike]);
+  }, [currentQuote, preview, step]);
 
   // Handle RFQ errors
   useEffect(() => {
@@ -159,6 +164,8 @@ export function RfqFlowModal({
     if (flow.type !== "idle" && flow.type !== "confirmed" && flow.type !== "failed") {
       return;
     }
+    reset();
+    setRecoveredOpen(false);
     onClose();
   };
 
@@ -168,15 +175,15 @@ export function RfqFlowModal({
       maximumFractionDigits: 2,
     })} USDC`;
   };
-  const quoteQuantity = quantity / 1_000_000_000;
+  const quoteQuantity = preview ? preview.quantity / 1_000_000_000 : 0;
   const quoteUnitPremium = quote ? Number(quote.net_price ?? quote.price) / 1_000_000_000 : null;
   const totalPremiumUsd =
-    lockedPremiumUsd != null
-      ? lockedPremiumUsd
+    preview?.lockedPremiumUsd != null
+      ? preview.lockedPremiumUsd
       : quoteUnitPremium != null
         ? quoteUnitPremium * quoteQuantity
         : null;
-  const displayedAprPct = lockedAprPct ?? null;
+  const displayedAprPct = preview?.lockedAprPct ?? null;
 
   const processingLabel =
     step === "accepting_quote"
@@ -198,29 +205,36 @@ export function RfqFlowModal({
   const panelClass = "border border-bg-border bg-action-primary/30 p-4";
 
   return (
-    <AppModal open={open} onClose={handleClose} title="Submit Order" showHowItWorks={false}>
+    <AppModal open={modalOpen} onClose={handleClose} title="Submit Order" showHowItWorks={false}>
       <div className="space-y-4">
         {/* Order Summary */}
-        <div className={panelClass}>
+        {isRestoredOrder ? (
+          <div className={panelClass}>
+            <div className="font-mono text-sm font-medium text-content-secondary">Recovered order</div>
+            {flow.type !== "idle" && flow.type !== "confirmed" && flow.type !== "failed" && (
+              <div className="mt-2 break-all font-mono text-xs text-content-secondary">Order ID: {flow.order.orderId}</div>
+            )}
+          </div>
+        ) : preview ? <div className={panelClass}>
           <div className="font-mono text-sm font-medium text-content-secondary">Order</div>
           <div className="mt-2 space-y-2 font-mono">
             <div className="flex justify-between">
               <span className="text-content-secondary">Asset</span>
-              <span className="font-semibold text-content-primary">{asset}</span>
+              <span className="font-semibold text-content-primary">{preview.asset}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-content-secondary">Type</span>
               <span className="font-semibold text-content-primary">
-                {positionType === "covered_call" ? "Covered Call" : "Cash-Secured Put"}
+                {preview.positionType === "covered_call" ? "Covered Call" : "Cash-Secured Put"}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-content-secondary">Strike</span>
-              <span className="font-semibold text-content-primary">{strikeDisplay}</span>
+              <span className="font-semibold text-content-primary">{preview.strikeDisplay}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-content-secondary">Quantity</span>
-              <span className="font-semibold text-content-primary">{quantityDisplay}</span>
+              <span className="font-semibold text-content-primary">{preview.quantityDisplay}</span>
             </div>
             {totalPremiumUsd != null && (
               <div className="flex justify-between">
@@ -235,7 +249,7 @@ export function RfqFlowModal({
               </div>
             )}
           </div>
-        </div>
+        </div> : null}
 
         {/* Progress */}
         <div className="flex items-center gap-2 font-mono text-sm">
@@ -265,7 +279,7 @@ export function RfqFlowModal({
         )}
 
         {/* Quote Details */}
-        {quote && step === "quote_received" && (
+        {!isRestoredOrder && quote && step === "quote_received" && (
           <div className={panelClass}>
             <div className="font-mono text-sm font-semibold text-accent-primary">Quote Received</div>
             <div className="mt-3 space-y-2 font-mono">
