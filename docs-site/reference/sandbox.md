@@ -88,7 +88,7 @@ Authentication uses the same Ed25519 challenge-response as production.
 | Caps | Test values; may differ from production |
 | Indicative pricing | Supported |
 | Sponsored tx signing | Supported |
-| Oracle | Oracle-setter reads devnet Pyth/Hermes feeds and writes Acta oracle accounts; feeds may be stale or unavailable outside market hours |
+| Oracle | Backend reads its configured Pyth/Hermes feeds; settlement publication writes Acta oracle accounts. Oracle readiness is checked independently of Solana cluster selection |
 | HTTP API | Public read endpoints available under `/api/v1` (`/markets`, `/makers`, `/stats`); participant RFQs/orders require an authenticated session |
 
 ## Differences from production
@@ -96,13 +96,15 @@ Authentication uses the same Ed25519 challenge-response as production.
 | Aspect | Devnet | Production |
 |--------|--------|------------|
 | Token mints | Devnet test mints (contact team) | Mainnet SPL tokens |
-| Oracle feeds | Devnet Pyth (may be stale) | Mainnet Pyth (real-time) |
+| Oracle feeds | Backend-configured feed IDs and oracle mapping | Backend-configured feed IDs and oracle mapping |
 | Settlement | Same logic, test tokens | Real assets |
 | Markets | Created on request | Dynamic |
 | SOL | Free via airdrop | Real SOL required |
 
 > The on-chain program logic is the same on devnet and production.
 > Differences are external: mints, oracles, and environment config.
+
+Browsers obtain current reference prices from the selected backend through [`GetTokenMarketsInfo`](taker-api.md#tokenmarketsinfo). They do not need Pyth credentials. Solana devnet selection does not itself choose a different Hermes endpoint or guarantee feed freshness.
 
 ## Program addresses
 
