@@ -20,11 +20,11 @@ The implementation does not require a second Vercel project:
 ## Architecture
 
 ```text
-docs/external
+public-docs
       │
       │ npm run sync:docs
       ▼
-yuzu-web/docs-site ── SUMMARY.md
+web-app/docs-site ── SUMMARY.md
       │
       ├── Next.js server-rendered Markdown
       ├── Accept: text/markdown
@@ -58,7 +58,7 @@ npm run build
 - duplicate `SUMMARY.md` entries;
 - documentation pages missing from the sidebar.
 
-`check:docs-source` additionally detects drift from `docs/external` when that
+`check:docs-source` additionally detects drift from `public-docs` when that
 sibling repository is available. The regular validation remains runnable in an
 isolated CI checkout.
 
