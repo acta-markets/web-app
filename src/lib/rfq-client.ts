@@ -71,14 +71,17 @@ function normalizeWsUrl(url: string): string {
 }
 
 export function createRfqClient(options?: CreateClientOptions): ActaWsClient {
-  const configuredUrl = options?.url || RFQ_WS_URL;
-  const url = normalizeWsUrl(configuredUrl);
+  const url = options?.url ? normalizeWsUrl(options.url) : getRfqBackendUrl();
   return new ActaWsClient({
     url,
     role: "taker",
     autoReconnect: true,
     debug: options?.debug ?? false,
   });
+}
+
+export function getRfqBackendUrl(): string {
+  return normalizeWsUrl(RFQ_WS_URL);
 }
 
 export interface WalletAdapter {

@@ -490,11 +490,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       client.getMyReferralInfo();
     });
 
-    client.on("orderFailed", (orderId, reason) => {
-      console.error("[RfqProvider] Order failed:", orderId, reason);
-      setError(new Error(`Order failed: ${reason}`));
-    });
-
     // Always connect once. If wallet is available, auth will upgrade
     // this same connection in-place (no second WS).
     console.log("[RfqProvider] Connecting...");
@@ -943,4 +938,3 @@ export function RfqProvider({ children }: RfqProviderProps) {
     </RfqContext.Provider>
   );
 }
-

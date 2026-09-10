@@ -1,28 +1,88 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VersionedTransaction } from "@solana/web3.js";
 import type { ActaWsClient, ActaWsClientError, ConnectionState, QuoteReceivedMessage } from "@/lib/rfq-client";
 
+type OrderSubmission = "unsigned" | "sent";
 type SelectedOrder = {
   orderId: string;
   rfqId: string;
   maker: string;
-  sessionId: string | null;
+  originalSessionId: string | null;
 };
+type StoredOrder = SelectedOrder & { submission: OrderSubmission; txSignature?: string };
+type StorageScope = { walletAddress: string | null; backendUrl: string };
 type OpenOrder =
   | { type: "awaiting_signature" | "signing" | "submitting" | "pending"; order: SelectedOrder }
-  | { type: "recovering" | "unknown"; order: SelectedOrder; submission: "unsigned" | "sent" };
+  | { type: "recovering" | "unknown"; order: SelectedOrder; submission: OrderSubmission };
 type OrderFlow =
   | { type: "idle" }
   | OpenOrder
   | { type: "confirmed"; orderId: string; positionPda: string }
   | { type: "failed"; orderId: string; message: string };
 
+const UNFINISHED_ORDER_KEY = "acta_rfq_unfinished_order";
+
 function isOpen(flow: OrderFlow): flow is OpenOrder {
   return flow.type !== "idle" && flow.type !== "confirmed" && flow.type !== "failed";
 }
-function submissionOf(flow: OpenOrder): "unsigned" | "sent" {
+function submissionOf(flow: OpenOrder): OrderSubmission {
   if (flow.type === "recovering" || flow.type === "unknown") return flow.submission;
   return flow.type === "submitting" || flow.type === "pending" ? "sent" : "unsigned";
+}
+function storageKeyFor(scope: StorageScope): string | null {
+  const wallet = scope.walletAddress?.trim();
+  const backend = scope.backendUrl.trim();
+  if (!wallet || !backend || typeof window === "undefined") return null;
+  return `${UNFINISHED_ORDER_KEY}:${encodeURIComponent(backend)}:${encodeURIComponent(wallet)}`;
+}
+function readStoredOrder(key: string): StoredOrder | null {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? "null");
+    if (!value || typeof value !== "object") return null;
+    const record = value as Partial<StoredOrder>;
+    if (typeof record.orderId !== "string" || typeof record.rfqId !== "string" || typeof record.maker !== "string") return null;
+    if (record.originalSessionId !== null && typeof record.originalSessionId !== "string") return null;
+    if (record.submission !== "unsigned" && record.submission !== "sent") return null;
+    if (record.txSignature !== undefined && typeof record.txSignature !== "string") return null;
+    return {
+      orderId: record.orderId,
+      rfqId: record.rfqId,
+      maker: record.maker,
+      originalSessionId: record.originalSessionId,
+      submission: record.submission,
+      ...(record.txSignature ? { txSignature: record.txSignature } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+function writeStoredOrder(key: string, order: SelectedOrder, submission: OrderSubmission, txSignature?: string | null): boolean {
+  try {
+    const record: StoredOrder = {
+      ...order,
+      submission,
+      ...(txSignature ? { txSignature } : {}),
+    };
+    window.localStorage.setItem(key, JSON.stringify(record));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function sameOrder(a: SelectedOrder, b: SelectedOrder): boolean {
+  return a.orderId === b.orderId && a.rfqId === b.rfqId && a.maker === b.maker;
+}
+function recoveringFlow(stored: StoredOrder): OpenOrder {
+  return {
+    type: "recovering",
+    order: {
+      orderId: stored.orderId,
+      rfqId: stored.rfqId,
+      maker: stored.maker,
+      originalSessionId: stored.originalSessionId,
+    },
+    submission: stored.submission,
+  };
 }
 
 type Options = {
@@ -30,32 +90,75 @@ type Options = {
   acceptQuote: (rfqId: string, maker: string, orderId: string) => Promise<void>;
   submitSignedTx: (orderId: string, tx: string) => Promise<void>;
   signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
+  scope: StorageScope;
 };
 
-export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransaction }: Options) {
+export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransaction, scope }: Options) {
   const client = getClient();
-  const [flow, setFlow] = useState<OrderFlow>({ type: "idle" });
-  const current = useRef<OrderFlow>(flow);
+  const storageKey = storageKeyFor(scope);
+  const initialStored = useMemo(() => storageKey ? readStoredOrder(storageKey) : null, [storageKey]);
+  const initialFlow: OrderFlow = initialStored ? recoveringFlow(initialStored) : { type: "idle" };
+  const [flow, setFlow] = useState<OrderFlow>(initialFlow);
+  const current = useRef<OrderFlow>(initialFlow);
   const signer = useRef(signTransaction);
   const walletSigning = useRef<Promise<VersionedTransaction> | null>(null);
   useEffect(() => { signer.current = signTransaction; }, [signTransaction]);
   const connection = useRef(0);
   const statusRequest = useRef<string | null>(null);
+  const loadedScope = useRef<string | null>(storageKey);
+  const [restoreGeneration, setRestoreGeneration] = useState(initialStored ? 1 : 0);
+  const [restored, setRestored] = useState(Boolean(initialStored));
   const invalidateConnection = useCallback(() => {
     connection.current++;
     statusRequest.current = null;
   }, []);
-  const [txSignature, setTxSignature] = useState<string | null>(null);
+  const [txSignature, setTxSignature] = useState<string | null>(initialStored?.txSignature ?? null);
+  const clearTerminalRecord = useCallback((orderId: string) => {
+    if (typeof storageKey !== "string") return;
+    const existing = readStoredOrder(storageKey);
+    if (!existing || existing.orderId !== orderId) return;
+    try { window.localStorage.removeItem(storageKey); } catch { /* terminal cleanup is best-effort */ }
+  }, [storageKey]);
   const update = useCallback((next: OrderFlow) => {
+    if (next.type === "confirmed" || next.type === "failed") clearTerminalRecord(next.orderId);
     current.current = next;
     setFlow(next);
-  }, []);
+  }, [clearTerminalRecord]);
+  const restoreStored = useCallback((stored: StoredOrder) => {
+    setTxSignature(stored.txSignature ?? null);
+    setRestored(true);
+    setRestoreGeneration(value => value + 1);
+    update(recoveringFlow(stored));
+  }, [update]);
+  const saveUnfinished = useCallback((order: SelectedOrder, submission: OrderSubmission, signature?: string | null) => {
+    if (storageKey === null) return "unavailable" as const;
+    const existing = readStoredOrder(storageKey);
+    if (existing && !sameOrder(existing, order)) {
+      restoreStored(existing);
+      return "existing" as const;
+    }
+    if (existing?.submission === "sent") {
+      if (submission === "unsigned" || signature === existing.txSignature || (!signature && existing.txSignature)) {
+        restoreStored(existing);
+        return "sent" as const;
+      }
+    }
+    return writeStoredOrder(storageKey, order, submission, signature) ? "written" as const : "unavailable" as const;
+  }, [storageKey, restoreStored]);
   const reset = useCallback(() => {
     invalidateConnection();
     update({ type: "idle" });
     setTxSignature(null);
+    setRestored(false);
   }, [update, invalidateConnection]);
+
   const sendAccept = useCallback(async (order: SelectedOrder) => {
+    const saved = saveUnfinished(order, "unsigned");
+    if (saved === "existing" || saved === "sent") return;
+    if (saved === "unavailable") {
+      update({ type: "failed", orderId: order.orderId, message: "Unable to save unfinished order before accepting the quote" });
+      return;
+    }
     const epoch = connection.current;
     const attempt: OpenOrder = { type: "awaiting_signature", order };
     update(attempt);
@@ -65,7 +168,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
       if (connection.current !== epoch || current.current !== attempt) return;
       update({ type: "failed", orderId: order.orderId, message: error instanceof Error ? error.message : String(error) });
     }
-  }, [acceptQuote, update]);
+  }, [acceptQuote, saveUnfinished, update]);
 
   const checkStatus = useCallback(() => {
     const active = current.current;
@@ -88,8 +191,8 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
             return;
           }
           if (rfq.state === "pending_signature" && (active.type === "signing" || active.type === "awaiting_signature")) return;
-          if (rfq.state === "pending_signature" && order.sessionId !== null
-            && client.getSessionId() === order.sessionId) {
+          if (rfq.state === "pending_signature" && order.originalSessionId !== null
+            && client.getSessionId() === order.originalSessionId) {
             await sendAccept(order);
             return;
           }
@@ -118,6 +221,29 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
   }, [client, sendAccept, update]);
 
   useEffect(() => {
+    if (loadedScope.current === storageKey) return;
+    loadedScope.current = storageKey;
+    invalidateConnection();
+    setTxSignature(null);
+    if (storageKey === null) {
+      setRestored(false);
+      update({ type: "idle" });
+      return;
+    }
+    const stored = readStoredOrder(storageKey);
+    if (!stored) {
+      setRestored(false);
+      update({ type: "idle" });
+      return;
+    }
+    restoreStored(stored);
+  }, [invalidateConnection, restoreStored, storageKey, update]);
+
+  useEffect(() => {
+    if (restoreGeneration > 0 && client?.isAuthenticated()) checkStatus();
+  }, [client, checkStatus, restoreGeneration]);
+
+  useEffect(() => {
     if (!client) return;
     const owns = (id: string) => {
       const active = current.current;
@@ -132,13 +258,20 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
       if (state === "disconnected") onDisconnected();
     };
     const onConfirmed = (id: string, positionPda: string) => {
-      if (owns(id)) update({ type: "confirmed", orderId: id, positionPda });
+      const active = current.current;
+      if (!isOpen(active) || active.order.orderId !== id) return;
+      update({ type: "confirmed", orderId: id, positionPda });
+    };
+    const onAccepted = (id: string) => {
+      const active = current.current;
+      if (active.type === "submitting" && active.order.orderId === id) update({ type: "pending", order: active.order });
     };
     const onSubmitted = (id: string, signature: string) => {
       const active = current.current;
       if (!isOpen(active) || !owns(id)) return;
+      if (saveUnfinished(active.order, "sent", signature) === "existing") return;
       setTxSignature(signature);
-      update({ type: "submitting", order: active.order });
+      update({ type: "pending", order: active.order });
     };
     const onFailed = (id: string, reason: string) => {
       const active = current.current;
@@ -210,6 +343,12 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
         }
         if (epoch !== connection.current || current.current !== signing) return;
         if (deadline != null && Math.floor(Date.now() / 1000) >= deadline) throw new Error("Signature deadline expired");
+        const saved = saveUnfinished(active.order, "sent");
+        if (saved === "existing" || saved === "sent") return;
+        if (saved === "unavailable") {
+          update({ type: "unknown", order: active.order, submission: "unsigned" });
+          return;
+        }
         update({ type: "submitting", order: active.order });
         await submitSignedTx(id, btoa(String.fromCharCode(...signed.serialize())));
       } catch (error) {
@@ -227,6 +366,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
     client.on("stateChange", onStateChange);
     client.on("authenticated", checkStatus);
     client.on("sponsoredTxToSign", onSponsored);
+    client.on("orderAccepted", onAccepted);
     client.on("orderConfirmed", onConfirmed);
     client.on("orderSubmitted", onSubmitted);
     client.on("orderFailed", onFailed);
@@ -239,6 +379,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
       client.off("stateChange", onStateChange);
       client.off("authenticated", checkStatus);
       client.off("sponsoredTxToSign", onSponsored);
+      client.off("orderAccepted", onAccepted);
       client.off("orderConfirmed", onConfirmed);
       client.off("orderSubmitted", onSubmitted);
       client.off("orderFailed", onFailed);
@@ -246,12 +387,17 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
       client.off("rfqClosed", onRfqEnded);
       client.off("error", onError);
     };
-  }, [client, update, submitSignedTx, checkStatus, invalidateConnection]);
+  }, [client, update, submitSignedTx, checkStatus, invalidateConnection, saveUnfinished]);
 
   const accept = useCallback(async (quote: QuoteReceivedMessage) => {
     if (current.current.type !== "idle") return;
-    await sendAccept({ orderId: quote.order_id, rfqId: quote.rfq_id, maker: quote.maker, sessionId: client?.getSessionId() ?? null });
+    await sendAccept({
+      orderId: quote.order_id,
+      rfqId: quote.rfq_id,
+      maker: quote.maker,
+      originalSessionId: client?.getSessionId() ?? null,
+    });
   }, [client, sendAccept]);
 
-  return { flow, accept, reset, checkStatus, txSignature };
+  return { flow, accept, reset, checkStatus, txSignature, restored };
 }

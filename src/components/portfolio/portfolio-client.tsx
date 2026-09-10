@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppSegmented, type AppSegmentedOption } from "@/components/app-ui/app-segmented";
 import { AppTable, AppTd, AppTh } from "@/components/app-ui/app-table";
-import { formatUsdSmart } from "@/lib/markets";
+import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { getTokenBrand } from "@/lib/token-brand";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { TOKENS, getNetwork, normalizeTokenSymbol } from "@/lib/tokens";
@@ -475,7 +475,7 @@ export function PortfolioClient() {
                       ) : "\u2014"}
                     </AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{fmtNumber(p.quantity, 4)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.strike)}</AppTd>
+                    <AppTd className="text-right tabular-nums text-content-secondary">{formatStrikePrice(p.strike)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.premiumUsd)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{Number.isFinite(p.apr) ? `${p.apr.toFixed(2)}%` : "\u2014"}</AppTd>
                   </tr>
@@ -511,7 +511,7 @@ export function PortfolioClient() {
                     <AppTd className="text-content-secondary">{p.userStatus}</AppTd>
                     <AppTd className="font-mono text-content-secondary">{fmtDate(p.expiryTs ?? p.createdTs)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{fmtNumber(p.quantity, 4)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.strike)}</AppTd>
+                    <AppTd className="text-right tabular-nums text-content-secondary">{formatStrikePrice(p.strike)}</AppTd>
                     <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.premiumUsd)}</AppTd>
                   </tr>
                 ))

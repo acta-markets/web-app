@@ -20,6 +20,11 @@ Resume credentials require a future expiry in Unix seconds. Missing or expired
 stored credentials start fresh authentication; reconnect recovery preserves the
 selected order and never resubmits an already sent transaction.
 
+Unfinished orders are stored locally per wallet and RFQ backend as identifiers,
+submission state, and an optional transaction signature only. Transaction
+payloads are never stored or replayed; recovery reconciles authoritative order
+state before an unsigned same-session order can retrieve its signing payload.
+
 Public documentation lives in the sibling `public-docs` repository. After editing
 it, run `npm run sync:docs`, `npm run check:docs-source`, and `npm run check:docs`
 to update and validate the site's copy in `docs-site`.
@@ -38,4 +43,3 @@ See `ENV_SETUP.md` to set `MONGODB_URI` / `MONGODB_DB` and `NEXT_PUBLIC_PRIVY_AP
   - `Navbar`, `Hero`, `Marquee`, `Architecture`, `Solution`, `Whitelist`, `Team`, `Footer`
 - **Global styles + legacy effects**: `src/app/globals.css`
 - **Legacy snapshots**: `legacy/oldindex.html` (original) and `legacy/index.html` (whitelist version)
-
