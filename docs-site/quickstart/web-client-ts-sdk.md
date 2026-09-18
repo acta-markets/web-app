@@ -7,8 +7,13 @@ Wire messages, errors, and enums are in [`../reference/taker-api.md`](../referen
 ## Installation
 
 ```bash
-yarn add @acta-markets/ts-sdk@0.1.5
+yarn add @acta-markets/ts-sdk@0.1.6
 ```
+
+Version 0.1.6 includes canonical auth-challenge, market-PDA and declared-signer
+checks. These checks are absent from 0.1.5.
+`ActaWsClient` validates challenge format before calling any auth provider;
+raw clients can call `validateAuthChallenge` before signing.
 
 The client requires these fields in server messages:
 `Welcome.server_time_unix_ms`, `AuthSuccess.expires_at`,
@@ -39,7 +44,7 @@ const authProvider = new WalletAuthProvider({
 
 Other providers: `KeypairAuthProvider` (Node/CI/bots), `CustomAuthProvider` (remote signer).
 
-**Frontend wallets (Phantom / Privy).** WS auth requires `signMessage` (ed25519 over the UTF-8 challenge). For sponsored-tx signing, `signSponsoredTxBase64(...)` signs the raw message bytes (no `@solana/web3.js`); or call `wallet.signTransaction(...)` if you want the wallet's own tx preview. If a wallet doesn't expose `signMessage`, use `CustomAuthProvider` with a backend signer.
+**Frontend wallets (Phantom / Privy).** WS auth requires `signMessage` (ed25519 over the UTF-8 challenge). For sponsored-tx signing, `signSponsoredTxBase64(...)` signs approved message bytes after the intent comparison described below (no `@solana/web3.js`); or call `wallet.signTransaction(...)` if you want the wallet's own tx preview. If a wallet doesn't expose `signMessage`, use `CustomAuthProvider` with a backend signer.
 
 ### 2. Connect
 
@@ -151,6 +156,18 @@ ws.cancelRfq(rfqId);
 
 ### 8. Accept quote and sign
 
+SDK 0.1.6 requires `expectedMessageBytes`: the exact message independently
+built from the selected order and approved transaction parameters. It compares
+all bytes before calling the wallet, including every instruction, account flag,
+fee payer, blockhash and ALT reference. Never copy the expected bytes from the
+received transaction. Resolve ALT references against trusted table contents when
+building the approved message. Matching `orderIdHex` alone is insufficient.
+
+The example assumes your application provides `approvedMessageForOrder(id)`.
+This is application code, not an SDK export. A wallet preview is complementary.
+Older SDKs without this argument require equivalent application checks;
+`signSponsoredTxBase64Unverified` explicitly retains server-template trust.
+
 ```typescript
 import { signSponsoredTxBase64 } from "@acta-markets/ts-sdk/ws";
 
@@ -164,7 +181,10 @@ ws.on("sponsoredTxToSign", async (id, txBase64, signatureDeadline) => {
   const expired = () => Date.now() / 1000 >= signatureDeadline;
   if (!walletMatches() || expired()) return;
   try {
-    const signedTxBase64 = await signSponsoredTxBase64({ txBase64, taker: wallet });
+    const signedTxBase64 = await signSponsoredTxBase64({
+      txBase64, taker: wallet,
+      expectedMessageBytes: await approvedMessageForOrder(id),
+    });
     if (epoch !== connectionEpoch || id !== orderIdHex || !walletMatches() || expired()) return;
     await ws.submitSignedSponsoredTx({ orderIdHex: id, txBase64: signedTxBase64 });
   } catch (error) {

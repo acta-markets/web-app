@@ -24,7 +24,7 @@ No. Only one active quote WebSocket per maker pubkey is allowed, alongside the s
 |---|---|
 | `invalid_strike` | The strike is not in the RFQ's `order_options` set. |
 | `order_id_mismatch` | The submitted `order_id` does not equal `SHA-256(preimage182)`. See [Troubleshooting](#troubleshooting). |
-| `quote_expiry_too_short` | `valid_until < now + 310s` (the server's settlement buffer floor). |
+| `quote_expiry_too_short` | `valid_until < now + 100s` (the server's settlement buffer floor). |
 | `cap_exceeded` | A position-count, notional, or balance cap was breached. See [`caps.md`](caps.md). |
 | `rfq_not_active` | The RFQ expired or filled before the quote arrived. |
 
@@ -36,7 +36,7 @@ The server pre-filters RFQs against the maker's caps before broadcast. When a pr
 
 ### What is the appropriate value for `valid_until`?
 
-The hard floor is `now + 310s`; lower values are rejected with `quote_expiry_too_short`. The hard ceiling is the market's `expiry_ts`; later values are rejected with `market_expired`. The server reserves the trailing 300 seconds as the settlement buffer, so the trading cutoff is `valid_until - 300s`. Use `now + 320..360s` unless you have a reason not to, while remaining at or below market expiry. Longer windows leave stale quotes live without helping fills, because the taker cannot accept after `rfq.expires_at`. Track server clock offset from `Welcome.server_time_unix_ms` and `Pong.server_time_unix_ms`.
+The hard floor is `now + 100s`; lower values are rejected with `quote_expiry_too_short`. The hard ceiling is the market's `expiry_ts`; later values are rejected with `market_expired`. The server reserves the trailing 90 seconds as the settlement buffer, so the trading cutoff is `valid_until - 90s`. Size the quote against the auction you are quoting into: `rfq.expires_at + 100s` covers the whole auction plus the settlement buffer and the refresh lead. Add a few seconds of slack for clock skew, and stay at or below market expiry. Longer windows leave stale quotes live without helping fills, because the taker cannot accept after `rfq.expires_at`. Track server clock offset from `Welcome.server_time_unix_ms` and `Pong.server_time_unix_ms`.
 
 ## Troubleshooting
 

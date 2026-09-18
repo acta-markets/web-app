@@ -5,16 +5,24 @@ Acta's website and options trading app, built with Next.js App Router, Tailwind 
 ## Run locally
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 ## RFQ integration
 
-The app uses `@acta-markets/ts-sdk/ws`; its exact version is pinned in
-`package.json` and `package-lock.json`. `NEXT_PUBLIC_RFQ_WS_URL` selects the
+The app uses the published `@acta-markets/ts-sdk` 0.1.6, pinned in `package.json`
+and `package-lock.json`. A separate SDK checkout or build is not required.
+WebSocket integration imports `@acta-markets/ts-sdk/ws`.
+
+`NEXT_PUBLIC_RFQ_WS_URL` selects the
 backend, and `NEXT_PUBLIC_SOLANA_NETWORK` selects the matching token addresses.
 Market prices and indicative premiums come from that backend.
+
+The SDK checks auth challenge format before opening the wallet. The app supplies
+the selected wallet's signing callback without logging or rewriting the message.
+Sponsored transactions still use the wallet's transaction preview; this path
+trusts backend construction and does not independently rebuild transaction intent.
 
 Resume credentials require a future expiry in Unix seconds. Missing or expired
 stored credentials start fresh authentication; reconnect recovery preserves the

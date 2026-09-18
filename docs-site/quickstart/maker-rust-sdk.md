@@ -12,8 +12,12 @@ For JSON-layer integrations, see [`maker-quickstart.md`](maker-quickstart.md). M
 
 ```toml
 [dependencies]
-acta-maker-sdk = { version = "0.4.2", features = ["ws-client"] }
+acta-maker-sdk = { version = "0.4.3", features = ["ws-client"] }
 ```
+
+Version 0.4.3 includes canonical auth-challenge validation and market-PDA binding.
+These checks are absent from 0.4.2. This guide covers ordinary makers;
+vault integrations remain on the separate `feat/vaults` branch.
 
 Quote-only integrations need `ws-client`. `chain` adds Solana instruction builders; `chain-rpc` adds on-chain reads.
 
@@ -63,7 +67,7 @@ Resume can restore a server-side mint scope. The SDK explicitly sends both mint 
 
 ## Quoting
 
-After applying recovery, retain that `recovery_epoch: u64` with the strategy state and build quotes from its `RfqBroadcast`. `RfqBinding` derives the preimage and wire message from the same values:
+After applying recovery, retain that `recovery_epoch: u64` with the strategy state and build quotes from its `RfqBroadcast`. `RfqBinding` verifies the market PDA and terms under the configured Acta program before deriving the preimage and wire message. Use `from_broadcast_for_program` for a different locally configured deployment; never take that program ID from the RFQ:
 
 ```rust
 use acta_maker_sdk::{AtomicNonceGenerator, Nonce, Price, QuoteExpiry, RfqBinding};
@@ -90,7 +94,7 @@ quote_handle.send_in_epoch(ClientMessage::Quote(quote), recovery_epoch).await?;
 
 Constraints:
 
-- `now + 310s ≤ valid_until ≤ market.expiry_ts`. The trailing 300s is reserved for settlement; the effective trading window is `valid_until − 300s`. The recommended range is `now + 320..360s`, capped at market expiry.
+- `now + 100s ≤ valid_until ≤ market.expiry_ts`. The trailing 90s is reserved for settlement; the effective trading window ends at `valid_until − 90s`. Size it as `rfq.expires_at + 100s` plus a little slack, capped at market expiry.
 - `is_taker_buy` is fixed at `false`. The taker is always the option writer. Setting `true` produces an `order_id` the server rejects.
 - Use a fresh nonce and order ID for a new quote; the server validates the hash-bound order ID, not independent nonce uniqueness. `AtomicNonceGenerator` is safe to declare as a `static`.
 

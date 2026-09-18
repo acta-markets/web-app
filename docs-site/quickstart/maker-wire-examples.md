@@ -41,18 +41,18 @@ Payloads illustrate wire shapes. Replace abbreviated IDs, addresses, signatures 
 {
   "type": "AuthRequest",
   "data": {
-    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nNonce: a1b2c3d4e5f6...hex64\nIssued At: 2024-03-09T12:00:00Z"
+    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nNonce: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nIssued At: 2024-03-09T12:00:00Z\n"
   }
 }
 ```
 
-Maker echoes the challenge, signs it, and sends `maker_owner` pubkey:
+Validate the complete [canonical challenge](../reference/ws-common.md#what-to-sign) before signing. Then echo it and send the `maker_owner` pubkey:
 
 ```json
 {
   "type": "AuthChallenge",
   "data": {
-    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nNonce: a1b2c3d4e5f6...hex64\nIssued At: 2024-03-09T12:00:00Z",
+    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nNonce: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nIssued At: 2024-03-09T12:00:00Z\n",
     "signature": "3q7uQqYc3...base58sig",
     "pubkey": "MakerOwnerPubkeyBase58"
   }
@@ -146,7 +146,7 @@ The server verifies the signature by `quote_signing` key.
 
 ### 7) Quote -> QuoteAcknowledged -> QuoteSelected
 
-At example time `1710000000`, this quote has 350 seconds of on-chain validity and a trading cutoff at `1710000050` after the 300-second settlement buffer. Selection at `1710000010` gives the 30-second signature deadline shown below.
+At example time `1710000000`, this quote has 140 seconds of on-chain validity and a trading cutoff at `1710000050` after the 90-second settlement buffer. Selection at `1710000010` gives the 30-second signature deadline shown below.
 
 ```json
 {
@@ -155,7 +155,7 @@ At example time `1710000000`, this quote has 350 seconds of on-chain validity an
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "strike": 160000000000,
     "price": 50000000,
-    "valid_until": 1710000350,
+    "valid_until": 1710000140,
     "nonce": 42,
     "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
     "signature": "4kZ7kZ...base58sig"
@@ -229,7 +229,7 @@ For successful fills, the winning maker receives `QuoteFilled` before `RfqClosed
 
 ### QuoteRefreshRequested
 
-If the quote remains active instead of being selected, refresh fires at `1710000040`: ten seconds before its trading cutoff. The minimum new validity is that time plus the 300-second buffer and 10-second refresh lead.
+If the quote remains active instead of being selected, refresh fires at `1710000040`: ten seconds before its trading cutoff. The minimum new validity is that time plus the 90-second buffer and 10-second refresh lead.
 
 ```json
 {
@@ -237,7 +237,7 @@ If the quote remains active instead of being selected, refresh fires at `1710000
   "data": {
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "strike": 160000000000,
-    "min_valid_until": 1710000350,
+    "min_valid_until": 1710000140,
     "reason": "expiring_soon"
   }
 }
@@ -335,7 +335,7 @@ Next page (keyset pagination):
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "strike": 160000000000,
     "price": 55000000,
-    "valid_until": 1710000350,
+    "valid_until": 1710000140,
     "nonce": 43,
     "order_id": "0xb2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3",
     "signature": "5kA8bR...base58sig"
@@ -354,7 +354,7 @@ Next page (keyset pagination):
         "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
         "strike": 150000000000,
         "price": 45000000,
-        "valid_until": 1710000350,
+        "valid_until": 1710000140,
         "nonce": 44,
         "order_id": "0xaaaa2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
         "signature": "3mR9xY...base58sig"
@@ -363,7 +363,7 @@ Next page (keyset pagination):
         "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
         "strike": 160000000000,
         "price": 50000000,
-        "valid_until": 1710000350,
+        "valid_until": 1710000140,
         "nonce": 45,
         "order_id": "0xbbbb2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
         "signature": "7pQ2wK...base58sig"
