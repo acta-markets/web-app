@@ -47,7 +47,7 @@ Nonce: {hex_32_random_bytes}
 Issued At: {RFC3339_timestamp}
 ```
 
-Sign the **raw UTF-8 bytes** of the challenge with your wallet key (Ed25519, no prefix or hashing), base58-encode the 64-byte signature, and reply:
+Before signing, validate the complete challenge using the [canonical auth rules](../reference/ws-common.md#what-to-sign), including the exact domain, wallet, nonce, timestamp and final newline. Reject arbitrary endpoint text. Then sign the original UTF-8 bytes with your wallet key (Ed25519, no extra prefix or hashing), base58-encode the 64-byte signature, and reply:
 
 ```json
 {
@@ -186,7 +186,7 @@ The server locks the quote and builds a transaction to sign:
 
 ### Sponsored transaction: raw signing
 
-If you are not using the TypeScript SDK (which handles this for you), sign the sponsored tx at the byte level — you do **not** need to fully reconstruct a `VersionedTransaction`. `tx_base64` decodes to Solana's wire transaction format:
+The TypeScript SDK provides signing helpers; they do not independently verify that a server-prepared transaction matches your trading intent. Before signing, verify the program, market, quote terms, amounts, accounts and all instructions against your accepted order. For a custom byte-level signer, you do **not** need to fully reconstruct a `VersionedTransaction`. `tx_base64` decodes to Solana's wire transaction format:
 
 ```
 <shortvec(sig_count)> | sig[0..64] | sig[1..64] | … | <message bytes>
@@ -212,7 +212,15 @@ Do not modify the message bytes, account order, or the keeper's slot.
 Library shortcuts:
 - **Rust** (`solana-sdk`): deserialize with `bincode`, sign `tx.message.serialize()` with the taker `Keypair`, set `tx.signatures[1]`; or operate on the raw bytes as above.
 - **Python** (`solders`): `tx = VersionedTransaction.from_bytes(raw)`, sign `bytes(tx.message)`, assign into `tx.signatures[1]`, re-serialize.
-- **TypeScript**: `signSponsoredTxBase64({ txBase64, taker })` from `@acta-markets/ts-sdk/ws` (no `@solana/web3.js`).
+- **TypeScript**: `signSponsoredTxBase64({ txBase64, taker, expectedMessageBytes })` from `@acta-markets/ts-sdk/ws` (no `@solana/web3.js`).
+
+The TypeScript helper in SDK 0.1.6 requires an independently constructed expected
+message and checks it before signing. Include the accepted order, configured
+program/accounts, approved blockhash, instructions and resolved ALT references;
+never use bytes copied from the received transaction as the expectation. Older
+SDK versions require this check in application code. The explicitly named
+`signSponsoredTxBase64Unverified` is for applications that trust server-side
+construction.
 
 ### 4. Track the order
 

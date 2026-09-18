@@ -1,10 +1,3 @@
-/**
- * Auth flow:
- * 1. Server sends `AuthRequest { challenge: <human-readable text> }`
- * 2. Client signs UTF-8 bytes of challenge text
- * 3. Client responds with `AuthChallenge { challenge, signature: base58(ed25519), pubkey }`
- */
-
 export { ActaClient } from "@acta-markets/ts-sdk";
 export {
   ActaWsClient,
@@ -52,7 +45,7 @@ export type {
   ReferralCodeClaimedData,
 } from "@acta-markets/ts-sdk/ws";
 
-import { ActaWsClient, WalletAuthProvider, type WalletLike } from "@acta-markets/ts-sdk/ws";
+import { ActaWsClient, WalletAuthProvider } from "@acta-markets/ts-sdk/ws";
 
 const RFQ_WS_URL = process.env.NEXT_PUBLIC_RFQ_WS_URL || "wss://beta-api.acta.markets";
 
@@ -92,31 +85,10 @@ export interface WalletAdapter {
 }
 
 export function createWalletAuthProvider(wallet: WalletAdapter): WalletAuthProvider {
-  const walletLike: WalletLike = {
+  return new WalletAuthProvider({
     publicKeyBase58: wallet.address,
-    signMessage: async (message: Uint8Array): Promise<Uint8Array> => {
-      console.log("[WalletAuthProvider] Signing message:");
-      console.log("  Length:", message.length, "bytes");
-      const mutableMessage = new Uint8Array(message);
-      let challengeText: string | null = null;
-
-      // The SDK sends human-readable challenge text as UTF-8.
-      try {
-        challengeText = new TextDecoder().decode(mutableMessage);
-        console.log("  Challenge text:", challengeText.slice(0, 200));
-      } catch {
-        console.log("  (raw bytes, not UTF-8)");
-      }
-
-      if (challengeText != null && challengeText.trim().length === 0) {
-        throw new Error("RFQ auth challenge is empty. Please retry in a few seconds.");
-      }
-
-      return wallet.signMessage(mutableMessage);
-    },
-  };
-  
-  return new WalletAuthProvider(walletLike);
+    signMessage: (message) => wallet.signMessage(message),
+  });
 }
 
 let clientInstance: ActaWsClient | null = null;

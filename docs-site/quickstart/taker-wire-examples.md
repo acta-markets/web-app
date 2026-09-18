@@ -52,18 +52,18 @@ The server replies with a challenge. The **taker** challenge includes a `Wallet:
 {
   "type": "AuthRequest",
   "data": {
-    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nWallet: TakerWalletPubkeyBase58\nNonce: a1b2c3d4e5f6...hex64\nIssued At: 2024-03-09T12:00:00Z"
+    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nWallet: TakerWalletPubkeyBase58\nNonce: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nIssued At: 2024-03-09T12:00:00Z\n"
   }
 }
 ```
 
-Sign the raw UTF-8 bytes of `challenge` with your wallet key, base58-encode the 64-byte signature, and echo it back:
+Validate the complete [canonical challenge](../reference/ws-common.md#what-to-sign), including the expected wallet, before signing. Sign its original UTF-8 bytes, base58-encode the 64-byte signature, and echo it back:
 
 ```json
 {
   "type": "AuthChallenge",
   "data": {
-    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nWallet: TakerWalletPubkeyBase58\nNonce: a1b2c3d4e5f6...hex64\nIssued At: 2024-03-09T12:00:00Z",
+    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nWallet: TakerWalletPubkeyBase58\nNonce: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nIssued At: 2024-03-09T12:00:00Z\n",
     "signature": "3q7uQqYc3...base58sig",
     "pubkey": "TakerWalletPubkeyBase58"
   }
