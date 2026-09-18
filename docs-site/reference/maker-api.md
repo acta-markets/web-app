@@ -258,12 +258,23 @@ Sent instead of `RfqBroadcast` when cap limits pre-filter the maker. `reason` is
 ```
 
 Rules:
-- `valid_until` MUST be >= `now + 310` seconds (server rejects shorter expiries with `quote_expiry_too_short`)
+- `valid_until` MUST be >= `now + 100` seconds (server rejects shorter expiries with `quote_expiry_too_short`)
 - `valid_until` MUST be <= the market's `expiry_ts` (later expiries are rejected with `market_expired`)
-- The server applies a **300-second settlement buffer**. Your quote is considered active for trading until `valid_until - 300` seconds. Set `valid_until` at least 310 seconds from now to allow a minimum 10-second trading window.
+- The server applies a **90-second settlement buffer**. Your quote is considered active for trading until `valid_until - 90` seconds. Set `valid_until` to `rfq.expires_at + 100` seconds so the quote stays tradable for the whole auction; the accepted floor is 100 seconds from now.
 - `order_id = sha256(preimage182)`
 - maker signs only 32-byte `order_id`
 - if `order_options` is present, strike must be from that set
+
+Before building the preimage, derive the market PDA locally using Solana PDA seeds
+`["market", underlying_mint[32], quote_mint[32], expiry_ts_u64_le[8], is_put_u8[1]]`
+under the Acta program ID from your deployment configuration. Require chain ID
+`0`, that configured program ID, and equality with `market_pda`. Also check that
+`position_type` matches `is_put`: collateral/settlement are underlying/quote for
+calls and quote/underlying for puts. Do not copy an endpoint-selected program ID
+into the derivation. Rust `RfqBinding::from_broadcast` and TS
+`buildSignedQuoteFromRfq` perform these checks before signing. Strategy mint
+allowlists and pricing inputs remain your responsibility; PDA verification does
+not certify an endpoint's prices or mint decimals.
 
 Canonical `order_id` preimage layout (self-contained):
 - preimage is exactly 182 bytes
@@ -1204,6 +1215,7 @@ Received when subscribed to the corresponding channel.
   "type": "StatsUpdate",
   "data": {
     "stats": {
+      "usd": { "notional_24h": "1500.00", "premium_24h": "49.00", "priced_trades_24h": 149 },
       "total_volume_24h": 1000000,
       "total_trades_24h": 150,
       "total_price_24h": 500000,
@@ -1214,6 +1226,12 @@ Received when subscribed to the corresponding channel.
   }
 }
 ```
+
+`stats.usd` contains exact decimal USD strings: underlying notional and gross
+premium. Only confirmed orders with a captured oracle valuation contribute;
+`priced_trades_24h` exposes coverage against `total_trades_24h`. Older servers omit
+this object. Legacy numeric volume/price aggregates are not dollars and can retain
+the last representable value after overflow; prefer the USD object.
 
 ### PositionUpdated (owner-only push)
 
