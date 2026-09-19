@@ -257,7 +257,7 @@ The server responds with `RfqClosed { reason: "taker_cancelled" }`.
 
 ## Position lifecycle
 
-Once open, the position is fully collateralized in its own escrow — no margin, no early exercise. The taker carries no credit risk: collateral is locked at open and the taker is made whole on every settlement path.
+Once open, the position's collateral is locked in its own escrow — no margin, no early exercise. Settlement requires a finalized market. For an ITM position, the maker supplies the settlement asset; if it remains unfunded, a permissionless liquidator can supply that asset and receive the corresponding collateral. Locked collateral does not guarantee a liquidation deadline: completion depends on someone providing the required funding.
 
 | Status | Meaning |
 |---|---|

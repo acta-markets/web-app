@@ -43,9 +43,7 @@ Returns service health and metadata.
 ### GET `/ready`
 
 Returns readiness status: `200` when every gated component is healthy, `503`
-otherwise. Which components gate depends on how the server is configured; the
-table is rendered from the server's own selector, so it cannot drift from the
-code.
+otherwise. The required components depend on the server configuration:
 
 <!-- generated:rfq-ready -->
 | Configuration | `/ready` gates on |

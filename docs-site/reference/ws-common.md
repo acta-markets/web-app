@@ -151,7 +151,7 @@ Rust SDK 0.4.3 and TS SDK 0.1.6 validate authentication messages before invoking
 }
 ```
 
-**Maker**: `pubkey` is the `maker_owner` pubkey registered on-chain. Sign the challenge with your **auth signing key**; the server looks up `maker_owner` and verifies against the registered auth signing key. (A maker currently registers a single on-chain key that serves as both the auth and quote signing key, so either works today — but sign the auth challenge with the auth key and quote payloads with the quote key, in case the contract later provisions separate keys.)
+**Maker**: `pubkey` is the `maker_owner` pubkey registered on-chain. Sign the challenge with the maker's registered signing key, which is also used for quotes. The server looks up `maker_owner` and verifies the authentication signature against that key.
 
 **Taker**: `pubkey` is the taker's wallet pubkey (same as the `Wallet:` value in the challenge). The signature is verified directly against this key.
 
