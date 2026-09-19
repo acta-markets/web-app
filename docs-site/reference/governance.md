@@ -6,7 +6,7 @@ Acta separates cold governance from hot operations. The cold authority controls 
 
 ### Cold authority (`ACTA_ADMIN`)
 
-The cold authority is the hardcoded public key `CLSYf1AL9rXYjGbSjvexMRegriqpLR37kmLkcqvAgBnN`. In production this is intended to be a Squads v4 vault PDA. Acta authorization is a pure signer check: if the transaction signer equals `ACTA_ADMIN`, the cold action is authorized. Squads supplies that signer via its own M-of-N approval flow.
+The cold authority is the hardcoded public key `CLSYf1AL9rXYjGbSjvexMRegriqpLR37kmLkcqvAgBnN`. Squads v4 supplies the vault PDA's signature after its configured approvals. Acta verifies the `ACTA_ADMIN` signature; membership, approval thresholds and Squads execution delays are enforced by Squads.
 
 Cold authority operations:
 - initialize the global config
@@ -19,7 +19,7 @@ Cold authority operations:
 - set, rotate, or clear the guardian immediately
 - set, rotate, or revoke the settlement attestor through the timelock
 - toggle pause immediately
-- queue and execute pending actions
+- queue pending actions
 - cancel pending actions
 
 The cold authority is separate from the program upgrade authority.
@@ -45,7 +45,7 @@ Guardian operations:
 - cancel any queued pending action before execution
 - engage the emergency pause (releasing it / unpause is cold-only)
 
-The guardian cannot queue or execute pending actions, rotate itself, rotate the hot wallet, unpause, or perform hot/cold configuration changes. A guardian is a single trusted key: if compromised it can only grief (veto-spam queued actions, re-engage the pause) and the cold authority recovers by rotating it with `SetGuardian` (immediate).
+The guardian cannot queue pending actions, rotate itself, rotate the hot wallet, unpause, or authorize hot/cold configuration changes. A guardian is a single trusted key: if compromised it can only grief (veto-spam queued actions, re-engage the pause) and the cold authority recovers by rotating it with `SetGuardian` (immediate).
 
 ### Permissionless exits
 
@@ -55,14 +55,14 @@ Settlement and liquidation are permissionless. Any signer may settle an expired 
 
 | Action | Authority | Timing |
 |--------|-----------|--------|
-| Program upgrade | Dedicated program-upgrade Squads 3-of-4 vault | Squads delay ≥24h on mainnet |
+| Program upgrade | Separate program-upgrade authority | Its configured Squads approvals and delay |
 | Initialize global config | Cold | Immediate |
 | Rotate hot wallet | Cold | Immediate |
 | Set / rotate / clear guardian (`SetGuardian`, op 27) | Cold | Immediate |
 | Engage emergency pause (`SetPause`, op 28) | Cold or guardian | Immediate |
 | Release emergency pause / unpause (`SetPause`, op 28) | Cold | Immediate |
 | Queue pending action (`QueuePendingAction`, op 23) | Cold | Immediate queue |
-| Execute pending action (`ExecutePendingAction`, op 25) | Cold | After delay |
+| Execute pending action (`ExecutePendingAction`, op 25) | Any signer | After the cold-approved action's delay |
 | Cancel pending action (`CancelPendingAction`, op 24) | Cold or guardian | Before execute |
 | Raise / keep timelock delay (`UpdateActionTimelock`, op 26) | Cold | Immediate |
 | Lower timelock delay (`UpdateActionTimelock`, op 26) | Cold | Timelocked by current delay |
@@ -82,9 +82,13 @@ Settlement and liquidation are permissionless. Any signer may settle an expired 
 
 ## Timelock
 
-Acta uses one global delay: `GlobalConfig.timelock_secs`. It starts at `0`, should be raised after deployment, and is capped at 7 days. There are no per-kind delay slots and no `GlobalConfig.timelock_secs[0..N]` array.
+Acta uses one global delay for timelocked actions: `GlobalConfig.timelock_secs`, from `0` to 604,800 seconds (7 days). Its initial value is `0`. Zero permits immediate execution of a queued action; cold authorization and the instruction commitment still apply.
 
 The timelock uses a generic store-and-replay model. Queue stores a commitment to the exact wrapped instruction; execute replays the same wrapped instruction after `execute_at`.
+
+Cold authorizes the action when queueing it. Once its delay has elapsed, any signer can execute that exact action. The executor pays transaction costs and funds accounts created during execution; closing the pending-action account returns its rent to the original proposer.
+
+Supported premium mints are configured through premium config PDAs. `InitializeConfig` creates a premium config, `UpdateConfig` updates it, and `CloseConfig` closes that premium config.
 
 Timelockable wrapped opcodes:
 
@@ -106,7 +110,7 @@ In production, all listed operations except the immediate raise/keep form of `Up
 
 `QueuePendingAction` data is `[23, wrapped_opcode, ...wrapped_args]` and accounts are `[admin, pending_action_pda, system_program, global_config_pda, ...wrapped_accounts]`.
 
-`ExecutePendingAction` data is `[25, wrapped_opcode, ...wrapped_args]` and accounts are `[admin, pending_action_pda, ...wrapped_accounts]`.
+`ExecutePendingAction` data is `[25, wrapped_opcode, ...wrapped_args]` and accounts are `[executor, pending_action_pda, proposed_by, ...wrapped_accounts]`.
 
 The commitment binds:
 
@@ -133,15 +137,8 @@ While paused, `OpenPosition` fails with `ProtocolPaused`. Settlement, liquidatio
 
 ## Squads Integration
 
-In the target deployment, `ACTA_ADMIN` is a protocol-cold Squads **3-of-4** vault PDA. Squads handles approvals and member rotation; Acta checks the vault signature. The Acta timelock delays sensitive actions, and the guardian can cancel them. A second Squads vault controls program upgrades.
+Squads handles approvals and member rotation; Acta checks the cold vault signature. The approval threshold and Squads delay are stored in the multisig account. The Acta timelock separately controls when queued protocol actions become executable, and the guardian can cancel them before execution.
 
 ## Program Upgrade
 
-The program upgrade authority is a separate Squads **3-of-4** vault. On mainnet it has a delay of at least 24 hours. Upgrades use a verified buffer and Squads Programs. Initial mainnet authority transfer uses Safe Authority Transfer.
-
-## Not Implemented
-
-- No per-kind timelock array.
-- No `AddPremiumToken` instruction. Supported premium mints are represented by premium config PDAs created through `InitializeConfig`.
-- No global-config close instruction. `CloseConfig` closes a premium config.
-- No on-chain Squads threshold introspection. The threshold lives in Squads state.
+Program upgrades use a separate Squads vault and its configured approvals and execution delay. The program's upgrade authority authorizes deployment of the program buffer. `GlobalConfig.timelock_secs` applies to Acta's queued instructions, not to program upgrades.
