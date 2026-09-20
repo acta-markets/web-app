@@ -72,7 +72,7 @@ The default allows three failed attempts; the fourth triggers `too_many_auth_att
 {
   "type": "AuthChallenge",
   "data": {
-    "challenge": "sign-me",
+    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nWallet: WalletPubkeyBase58\nNonce: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nIssued At: 2026-09-15T00:00:00Z\n",
     "signature": "base58sig",
     "pubkey": "WalletPubkeyBase58"
   }

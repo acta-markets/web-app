@@ -1,15 +1,15 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TokenMarketsInfoData } from "@/lib/rfq-client";
 import { getTokenMint } from "@/lib/tokens";
 import { MarketClient } from "./market-client";
 
-const mocks = vi.hoisted(() => ({ context: {} as Record<string, unknown>, refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }));
+const mocks = vi.hoisted(() => ({ context: {} as Record<string, unknown>, refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), modal: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useSearchParams: () => new URLSearchParams("type=call") }));
 vi.mock("@/components/rfq/rfq-provider", () => ({ useRfqContext: () => mocks.context }));
 vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ selectedAccount: null }) }));
 vi.mock("@/components/wallet/wallet-sidebar", () => ({ useWalletSidebar: () => ({ openSidebar: vi.fn() }) }));
-vi.mock("./rfq-flow-modal", () => ({ RfqFlowModal: () => null }));
+vi.mock("./rfq-flow-modal", () => ({ RfqFlowModal: (props: unknown) => { mocks.modal(props); return null; } }));
 const now = 1_800_000_000;
 function snapshot(spot = 100, stale = false): TokenMarketsInfoData {
   return {
@@ -37,6 +37,28 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("market APR from backend prices", () => {
+  it("distinguishes fractional strikes and keeps the selected outcome price exact", () => {
+    const data = snapshot();
+    data.markets[0].indicatives[0].strikes = [
+      { strike: 101.1e9, best_price: 10e9 },
+      { strike: 101.4e9, best_price: 9e9 },
+    ];
+    setSnapshot(data);
+    render(<MarketClient asset="SOL" />);
+    expect(screen.getByRole("button", { name: /\$101\.1\s*APR/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /\$101\.4\s*APR/ }));
+    expect(screen.getByText("If spot below $101.4")).toBeTruthy();
+    expect(screen.getByText("If spot above $101.4")).toBeTruthy();
+  });
+
+  it("keeps the RFQ recovery modal mounted while live market metadata is unavailable", () => {
+    mocks.context.tokenMarketsInfo = null;
+    render(<MarketClient asset="SOL" />);
+    const props = mocks.modal.mock.lastCall?.[0] as { preview: unknown; walletAddress: unknown; backendUrl: string };
+    expect(props.preview).toBeNull();
+    expect(props.walletAddress).toBeNull();
+    expect(props.backendUrl).toBe("wss://beta-api.acta.markets");
+  });
   it("renders APR without calling Hermes and recalculates when backend spot changes", () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Hermes unavailable"));
     const page = render(<MarketClient asset="SOL" />);

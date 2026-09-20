@@ -9,13 +9,13 @@ import { AppCard } from "@/components/app-ui/app-card";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { AppPill } from "@/components/app-ui/app-pill";
-import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
+import { RfqFlowModal, type RfqOrderPreview } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getTokenMint, getToken } from "@/lib/tokens";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { getCapFilledPct } from "@/lib/token-caps";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
-import type { QuoteReceivedMessage } from "@/lib/rfq-client";
+import { getRfqBackendUrl, type QuoteReceivedMessage } from "@/lib/rfq-client";
 import {
   computeApyFromScaledPrices,
   quoteAmountToQuantity,
@@ -27,6 +27,7 @@ import {
   getMarket,
   type MarketType,
   formatPct,
+  formatStrikePrice,
   formatUsdSmart
 } from "@/lib/markets";
 
@@ -170,15 +171,7 @@ export function MarketClient({ asset }: { asset: string }) {
   const [rfqRequestNonce, setRfqRequestNonce] = useState(0);
   const [isRequestingQuote, setIsRequestingQuote] = useState(false);
   const [modalInitialQuote, setModalInitialQuote] = useState<QuoteReceivedMessage | null>(null);
-  const [orderPreview, setOrderPreview] = useState<{
-    asset: string;
-    positionType: "covered_call" | "cash_secured_put";
-    strike: number;
-    quantity: number;
-    strikeDisplay: string;
-    quantityDisplay: string;
-    lockedAprPct: number;
-  } | null>(null);
+  const [orderPreview, setOrderPreview] = useState<RfqOrderPreview | null>(null);
   const [indicativeRequestedKey, setIndicativeRequestedKey] = useState<string | null>(null);
 
   // Global RFQ context (markets already fetched on app load)
@@ -331,6 +324,7 @@ export function MarketClient({ asset }: { asset: string }) {
   const { openSidebar } = useWalletSidebar();
 
   const walletAddress = selectedAccount?.address;
+  const rfqBackendUrl = getRfqBackendUrl();
   const depositToken = type === "call" ? market?.asset ?? asset : "USDC";
   const walletBalance = useTokenBalance(walletAddress, depositToken);
 
@@ -651,7 +645,7 @@ export function MarketClient({ asset }: { asset: string }) {
       positionType,
       strike: selectedStrikeLamports,
       quantity: alignedQuantity,
-      strikeDisplay: formatUsdSmart(selectedPrice),
+      strikeDisplay: formatStrikePrice(selectedPrice),
       quantityDisplay: `${alignedDeposit.toLocaleString("en-US")} ${type === "call" ? (market?.asset ?? asset) : "USDC"}`,
       lockedAprPct: selectedApr,
     });
@@ -684,14 +678,33 @@ export function MarketClient({ asset }: { asset: string }) {
     asset, market?.asset, selectedPrice, selectedApr,
   ]);
 
+  const rfqModal = <RfqFlowModal
+    key="rfq-order"
+    preview={orderPreview}
+    open={rfqModalOpen}
+    onClose={() => {
+      setRfqModalOpen(false);
+      setIsRequestingQuote(false);
+      setModalInitialQuote(null);
+    }}
+    requestNonce={rfqRequestNonce}
+    initialQuote={modalInitialQuote}
+    walletAddress={walletAddress ?? null}
+    backendUrl={rfqBackendUrl}
+    signTransaction={walletAddress ? solanaSignTransaction : undefined}
+  />;
+
   if (!market) {
     return (
-      <div className="space-y-6">
-        <h1 className="font-space text-4xl font-semibold">Market not found</h1>
-        <div className="font-mono text-content-secondary">
-          Try <Link className="text-accent-secondary hover:text-accent-primary" href="/earn">/earn</Link>.
+      <>
+        <div className="space-y-6">
+          <h1 className="font-space text-4xl font-semibold">Market not found</h1>
+          <div className="font-mono text-content-secondary">
+            Try <Link className="text-accent-secondary hover:text-accent-primary" href="/earn">/earn</Link>.
+          </div>
         </div>
-      </div>
+        {rfqModal}
+      </>
     );
   }
 
@@ -751,6 +764,7 @@ export function MarketClient({ asset }: { asset: string }) {
             </AppButton>
           </div>
         </div>
+        {rfqModal}
       </div>
     );
   }
@@ -902,7 +916,7 @@ export function MarketClient({ asset }: { asset: string }) {
                 <span className="text-content-primary">{formatDate(expiryDate)} (in {termDisplay})</span>
               </p>
 
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-2 md:flex">
                 {shouldShowIndicativeLoading
                   ? Array.from({ length: 4 }).map((_, idx) => (
                     <div key={`price-skeleton-${idx}`} className="flex min-w-0 flex-1 flex-col items-start justify-center gap-1 border border-bg-border px-4 py-3">
@@ -926,7 +940,7 @@ export function MarketClient({ asset }: { asset: string }) {
                         ].join(" ")}
                       >
                         <span className="w-full font-mono text-base font-medium leading-[1.2] tracking-[-0.32px]">
-                          {formatUsdSmart(option.strike)}
+                          {formatStrikePrice(option.strike)}
                         </span>
                         <span className="flex w-full items-center justify-center gap-1.5 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
                           <span className={active ? "text-content-primary" : "text-content-secondary"}>APR</span>
@@ -1120,7 +1134,7 @@ export function MarketClient({ asset }: { asset: string }) {
             <div className="flex gap-2 max-md:flex-col">
               <div className="flex flex-1 flex-col gap-2 border border-bg-border bg-[rgba(18,18,18,0.01)] p-4 backdrop-blur-[4px] max-md:p-3">
                 <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-primary opacity-50">
-                  If spot {type === "call" ? "below" : "above"} {formatUsdSmart(selectedPrice)}
+                  If spot {type === "call" ? "below" : "above"} {formatStrikePrice(selectedPrice)}
                 </span>
                 <span className="font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
                   {depositOk
@@ -1138,13 +1152,13 @@ export function MarketClient({ asset }: { asset: string }) {
 
               <div className="flex flex-1 flex-col gap-2 border border-bg-border bg-[rgba(18,18,18,0.01)] p-4 backdrop-blur-[4px] max-md:p-3">
                 <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-primary opacity-50">
-                  If spot {type === "call" ? "above" : "below"} {formatUsdSmart(selectedPrice)}
+                  If spot {type === "call" ? "above" : "below"} {formatStrikePrice(selectedPrice)}
                 </span>
                 <span className="font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
                   {depositOk
                     ? type === "call"
                       ? `Receive ${formatUsdc(depositNum * selectedPrice)}`
-                      : `Buy ${market.asset} at ${formatUsdSmart(selectedPrice)}`
+                      : `Buy ${market.asset} at ${formatStrikePrice(selectedPrice)}`
                     : "\u2014"}
                 </span>
                 <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-primary opacity-50">
@@ -1196,19 +1210,7 @@ export function MarketClient({ asset }: { asset: string }) {
         )} */}
       </div>
 
-      {/* RFQ Flow Modal */}
-      {orderPreview && <RfqFlowModal
-        {...orderPreview}
-        open={rfqModalOpen}
-        onClose={() => {
-          setRfqModalOpen(false);
-          setIsRequestingQuote(false);
-          setModalInitialQuote(null);
-        }}
-        requestNonce={rfqRequestNonce}
-        initialQuote={modalInitialQuote}
-        signTransaction={walletAddress ? solanaSignTransaction : undefined}
-      />}
+      {rfqModal}
     </div>
   );
 }

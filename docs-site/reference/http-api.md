@@ -43,9 +43,7 @@ Returns service health and metadata.
 ### GET `/ready`
 
 Returns readiness status: `200` when every gated component is healthy, `503`
-otherwise. Which components gate depends on how the server is configured; the
-table is rendered from the server's own selector, so it cannot drift from the
-code.
+otherwise. The required components depend on the server configuration:
 
 <!-- generated:rfq-ready -->
 | Configuration | `/ready` gates on |
@@ -55,7 +53,7 @@ code.
 | database only | redis, kernel, maker_registry, market_metadata, postgres |
 | no database (local demo) | redis, kernel, maker_registry, market_metadata |
 
-`kernel` is also the `/live` gate: a closed kernel channel needs a restart.
+`kernel` is also the `/live` gate: a closed kernel channel needs a restart. During shutdown drain, `/ready` returns 503 while `/live` remains governed by the kernel.
 <!-- /generated:rfq-ready -->
 
 ### GET `/live`
@@ -145,7 +143,9 @@ authenticated maker/taker session protocols for participant-specific state.
 
 ```json
 {
+  "usd": { "notional_24h": "1500.00", "premium_24h": "49.00", "priced_trades_24h": 149 },
   "total_volume_24h": 1000000,
+  "total_volume_24h_exact": "1000000",
   "total_trades_24h": 150,
   "active_markets": 12,
   "active_makers": 5,
@@ -154,6 +154,13 @@ authenticated maker/taker session protocols for participant-specific state.
 ```
 
 This differs from WS `GlobalStats` in `Snapshot` and `StatsUpdate`. HTTP includes `connected_makers` (live WS sessions) and omits `total_price_24h` and `active_rfqs`.
+
+`usd` separates underlying notional from gross paid premium, both as exact decimal
+dollar strings. Prices are captured from the trusted local oracle cache when the
+signed transaction is submitted; only confirmed trades are counted. USDC uses its
+oracle price too. `priced_trades_24h < total_trades_24h` means some confirmed trades
+lack a stored USD valuation; those are not repriced using today's market.
+The legacy `total_volume_24h` fields are raw aggregates, not dollars.
 
 ---
 

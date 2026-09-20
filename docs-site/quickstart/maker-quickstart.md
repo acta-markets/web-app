@@ -20,7 +20,7 @@ The first message from the client is `Hello`. Version compatibility is semver-ba
 }
 ```
 
-The server responds with `Welcome` (`server_time_unix_ms` is for clock sync), then `AuthRequest` with a challenge string. Sign the UTF-8 challenge bytes with `quote_signing`, base58-encode the signature, and reply with `AuthChallenge`:
+The server responds with `Welcome` (`server_time_unix_ms` is for clock sync), then `AuthRequest` with a challenge string. Validate the entire [canonical auth challenge](../reference/ws-common.md#what-to-sign) before invoking your signer. Then sign its original UTF-8 bytes with `quote_signing`, base58-encode the signature, and reply with `AuthChallenge`:
 
 ```json
 {
@@ -57,7 +57,7 @@ A resumed maker auth session restores server-side routing and mint scope. Omitte
 
 ## Quoting
 
-On `RfqBroadcast`, pick a strike from `rfq.strike` or `rfq.order_options`, compute the premium, set `now + 310s <= valid_until <= market.expiry_ts`, build the 182-byte order preimage from [`../reference/maker-api.md`](../reference/maker-api.md) (Quote rules), hash it to `order_id`, sign the 32-byte hash with `quote_signing`, and send `Quote`:
+On `RfqBroadcast`, first verify the [market PDA and terms](../reference/maker-api.md#quote-flow) against your configured Acta program. Then pick a strike from `rfq.strike` or `rfq.order_options`, compute the premium, set `now + 100s <= valid_until <= market.expiry_ts`, build the 182-byte order preimage from [`../reference/maker-api.md`](../reference/maker-api.md) (Quote rules), hash it to `order_id`, sign the 32-byte hash with `quote_signing`, and send `Quote`:
 
 ```json
 {
@@ -167,7 +167,7 @@ Fetch static metadata on `/maker/data` at startup and refresh it when markets or
 |---|---|
 | Application Ping | Approximately every 30 seconds. Each `Pong` carries an updated `server_time_unix_ms`. |
 | Reconnect backoff | Exponential with jitter, e.g. 250 ms initial, 5 s cap, ±20%. |
-| `valid_until` margin | `now + 320..360s`, capped at `market.expiry_ts`. Values below 310s or after market expiry are rejected; values significantly above 360s increase the maker's exposure window without functional benefit. |
+| `valid_until` margin | `rfq.expires_at + 100s` plus a little slack, capped at `market.expiry_ts`. Values below `now + 100s` or after market expiry are rejected; going far beyond the auction plus the settlement buffer only widens the maker's exposure window. |
 | Clock skew | Track `offset = server_time − local_time` from `Welcome` and `Pong`. Apply when computing `valid_until`. |
 | Quote concurrency | One active quote per `(rfq_id, strike)`. Repricing via `ReplaceQuote`. |
 | Message rate | `30 msg/s` sustained, `60` burst per WebSocket connection. |
