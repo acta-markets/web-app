@@ -189,7 +189,6 @@ export function PortfolioClient() {
               updates[marketPda] = underlyingMint;
             }
           } catch {
-            // Leave unresolved; UI will keep Unknown for this market.
           }
         }
 
@@ -197,7 +196,6 @@ export function PortfolioClient() {
           setResolvedUnderlyingByMarket((prev) => ({ ...prev, ...updates }));
         }
       } catch {
-        // ignore; fallback resolution is best-effort
       }
     };
 
@@ -209,7 +207,7 @@ export function PortfolioClient() {
 
   const rows = useMemo<PortfolioRow[]>(() => {
     const decimals = 1_000_000_000;
-    const premiumDecimals = 1_000_000; // total_premium is quote-token units (USDC 6dp)
+    const premiumDecimals = 1_000_000;
     return rfqPositions.map((p) => {
       const px = p as unknown as { total_premium?: number; underlying_mint?: string; quote_mint?: string };
       const market = marketByPda.get(p.market);
@@ -337,7 +335,7 @@ export function PortfolioClient() {
 
   return (
     <div className="mx-auto w-full max-w-[850px] pb-16 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-16">
-      {/* Header -- centered */}
+      {                        }
       <div className="flex flex-col items-center gap-3">
         <h1 className="text-center font-space text-[64px] font-semibold leading-[1.2] tracking-[-1.28px] text-content-primary max-md:text-[40px]">
           Portfolio
@@ -355,7 +353,7 @@ export function PortfolioClient() {
         </div>
       </div>
 
-      {/* Top metrics + chart */}
+      {                         }
       <section className="mt-[80px] flex flex-col gap-2 max-md:mt-10">
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
           <AppCard className="p-4">
@@ -399,7 +397,7 @@ export function PortfolioClient() {
           </AppCard>
         </div>
 
-        {/* Chart */}
+        {           }
         <AppCard className="p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">Income</div>
@@ -421,7 +419,7 @@ export function PortfolioClient() {
         </AppCard>
       </section>
 
-      {/* Positions / History table */}
+      {                               }
       <section className="mt-16 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">

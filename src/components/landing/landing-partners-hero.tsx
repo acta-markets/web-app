@@ -4,7 +4,7 @@ import { PARTNERS_CONTACT_URL } from "./landing-partners-contact";
 export function LandingPartnersHero() {
   return (
     <section className="relative overflow-hidden" style={{ backgroundColor: "#000" }}>
-      {/* layer 1: ASCII noise */}
+      {                          }
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -15,7 +15,7 @@ export function LandingPartnersHero() {
           opacity: 0.24,
         }}
       />
-      {/* layer 2: big Acta A-mark silhouette */}
+      {                                         }
       <div
         aria-hidden
         className="pointer-events-none absolute bottom-0 top-0 max-md:hidden"
@@ -29,7 +29,7 @@ export function LandingPartnersHero() {
           backgroundPosition: "right center",
         }}
       />
-      {/* layer 3: bottom fade to black */}
+      {                                   }
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -44,7 +44,7 @@ export function LandingPartnersHero() {
             className="mb-8 inline-flex items-center gap-[10px] font-mono text-[12px] uppercase text-accent-secondary"
             style={{ letterSpacing: "0.18em" }}
           >
-            {/* square rather than the hero's pulsing dot: a label, not a status */}
+            {                                                                      }
             <span
               className="inline-block h-1.5 w-1.5"
               style={{ background: "#2AA286", boxShadow: "0 0 10px #2AA286" }}
@@ -54,7 +54,6 @@ export function LandingPartnersHero() {
           <h1
             className="m-0 font-space font-semibold text-content-primary"
             style={{
-              // matches the home hero so the two entry points read as one site
               fontSize: "clamp(48px, 9vw, 96px)",
               lineHeight: 0.95,
               letterSpacing: "-0.04em",

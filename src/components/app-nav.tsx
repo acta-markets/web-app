@@ -20,14 +20,14 @@ export function AppNav() {
 
   return (
     <nav className="relative z-50 mx-auto flex w-full max-w-[850px] items-center justify-between pt-10 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-4">
-      {/* Logo — 129×36, logo itself 120×36 */}
+      {                                       }
       <div className="h-9 w-[129px]">
         <Link href="/earn">
           <ActaLogo className="h-9 w-[120px]" />
         </Link>
       </div>
 
-      {/* Tabs — h-40, gap-8, px-16, py-10 per tab */}
+      {                                              }
       <div className="hidden items-center md:flex">
         <div className="flex items-center gap-2">
           {tabs.map((t) => {
@@ -51,9 +51,9 @@ export function AppNav() {
         </div>
       </div>
 
-      {/* Connect — w-[129px], right-aligned */}
+      {                                        }
       <div className="flex w-[129px] flex-col items-end">
-        {/* Mobile tabs */}
+        {                 }
         <div className="flex items-center gap-2 md:hidden">
           {tabs.map((t) => {
             const isActive = t.value === active;

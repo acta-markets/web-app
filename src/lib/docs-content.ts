@@ -273,8 +273,6 @@ function readableMarkdownLabel(
   return label;
 }
 
-// Inline code spans match first so a `](` inside backticks never parses as a
-// link; fenced blocks are skipped line-by-line.
 const INLINE_CODE_OR_LINK = /(`+)[^`]*?\1|(?<!!)\[([^\]]+)]\(([^) \t\n]+)\)/g;
 
 function rewriteMarkdownLinks(
