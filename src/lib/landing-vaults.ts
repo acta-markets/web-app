@@ -2,21 +2,18 @@ export type VaultStatus = "live" | "soon" | "launch";
 
 export type LandingVault = {
   id: string;
-  asset: string; // display name and the only name, e.g. "SOL"
-  type: string; // asset class shown as the card eyebrow, e.g. "Crypto"
-  curator: string; // "Acta" for now
+  asset: string;
+  type: string;
+  curator: string;
   cycle: "Weekly";
   status: VaultStatus;
-  // Indicative on a "soon" vault, actual on a "live" one. Never invented:
-  // every figure here comes from the desk.
   apr?: { staking: number; premium: number };
-  riskNote?: string; // the one-liner describing what the vault gives up
+  riskNote?: string;
   note?: string;
   ctaLabel: string;
   ctaHref: string;
 };
 
-// TODO(tim): confirm access link. Defaults to the Telegram invite already used in the footer.
 export const VAULT_ACCESS_URL = "https://t.me/+J3_R6jW-msc1MDU6";
 export const PARTNER_EMAIL = "connect@acta.markets";
 
@@ -40,15 +37,10 @@ export const LANDING_VAULTS: LandingVault[] = [
     id: "usdc",
     asset: "USDC",
     type: "Stables",
-    // TODO(tim): confirm curator and CTA for the USDC vault, copied from SOL for now
     curator: "Acta",
     cycle: "Weekly",
     status: "live",
-    // no staking leg: the whole rate is premium
     apr: { staking: 0, premium: 20 },
-    // TODO(tim): needs its own risk one-liner. The upside-cap sentence describes
-    // the SOL vault and does not apply here, so nothing is shown rather than
-    // shipping a sentence that is wrong.
     ctaLabel: "Deposit",
     ctaHref: VAULT_ACCESS_URL,
   },
@@ -56,15 +48,10 @@ export const LANDING_VAULTS: LandingVault[] = [
     id: "xtsla",
     asset: "xTSLA",
     type: "Stocks",
-    // TODO(tim): confirm the curator for the tokenized stock vault
     curator: "TBA",
     cycle: "Weekly",
     status: "soon",
-    // indicative until the vault opens; no staking leg on a tokenized stock
     apr: { staking: 0, premium: 70 },
-    // TODO(tim): needs its own risk one-liner. The cadence in the SOL sentence
-    // ("one week in twelve") is specific to SOL, so nothing is shown here
-    // rather than a number that was not measured on this asset.
     ctaLabel: "Quoting soon",
     ctaHref: "#",
   },
@@ -75,7 +62,6 @@ export const LANDING_VAULTS: LandingVault[] = [
     curator: "You",
     cycle: "Weekly",
     status: "launch",
-    // the partners page carries the full pitch; the address lives there too
     ctaLabel: "Partner with us",
     ctaHref: "/partners",
   },

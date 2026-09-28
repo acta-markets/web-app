@@ -5,69 +5,56 @@
 @layer base {
   :root {
     --font-syne: "Syne";
-    /* Background */
     --bg-primary: #121212;
     --bg-secondary: #121212;
     --bg-tertiary: #121212;
     --bg-border: #282828;
     --bg-border-active: #F0F0F0;
 
-    /* Content/Text */
     --content-primary: #F0F0F0;
     --content-secondary: #8A8A8A;
     --content-tertiary: #8A8A8A;
 
-    /* Accent (brand teal) */
     --accent-primary: #2AA286;
     --accent-primary-rgb: 42 162 134;
     --accent-secondary: #80C9B6;
     --accent-primary-deep: #078568;
 
-    /* Action surfaces */
     --action-primary: #282828;
     --action-secondary: #121212;
     --action-tertiary: #1A1A1A;
 
-    /* Constants */
     --constant-black: #000000;
     --constant-white: #F5F5F5;
 
-    /* New tokens */
     --error: #FF611B;
     --header-scrolled-bg: rgba(18, 18, 18, 0.8);
 
-    /* Additional: Red */
     --additional-red-primary: #FF3347;
     --additional-red-primary-deep: #E84749;
     --additional-red-secondary: #2A1215;
 
-    /* Additional: Orange */
     --additional-orange-primary: #D87A16;
     --additional-orange-primary-deep: #E89A3C;
     --additional-orange-secondary: #2B1D11;
 
-    /* Additional: Gold */
     --additional-gold-primary: #D89614;
     --additional-gold-primary-deep: #E8B339;
     --additional-gold-secondary: #2B2111;
 
-    /* Additional: Green */
     --additional-green-primary: #49AA19;
     --additional-green-primary-deep: #6ABE39;
     --additional-green-secondary: #1C2C17;
 
-    /* Additional: Blue */
     --additional-blue-primary: #2E9AFF;
     --additional-blue-primary-deep: #3C9AE8;
     --additional-blue-secondary: #111D2C;
 
-    /* Additional: Violet */
     --additional-violet-primary: #7251F7;
     --additional-violet-primary-deep: #B7A8F1;
     --additional-violet-secondary: #1C1145;
   }
 
-  /* landing anchors (/#vaults) glide instead of jumping */
   html {
     scroll-behavior: smooth;
   }

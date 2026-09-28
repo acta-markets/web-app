@@ -11,7 +11,6 @@ function isNonEmptyString(v: unknown): v is string {
 }
 
 function isValidEmail(email: string) {
-  // pragmatic check; keep dependencies minimal
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
@@ -29,7 +28,6 @@ export async function POST(req: Request) {
   if (!isValidEmail(emailRaw)) {
     return NextResponse.json({ ok: false, error: "Invalid email." }, { status: 400 });
   }
-  // wallet is stored as-provided (no validation)
   if (!walletRaw) {
     return NextResponse.json({ ok: false, error: "Wallet is required." }, { status: 400 });
   }
@@ -45,7 +43,6 @@ export async function POST(req: Request) {
   }
   const col = db.collection("whitelist");
 
-  // Best-effort uniqueness; if indexes already exist, this is a no-op.
   await Promise.all([
     col.createIndex({ email: 1 }, { unique: true }),
     col.createIndex({ wallet: 1 }, { unique: true })
@@ -53,7 +50,6 @@ export async function POST(req: Request) {
 
   const now = new Date();
 
-  // idempotent-ish: if either exists, treat as success
   const existing = await col.findOne({
     $or: [{ email: emailRaw }, { wallet: walletRaw }]
   });
@@ -69,7 +65,6 @@ export async function POST(req: Request) {
       createdAt: now
     });
   } catch (err: any) {
-    // handle duplicate index race
     if (err?.code === 11000) {
       return NextResponse.json({ ok: true, already: true });
     }
