@@ -8,7 +8,10 @@ export interface DocsNavItem {
   slug: string;
 }
 
+export type DocsAudience = "user" | "protocol";
+
 export interface DocsNavGroup {
+  audience: DocsAudience;
   title: string;
   items: DocsNavItem[];
 }
@@ -21,6 +24,7 @@ export interface DocsPage {
 }
 
 export interface DocsSearchItem extends DocsNavItem {
+  audience: DocsAudience;
   description: string;
   text: string;
 }
@@ -28,7 +32,12 @@ export interface DocsSearchItem extends DocsNavItem {
 const DOCS_ROOT = path.join(process.cwd(), "docs-site");
 const SUMMARY_PATH = path.join(DOCS_ROOT, "SUMMARY.md");
 const DOCS_DESCRIPTIONS: Record<string, string> = {
-  "": "Protocol, API, taker, maker, settlement, governance, and operational documentation for Acta Markets.",
+  "": "Connect a wallet, choose between options and vaults, and understand signatures, collateral, and settlement.",
+  protocol: "How Acta settles options, manages vault capital, and connects contracts, backend services, APIs, and SDKs.",
+  "guide/returns-and-risks": "NAV, value per share, vault returns, management and performance fees, and risks to deposited assets.",
+  "protocol/vault-accounting": "Vault NAV and equity checkpoints, share supply, price per share, fee dilution, and final redemption.",
+  "reference/vault-http-api": "Vault and depositor HTTP endpoints, filters, cursors, response schemas, and error codes.",
+  "protocol/vault-owner": "Create and bootstrap a vault, configure governance and delegates, trade options, swap assets, and process capital.",
   "reference/protocol-flow":
     "Actors, RFQ mechanics, trade lifecycle, settlement scenarios, economics, fees, and protocol risk.",
   "reference/governance":
@@ -58,7 +67,7 @@ const DOCS_DESCRIPTIONS: Record<string, string> = {
   "reference/http-api":
     "Public read-only HTTP endpoints for health, markets, makers, and protocol statistics, including response schemas.",
   "reference/sandbox":
-    "Devnet and mainnet endpoints, maker onboarding, test funding, program addresses, and environment differences.",
+    "Connection endpoints, maker registration, premium funding, and program addresses.",
 };
 
 function assertSafeSlug(parts: string[]) {
@@ -156,16 +165,21 @@ export function getDocsPage(slugParts: string[] = []): DocsPage | null {
   }
 }
 
-export function getDocsNavigation(): DocsNavGroup[] {
+export function getDocsNavigation(audience?: DocsAudience): DocsNavGroup[] {
   const summary = readFileSync(SUMMARY_PATH, "utf8");
   const groups: DocsNavGroup[] = [];
-  let current: DocsNavGroup = { title: "Overview", items: [] };
+  let currentAudience: DocsAudience = "user";
+  let current: DocsNavGroup = { audience: currentAudience, title: "Overview", items: [] };
   groups.push(current);
 
   for (const line of summary.split("\n")) {
+    if (line === "# User guide" || line === "# Protocol & integrations") {
+      currentAudience = line === "# User guide" ? "user" : "protocol";
+      continue;
+    }
     const groupMatch = line.match(/^##\s+(.+)$/);
     if (groupMatch) {
-      current = { title: groupMatch[1].trim(), items: [] };
+      current = { audience: currentAudience, title: groupMatch[1].trim(), items: [] };
       groups.push(current);
       continue;
     }
@@ -179,7 +193,7 @@ export function getDocsNavigation(): DocsNavGroup[] {
     }
   }
 
-  return groups.filter((group) => group.items.length > 0);
+  return groups.filter((group) => group.items.length > 0 && (!audience || group.audience === audience));
 }
 
 export function getDocsSearchIndex(): DocsSearchItem[] {
@@ -188,8 +202,9 @@ export function getDocsSearchIndex(): DocsSearchItem[] {
       const page = getDocsPage(item.slug ? item.slug.split("/") : []);
       return {
         ...item,
+        audience: group.audience,
         description: page?.description ?? "",
-        text: page ? plainText(page.source).slice(0, 4000) : "",
+        text: page ? plainText(page.source) : "",
       };
     }),
   );
@@ -391,9 +406,9 @@ ${group.items
     )
     .join("\n\n");
 
-  return `# Acta Protocol Documentation
+  return `# Acta Documentation
 
-> Protocol, public API, taker, maker, settlement, governance, and operational documentation for Acta Markets.
+> User guides, protocol mechanics, vaults, APIs, and SDK integrations for Acta Markets.
 
 ## Agent access
 

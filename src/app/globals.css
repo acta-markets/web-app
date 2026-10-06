@@ -81,9 +81,11 @@
 
 @layer components {
   .docs-prose {
-    color: var(--content-secondary);
+    color: #c7c7c7;
+    font-family: var(--font-space-grotesk), system-ui, sans-serif;
     font-size: 16px;
     line-height: 1.75;
+    overflow-wrap: anywhere;
   }
 
   .docs-prose h1,

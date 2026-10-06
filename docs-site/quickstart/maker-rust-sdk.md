@@ -15,9 +15,7 @@ For JSON-layer integrations, see [`maker-quickstart.md`](maker-quickstart.md). M
 acta-maker-sdk = { version = "0.4.3", features = ["ws-client"] }
 ```
 
-Version 0.4.3 includes canonical auth-challenge validation and market-PDA binding.
-These checks are absent from 0.4.2. This guide covers ordinary makers;
-vault integrations remain on the separate `feat/vaults` branch.
+Vault operators use the `/vault` session described in [Managing a vault](../protocol/vault-owner.md).
 
 Quote-only integrations need `ws-client`. `chain` adds Solana instruction builders; `chain-rpc` adds on-chain reads.
 
@@ -117,7 +115,7 @@ Lifecycle events arrive through the managed message receiver with a connection e
 | `RfqAvailableAgain` | Settlement reverted; re-quote with a fresh `order_id`. |
 | `RfqClosed` | Closes the auction. Keep unresolved execution obligations separately. |
 
-Use `ReplaceQuote` for repricing. The prior quote is removed only after the replacement validates, so the swap is single-RTT. `CancelQuote` followed by `Quote` creates a gap and adds a round-trip.
+Use `ReplaceQuote` to change a quote. The previous quote remains until the replacement validates.
 
 ```rust
 quote_handle.send_in_epoch(ClientMessage::ReplaceQuote(ReplaceQuoteMessage {
@@ -134,10 +132,10 @@ The preimage is constructed identically to a fresh `Quote` with a new `nonce` an
 
 `handle.send_await(msg, timeout)` correlates request and response via `request_id` and returns `Arc<ServerMessage>`. Supported response shapes:
 
-- `GetMyQuotes`, `GetMyTrades`, `GetMakerPositions`, `GetMmSummary`, `GetOrderStatus` — maker state; prefer the data handle
-- `GetActiveRfqs`, `GetMarketsForMaker`, `GetMarketDescriptors` — recovery and instrument metadata; prefer the data handle
-- `GetSubscriptions` — quote-plane session view
-- `GetTokenCaps`, `GetMyCaps` — risk and per-maker limits
+- `GetMyQuotes`, `GetMyTrades`, `GetMakerPositions`, `GetMmSummary`, `GetOrderStatus`: maker state; prefer the data handle
+- `GetActiveRfqs`, `GetMarketsForMaker`, `GetMarketDescriptors`: recovery and instrument metadata; prefer the data handle
+- `GetSubscriptions`: quote-plane session view
+- `GetTokenCaps`, `GetMyCaps`: risk and per-maker limits
 
 `send_await` also supports `Quote` / `ReplaceQuote` (by `order_id`), batches (by their order IDs), and subscription/cancellation commands (by `request_id`). `CancelQuote` waits for `CancelQuoteAck`; `QuoteCancelled` cannot satisfy it. A correlated protocol error is a response to inspect, not a successful cancellation. Commands with no supported correlation key return `SendAwaitError::NoCorrelationKey`.
 
@@ -151,15 +149,15 @@ Query bounds: `GetMyQuotes { scope: History }` defaults to `200` historical rows
 
 The SDK reconnects by default. The first handshake is: TCP up -> `Hello` -> `Welcome` + server-issued `AuthRequest` -> challenge signed by `quote_signing` -> `AuthChallenge(maker_owner, signature)` -> authenticated -> subscription acknowledgement and recovery reads -> ready. If no challenge is pending, the SDK sends `StartAuth(maker_owner)`, which maker endpoints ignore. After a disconnect it sends `Hello` and tries `ResumeAuth` with the last session ID; `session_expired` clears that ID and falls back to the full signed-challenge flow on the same connection. Backoff is 250 ms initial, 5 s cap, +/-20% jitter.
 
-`ManagedWsConfig` also bounds the failure modes: configure `connect_timeout`, `max_reconnect_attempts` (`0` means unlimited), and `reconnect_jitter_ratio`. A production supervisor should treat exhaustion or task exit as loss of readiness and restart or alert.
+`ManagedWsConfig` sets `connect_timeout`, `max_reconnect_attempts` (`0` means unlimited) and `reconnect_jitter_ratio`. When reconnection attempts are exhausted, the session closes.
 
-Trading commands are never automatically replayed across a connection boundary. Typed trading calls require `Ready` and are bound to its `connection_epoch`; non-ready calls return `NotReady`. The strategy must recompute quote validity after recovery. Raw pre-ready reads do not provide the same readiness guarantee.
+Trading commands are bound to a connection epoch and are not replayed after reconnect. Typed calls require `Ready`; otherwise they return `NotReady`. Recompute quote validity after recovery. Raw reads made before readiness require separate reconciliation.
 
-The writer keeps Quote, BatchQuotes, ReplaceQuote, CancelQuote and CancelAllQuotes in one FIFO data lane. Control traffic such as ping and authentication uses a separate lane. This preserves `Quote; Cancel` ordering rather than allowing cancellation to overtake an earlier quote.
+The writer sends Quote, BatchQuotes, ReplaceQuote, CancelQuote and CancelAllQuotes in FIFO order. Ping and authentication use a separate control lane.
 
-`write_timeout` bounds one socket write, not total queueing time or Core cancellation latency. COD provides a disconnect fallback, not a bounded-time halt; selected/executing obligations survive it. Queue admission or a successful socket write alone does not prove Core applied a command.
+`write_timeout` applies to one socket write. Queueing and Core execution have separate timing. COD removes eligible quotes on disconnect; selected and executing orders remain active. Track acknowledgments for command outcomes.
 
-An inbound receiver that falls behind reports `ManagedReceiveError::Gap`; the configured gap policy decides whether the session reconnects. Keep the strategy's unresolved orders across this boundary and query `GetOrderStatus` after losing an ACK. `unknown`, timeout and an empty Live result are not proof of nonexecution.
+An inbound receiver that falls behind reports `ManagedReceiveError::Gap`; the configured gap policy decides whether the session reconnects. Retain unresolved orders and query `GetOrderStatus` after losing an acknowledgment. Keep reconciling orders with an `unknown` result.
 
 The server does not replay the missed event stream. Handle duplicate lifecycle observations idempotently using order identity and entity versions.
 
@@ -193,9 +191,9 @@ Convenience methods exist for every `ClientMessage` variant. `WsClient` does not
 
 ## Reference
 
-- [Maker API reference](../reference/maker-api.md) — message catalogue and error variants
-- [Maker quickstart (JSON)](maker-quickstart.md) — the same flow at the protocol level
-- [Maker wire examples (JSON)](maker-wire-examples.md) — concrete request/response payloads
-- [WS common conventions](../reference/ws-common.md) — units, envelopes, error codes
-- [Caps reference](../reference/caps.md) — risk and quoting limits
+- [Maker API reference](../reference/maker-api.md): message catalogue and error variants
+- [Maker quickstart (JSON)](maker-quickstart.md): the same flow at the protocol level
+- [Maker wire examples (JSON)](maker-wire-examples.md): concrete request/response payloads
+- [WS common conventions](../reference/ws-common.md): units, envelopes, error codes
+- [Caps reference](../reference/caps.md): risk and quoting limits
 - [FAQ](../reference/faq.md)

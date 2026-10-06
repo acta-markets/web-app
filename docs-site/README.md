@@ -1,25 +1,23 @@
-# Acta Protocol — Tech Docs
+# Getting started
 
-## Overview
+Acta lets you earn premiums from options or invest in managed vaults on Solana.
 
-- [Protocol flow](reference/protocol-flow.md) — actors, RFQ mechanics, trade lifecycle, economics, fees, risk
+## Choose a product
 
-## Quickstart
+Choose a price at which you are willing to sell or buy an asset, and receive a premium when the trade opens. You choose the amount and expiry. [See how options work](guide/options.md).
 
-- [Taker quickstart](quickstart/taker-quickstart.md) — auth, RFQ, accept, sponsored tx (language-neutral)
-- [Taker wire examples](quickstart/taker-wire-examples.md) — complete JSON session + branch scenarios
-- [Web client SDK (TypeScript)](quickstart/web-client-ts-sdk.md) — taker integration via TS SDK
-- [Maker quickstart](quickstart/maker-quickstart.md) — keypairs, registration, first quote
-- [Maker wire examples](quickstart/maker-wire-examples.md) — complete JSON session
-- [Rust Maker SDK](quickstart/maker-rust-sdk.md) — Rust SDK integration guide
+In a vault, a manager trades pooled funds. You hold shares whose value changes with the strategy's results. [See how vaults work](guide/vaults.md).
 
-## Reference
+## Connect your wallet
 
-- [Maker API](reference/maker-api.md) — WS messages, quote rules, events, enums
-- [Taker API](reference/taker-api.md) — WS messages, RFQs, sponsored transactions
-- [WS common conventions](reference/ws-common.md) — encodings, units, collateral formulas, timeouts
-- [HTTP API](reference/http-api.md) — REST endpoints
-- [Capacity limits](reference/caps.md) — OI caps, maker limits, monitoring
-- [Governance and security](reference/governance.md) — cold/hot authority split, authority matrix, on-chain timelock
-- [Sandbox / Devnet](reference/sandbox.md) — test environment, endpoints, program addresses
-- [FAQ](reference/faq.md) — common questions and troubleshooting
+Connect a Solana wallet and keep some SOL for transaction fees. Signing the login message proves ownership of your wallet. Moving funds requires a separate transaction signature.
+
+## Open an option
+
+In Earn, select Calls or Puts, choose an asset, strike and expiry, then enter the deposit amount. The strike is your agreed selling or buying price.
+
+Deposit requests a live quote. Review the premium and trade terms before signing. The estimate shown earlier can change.
+
+Your collateral stays locked until payout after expiry. An exchange at the strike requires funds from the buyer or a liquidator, so expiry does not guarantee when you will be paid.
+
+Contract rules, APIs and SDKs are in [Protocol & integrations](protocol.md).

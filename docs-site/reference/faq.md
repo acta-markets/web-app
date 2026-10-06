@@ -28,8 +28,6 @@ No. Only one active quote WebSocket per maker pubkey is allowed, alongside the s
 | `cap_exceeded` | A position-count, notional, or balance cap was breached. See [`caps.md`](caps.md). |
 | `rfq_not_active` | The RFQ expired or filled before the quote arrived. |
 
-Fix the cause before retrying. Re-sending the same payload will fail the same way.
-
 ### Why are some RFQs not delivered?
 
 The server pre-filters RFQs against the maker's caps before broadcast. When a pre-filter triggers, the maker receives `RfqSkipped` with a `reason` field (typical values include `token_oi_cap_exceeded` and `maker_insufficient_balance`) in place of `RfqBroadcast`. Current cap headroom can be inspected via `GetMyCaps`. Cap mechanics are documented in [`caps.md`](caps.md).
@@ -53,7 +51,7 @@ The Rust SDK's `compute_order_id()` builds this preimage. Other languages should
 
 ### `rfq_not_active`
 
-The RFQ expired or another maker filled it before your quote arrived. You can only reduce this race: lower submission latency and use `BatchQuotes` when quoting several strikes for one RFQ.
+The RFQ expired or another maker filled it before your quote arrived. Use `BatchQuotes` when quoting several strikes for one RFQ to send them together.
 
 ### Persistent disconnects
 

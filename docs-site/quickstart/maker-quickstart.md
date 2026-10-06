@@ -1,6 +1,6 @@
 # Acta Maker Quickstart
 
-JSON-layer path for a maker connection: auth, subscribe, quote, handle fills, reconnect. Rust integrations should start with [`maker-rust-sdk.md`](maker-rust-sdk.md). Payload examples are in [`maker-wire-examples.md`](maker-wire-examples.md); onboarding is in [`../reference/sandbox.md`](../reference/sandbox.md); units and envelopes are in [`../reference/ws-common.md`](../reference/ws-common.md); the message catalogue is in [`../reference/maker-api.md`](../reference/maker-api.md).
+Authenticate, subscribe to RFQs, quote and track fills over WebSocket. For the Rust client, see [Rust maker SDK](maker-rust-sdk.md). [Endpoints and registration](../reference/sandbox.md) describes account setup; [Wire examples](maker-wire-examples.md) shows complete messages.
 
 ---
 
@@ -104,8 +104,8 @@ Lifecycle events are keyed by `order_id`. `RfqClosed` is the terminal event for 
 
 Quoting and the lifecycle above are entirely off-chain (WebSocket). Your only on-chain actions as a maker are funding-related:
 
-- `DepositPremium` — deposit program quote balance; **required before quoting** (the fill's premium debit draws from it). `WithdrawPremium` retrieves idle balance.
-- `DepositFundsToPosition` — optional, after a fill: fund the settlement leg (`open` → `funded`) to avoid the ITM-unfunded liquidation loss.
+- `DepositPremium`: deposit program quote balance; **required before quoting** (the fill's premium debit draws from it). `WithdrawPremium` retrieves idle balance.
+- `DepositFundsToPosition`: optional, after a fill: fund the settlement leg (`open` → `funded`) to avoid the ITM-unfunded liquidation loss.
 
 You do **not** settle or liquidate. Publishing the settlement price and finalizing markets is operator-side; settlement is keeper-driven; liquidating ITM-unfunded positions is permissionless. Your downside is bounded — fund the settlement leg, or a third party liquidates and fronts the taker payout. See [`../reference/protocol-flow.md`](../reference/protocol-flow.md) for the risk model.
 
