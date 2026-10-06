@@ -91,7 +91,7 @@ The default allows three failed attempts; the fourth triggers `too_many_auth_att
 }
 ```
 
-`expires_at` is a required Unix timestamp (seconds) for both takers and makers. It is the resume credential deadline, not the lifetime of the authenticated socket. Makers use a shorter TTL, and makers can `ResumeAuth` too. The official maker SDK tries the cached session first and falls back to a fresh signed challenge only when the server reports `session_expired`.
+`expires_at` is a required Unix timestamp in seconds. It is the deadline for resuming the session; an authenticated socket can remain open beyond it.
 Client should persist both `session_id` and `expires_at` for future `ResumeAuth`.
 
 ### AuthError
@@ -261,8 +261,8 @@ through the observation slot; a later audit-gap retraction fails the read closed
 }
 ```
 
-- `price` — gross quote from the maker. Hash-bound via `order_id` — use this for `AcceptQuote` and all order operations.
-- `net_price` — display-only net price estimate after protocol fee deduction. Present when the server has loaded the on-chain fee config. The contract's authoritative fee is computed at `OpenPosition` as `min(premium_fee, volume_fee)` after token-decimal scaling. Use `net_price` for UI display and `price` for order operations.
+- `price`: gross quote from the maker. Hash-bound via `order_id` — use this for `AcceptQuote` and all order operations.
+- `net_price`: display-only net price estimate after protocol fee deduction. Present when the server has loaded the on-chain fee config. The contract's authoritative fee is computed at `OpenPosition` as `min(premium_fee, volume_fee)` after token-decimal scaling. Use `net_price` for UI display and `price` for order operations.
 
 ### QuotesUpdate (server -> taker)
 
@@ -376,7 +376,7 @@ Sent when `SubmitSignedSponsoredTx` is accepted into Core's `Enqueued` state; it
 |---|---|
 | `{ "type": "pending" }` | The venue still has a pending execution obligation. |
 | `{ "type": "confirmed", "position_pda": "..." }` | Execution is confirmed; this is the resulting position. |
-| `{ "type": "unknown" }` | Available evidence cannot establish the outcome. This is not proof of nonexecution. |
+| `{ "type": "unknown" }` | The order outcome is unresolved; reconcile its transaction and accounts. |
 
 The response has no `status`, `order_version`, `rfq_id` or `tx_signature` fields. Lookup failures return a correlated `RequestError`. Neither an empty position list nor `unknown` authorizes replaying the order.
 
@@ -501,12 +501,11 @@ Query-style responses echo the same `request_id`:
 - for `GetMarketDescriptors`/`GetTokens`, `active_only=true` means **tradable** markets — non-finalized, non-disabled, and before the pre-expiry trading cutoff; `active_only=false` returns all markets/tokens
 - `GetExpiries` has **no** `active_only` field — it always returns the tradable set (same predicate as above)
 
-### Discovery strict policy
+### Market size rules
 
-- `GetMarketDescriptors` and `GetTokens` require `prices.size_by_mint` config for every underlying mint in the DB.
+- `GetMarketDescriptors` and `GetTokens` require a size rule for every underlying mint.
 - If any market is missing a size rule, the entire request fails with `missing_size_rule_for_underlying_mint`.
 - Partial discovery is not supported.
-- `config.toml` `[prices.size_by_mint]` must include all underlying mints used by markets.
 
 ### MarketDescriptors payload
 
@@ -1039,11 +1038,11 @@ Common typed `ServerError` variants (PascalCase on the wire):
 - `Claim` (data is `ClaimErrorReason` string, e.g. `"code_taken"`)
 
 Common `Generic` variant `code` values in taker flows:
-- `missing_size_rule_for_underlying_mint` — no configured size rule for RFQ market underlying mint
-- `invalid_quantity_size_rule` — RFQ `quantity` violates `min/max/step` constraint
-- `trading_paused` — backend or on-chain pause currently blocks new trading actions
-- `session_expired` — `ResumeAuth` with invalid/expired/revoked session
-- `already_authenticated` — `ResumeAuth` on an already authenticated connection
+- `missing_size_rule_for_underlying_mint`: no configured size rule for RFQ market underlying mint
+- `invalid_quantity_size_rule`: RFQ `quantity` violates `min/max/step` constraint
+- `trading_paused`: backend or on-chain pause currently blocks new trading actions
+- `session_expired`: `ResumeAuth` with invalid/expired/revoked session
+- `already_authenticated`: `ResumeAuth` on an already authenticated connection
 - `hello_required`, `hello_timeout`, `hello_already_sent`
 - `parse_error`, `too_many_parse_errors`, `message_too_large`
 - `internal_error`
@@ -1055,16 +1054,3 @@ Common `Generic` variant `code` values in taker flows:
 | `too_many_active_rfqs_total` | Platform-wide RFQ limit reached |
 | `too_many_active_rfqs_per_taker` | Per-taker RFQ limit reached |
 | `too_many_sessions_per_user` | Too many concurrent sessions |
-
----
-
-## Related
-
-- [Taker quickstart](../quickstart/taker-quickstart.md) — narrative flow + raw sponsored-tx signing
-- [Taker wire examples](../quickstart/taker-wire-examples.md) — complete JSON session + branch scenarios
-- [Taker TS SDK quickstart](../quickstart/web-client-ts-sdk.md)
-- [Protocol flow](protocol-flow.md) — trade lifecycle, economics, settlement, risk
-- [WS common conventions](ws-common.md) — units, envelopes, timeouts
-- [Capacity limits](caps.md) — OI and notional caps
-- [Sandbox / Devnet](sandbox.md) — endpoints, faucets, program addresses
-- [FAQ](faq.md)

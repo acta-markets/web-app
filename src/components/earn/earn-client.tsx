@@ -99,6 +99,9 @@ export function EarnClient() {
               How it works
               <img src="/chevron-right-duo.svg" alt="" className="h-5 w-5" />
             </button>
+            <Link href="/docs/guide/options" className="text-sm text-content-secondary hover:text-accent-secondary">
+              Read the options guide
+            </Link>
           </div>
         </div>
 

@@ -20,14 +20,11 @@ export function AppNav() {
 
   return (
     <nav className="relative z-50 mx-auto flex w-full max-w-[850px] items-center justify-between pt-10 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-4">
-      {                                       }
       <div className="h-9 w-[129px]">
         <Link href="/earn">
           <ActaLogo className="h-9 w-[120px]" />
         </Link>
       </div>
-
-      {                                              }
       <div className="hidden items-center md:flex">
         <div className="flex items-center gap-2">
           {tabs.map((t) => {
@@ -50,10 +47,7 @@ export function AppNav() {
           })}
         </div>
       </div>
-
-      {                                        }
       <div className="flex w-[129px] flex-col items-end">
-        {                 }
         <div className="flex items-center gap-2 md:hidden">
           {tabs.map((t) => {
             const isActive = t.value === active;
@@ -75,6 +69,7 @@ export function AppNav() {
           })}
         </div>
         <SolanaConnectButton />
+        <Link href="/docs" className="mt-2 text-xs text-content-secondary hover:text-accent-secondary">Docs</Link>
       </div>
     </nav>
   );

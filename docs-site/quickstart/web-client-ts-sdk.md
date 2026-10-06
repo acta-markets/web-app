@@ -23,7 +23,7 @@ Frames missing these fields or containing `null` are rejected before
 dispatch. `server_time_unix_ms` and `sent_at_unix_ms` use milliseconds;
 `expires_at` uses Unix seconds. The WS protocol version is `1.0.0`.
 
-Taker-only apps should import **`@acta-markets/ts-sdk/ws`**: client, auth, RFQ and sponsored-tx signing, without instruction builders or IDL. The SDK is built on `@solana/kit`; you do not need `@solana/web3.js`.
+Import `@acta-markets/ts-sdk/ws` for the taker WebSocket client and signing helpers.
 
 ---
 
@@ -163,8 +163,7 @@ fee payer, blockhash and ALT reference. Never copy the expected bytes from the
 received transaction. Resolve ALT references against trusted table contents when
 building the approved message. Matching `orderIdHex` alone is insufficient.
 
-The example assumes your application provides `approvedMessageForOrder(id)`.
-This is application code, not an SDK export. A wallet preview is complementary.
+Your application supplies `approvedMessageForOrder(id)`.
 Older SDKs without this argument require equivalent application checks;
 `signSponsoredTxBase64Unverified` explicitly retains server-template trust.
 
@@ -266,7 +265,6 @@ ws.on("versionMismatch", (msg) => {
 
 Wait for those responses before rebuilding application state, and request `GetOrderStatus` for each unresolved order. Apply the exact-order recovery rules above. Do not clear an unresolved order because it is missing from an RFQ or position response.
 
-Transport note: during reconnect, WebSocket control frames (`Ping`/`Pong`) may arrive before the first protocol JSON message. The client ignores control frames until `Welcome`, `VersionMismatch`, or `Error`.
 
 ---
 
@@ -294,22 +292,21 @@ Error codes and `OrderFailed` reasons: [taker-api.md](../reference/taker-api.md)
 - **Invite gating (closed mainnet).** If `requireInvite` fires, redeem before trading via `redeemInvite(rawCode)`; claim your own code via `claimReferralCode`; inspect stats via `getMyReferralInfo`. Errors: [taker-api.md](../reference/taker-api.md).
 - **Token caps.** `getTokenCaps()` -> `tokenCaps` event. OI and notional capacity per token. Schema: [caps.md](../reference/caps.md).
 - **Earn summary.** `getEarnSummary()` -> `earnSummary` event. APR ranges and capacity per asset for landing pages.
-- **Market price snapshot.** `getTokenMarketsInfo(underlyingMint)` -> `tokenMarketsInfo` returns backend `reference_price`, size rules, decimals and indicative premiums together. See [TokenMarketsInfo](../reference/taker-api.md#tokenmarketsinfo). Correlate the response with the returned request ID and the mint you requested; the response does not echo the mint. Refresh while the view is active; the Acta web app uses 30 seconds.
+- **Market price snapshot.** `getTokenMarketsInfo(underlyingMint)` -> `tokenMarketsInfo` returns backend `reference_price`, size rules, decimals and indicative premiums together. See [TokenMarketsInfo](../reference/taker-api.md#tokenmarketsinfo). Correlate the response with the returned request ID and the mint you requested; the response does not echo the mint. Refresh while the view is active.
 - **Indicative prices.** `getIndicativePrices({ market, position_type })` -> `indicativePrices` event. Non-binding UI reference prices; server refreshes roughly every 30s.
 - **APR inputs.** Use spot and indicative premium from the same `TokenMarketsInfo` response. Suppress the preview when the price is unavailable or the indicative has `is_stale: true`; clear cached metadata after a failed refresh or disconnect. Pyth credentials belong on the backend, not in browser code.
 - **APR/APY helper.** `computeApyFromScaledPrices({ positionType, underlyingAmount, grossPremiumPerUnit1e9, strike1e9, spotPrice1e9, secondsToExpiry })` from `@acta-markets/ts-sdk/ws` returns `{ apy, apr, termYield }`. For the market preview, pass backend `best_price` as `grossPremiumPerUnit1e9`: the backend applies the quote-mint fee adjustment when fee configuration is present. Do not subtract the fee a second time.
 
 ---
 
-## Production notes
+## Signing requirements
 
-- Sponsored transactions are **v0 VersionedTransaction**. The `wallet.signTransaction` path requires versioned transaction support and can show the wallet's preview; `signSponsoredTxBase64` signs raw message bytes and does not guarantee a transaction preview.
+- Sponsored transactions use v0 `VersionedTransaction`. Use a wallet with versioned transaction support for `wallet.signTransaction` and its transaction preview. `signSponsoredTxBase64` signs raw message bytes; preview support depends on the signer.
 - If the wallet can't sign arbitrary bytes, WS auth won't work directly - use a server-side signer via `CustomAuthProvider`.
 
 ---
 
-## Support
+## Endpoints
 
 - **Devnet:** `wss://devnet-api.acta.markets`
 - **Mainnet:** `wss://beta-api.acta.markets`
-- **Questions:** contact the Acta team

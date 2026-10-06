@@ -136,7 +136,7 @@ Validate the entire challenge **before invoking the signer**. Require the exact 
 
 After validation, sign the original UTF-8 bytes without normalization, additional prefix or hashing. The fixed text already supplies the authentication domain. Signing arbitrary endpoint text with the order key can authorize an order instead of authentication.
 
-Rust SDK 0.4.3 and TS SDK 0.1.6 validate authentication messages before invoking signers in their managed clients. Raw Rust clients use `validate_maker_auth_challenge`; raw TS clients use `validateAuthChallenge`, which checks the grammar of both server formats. This does not establish endpoint trust or prevent relay of a genuine server challenge. Rust 0.4.2 and TS 0.1.5 lack these checks.
+Managed SDK clients validate challenges before signing. Raw Rust clients use `validate_maker_auth_challenge`; raw TypeScript clients use `validateAuthChallenge`. These helpers validate message format; endpoint trust is configured by the integrator.
 
 ### AuthChallenge (client -> server)
 
@@ -386,8 +386,6 @@ channels already subscribed (or already absent) are not repeated.
 
 ## Lifecycle terms
 
-Use the same terms across all external docs:
-
 ### RFQ lifecycle
 - **Terminal RFQ event**: `RfqClosed`. Close RFQ state only on this event.
 - **Fill-details event (maker)**: `QuoteFilled`. Contains fill details for the winning maker.
@@ -395,10 +393,10 @@ Use the same terms across all external docs:
   on-chain identifiers (`tx_signature`, `position_pda`).
 
 ### Position lifecycle (post-fill)
-- `open` — position created, collateral locked, premium paid to taker.
-- `funded` — maker deposited settlement asset via `DepositFundsToPosition`.
-- `settled` — market finalized, assets distributed based on ITM/OTM outcome.
-- `liquidated` — an unfunded ITM position was closed by a liquidation transaction.
+- `open`: position created, collateral locked, premium paid to taker.
+- `funded`: maker deposited settlement asset via `DepositFundsToPosition`.
+- `settled`: market finalized, assets distributed based on ITM/OTM outcome.
+- `liquidated`: an unfunded ITM position was closed by a liquidation transaction.
 
 Trade lifecycle and payoff: [Protocol flow](protocol-flow.md).
 
@@ -442,7 +440,7 @@ rfq.signature_deadline
 - **`rfq.expires_at`** controls how long makers can submit quotes and the taker can accept. After this time new quoting/acceptance stops; an enqueued order remains unresolved until execution evidence arrives.
 - **`quote.valid_until`** is the cryptographic expiry the maker signs into the order. The on-chain program rejects settlement if `valid_until` has passed.
 
-Makers should normally choose `valid_until` beyond `expires_at` to cover settlement; this relationship is not a Core invariant. A taker might accept a quote at second 59 of a 60-second auction. After that, the server builds a sponsored tx, the taker signs it, and the tx confirms on Solana. This can take up to 90 seconds. If `valid_until` equaled `expires_at`, the on-chain order would expire before the tx lands.
+Choose `valid_until` beyond `expires_at` to allow time for transaction building, wallet signing and chain confirmation. The settlement buffer defaults to 90 seconds. Core does not enforce the relationship between the two deadlines.
 
 ### Recommended `valid_until` range
 
@@ -452,12 +450,7 @@ max:  rfq.expires_at + settlement_buffer_seconds  (recommended upper bound)
 hard max: market.expiry_ts
 ```
 
-Setting `valid_until` above the recommended max but no later than
-`market.expiry_ts` is accepted, but provides no benefit: after
-`rfq.expires_at` the server will not allow accepts, so extra on-chain validity
-only increases the maker's exposure window without enabling additional trades.
-Values later than `market.expiry_ts` are rejected with
-`QuoteRejected.reason = "market_expired"`.
+Values above the recommended max are accepted up to `market.expiry_ts`. New accepts stop at `rfq.expires_at`. Values later than market expiry return `QuoteRejected.reason = "market_expired"`.
 
 Example: RFQ with `expires_at = now + 60s`, settlement buffer 90s:
 
@@ -465,9 +458,6 @@ Example: RFQ with `expires_at = now + 60s`, settlement buffer 90s:
 valid_until range: [now + 100s, now + 150s]
 effective_expiry:  [now + 10s,  now + 60s]
 ```
-
-The maker's quote is tradeable for up to 60 seconds (the full RFQ lifetime)
-and the on-chain order is valid long enough for settlement to land.
 
 ### Invariants
 

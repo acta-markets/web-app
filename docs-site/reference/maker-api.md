@@ -320,8 +320,8 @@ Atomic cancel-and-resubmit for a specific quote. Cancels the quote identified by
 
 **Errors:**
 - `QuoteRejected` with standard reasons (`invalid_strike`, `cap_exceeded`, etc.) — new quote failed validation; old quote remains active
-- `Error { type: "QuoteLocked" }` — old quote is locked in `PendingSignature`/`Enqueued` (cannot replace)
-- `Error { type: "QuoteNotFound" }` — `old_order_id` not found (race: already cancelled/expired)
+- `Error { type: "QuoteLocked" }`: old quote is locked in `PendingSignature`/`Enqueued` (cannot replace)
+- `Error { type: "QuoteNotFound" }`: `old_order_id` not found (race: already cancelled/expired)
 
 ### BatchQuotes (maker -> server)
 
@@ -465,7 +465,7 @@ Identified by `(rfq_id, strike)`, not `order_id`. If quoting multiple strikes pe
 `QuoteFilled` is the fill-details event for the winning maker.
 `RfqClosed` is the terminal RFQ event.
 
-Current runtime behavior for successful fills:
+For successful fills:
 - winner maker receives `QuoteFilled` and then `RfqClosed` (in that order for maker session)
 - taker receives `OrderConfirmed` and then `RfqClosed`
 - close RFQ state only on `RfqClosed`; process `QuoteFilled` as fill-details information
@@ -681,9 +681,9 @@ Server responds with `CancelAllQuotesAck` after Core applies the cancellation. A
 }
 ```
 
-`cancelled_count` equals `cancelled_order_ids.length`; both report the orders actually removed by Core. An empty list means this command removed no quotes; it does not establish that no selected or executing obligations remain. Lifecycle `QuoteCancelled` messages are separate from the receipt and must not complete another request's await.
+`cancelled_count` equals `cancelled_order_ids.length` and counts quotes removed by Core. Selected or executing orders remain active. Match cancellation requests to their acknowledgment; `QuoteCancelled` is a separate lifecycle event.
 
-Quote, batch, replacement and cancellation commands from one connection retain FIFO order through the SDK writer, socket actor and Core request queue. Commands before a cancellation may execute first; commands sent afterward may create new quotes. Cancellation is not a persistent account halt.
+Quote, batch, replacement and cancellation commands from one connection keep FIFO order. Commands before a cancellation may execute first; later commands may create new quotes.
 
 If the connection drops before the ACK, retain an unknown outcome and reconcile instead of automatically replaying the command.
 
@@ -806,7 +806,7 @@ Optional filters for `GetMarketsForMaker`:
 ```
 
 All filter fields are optional. `include_stats` defaults to `false`.
-The current wire request has no result cap. Use filters for dashboard views and
+The request has no result cap. Use filters for dashboard views and
 avoid polling this request.
 
 ### Markets payload
@@ -1011,13 +1011,7 @@ A lost ACK leaves the command outcome unknown. Keep unresolved orders in strateg
 
 ### MmSummary payload
 
-`MmSummary` is the one-shot MM dashboard bootstrap response. It bundles caps, positions, active quotes, markets, and token metadata in a single payload so a freshly-connected market maker can render its UI without firing a fan-out of discovery requests.
-
-Send `GetMmSummary` on `/maker/data`. Valid triggers are initial connect/auth,
-reconnect, manual refresh, detected drift, and post-transaction reconciliation
-when no owner-direct push is expected. Do not poll it. The current server charges
-it through the query bucket as one query message; operators should budget it as a
-heavy query, and the next backend policy target is `10` query tokens.
+`MmSummary` returns caps, positions, active quotes, markets and token metadata. Request it on `/maker/data` for initial state or recovery, rather than polling. The request costs one query token.
 
 ```json
 {
@@ -1060,10 +1054,10 @@ heavy query, and the next backend policy target is `10` query tokens.
 Field semantics:
 - `maker_pda`: on-chain maker account PDA (base58)
 - `caps`: same shape as the [`MyCaps`](#mycaps-payload) response (echoes `request_id` from `GetMmSummary`)
-- `positions`: `MakerPositionInfo[]` — see [MakerPositions payload](#makerpositions-payload)
-- `active_quotes`: `MakerQuoteInfo[]` — see [MyQuotes payload](#myquotes-payload)
-- `markets`: `MakerMarketInfo[]` — see [MakerMarkets payload](#makermarkets-payload)
-- `tokens`: `TokenInfo[]` — see [Tokens payload](#tokens-payload)
+- `positions`: `MakerPositionInfo[]`; see [MakerPositions payload](#makerpositions-payload)
+- `active_quotes`: `MakerQuoteInfo[]`; see [MyQuotes payload](#myquotes-payload)
+- `markets`: `MakerMarketInfo[]`; see [MakerMarkets payload](#makermarkets-payload)
+- `tokens`: `TokenInfo[]`; see [Tokens payload](taker-api.md#tokens-payload)
 - `computed_at`: server-side snapshot timestamp (Unix seconds)
 - `positions_has_more`: `true` when the embedded `positions` were capped at 500. Retrieve the rest via `GetMakerPositions` — page with the keyset cursor: pass `cursor` (the `created_at` of the last row, unix seconds) together with `cursor_id` (its `pda`) — both or neither. Ordering is second-granular with `pda` as the tie-break; stop when `has_more` is `false`. The rest of the snapshot is complete.
 
@@ -1354,13 +1348,13 @@ All variants require `signature` (tx signature, base58), `instruction_index` (in
 
 ## Delivery and recovery
 
-Delivery is **best-effort, with loss surfaced as a disconnect**. Every *critical* message is delivered reliably or — if it cannot be delivered under backpressure — dropped, after which the server **closes the connection**. Critical means the owner-direct pushes (`PositionUpdated`, `TradeExecuted`), `RfqBroadcast`, and the maker quote-lifecycle messages listed above. `QuoteReceived`, `QuotesUpdate`, and the order-signing lifecycle are taker-only. A lost critical message therefore always surfaces as a disconnect — never silent staleness. Only non-critical broadcasts (`StatsUpdate`) may drop silently.
+Critical messages include `PositionUpdated`, `TradeExecuted`, `RfqBroadcast` and maker quote-lifecycle events. If a critical message cannot be delivered under backpressure, the server closes the connection. Non-critical broadcasts such as `StatsUpdate` may be dropped while the connection stays open.
 
 On every (re)connect read `GetMmSummary`, `GetActiveRfqs` and complete `GetMyQuotes { scope: Live }`; query `GetOrderStatus` for unresolved orders. Managed Rust SDK requires all three recovery reads before `Ready`. These observations span Core live state and persistent projections; they are not an atomic snapshot. `ActiveRfqs` supplies each RFQ's taker and market PDA for the quote preimage.
 
 The wire has no replay cursor or stream sequence number. Apply entity versions on a live connection and re-read state after disconnect; do not infer execution from absent events. SDK receiver sequence gaps are local delivery gaps, distinct from the wire.
 
-`TradeExecuted` is a UI hint, not authoritative. The DB-backed reads — `GetMmSummary`, `GetMakerPositions`, `GetMyTrades` — are the recovery authority: on any doubt, re-read rather than trusting the last live push. A fill's `PositionUpdated` can occasionally be deferred to a later snapshot rather than pushed, so also reconcile periodically (and after your own transactions) via `GetMmSummary`.
+Recover indexed positions and trades through `GetMmSummary`, `GetMakerPositions` and `GetMyTrades` after a missing push or an interrupted transaction. Live events notify clients of changes; recovery reads restore state.
 
 If `MmSummary.positions_has_more` (or a `MakerPositions` response's `has_more`) is `true`, the position list was truncated at 500 — retrieve the rest via `GetMakerPositions`: page with the keyset cursor: pass `cursor` (the `created_at` of the last row, unix seconds) together with `cursor_id` (its `pda`) — both or neither. Ordering is second-granular with `pda` as the tie-break; stop when `has_more` is `false`.
 
@@ -1421,7 +1415,7 @@ Parsing rule for maker integrations:
 4. If `type == "Generic"`, switch on `data.code`.
 5. Keep fallback handling for unknown `generic.code`.
 
-Important typed `ServerError` variants for makers (PascalCase on the wire):
+Maker `ServerError` variants (PascalCase on the wire):
 - `RfqNotFound`, `RfqNotActive`
 - `QuoteNotFound`, `QuoteExpired`, `QuoteLocked`
 - `InvalidStrike`, `InvalidValidUntil`, `OrderIdMismatch`, `QuoteExpiryTooShort`
@@ -1567,8 +1561,6 @@ Both require a `request_id`. The ack carries the *diff* of channels added or rem
 
 One active quote connection per maker pubkey. A new quote connection replaces the previous quote connection; the separate data connection is for reads. On replacement, the displaced session gets `Error { generic.code = "session_replaced" }` and is closed.
 
-The client requests `cancel_on_disconnect` in `Hello.features`; the server enables it by including it in `Welcome.enabled_features`. The managed quote SDK requests it by default. Selected and executing quotes remain obligations. Reconcile `GetMyQuotes { scope: "live" }` and execution status after reconnect.
-
 A resumed maker auth session restores server-side routing and mint scope. Omitted or null mint fields leave the saved scope unchanged; explicit empty lists clear mint filters. After fresh auth, establish subscriptions again. The managed SDK restores its own desired target after either path, sending both mint lists explicitly, including empty lists.
 
 ### Max message size
@@ -1589,16 +1581,8 @@ After `AuthSuccess`, the server sends `Snapshot` before any broadcast events. Yo
 
 ### `is_taker_buy`
 
-In the order-id preimage, `is_taker_buy` is always `0`. Reserved for future use.
+In the order-id preimage, `is_taker_buy` is always `0`.
 
 ### `gross_price` in preimage
 
 The `gross_price` at preimage offset 94 is the same value as `price` in the `Quote` message — gross premium per one underlying unit, 1e9 scale. `total_premium` in position data comes from on-chain state and is the net amount, not derivable from the wire `price` alone. The gross/net split is documented under the fee model in [WS common conventions](ws-common.md).
-
----
-
-## Related
-
-- [Maker quickstart](../quickstart/maker-quickstart.md)
-- [Maker wire examples](../quickstart/maker-wire-examples.md)
-- [WS common conventions](ws-common.md)
