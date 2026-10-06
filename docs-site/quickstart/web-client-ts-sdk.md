@@ -7,10 +7,10 @@ Wire messages, errors, and enums are in [`../reference/taker-api.md`](../referen
 ## Installation
 
 ```bash
-yarn add @acta-markets/ts-sdk@0.1.6
+yarn add @acta-markets/ts-sdk@0.1.6-vaults.2
 ```
 
-Version 0.1.6 includes canonical auth-challenge, market-PDA and declared-signer
+Version 0.1.6-vaults.2 includes canonical auth-challenge, market-PDA and declared-signer
 checks. These checks are absent from 0.1.5.
 `ActaWsClient` validates challenge format before calling any auth provider;
 raw clients can call `validateAuthChallenge` before signing.
