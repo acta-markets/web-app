@@ -11,7 +11,7 @@ npm run dev
 
 ## RFQ integration
 
-The app uses the published `@acta-markets/ts-sdk` 0.1.6, pinned in `package.json`
+The app uses the published `@acta-markets/ts-sdk` 0.1.6-vaults.2, pinned in `package.json`
 and `package-lock.json`. A separate SDK checkout or build is not required.
 WebSocket integration imports `@acta-markets/ts-sdk/ws`.
 
