@@ -1,12 +1,8 @@
 # Acta Taker Quickstart
 
-Authenticate, discover markets, request quotes, sign a trade and track the resulting position. The [TypeScript client SDK](web-client-ts-sdk.md) wraps this WebSocket flow.
+A taker authenticates over WebSocket, requests quotes, signs a trade and tracks the position. The [TypeScript client SDK](web-client-ts-sdk.md) wraps this flow.
 
-See [Taker API reference](../reference/taker-api.md) for message fields and [WebSocket conventions](../reference/ws-common.md) for units and signing rules.
-
-A taker needs only a Solana wallet keypair. There is no registration and no on-chain setup step: any wallet can open RFQs (rate-limited, and invite-gated on closed mainnet — see [Invite gating](#invite-gating-closed-mainnet)).
-
----
+A taker needs only a Solana wallet keypair. There is no registration or on-chain setup. Any wallet can open RFQs, subject to rate limits and, on closed mainnet, [invite gating](#invite-gating-closed-mainnet).
 
 ## Endpoint
 
@@ -17,7 +13,7 @@ wss://beta-api.acta.markets/taker
 
 ## Connection and authentication
 
-The first message from the client is `Hello`. Version compatibility is semver-based: the server accepts any client `protocol_version` that is `>= min_supported_version`; otherwise it closes the connection with `VersionMismatch`.
+The first message from the client is `Hello`. The server accepts any client `protocol_version` `>= min_supported_version` (semver). Otherwise it closes the connection with `VersionMismatch`.
 
 ```json
 {
@@ -31,11 +27,11 @@ The first message from the client is `Hello`. Version compatibility is semver-ba
 }
 ```
 
-The server responds with `Welcome` (`server_time_unix_ms` is for clock sync). Taker auth is **lazy**: you may authenticate immediately or defer until the first authenticated action. Unauthenticated discovery (`GetMarkets`, `GetMarketDescriptors`, `GetTokenCaps`, `GetIndicativePrices`, …) works before auth; see [`../reference/taker-api.md`](../reference/taker-api.md) "Authentication requirements".
+The server responds with `Welcome` (`server_time_unix_ms` is for clock sync). Taker auth is lazy. Authenticate right away or before the first action that needs it. Discovery (`GetMarkets`, `GetMarketDescriptors`, `GetTokenCaps`, `GetIndicativePrices`, …) works without auth. The list is under "Authentication requirements" in the [Taker API reference](../reference/taker-api.md).
 
 ### Fresh sign
 
-Send `StartAuth` with your wallet pubkey; the server replies with `AuthRequest` carrying a challenge string. The taker challenge includes a `Wallet:` line:
+Send `StartAuth` with your wallet pubkey. The server replies with `AuthRequest` carrying the challenge:
 
 ```
 Acta RFQ Authentication
@@ -47,7 +43,7 @@ Nonce: {hex_32_random_bytes}
 Issued At: {RFC3339_timestamp}
 ```
 
-Before signing, validate the complete challenge using the [canonical auth rules](../reference/ws-common.md#what-to-sign), including the exact domain, wallet, nonce, timestamp and final newline. Reject arbitrary endpoint text. Then sign the original UTF-8 bytes with your wallet key (Ed25519, no extra prefix or hashing), base58-encode the 64-byte signature, and reply:
+Validate the whole challenge against the [canonical auth rules](../reference/ws-common.md#what-to-sign) (domain, wallet, nonce, timestamp, final newline) and reject anything else. Sign the original UTF-8 bytes with your wallet key (Ed25519, no prefix or hashing). Base58-encode the 64-byte signature and reply:
 
 ```json
 {
@@ -60,21 +56,21 @@ Before signing, validate the complete challenge using the [canonical auth rules]
 }
 ```
 
-The signature is verified directly against `pubkey`. Auth must finish within 15 seconds of the challenge; the default limit allows three failed attempts and closes the connection on the fourth. On success the server sends `AuthSuccess { session_id, expires_at }` followed by `Snapshot`.
+The signature is verified against `pubkey`. Auth must finish within 15 seconds of the challenge. By default the fourth failed attempt closes the connection. On success the server sends `AuthSuccess { session_id, expires_at }`, then `Snapshot`.
 
 ### Session resume
 
-`AuthSuccess.expires_at` is a Unix timestamp (seconds). Persist `session_id` + `expires_at`. On reconnect, if `now < expires_at`, skip the wallet signature:
+`AuthSuccess.expires_at` is a Unix timestamp (seconds). Store `session_id` and `expires_at`. On reconnect, if `now < expires_at`, skip the wallet signature:
 
 ```json
 { "type": "ResumeAuth", "data": { "session_id": "<saved session_id>" } }
 ```
 
-A valid session returns `AuthSuccess`; an invalid/expired/revoked one returns `AuthError { reason: "session_expired" }`, at which point fall back to the fresh-sign flow. Sessions have a 24h default TTL (sliding, capped at 7 days) and survive disconnects. A failed `ResumeAuth` counts toward the 3-attempt limit.
+A valid session returns `AuthSuccess`. An invalid, expired or revoked one returns `AuthError { reason: "session_expired" }`. Fall back to a fresh sign. Sessions have a 24h default TTL (sliding, capped at 7 days) and survive disconnects. A failed `ResumeAuth` counts toward the 3-attempt limit.
 
 ## Discovery
 
-Fetch market metadata before opening an RFQ. `GetMarketDescriptors` returns the full descriptor — `size_rule`, decimals, oracle PDAs, symbols — needed to validate quantity and render prices.
+`GetMarketDescriptors` returns `size_rule`, decimals, oracle PDAs and symbols, which you need to validate quantity and render prices.
 
 ```json
 { "type": "GetMarketDescriptors", "data": { "request_id": "<uuid>", "active_only": true } }
@@ -82,9 +78,9 @@ Fetch market metadata before opening an RFQ. `GetMarketDescriptors` returns the 
 { "type": "GetExpiries",          "data": { "request_id": "<uuid>" } }
 ```
 
-Query-style requests require `request_id`; responses echo it. Cache descriptors and refresh on `MarketCreated` / `MarketFinalized`.
+Query requests need `request_id`, and responses echo it. Cache descriptors and refresh on `MarketCreated` / `MarketFinalized`.
 
-> **Size rules.** `size_rule = { min_size, max_size, step }` is in **underlying atomic units**, keyed by underlying mint. A valid `quantity` satisfies `min_size <= quantity <= max_size` and `(quantity - min_size) % step == 0`. If a market's underlying mint has no configured rule, `RfqRequest` is rejected with `missing_size_rule_for_underlying_mint`. `GetMarketDescriptors` fails the whole request if any market is missing a rule — partial discovery is not supported.
+`size_rule = { min_size, max_size, step }` is in underlying atomic units, keyed by underlying mint. A valid `quantity` satisfies `min_size <= quantity <= max_size` and `(quantity - min_size) % step == 0`. If a market's underlying mint has no rule, `RfqRequest` and the whole `GetMarketDescriptors` request fail with `missing_size_rule_for_underlying_mint`.
 
 ## The RFQ flow
 
@@ -96,7 +92,7 @@ RfqRequest -> RfqCreated -> QuoteReceived (0..N) -> AcceptQuote
 
 ### 1. Open the RFQ
 
-`quantity` is always in **underlying atomic units**, including for cash-secured puts. For a CSP UI that collects quote input (e.g. USDC), convert first: `quantity = round(quoteAmount * 10^underlying_decimals * 1e9 / strike)` (see [`../reference/ws-common.md`](../reference/ws-common.md) "Quantity and collateral by position type").
+`quantity` is in underlying atomic units, including for cash-secured puts. A CSP UI that takes a quote-token amount (e.g. USDC) converts first: `quantity = round(quoteAmount * 10^underlying_decimals * 1e9 / strike)`. See "Quantity and collateral by position type" in [WebSocket conventions](../reference/ws-common.md).
 
 ```json
 {
@@ -112,7 +108,7 @@ RfqRequest -> RfqCreated -> QuoteReceived (0..N) -> AcceptQuote
 }
 ```
 
-`position_type` is `covered_call` or `cash_secured_put`. `client_request_id` is an optional idempotency key: repeating a request with the same key while the RFQ is active returns the same `rfq_id`. The server replies with `RfqCreated { rfq_id, rfq_version, expires_at, created_at, order_options }`, then broadcasts the RFQ to eligible makers.
+`position_type` is `covered_call` or `cash_secured_put`. `client_request_id` is an optional idempotency key. Repeating it while the RFQ is active returns the same `rfq_id`. The server replies with `RfqCreated { rfq_id, rfq_version, expires_at, created_at, order_options }` and broadcasts the RFQ to makers.
 
 ### 2. Collect quotes
 
@@ -134,10 +130,10 @@ Makers stream `QuoteReceived`. Each quote is firm and hash-bound via `order_id`:
 }
 ```
 
-- `price`: gross premium per 1 underlying unit (1e9 scale). Use this and `order_id` for all order operations.
-- `net_price`: display-only estimate after protocol fee. Show `net_price`; the authoritative net is computed on-chain at open.
+- `price`: gross premium per 1 underlying unit (1e9 scale). Order operations use this and `order_id`.
+- `net_price`: display-only estimate after protocol fee. The actual net is computed on-chain at open.
 
-You pick the winner — the server's "best" ranking is advisory only. Winner-take-all: one quote fills the full quantity, no partial fills.
+You pick the winner. The server's "best" ranking is a hint. One quote fills the full quantity, with no partial fills.
 
 ### 3. Accept and sign the sponsored transaction
 
@@ -167,11 +163,11 @@ The server locks the quote and builds a transaction to sign:
 }
 ```
 
-`tx_base64` is a **v0 `VersionedTransaction`**. The keeper is the fee payer and co-signer; the taker signs as the collateral authority. Steps (any language):
+`tx_base64` is a v0 `VersionedTransaction`. The keeper is the fee payer and co-signer. The taker signs as the collateral authority. Steps in any language:
 
 1. base64-decode `tx_base64` to bytes.
 2. Deserialize as a v0 `VersionedTransaction`.
-3. Sign with the taker wallet key. Add the signature to the taker's signer slot — **do not** replace the keeper's fee-payer signature or re-order accounts; the message bytes are fixed.
+3. Sign with the taker wallet key into the taker's signer slot. Leave the keeper's slot and account order alone. The message bytes are fixed.
 4. Re-serialize the partially-signed transaction and base64-encode it.
 5. Submit before `signature_deadline` (Unix seconds):
 
@@ -182,11 +178,11 @@ The server locks the quote and builds a transaction to sign:
 }
 ```
 
-> The wallet must support **versioned (v0) transaction signing**. Browser wallets that only sign legacy transactions will not work; for headless/bot takers, sign the raw message bytes with the keypair directly (see below). If a wallet cannot sign arbitrary bytes at all, WS auth also fails — use a server-side signer.
+The wallet has to sign versioned (v0) transactions. Legacy-only wallets do not work. Headless takers can sign the raw message bytes with the keypair, as shown below. WS auth also needs arbitrary-byte signing.
 
 ### Sponsored transaction: raw signing
 
-The TypeScript SDK provides signing helpers; they do not independently verify that a server-prepared transaction matches your trading intent. Before signing, verify the program, market, quote terms, amounts, accounts and all instructions against your accepted order. For a custom byte-level signer, you do **not** need to fully reconstruct a `VersionedTransaction`. `tx_base64` decodes to Solana's wire transaction format:
+Before signing, check the program, market, quote terms, amounts, accounts and instructions against your accepted order. A byte-level signer does not need to rebuild a `VersionedTransaction`. `tx_base64` decodes to Solana's wire format:
 
 ```
 <shortvec(sig_count)> | sig[0..64] | sig[1..64] | … | <message bytes>
@@ -194,33 +190,27 @@ The TypeScript SDK provides signing helpers; they do not independently verify th
 
 - `shortvec(sig_count)` is a compact-u16 (little-endian base128 varint) count of signatures. For a 2-signer sponsored tx it is a single byte `0x02`.
 - Each signature slot is 64 bytes, ordered to match the message's required signers.
-- **Slot 0 = keeper** (fee payer / co-signer) — left zeroed at this stage; the keeper fills it *after* you submit.
-- **Slot 1 = taker** — the one slot you fill.
+- Slot 0 is the keeper (fee payer and co-signer). It is zeroed now. The keeper fills it after you submit.
+- Slot 1 is the taker. You fill it.
 
 To sign:
 
 1. Read the `shortvec` at offset 0 → `sig_count` and its byte length `n`.
-2. `msg_start = n + sig_count * 64`; the **message bytes** are `tx[msg_start..]`.
-3. Produce a raw 64-byte Ed25519 signature over those message bytes with the taker key. Signing the message bytes directly *is* a valid transaction signature — no VersionedTransaction reconstruction required.
+2. `msg_start = n + sig_count * 64`. The message bytes are `tx[msg_start..]`.
+3. Sign those message bytes with the taker key (raw 64-byte Ed25519). That is a valid transaction signature.
 4. Write the 64 bytes into slot 1: `tx[n + 64 .. n + 128] = signature`.
 5. base64-encode the whole buffer and return it in `SubmitSignedSponsoredTx`.
 
 Do not modify the message bytes, account order, or the keeper's slot.
 
-> **The maker's signature is not a signer slot.** The maker's Ed25519 signature over `order_id` rides inside the message as an **Ed25519-program verify instruction** (immediately preceding `open_position`), not as a transaction signature. The only tx signer slot you touch is the taker's (slot 1).
+The maker's signature is not a signer slot. It is an Ed25519-program verify instruction over `order_id`, placed right before `open_position` in the message.
 
 Library shortcuts:
-- **Rust** (`solana-sdk`): deserialize with `bincode`, sign `tx.message.serialize()` with the taker `Keypair`, set `tx.signatures[1]`; or operate on the raw bytes as above.
-- **Python** (`solders`): `tx = VersionedTransaction.from_bytes(raw)`, sign `bytes(tx.message)`, assign into `tx.signatures[1]`, re-serialize.
-- **TypeScript**: `signSponsoredTxBase64({ txBase64, taker, expectedMessageBytes })` from `@acta-markets/ts-sdk/ws` (no `@solana/web3.js`).
+- Rust (`solana-sdk`): deserialize with `bincode`, sign `tx.message.serialize()` with the taker `Keypair`, set `tx.signatures[1]`. Or work on the raw bytes as above.
+- Python (`solders`): `tx = VersionedTransaction.from_bytes(raw)`, sign `bytes(tx.message)`, assign into `tx.signatures[1]`, re-serialize.
+- TypeScript: `signSponsoredTxBase64({ txBase64, taker, expectedMessageBytes })` from `@acta-markets/ts-sdk/ws` (no `@solana/web3.js`).
 
-The TypeScript helper in SDK 0.1.6 requires an independently constructed expected
-message and checks it before signing. Include the accepted order, configured
-program/accounts, approved blockhash, instructions and resolved ALT references;
-never use bytes copied from the received transaction as the expectation. Older
-SDK versions require this check in application code. The explicitly named
-`signSponsoredTxBase64Unverified` is for applications that trust server-side
-construction.
+In SDK 0.1.6 the TypeScript helper checks the transaction against an expected message you build yourself from the accepted order, configured program and accounts, approved blockhash, instructions and resolved ALT references. Do not copy the expected message from the received transaction. Older SDK versions leave this check to the application. `signSponsoredTxBase64Unverified` skips it.
 
 ### 4. Track the order
 
@@ -228,24 +218,24 @@ The server relays keeper progress:
 
 | Event | Meaning |
 |---|---|
-| `OrderAccepted` | Signed transaction accepted into Core's Enqueued state. An exact AcceptQuote retry may also receive it as a liveness ACK. It does not confirm chain execution. |
+| `OrderAccepted` | Signed transaction enqueued in Core (not on-chain yet). Also sent on an exact `AcceptQuote` retry. |
 | `OrderSubmitted` | Tx sent to Solana. Carries `tx_signature`, `order_version`. |
 | `OrderConfirmed` | Position opened on-chain. Carries `position_pda`, `order_version`. |
 | `OrderFailed` | Settlement failed. Carries `reason`, `order_version`. |
 | `RfqClosed` | Terminal RFQ event. On a fill it follows `OrderConfirmed`. Drop per-RFQ state only here. |
 
-Apply updates only when `order_version` / `rfq_version` increases; ignore stale replays.
+Apply an update only if its `order_version` / `rfq_version` is higher than the one you hold.
 
 ### 5. Failure and retry
 
-`OrderFailed.reason` describes the failure; it alone does not authorize another trade:
+`OrderFailed` alone is not a reason to trade again:
 
 | Reason | Retryable? |
 |---|---|
-| `blockhash_expired` | Keeper may retry within five attempts. Reconcile `GetOrderStatus` and wait for `RfqAvailableAgain` or `RfqClosed` before selecting another quote. |
-| `on_chain`, `submission_rejected`, `safety_timeout`, `shutdown` | No. Surface to the user. |
+| `blockhash_expired` | The keeper may retry, up to five attempts. Check `GetOrderStatus` and wait for `RfqAvailableAgain` or `RfqClosed` before selecting another quote. |
+| `on_chain`, `submission_rejected`, `safety_timeout`, `shutdown` | No. |
 
-On a signature timeout or tx-build failure, only the winning quote is discarded; still-valid losing quotes are restored and the RFQ reverts to active if not expired.
+On a signature timeout or tx-build failure, only the winning quote is discarded. Still-valid losing quotes are restored and the RFQ returns to active if not expired.
 
 ## Cancelling
 
@@ -266,11 +256,11 @@ Position collateral stays in escrow until settlement after market finalization. 
 | `settled` | Market finalized after expiry; assets distributed by ITM/OTM outcome. |
 | `liquidated` | An unfunded ITM position was closed by a permissionless liquidator, who fronts the settlement to the taker. |
 
-Track position outcomes by subscribing to `chain_events` (the `ChainEvent(position_settled)` / `ChainEvent(position_liquidated)` pushes for your market) and by polling `GetPositions`. Note: `PositionUpdated` and the `positions` channel are **maker-only** — takers receive nothing there. Settlement mechanics and payoff tables are in [`../reference/protocol-flow.md`](../reference/protocol-flow.md).
+Track outcomes with the `chain_events` channel (`ChainEvent(position_settled)`, `ChainEvent(position_liquidated)`) and `GetPositions`. `PositionUpdated` and the `positions` channel are maker-only. Settlement and payoffs are in [Options and settlement](../reference/protocol-flow.md).
 
 ## Reconnection and recovery
 
-Subscriptions do not persist across disconnects, and the server does not replay missed events. After reconnect: re-auth (resume or fresh), resubscribe, then rehydrate:
+Subscriptions do not survive a disconnect, and missed events are not replayed. After reconnect, re-auth (resume or fresh), resubscribe, then re-read state:
 
 ```json
 { "type": "GetMyActiveRfqs", "data": { "request_id": "<uuid>" } }
@@ -278,54 +268,51 @@ Subscriptions do not persist across disconnects, and the server does not replay 
 { "type": "GetPositions",    "data": { "request_id": "<uuid>" } }
 ```
 
-Lifecycle events can be redelivered after recovery; process them idempotently by `order_id` and gate on `*_version`.
+Events may be redelivered after reconnect. Dedupe by `order_id` and `*_version`.
+
+Only a successful `ResumeAuth` of the same session transfers an unfinished signature. If the pending order's signature was not sent, repeat the exact `AcceptQuote` to get the signing payload. For a submitted or enqueued order, query `GetOrderStatus` and do not resend trading commands.
+
+`OrderStatus` is `{ request_id, order_id, state }`, with `state` one of `{ "type": "pending" }`, `{ "type": "confirmed", "position_pda": "..." }` or `{ "type": "unknown" }`. It has no `order_version`. `unknown`, a missing position or a timeout means the outcome is still unknown. See [Delivery and recovery](../reference/taker-api.md#delivery-and-recovery).
 
 ## Invite gating (closed mainnet)
 
-On closed mainnet the server sends `RequireInvite` after auth if the wallet is not registered, and `RfqRequest` returns `InviteRequired` until an invite is redeemed:
+On closed mainnet an unregistered wallet gets `RequireInvite` after auth, and `RfqRequest` returns `InviteRequired` until it redeems an invite:
 
 ```json
 { "type": "RedeemInvite", "data": { "request_id": "<uuid>", "code": "abc123" } }
 ```
 
-The authenticated session proves wallet ownership; no separate signature is needed. After redemption the taker receives a shareable `referral_code`. Devnet is open — no invite required. Error codes (`invalid_code`, `code_exhausted`, `code_expired`, `code_disabled`, …) are in [`../reference/taker-api.md`](../reference/taker-api.md).
+No signature is needed because the authenticated session proves wallet ownership. The response carries the taker's shareable `referral_code`. Devnet needs no invite. Error codes (`invalid_code`, `code_exhausted`, `code_expired`, `code_disabled`, …) are in the [Taker API reference](../reference/taker-api.md).
 
 ## Operational defaults
 
 | Topic | Value |
 |---|---|
-| Application `Ping` | Optional clock sample, e.g. every 30s; `Pong` carries `server_time_unix_ms`. Transport pongs maintain liveness; the default idle timeout is 90s. |
-| Server WS ping | every 30s; raw clients must answer protocol pings. |
-| Reconnect backoff | Exponential with jitter, e.g. 1s initial, 30s cap, ±20%. |
-| Clock skew | Track `offset = server_time − local_time` from `Welcome` / `Pong`; apply to `expires_at`, `signature_deadline`. |
-| Signature deadline | `min(now + 30s, quote effective_expiry, rfq.expires_at)`. Sign promptly after `AcceptQuote`. |
-| Rate limits | Per-taker active-RFQ cap (default 10) and platform cap; `RateLimit` errors carry a reason code. |
+| Application `Ping` | Optional clock sample. `Pong` carries `server_time_unix_ms`. Transport pongs keep the connection alive; default idle timeout 90s. |
+| Server WS ping | Every 30s. Raw clients answer protocol pings. |
+| Clock skew | Track `offset = server_time − local_time` from `Welcome` and `Pong`. Apply it to `expires_at` and `signature_deadline`. |
+| Signature deadline | `min(now + 30s, quote effective_expiry, rfq.expires_at)`. |
+| Rate limits | Per-taker active-RFQ cap (default 10) and platform cap. `RateLimit` errors carry a reason code. |
 
-`valid_until` is set by the maker; the taker never sets it.
+`valid_until` is set by the maker.
 
 ## Integrating from other languages
 
-The reference docs are the language-neutral wire spec. To build a taker client in any language you need:
+The reference docs are the wire spec. A taker client needs:
 
 1. An Ed25519 keypair and the ability to sign raw bytes (challenge auth + tx signing).
-2. A Solana library that can deserialize, partially sign, and re-serialize a **v0 `VersionedTransaction`** — e.g. `solders` / `solana-py` (Python), `solana-sdk` (Rust), `@solana/web3.js` (TS).
+2. A Solana library that can deserialize, partially sign and re-serialize a v0 `VersionedTransaction`, e.g. `solders` / `solana-py` (Python), `solana-sdk` (Rust), `@solana/web3.js` (TS).
 3. A WebSocket client that answers protocol pings.
 
-The RFQ flow itself does not require direct RPC: markets, quotes, positions and the sponsored transaction arrive over WebSocket.
+No direct RPC is needed. Markets, quotes, positions and the sponsored transaction arrive over WebSocket.
 
 ## Reference
 
-- [Taker API reference](../reference/taker-api.md): message catalogue and error variants
-- [Taker wire examples](taker-wire-examples.md): complete JSON session + branch scenarios
-- [Web client SDK (TypeScript)](web-client-ts-sdk.md): the same flow via `@acta-markets/ts-sdk`
-- [Protocol flow](../reference/protocol-flow.md): trade lifecycle, economics, settlement, risk
-- [WS common conventions](../reference/ws-common.md): units, envelopes, collateral formulas, timeouts
+- [Taker API reference](../reference/taker-api.md): messages and error variants
+- [Taker wire examples](taker-wire-examples.md): a full JSON session and branch cases
+- [TypeScript client SDK](web-client-ts-sdk.md): the same flow via `@acta-markets/ts-sdk`
+- [Options and settlement](../reference/protocol-flow.md): trade flow, economics, settlement, risk
+- [WebSocket conventions](../reference/ws-common.md): units, envelopes, collateral formulas, timeouts
 - [Capacity limits](../reference/caps.md): OI and notional caps
 - [Endpoints and maker registration](../reference/sandbox.md)
-- [FAQ](../reference/faq.md)
-
-## Recovery after reconnect
-
-After `AuthSuccess`, reconcile `GetMyActiveRfqs`, `GetPositions` and `GetOrderStatus`. Only a successful resume of the same credential transfers ownership of an unfinished signature. For the same pending order whose signature was not sent, repeat the exact `AcceptQuote` to retrieve the signing payload. For a submitted/enqueued order, query status without replaying trading commands.
-
-`OrderStatus` carries `{ request_id, order_id, state }`, with `state` equal to `{ "type": "pending" }`, `{ "type": "confirmed", "position_pda": "..." }` or `{ "type": "unknown" }`. It has no `order_version`; versions apply to lifecycle pushes. `unknown`, missing positions and timeouts leave the outcome unresolved. See [Delivery & recovery](../reference/taker-api.md#delivery-and-recovery).
+- [Integration FAQ](../reference/faq.md)

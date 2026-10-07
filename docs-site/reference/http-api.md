@@ -1,5 +1,6 @@
 # Acta HTTP API
-> Trading is WebSocket-based. See the [Maker API reference](maker-api.md) and [Taker API reference](taker-api.md).
+
+Trading runs over WebSocket. See the [Maker API reference](maker-api.md) and [Taker API reference](taker-api.md).
 
 ## Base URL
 
@@ -32,8 +33,6 @@ Common codes:
 
 Temporary unavailability may return HTTP `503`.
 
----
-
 ## Health
 
 ### GET `/health`
@@ -42,7 +41,7 @@ Returns service health and metadata.
 
 ### GET `/ready`
 
-Returns `200` when the required service components are healthy and `503` otherwise. During shutdown, readiness returns `503`.
+Returns `200` when required components are healthy, `503` otherwise, including during shutdown.
 
 ### GET `/live`
 
@@ -51,8 +50,6 @@ Returns process liveness.
 ### GET `/metrics`
 
 Prometheus metrics endpoint.
-
----
 
 ## Markets
 
@@ -63,7 +60,7 @@ List markets.
 Query:
 - `underlying` (optional symbol string)
 
-`GET /api/v1/markets` returns tradable markets only: not finalized, not disabled, and before the effective trading cutoff. `underlying` filters by symbol before that tradability filter. There is no `active=false` mode; use `/api/v1/markets/{pda}` for a specific market.
+Returns tradable markets only: not finalized, not disabled, and before the effective trading cutoff. `underlying` filters by symbol. There is no `active=false` mode. Use `/api/v1/markets/{pda}` for a specific market.
 
 Response:
 
@@ -85,13 +82,11 @@ Response:
 }
 ```
 
-`underlying_feed_id_hex` / `quote_feed_id_hex` are not part of current HTTP `MarketDto`.
+HTTP `MarketDto` has no `underlying_feed_id_hex` / `quote_feed_id_hex`.
 
 ### GET `/api/v1/markets/{pda}`
 
 Get a single market DTO.
-
----
 
 ## Makers
 
@@ -116,18 +111,13 @@ Get a single market DTO.
 
 Get a single maker DTO.
 
----
-
 ## Vaults and depositors
 
-The [Vault HTTP API](vault-http-api.md) covers `/api/v1/vaults`, vault detail, cycles, positions and depositor state/history. These public endpoints serve indexed projections; current share ownership comes from Solana token accounts.
+The [Vault HTTP API](vault-http-api.md) covers `/api/v1/vaults`, vault detail, cycles, positions and depositor state/history. They serve indexed data. Current share ownership is in Solana token accounts.
 
 ## Participant history
 
-Ordinary participant RFQ, quote, and order history is not exposed by the public HTTP API. Use the
-authenticated maker/taker session protocols for participant-specific state.
-
----
+Participant RFQ, quote and order history is not in the public HTTP API. Use the authenticated maker/taker WebSocket sessions.
 
 ## Stats
 
@@ -147,9 +137,8 @@ authenticated maker/taker session protocols for participant-specific state.
 
 This differs from WS `GlobalStats` in `Snapshot` and `StatsUpdate`. HTTP includes `connected_makers` (live WS sessions) and omits `total_price_24h` and `active_rfqs`.
 
-`usd` separates underlying notional from gross paid premium, both as exact decimal
-dollar strings. Prices are captured from the trusted local oracle cache when the
-signed transaction is submitted; only confirmed trades are counted. USDC uses its
-oracle price too. `priced_trades_24h < total_trades_24h` means some confirmed trades
-lack a stored USD valuation; those are not repriced using today's market.
+`usd` holds underlying notional and gross paid premium as exact decimal dollar strings.
+USD prices, USDC included, come from the local oracle cache when the signed transaction is
+submitted. Only confirmed trades count. `priced_trades_24h < total_trades_24h` means some
+confirmed trades have no stored USD value. They are not repriced at current prices.
 The legacy `total_volume_24h` fields are raw aggregates, not dollars.

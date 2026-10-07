@@ -7,7 +7,6 @@ wss://devnet-api.acta.markets/taker
 wss://beta-api.acta.markets/taker
 ```
 
-
 ## Connection flow
 
 ```
@@ -15,14 +14,14 @@ Connect -> Hello -> Welcome -> Auth -> AuthSuccess -> Snapshot -> Subscribe -> .
 ```
 
 Auth is one of:
-- **Resume** (returning user): `ResumeAuth { session_id }` → `AuthSuccess { session_id, expires_at }`
-- **Fresh sign** (first time or resume failed): `StartAuth { pubkey }` → `AuthRequest` → `AuthChallenge` → `AuthSuccess { session_id, expires_at }`
+- Resume (returning user): `ResumeAuth { session_id }` → `AuthSuccess { session_id, expires_at }`
+- Fresh sign (first time or resume failed): `StartAuth { pubkey }` → `AuthRequest` → `AuthChallenge` → `AuthSuccess { session_id, expires_at }`
 
 ### Protocol version and handshake constraints
 
 - Current server protocol: `protocol_version=1.0.0`
 - Current server minimum supported version: `min_supported_version=1.0.0`
-- `Hello` MUST be the first client message
+- `Hello` is the first client message
 - `Hello` timeout: `5000ms`
 - If a client sends non-`Hello` first, server closes with `hello_required` / `hello_timeout`
 
@@ -36,7 +35,7 @@ Auth is one of:
 
 ### Taker auth lifecycle
 
-- Taker auth is lazy by design: `StartAuth`/`ResumeAuth` can be sent immediately after `Welcome` or later.
+- Auth is lazy: `StartAuth`/`ResumeAuth` can be sent right after `Welcome` or later.
 - `Snapshot` is sent after `AuthSuccess`.
 
 ### ResumeAuth (session resume)
@@ -53,14 +52,13 @@ Server responds with:
 
 On `AuthError`, client falls back to the full sign flow (`StartAuth`).
 
-Failed `ResumeAuth` counts as an auth attempt toward the `max_auth_attempts` limit (default: 3).
-The default allows three failed attempts; the fourth triggers `too_many_auth_attempts` and closes the connection.
+Failed `ResumeAuth` counts toward `max_auth_attempts` (default 3). The fourth failed attempt triggers `too_many_auth_attempts` and closes the connection.
 
-**Session lifetime:**
+Session lifetime:
 - Server stores sessions with a TTL (default: 24 hours).
 - Sessions survive WS disconnects (not revoked on close).
 - `expires_at` may be extended on activity (sliding window), capped at an absolute maximum (7 days).
-- Client should persist `session_id` + `expires_at` (e.g. localStorage) and use `ResumeAuth` on reconnect if `now < expires_at`.
+- Persist `session_id` and `expires_at` (e.g. in localStorage) and send `ResumeAuth` on reconnect while `now < expires_at`.
 
 ### StartAuth / AuthChallenge (full sign flow)
 
@@ -91,8 +89,7 @@ The default allows three failed attempts; the fourth triggers `too_many_auth_att
 }
 ```
 
-`expires_at` is a required Unix timestamp in seconds. It is the deadline for resuming the session; an authenticated socket can remain open beyond it.
-Client should persist both `session_id` and `expires_at` for future `ResumeAuth`.
+`expires_at` is Unix seconds: the deadline for `ResumeAuth`. An authenticated socket can stay open past it.
 
 ### AuthError
 
@@ -106,7 +103,7 @@ Client should persist both `session_id` and `expires_at` for future `ResumeAuth`
 }
 ```
 
-`reason` is a `snake_case` code. `message` is optional and may be omitted.
+`reason` is a `snake_case` code. `message` is optional.
 
 ### Subscribe
 
@@ -122,15 +119,14 @@ Client should persist both `session_id` and `expires_at` for future `ResumeAuth`
 }
 ```
 
-`request_id` is required. The server always responds with `SubscribeAck` echoing the
-`request_id` and the channels that were newly added.
+`request_id` is required. The server responds with `SubscribeAck` echoing the
+`request_id` and the newly added channels.
 
 `underlying_mints` filters by underlying mint and `quote_mints` by quote mint.
-When either field is present, `Subscribe` replaces both scopes together; an
-omitted peer field becomes the all-mints wildcard. If both are omitted, existing
-scopes are unchanged. Use `AddMints`/`RemoveMints` for incremental updates.
+When either field is present, `Subscribe` replaces both scopes and the omitted
+field matches all mints. If both are omitted, the scopes are unchanged. Use `AddMints`/`RemoveMints` for incremental updates.
 
-> **Important:** Subscriptions do not persist across WebSocket disconnects. After reconnect, resend `Subscribe` to restore channel subscriptions.
+Subscriptions do not survive a disconnect. Resend `Subscribe` after reconnect.
 
 ### Snapshot (server -> taker)
 
@@ -151,9 +147,7 @@ scopes are unchanged. Use `AddMints`/`RemoveMints` for incremental updates.
 }
 ```
 
-`Snapshot.markets` uses a compact `MarketInfo` shape (`pda`, `underlying`, `quote`, `expiry_ts`, `is_put`). This is a different DTO from the `MarketDescriptor` used in `RfqCreated.order_options` and discovery responses. Use `GetMarketDescriptors` for the full market descriptor with `chain_id`, `program_id`, `collateral_mint`, `settlement_mint`, etc.
-
----
+`Snapshot.markets` uses the compact `MarketInfo` shape (`pda`, `underlying`, `quote`, `expiry_ts`, `is_put`), not the `MarketDescriptor` used in `RfqCreated.order_options` and discovery responses. `GetMarketDescriptors` returns the full descriptor with `chain_id`, `program_id`, `collateral_mint`, `settlement_mint`, etc.
 
 ## Message index
 
@@ -194,16 +188,13 @@ scopes are unchanged. Use `AddMints`/`RemoveMints` for incremental updates.
 - `TradeExecuted`, `StatsUpdate`, `ChainEvent`
 - `MarketCreated`, `MarketFinalized`
 
-`PositionUpdated` is **not** delivered to takers — it is a maker-owner-only push. Track your position state via `ChainEvent` (position settled/liquidated on the `chain_events` channel) plus `GetPositions`.
+`PositionUpdated` is maker-only and is not sent to takers. Track positions with `ChainEvent` (settled/liquidated, `chain_events` channel) and `GetPositions`.
 
-`GetPositions.price` is returned only from the maker-signed gross price in the
-canonical `OpenPosition` epoch. A GPA-only net-premium observation is not
-converted into a synthetic gross price; incomplete rows fail closed with
-`gross_price_proof` missing.
-Snapshot-to-epoch binding additionally requires finalized audit coverage
-through the observation slot; a later audit-gap retraction fails the read closed.
-
----
+`GetPositions.price` is the maker-signed gross price from the `OpenPosition`
+epoch. The server does not derive it from the on-chain net premium. A row
+without it fails the read with `gross_price_proof` missing. The read also fails
+if finalized audit coverage does not reach the slot where the position was
+seen, or if a later audit gap retracts it.
 
 ## RFQ flow
 
@@ -241,7 +232,7 @@ through the observation slot; a later audit-gap retraction fails the read closed
 }
 ```
 
-`order_options` contains the server-computed strike set for this RFQ — the same set that makers receive in `RfqBroadcast.order_options`. The number of strikes depends on the market and current index price.
+`order_options` is the server-computed strike set for this RFQ, the same set makers receive in `RfqBroadcast.order_options`. The number of strikes depends on the market and current index price.
 
 ### QuoteReceived (server -> taker)
 
@@ -261,14 +252,13 @@ through the observation slot; a later audit-gap retraction fails the read closed
 }
 ```
 
-- `price`: gross quote from the maker. Hash-bound via `order_id` — use this for `AcceptQuote` and all order operations.
-- `net_price`: display-only net price estimate after protocol fee deduction. Present when the server has loaded the on-chain fee config. The contract's authoritative fee is computed at `OpenPosition` as `min(premium_fee, volume_fee)` after token-decimal scaling. Use `net_price` for UI display and `price` for order operations.
+- `price`: the maker's gross quote, hash-bound via `order_id`. Use it for `AcceptQuote` and all order operations.
+- `net_price`: display-only estimate after the protocol fee. Present when the server has loaded the on-chain fee config. The contract computes the actual fee at `OpenPosition` as `min(premium_fee, volume_fee)` after token-decimal scaling.
 
 ### QuotesUpdate (server -> taker)
 
-The server sends the current executable quote snapshot directly to the owner
-of the RFQ whenever its quote set changes. An empty `quotes` array means no
-executable quotes remain.
+Sent to the RFQ owner whenever its executable quote set changes. An empty
+`quotes` array means no executable quotes remain.
 
 ```json
 {
@@ -345,7 +335,7 @@ Cancels an active RFQ. `request_id` is required on the wire. The server responds
 
 ### OrderAccepted (server -> taker)
 
-Sent when `SubmitSignedSponsoredTx` is accepted into Core's `Enqueued` state; it is not chain confirmation. An exact `AcceptQuote` retry on a locked order may also receive this liveness ACK while its signing payload is being built, or after enqueueing. Initial `AcceptQuote` locks the quote and starts building `SponsoredTxToSign`.
+Sent when `SubmitSignedSponsoredTx` moves the order to Core's `Enqueued` state. It is not chain confirmation. The first `AcceptQuote` locks the quote and starts building `SponsoredTxToSign`. An exact `AcceptQuote` retry on the locked order may get `OrderAccepted` while that payload is built or after enqueueing.
 
 ```json
 {
@@ -359,7 +349,7 @@ Sent when `SubmitSignedSponsoredTx` is accepted into Core's `Enqueued` state; it
 
 ### OrderStatus (server -> taker)
 
-`GetOrderStatus` is an owner-scoped execution lookup, available to authenticated takers and makers. It returns the strongest currently available execution evidence for the supplied `order_id`:
+`GetOrderStatus` returns the execution state of one of your orders. Authenticated takers and makers can call it.
 
 ```json
 {
@@ -374,13 +364,13 @@ Sent when `SubmitSignedSponsoredTx` is accepted into Core's `Enqueued` state; it
 
 | `state` | Meaning |
 |---|---|
-| `{ "type": "pending" }` | The venue still has a pending execution obligation. |
-| `{ "type": "confirmed", "position_pda": "..." }` | Execution is confirmed; this is the resulting position. |
-| `{ "type": "unknown" }` | The order outcome is unresolved; reconcile its transaction and accounts. |
+| `{ "type": "pending" }` | Execution is still pending. |
+| `{ "type": "confirmed", "position_pda": "..." }` | Executed; this is the resulting position. |
+| `{ "type": "unknown" }` | Outcome not known yet. Check the transaction and accounts on chain. |
 
-The response has no `status`, `order_version`, `rfq_id` or `tx_signature` fields. Lookup failures return a correlated `RequestError`. Neither an empty position list nor `unknown` authorizes replaying the order.
+The response has no `status`, `order_version`, `rfq_id` or `tx_signature` fields. Lookup failures return a correlated `RequestError`. Do not replay the order on `unknown` or on an empty position list.
 
-`order_version` remains on lifecycle pushes: accepted `1`, submitted `2`, failed `3`, confirmed `4`. A later chain confirmation can supersede a local failure.
+Order pushes carry `order_version`: accepted `1`, submitted `2`, failed `3`, confirmed `4`. A later chain confirmation can supersede a local failure.
 
 ### OrderSubmitted (server -> taker)
 
@@ -425,50 +415,42 @@ The response has no `status`, `order_version`, `rfq_id` or `tx_signature` fields
 
 | Value | Meaning | Retryable? |
 |-------|---------|------------|
-| `blockhash_expired` | Solana blockhash expired before confirmation | No client replay; reconcile execution and wait for explicit RFQ lifecycle evidence |
+| `blockhash_expired` | Solana blockhash expired before confirmation | No. Do not replay. Check `GetOrderStatus` and wait for `RfqAvailableAgain` / `RfqClosed` |
 | `on_chain` | On-chain program error (simulation or execution) | No |
 | `submission_rejected` | Solana RPC rejected the transaction | No |
 | `safety_timeout` | Confirmation timed out after max retries | No |
 | `shutdown` | Server shutting down during settlement | No |
 
-Keeper retries retryable submission failures within a five-attempt budget. Exhausting it does not prove nonexecution or guarantee a WS `OrderFailed` or `RfqAvailableAgain`. An uncertain keeper failure leaves Core `Enqueued`; only a locally proven-unforwarded failure can reopen or close the RFQ. Follow `RfqAvailableAgain` / `RfqClosed`, and query `GetOrderStatus` for unresolved execution. Rollback discards the winner; refresh available quotes instead of replaying that order.
+The keeper retries retryable submission failures up to five times. After the last attempt the order may still have executed, and you may get neither `OrderFailed` nor `RfqAvailableAgain`. The order stays `Enqueued` unless the server knows the transaction was never forwarded, in which case it reopens or closes the RFQ. Follow `RfqAvailableAgain` / `RfqClosed` and query `GetOrderStatus` for pending orders. A rollback discards the winning quote, so use fresh quotes instead of replaying that order.
 
 ### Terminal semantics: OrderConfirmed vs RfqClosed
 
-- `OrderConfirmed` is the order-level confirmation event: the selected order is confirmed on-chain and
-  carries `position_pda` (and `order_version`). The `tx_signature` is delivered earlier, on
-  `OrderSubmitted` — it is not repeated on `OrderConfirmed`.
-- `RfqClosed` is the terminal RFQ event: the RFQ is finished and must be
-  treated as closed for further quoting/accept actions.
-- On a successful fill, takers receive `OrderConfirmed` followed by `RfqClosed`
-  in close succession.
-- `RfqClosed.your_quote` / `RfqClosed.winner` are optional fields and may be omitted.
-
----
+- `OrderConfirmed`: the order is confirmed on-chain. Carries `position_pda` and `order_version`. `tx_signature` arrives earlier, on `OrderSubmitted`, and is not repeated.
+- `RfqClosed`: the RFQ is finished. No further quotes or accepts.
+- A successful fill sends `OrderConfirmed`, then `RfqClosed`.
+- `RfqClosed.your_quote` / `RfqClosed.winner` are optional.
 
 ## Delivery and recovery
 
-Delivery is **best-effort, with loss surfaced as a disconnect**. Everything a taker receives except `StatsUpdate` is critical: your owner-direct pushes (`RfqCreated`, `QuoteReceived`, `QuotesUpdate`, `RfqClosed`, `TradeExecuted`, and the order lifecycle `OrderAccepted`/`SponsoredTxToSign`/`OrderSubmitted`/`OrderConfirmed`/`OrderFailed`) and subscribed broadcasts (`ChainEvent`, market events). Each is delivered reliably or — if it cannot be delivered under backpressure — dropped, after which the server **closes the connection**. A lost critical message therefore always surfaces as a disconnect — never silent staleness. Only `StatsUpdate` may drop silently. (`PositionUpdated` is maker-only and never sent to takers.)
+If the server cannot deliver a message under backpressure, it drops it and closes the connection. `StatsUpdate` is the exception and may drop silently. This covers owner-direct pushes (`RfqCreated`, `QuoteReceived`, `QuotesUpdate`, `RfqClosed`, `TradeExecuted`, `OrderAccepted`, `SponsoredTxToSign`, `OrderSubmitted`, `OrderConfirmed`, `OrderFailed`) and subscribed broadcasts (`ChainEvent`, market events). A lost message shows up as a disconnect.
 
-After `AuthSuccess`, re-read `GetMyActiveRfqs`, `GetPositions` and `GetOrderStatus` for unresolved orders. These reads have different authorities: live RFQs come from Core; positions are a chain-derived database projection; execution lookup combines pending obligations and execution evidence. They are not one atomic snapshot, and absence from a single response does not prove nonexecution.
+After `AuthSuccess`, re-read `GetMyActiveRfqs`, `GetPositions`, and `GetOrderStatus` for pending orders. Live RFQs come from Core, positions from a database built from chain data, and order status from pending orders plus execution records. The three reads are not one atomic snapshot. An order missing from one response may still have executed.
 
-A successful `ResumeAuth` completes Core handoff before `AuthSuccess`: ownership transfers from the previous physical connection of that same auth session. A fresh credential for the same wallet does not perform that transfer.
+A successful `ResumeAuth` moves Core ownership from the session's previous connection to the new one before `AuthSuccess`. A fresh `StartAuth` for the same wallet does not.
 
 | Recovered state | Client action |
 |---|---|
-| Same credential, same `rfq_id` and `locked_order_id`, `pending_signature`, signature not sent | Repeat the exact `AcceptQuote` to retrieve the existing signing payload. While building it, the server may return `OrderAccepted`. Keep the original signature deadline. |
-| `enqueued`, or `SubmitSignedSponsoredTx` already sent | Reconcile execution with `GetOrderStatus`; do not resubmit or sign again automatically. |
-| `unknown`, missing RFQ/position, timeout or failed lookup | Keep the outcome unresolved. Missing evidence does not close the obligation. |
+| Same credential, same `rfq_id` and `locked_order_id`, `pending_signature`, signature not sent | Repeat the exact `AcceptQuote` to get the existing signing payload (or `OrderAccepted` while it is built). The original signature deadline still applies. |
+| `enqueued`, or `SubmitSignedSponsoredTx` already sent | Query `GetOrderStatus`. Do not resubmit or re-sign automatically. |
+| `unknown`, missing RFQ/position, timeout or failed lookup | Treat the outcome as unknown. |
 
-Preserve selected order identity and whether the signature was sent across reconnect. Ignore wallet results that belong to an older connection or selection. An uncorrelated `SignatureTimeout` is not enough to identify the affected RFQ; use the matching `RfqAvailableAgain` / `RfqClosed` or re-read its state.
+Across reconnects, keep the selected `order_id` and whether you sent the signature. Ignore wallet results from an older connection or selection. `SignatureTimeout` does not identify the RFQ. Use the matching `RfqAvailableAgain` / `RfqClosed` or re-read state.
 
-There is no stream replay cursor. Reconcile entity versions on lifecycle pushes, and apply owner-scoped reads after reconnect. `OrderConfirmed` establishes execution; `RfqClosed` closes the auction, not every possible unresolved execution record.
-
----
+There is no replay cursor. Compare entity versions on lifecycle pushes. `OrderConfirmed` means executed; `RfqClosed` ends the auction but does not resolve a pending execution.
 
 ## Discovery
 
-Current taker discovery requests:
+Discovery requests:
 
 ```json
 { "type": "GetMarkets", "data": { "request_id": "uuid" } }
@@ -496,16 +478,14 @@ Query-style responses echo the same `request_id`:
 - `EarnSummary`
 - `TokenMarketsInfo`
 
-`active_only` behavior:
-- default is `true` when omitted (wire default for `GetMarketDescriptors`, `GetTokens`)
-- for `GetMarketDescriptors`/`GetTokens`, `active_only=true` means **tradable** markets — non-finalized, non-disabled, and before the pre-expiry trading cutoff; `active_only=false` returns all markets/tokens
-- `GetExpiries` has **no** `active_only` field — it always returns the tradable set (same predicate as above)
+`active_only`:
+- defaults to `true` for `GetMarketDescriptors` and `GetTokens`
+- `true` returns tradable markets: not finalized, not disabled, and before the pre-expiry trading cutoff; `false` returns all markets/tokens
+- `GetExpiries` has no `active_only` field and returns the tradable set
 
 ### Market size rules
 
-- `GetMarketDescriptors` and `GetTokens` require a size rule for every underlying mint.
-- If any market is missing a size rule, the entire request fails with `missing_size_rule_for_underlying_mint`.
-- Partial discovery is not supported.
+`GetMarketDescriptors` and `GetTokens` require a size rule for every underlying mint. If any market lacks one, the whole request fails with `missing_size_rule_for_underlying_mint`.
 
 ### MarketDescriptors payload
 
@@ -541,9 +521,9 @@ type MarketDescriptorInfo = {
 `size_rule` semantics (per underlying mint):
 - `min_size <= quantity <= max_size`
 - `(quantity - min_size) % step == 0`
-- if rule for market underlying mint is missing, server rejects RFQ (`Generic` error with `code: "missing_size_rule_for_underlying_mint"`)
+- if the market's underlying mint has no rule, the server rejects the RFQ (`Generic` error with `code: "missing_size_rule_for_underlying_mint"`)
 
-For cash-secured puts, the size_rule still constrains the underlying quantity on the wire, not the quote deposit amount. Frontends that collect user input in quote terms (e.g. USDC) must convert before sending `RfqRequest`. See [WS common conventions](ws-common.md) "Quantity and collateral by position type" for conversion formulas and SDK helpers.
+For cash-secured puts, `size_rule` still applies to the underlying quantity, not the quote deposit. Convert quote-denominated input (e.g. USDC) before sending `RfqRequest`. Formulas and SDK helpers are in [WS common conventions](ws-common.md) "Quantity and collateral by position type".
 
 `underlying_symbol`, `quote_symbol`, and token `symbol` are mandatory and non-null in discovery payloads.
 
@@ -570,7 +550,7 @@ type Tokens = {
 };
 ```
 
-`size_rule` and `symbol` are always present. For `quotes_by_underlying`, each quote token entry carries the same rule as its parent underlying key.
+`size_rule` and `symbol` are present on every token. In `quotes_by_underlying`, each quote token carries its parent underlying's rule.
 
 ### Positions payload
 
@@ -600,7 +580,7 @@ type Tokens = {
   }
 }
 ```
-`is_otm` is `null` for open/funded positions. Set to `true` (out-of-the-money) or `false` (in-the-money) after settlement or liquidation. Omitted from the wire when `null`.
+`is_otm` is omitted for open/funded positions. After settlement or liquidation it is `true` (out-of-the-money) or `false` (in-the-money).
 
 Field semantics:
 - `price`: gross premium per 1 underlying unit (1e9 scale)
@@ -633,8 +613,8 @@ Field semantics:
 ```
 
 `state` values: `active`, `pending_signature`, `enqueued`.
-`locked_order_id` is present when the RFQ is locked on a specific order (state = `pending_signature` or `enqueued`).
-`best_price` may be `null` if no quotes have been submitted.
+`locked_order_id` is set when the RFQ is locked on an order (`pending_signature` or `enqueued`).
+`best_price` is `null` when there are no quotes.
 
 ### Position lifecycle (taker perspective)
 
@@ -647,11 +627,9 @@ Once your position is `open`:
 
 See [Protocol Flow](protocol-flow.md) for all settlement scenarios.
 
----
-
 ## Dynamic subscription management
 
-Modify subscriptions incrementally without replacing the full set:
+Change subscriptions incrementally:
 
 ```json
 { "type": "AddMints", "data": { "request_id": "uuid", "underlying_mints": ["MintBase58"], "quote_mints": ["MintBase58"] } }
@@ -660,7 +638,7 @@ Modify subscriptions incrementally without replacing the full set:
 { "type": "RemoveChannels", "data": { "request_id": "uuid", "channels": ["stats"] } }
 ```
 
-All four respond with `SubscriptionUpdated` containing the subscription state after the operation:
+All four respond with `SubscriptionUpdated` carrying the resulting state:
 
 ```json
 {
@@ -673,13 +651,11 @@ All four respond with `SubscriptionUpdated` containing the subscription state af
 }
 ```
 
-In subscription responses, an omitted mint list means that dimension is unfiltered. In requests, omission/null preserves the current filter; an explicit empty list clears it.
-
----
+In subscription responses, an omitted mint list means that dimension is unfiltered. In requests, an omitted or null list keeps the current filter and an empty list clears it.
 
 ## Invite gating (closed mainnet)
 
-During closed mainnet, takers need an invite code to trade. The server sends `RequireInvite` after auth if the taker is not registered.
+During closed mainnet, takers need an invite code to trade.
 
 ### RequireInvite (server -> taker)
 
@@ -701,7 +677,7 @@ Unit variant, no `data` field. Sent once after `AuthSuccess` if the taker has no
 }
 ```
 
-The authenticated taker session proves wallet ownership; `RedeemInvite` does not carry a separate signature field.
+`RedeemInvite` has no signature field. The authenticated session proves wallet ownership.
 
 ### InviteRedeemed (server -> taker)
 
@@ -715,7 +691,7 @@ The authenticated taker session proves wallet ownership; `RedeemInvite` does not
 }
 ```
 
-After redemption, the taker receives a personal `referral_code` they can share.
+`referral_code` is the taker's own shareable code.
 
 ### ClaimReferralCode (taker -> server)
 
@@ -770,9 +746,9 @@ Claim a custom referral code (replaces the auto-assigned one).
 
 Invite errors use typed `ServerError` variants (delivered as `RequestError` when `request_id` is present):
 
-**`InviteRequired`** — sent as a typed error when an unregistered taker attempts a trading action.
+`InviteRequired`: an unregistered taker attempted a trading action.
 
-**`Invite`** — `RedeemInvite` errors:
+`Invite` errors from `RedeemInvite`:
 
 | Value | Meaning |
 |-------|---------|
@@ -785,7 +761,7 @@ Invite errors use typed `ServerError` variants (delivered as `RequestError` when
 | `already_registered` | Taker already registered |
 | `internal_error` | Server error |
 
-**`Claim`** — `ClaimReferralCode` errors:
+`Claim` errors from `ClaimReferralCode`:
 
 | Value | Meaning |
 |-------|---------|
@@ -795,13 +771,10 @@ Invite errors use typed `ServerError` variants (delivered as `RequestError` when
 | `reserved` | Code is reserved |
 | `internal_error` | Server error |
 
----
-
 ## Token caps
 
-Platform-level open interest and notional caps. Useful for showing remaining capacity on the UI
-(e.g. "X SOL available out of Y SOL limit" per market or underlying).
-No authentication required.
+Platform-level open interest and notional caps, e.g. for showing
+"X SOL available out of Y SOL" per market or underlying. No authentication required.
 
 ### GetTokenCaps (taker -> server)
 
@@ -843,18 +816,15 @@ type QuoteCapInfo = {
 };
 ```
 
-All amount fields are `u64` represented as JSON numbers. Scale is token-specific
-(underlying atomic units for OI, quote token atomic units for notional).
+Amounts are `u64` JSON numbers: underlying atomic units for OI, quote atomic units for notional.
 
-Only entries with a configured budget are returned. If a token or market has no budget, it will not appear in the response and the backend treats that scope as uncapped.
+Only scopes with a configured budget are returned. A missing token or market is uncapped.
 
-`GetTokenCaps.include_markets` is accepted but ignored; configured market caps are returned when present.
-
----
+`GetTokenCaps.include_markets` is accepted but ignored. Configured market caps are returned when present.
 
 ## TokenMarketsInfo
 
-`GetTokenMarketsInfo { request_id, underlying_mint }` is available after `Welcome` without authentication. It returns one market-page snapshot from the selected backend:
+`GetTokenMarketsInfo { request_id, underlying_mint }` works after `Welcome` without authentication. It returns one market-page snapshot:
 
 ```json
 {
@@ -882,13 +852,13 @@ Only entries with a configured budget are returned. If a token or market has no 
 }
 ```
 
-`reference_price` is the backend-validated underlying/quote spot, scaled by `1e9`. `best_price` is a non-binding indicative display premium per underlying unit, also scaled by `1e9`. The backend applies the configured quote-mint fee adjustment before returning it; if fee configuration is unavailable, it leaves the original indicative price unchanged. This is an estimate, not the exact on-chain net premium, and it may be absent. Size-rule quantities are underlying atomic units. Examples illustrate units, not current prices or limits.
+`reference_price` is the backend-validated underlying/quote spot, scaled by `1e9`. `best_price` is a non-binding indicative premium per underlying unit, scaled by `1e9`, after the quote-mint fee adjustment (unadjusted if the fee config is unavailable). It is an estimate of the on-chain net premium and may be absent. Size-rule quantities are underlying atomic units.
 
-The response does not echo `underlying_mint`: retain it with the request ID. Use spot and premiums from this same response for an APR estimate, and suppress the estimate when the indicative is stale or missing. `updated_at` / `is_stale` describe the maker's indicative premiums, not the oracle spot. The response contains no oracle publish timestamp, confidence or age.
+The response does not echo `underlying_mint`; keep it with the request ID. Compute APR from spot and premiums in the same response, and skip it when the indicative is stale or missing. `updated_at` / `is_stale` refer to the maker indicatives, not the oracle spot. There is no oracle publish time, confidence or age.
 
-The backend owns Pyth/Hermes access and price validation. A browser does not need a Pyth key. This endpoint supplies a current snapshot, not historical chart data or a binding execution quote.
+The backend handles Pyth/Hermes access, so clients need no Pyth key. There is no history and the prices are not binding.
 
-**Failure behavior:** missing size rules, incomplete metadata or unavailable oracle prices can return uncorrelated `Error` (including `OraclePriceNotReady`). When there are no active markets for the underlying, the handler sends no response. Apply a request deadline, show unavailable data, and discard stale responses by request ID. Do not interpret silence as a successful empty snapshot. This endpoint is an exception to correlated query-error handling.
+Missing size rules, incomplete metadata or an unavailable oracle price return an uncorrelated `Error` (e.g. `OraclePriceNotReady`), not a `RequestError`. With no active markets for the underlying, the server sends no response at all, so set a request deadline and discard stale responses by request ID.
 
 ## Indicative prices
 
@@ -923,8 +893,6 @@ The backend owns Pyth/Hermes access and price validation. A browser does not nee
   }
 }
 ```
-
----
 
 ## Earn summary
 
@@ -969,13 +937,11 @@ No authentication required.
 
 Field semantics:
 - `min_apr` / `max_apr`: annualized percentage rate range across active strikes. `null` if no indicative prices available.
-- `cap_filled_pct`: fraction of capacity used, not clamped to 1.0. It may exceed 1.0 after limits are tightened; a zero limit reports saturated utilization 1.0. See [caps](caps.md#monitoring-caps).
+- `cap_filled_pct`: fraction of capacity used, not clamped to 1.0. It may exceed 1.0 after limits are tightened. A zero limit reports saturated utilization 1.0. See [caps](caps.md#monitoring-caps).
 - `cap_total` / `cap_used`: underlying atomic units.
-- `nearest_market_pda`: market PDA with the nearest expiry. Use this to navigate to the market page.
+- `nearest_market_pda`: market PDA with the nearest expiry.
 - `nearest_expiry_ts`: Unix seconds of the nearest market expiry.
-- `computed_at`: Unix seconds when the summary was computed server-side.
-
----
+- `computed_at`: Unix seconds when the server computed the summary.
 
 ## Authentication requirements
 
@@ -991,7 +957,7 @@ Field semantics:
 - `GetTokenMarketsInfo`
 - `GetSubscriptions`
 - `AddMints`, `RemoveMints`, `AddChannels`, `RemoveChannels`
-- `ResumeAuth`, `StartAuth`, `AuthChallenge` (these *perform* auth)
+- `ResumeAuth`, `StartAuth`, `AuthChallenge` (these perform auth)
 
 ### Requires auth
 
@@ -1006,14 +972,12 @@ Field semantics:
 
 - `RfqRequest` (server returns `InviteRequired` error if taker has not redeemed an invite)
 
----
-
 ## Errors
 
 Two error message types: `Error` (connection-level) and `RequestError` (request-correlated).
 See [WS common conventions](ws-common.md) "Error format" for the envelope.
 
-Parsing rule for taker integrations:
+Error handling:
 
 1. Handle `RequestError` where you pass `request_id` (e.g. `GetPositions`, `Subscribe`).
 2. Handle `Error` for connection-level failures (auth, WS errors, unknown request).
@@ -1040,7 +1004,7 @@ Common typed `ServerError` variants (PascalCase on the wire):
 Common `Generic` variant `code` values in taker flows:
 - `missing_size_rule_for_underlying_mint`: no configured size rule for RFQ market underlying mint
 - `invalid_quantity_size_rule`: RFQ `quantity` violates `min/max/step` constraint
-- `trading_paused`: backend or on-chain pause currently blocks new trading actions
+- `trading_paused`: backend or on-chain pause blocks new trading actions
 - `session_expired`: `ResumeAuth` with invalid/expired/revoked session
 - `already_authenticated`: `ResumeAuth` on an already authenticated connection
 - `hello_required`, `hello_timeout`, `hello_already_sent`

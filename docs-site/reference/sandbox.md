@@ -10,17 +10,17 @@
 | HTTP API | `https://beta-api.acta.markets` | `https://devnet-api.acta.markets` |
 | Solana cluster | Mainnet-beta | Devnet |
 
-Both endpoints use the same [message envelopes and encodings](ws-common.md).
+All WebSocket endpoints use the same [message envelopes and encodings](ws-common.md).
 
 ## Maker registration
 
 A maker has an owner wallet for on-chain transactions and a key for signing quotes. Both roles can use the same key.
 
-The protocol administrator registers the owner and quote-signing public keys through `RegisterMaker`, which creates the maker PDA.
+The protocol administrator registers both public keys through `RegisterMaker`, which creates the maker PDA.
 
-Before quoting, deposit the quote token into the maker account through `DepositPremium`. The owner signs the transaction and supplies a token account for the quote mint. Markets specify their underlying and quote mints.
+Before quoting, deposit the quote token into the maker account with `DepositPremium`. The owner signs and supplies a token account for the market's quote mint.
 
-Connect the signing key to `/maker` for quotes and `/maker/data` for participant reads. Authentication uses the Ed25519 challenge-response described in [Signing conventions](ws-common.md#what-to-sign).
+Connect the signing key to `/maker` for quotes and `/maker/data` for participant reads. Authentication is the Ed25519 challenge-response in [Signing conventions](ws-common.md#what-to-sign).
 
 ## Program addresses
 
@@ -32,4 +32,4 @@ Connect the signing key to `/maker` for quotes and `/maker/data` for participant
 | --- | --- |
 | Maker account | `["maker", maker_owner_pubkey]` |
 
-See [Maker quickstart](../quickstart/maker-quickstart.md) for the connection flow and [Maker API reference](maker-api.md) for message fields.
+See also: [Maker quickstart](../quickstart/maker-quickstart.md), [Maker API reference](maker-api.md).

@@ -1,6 +1,6 @@
 # Vault API, SDKs and swaps
 
-Vault integrations combine public HTTP reads, wallet-signed capital transactions and an authenticated operator WebSocket session.
+A vault integration uses public HTTP reads, wallet-signed capital transactions and an authenticated operator WebSocket session.
 
 ## Public reads
 
@@ -8,8 +8,8 @@ Routes use the `/api/v1` prefix:
 
 | Route | Use |
 | --- | --- |
-| `GET /vaults` | Discover open vaults and their projected state. |
-| `GET /vaults/{pda}` | Vault detail and projected performance. |
+| `GET /vaults` | List open vaults and their indexed state. |
+| `GET /vaults/{pda}` | Vault detail and performance. |
 | `GET /vaults/{pda}/cycles` | Indexed cycle history. |
 | `GET /vaults/{pda}/positions` | Vault position memberships. |
 | `GET /vaults/{pda}/depositors/{wallet}` | Open requests and indexed totals for a depositor. |
@@ -17,21 +17,19 @@ Routes use the `/api/v1` prefix:
 | `GET /depositors/{wallet}` | Depositor activity across vaults. |
 | `GET /depositors/{wallet}/history` | Cross-vault indexed history. |
 
-Closed vaults disappear from list/detail but retain their history routes. Current share balances come from RPC, since shares can transfer between wallets.
+Closed vaults drop out of list and detail but keep their history routes. Shares can move between wallets, so read current share balances over RPC.
 
-Use the returned cursor for pagination. Back off on `429` and retryable `503` responses. `db_disabled` requires database configuration on the server. Fields, pagination and errors are in [Vault HTTP API](../reference/vault-http-api.md).
+Paginate with the returned cursor. Fields and errors are in [Vault HTTP API](../reference/vault-http-api.md).
 
 ## Capital transactions
 
-Use a TypeScript SDK build with vault instruction builders and a `/vault` client. It prepares deposit, withdrawal, cancellation, refund and capital-processing instructions. The depositor signs their requests; governance or an eligible delegate signs manager operations. Public processing follows the account and timing conditions in the [lifecycle](vault-lifecycle.md#request-processing).
+The TypeScript SDK build with vault instruction builders and a `/vault` client prepares deposit, withdrawal, cancellation, refund and capital-processing instructions. The depositor signs their own requests. Governance or a delegate with the right permission signs manager operations. Public processing follows the timing rules in [Request processing](vault-lifecycle.md#request-processing).
 
-After submitting a transaction, wait for confirmation and read the affected chain accounts.
-
-Use the SDK's dedicated final-withdrawal builder to redeem all remaining shares.
+Redeem all remaining shares with the SDK's final-withdrawal builder.
 
 ## Operator session
 
-The `/vault` endpoint authenticates an operator for a specific vault. Authenticate, reconcile the required state and wait for readiness before trading. Use `permissions` to determine the granted actions, including for a shared governance/delegate wallet.
+The `/vault` endpoint authenticates an operator for one vault. After auth, load the current state and wait for readiness before trading. `permissions` lists the granted actions, including for a wallet that is both governance and delegate.
 
 After `Hello` and `Welcome`, send:
 
@@ -45,15 +43,15 @@ After `Hello` and `Welcome`, send:
 }
 ```
 
-Validate the `AuthRequest` challenge under the [signing conventions](../reference/ws-common.md#what-to-sign), sign its original bytes and reply with `AuthChallenge`. `VaultAuthSuccess` returns `vault_pda`, `operator`, `operator_kind` and `permissions`. Before trading, complete the session's state reconciliation and readiness checks.
+Check the `AuthRequest` challenge against the [signing conventions](../reference/ws-common.md#what-to-sign), sign its original bytes and reply with `AuthChallenge`. `VaultAuthSuccess` returns `vault_pda`, `operator`, `operator_kind` and `permissions`.
 
-A vault writing an option uses the taker RFQ flow. A vault buying an option acts as maker and signs holder quotes under its active primary-delegate grant. `is_taker_buy` remains fixed at zero in the RFQ order.
+A vault writing an option uses the taker RFQ flow. A vault buying an option acts as maker and signs holder quotes under its active primary-delegate grant. `is_taker_buy` is fixed at zero in the RFQ order.
 
-Reconnects require readiness and authorization checks. Permission or projection changes can invalidate an existing session.
+A permission change can close an open session. Reconnect and authenticate again.
 
 ## Jupiter swaps
 
-Request a vault swap quote for `main_to_second` or `second_to_main`. The backend constructs the route transaction, the operator wallet signs, and the signed transaction is submitted for durable execution.
+Request a vault swap quote for `main_to_second` or `second_to_main`. The backend builds the route transaction, the operator wallet signs it, and the backend sends it.
 
 ```json
 {
@@ -69,9 +67,9 @@ Request a vault swap quote for `main_to_second` or `second_to_main`. The backend
 }
 ```
 
-`amount` is an input-token atomic amount encoded as a decimal string. `slippage_bps` defaults to 50 if omitted. `mode` selects `rebalance`, `recovery` or `closing`, each with its own phase and permission requirements.
+`amount` is an input-token atomic amount as a decimal string. `slippage_bps` defaults to 50. `mode` is `rebalance`, `recovery` or `closing`, and each mode has its own phase and permission requirements.
 
-`SwapQuoteResult` returns `request_id`, `execution_id`, `mode`, `tx_base64`, `in_amount`, `quoted_out_amount`, `minimum_out_amount` and `valid_until`. Amounts and the deadline are decimal strings. Check the terms and instructions, sign the transaction, then submit:
+`SwapQuoteResult` returns `request_id`, `execution_id`, `mode`, `tx_base64`, `in_amount`, `quoted_out_amount`, `minimum_out_amount` and `valid_until`. Amounts and the deadline are decimal strings. Review the terms and instructions, sign the transaction, then submit:
 
 ```json
 {
@@ -84,8 +82,8 @@ Request a vault swap quote for `main_to_second` or `second_to_main`. The backend
 }
 ```
 
-The contract checks the route, pair, mode, permissions, phase, safety mode and price accounts. Normal rebalance excludes unpriced idle capital.
+The contract checks the route, pair, mode, permissions, phase, safety mode and price accounts. Normal rebalance cannot touch unpriced idle capital.
 
-`SwapSubmitResult` returns `request_id` and `execution_id` after durable acceptance for submission. Track execution and chain confirmation for the result.
+`SwapSubmitResult` returns `request_id` and `execution_id` when the backend accepts the transaction. The swap is done when it confirms on-chain.
 
 See [Roles and permissions](vault-permissions.md) and [Transaction recovery](recovery.md).

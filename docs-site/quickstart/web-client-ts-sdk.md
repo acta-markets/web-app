@@ -1,8 +1,8 @@
 # Acta Web Client SDK (TypeScript)
 
-The TS SDK wraps the taker WebSocket protocol: auth, market/position queries, RFQs, and sponsored transactions.
+The TS SDK wraps the taker WebSocket protocol: auth, market and position queries, RFQs and sponsored transactions.
 
-Wire messages, errors, and enums are in [`../reference/taker-api.md`](../reference/taker-api.md). SDK event callbacks mirror wire message names in lowerCamelCase; TypeScript types define the payloads.
+SDK event callbacks use the wire message names in lowerCamelCase. TypeScript types define the payloads. Wire messages, errors and enums are in the [Taker API reference](../reference/taker-api.md).
 
 ## Installation
 
@@ -10,28 +10,17 @@ Wire messages, errors, and enums are in [`../reference/taker-api.md`](../referen
 yarn add @acta-markets/ts-sdk@0.1.6-vaults.2
 ```
 
-Version 0.1.6-vaults.2 includes canonical auth-challenge, market-PDA and declared-signer
-checks. These checks are absent from 0.1.5.
-`ActaWsClient` validates challenge format before calling any auth provider;
-raw clients can call `validateAuthChallenge` before signing.
+0.1.6-vaults.2 adds canonical auth-challenge, market-PDA and declared-signer checks (not in 0.1.5). `ActaWsClient` validates the challenge before calling the auth provider. Raw clients can call `validateAuthChallenge`.
 
-The client requires these fields in server messages:
-`Welcome.server_time_unix_ms`, `AuthSuccess.expires_at`,
-`RfqBroadcast.sent_at_unix_ms`, `order_version` on order lifecycle events,
-and `instruction_index` on every known chain event.
-Frames missing these fields or containing `null` are rejected before
-dispatch. `server_time_unix_ms` and `sent_at_unix_ms` use milliseconds;
-`expires_at` uses Unix seconds. The WS protocol version is `1.0.0`.
+The client rejects frames where any of these is missing or `null`: `Welcome.server_time_unix_ms`, `AuthSuccess.expires_at`, `RfqBroadcast.sent_at_unix_ms`, `order_version` on order events, and `instruction_index` on known chain events. `*_unix_ms` fields are milliseconds. `expires_at` is Unix seconds. WS protocol version: `1.0.0`.
 
-Import `@acta-markets/ts-sdk/ws` for the taker WebSocket client and signing helpers.
-
----
+The taker WebSocket client and signing helpers are in `@acta-markets/ts-sdk/ws`.
 
 ## Quick start
 
 ### 1. Auth provider
 
-`wallet` is a connected wallet adapter exposing its current `publicKey` and `signMessage`; `walletPublicKeyBase58` is the account used for this client's authentication. Recreate the client when that account changes.
+`wallet` is a connected wallet adapter with `publicKey` and `signMessage`. `walletPublicKeyBase58` is the account this client authenticates as. Recreate the client when the account changes.
 
 ```typescript
 import { WalletAuthProvider } from "@acta-markets/ts-sdk/ws";
@@ -44,7 +33,7 @@ const authProvider = new WalletAuthProvider({
 
 Other providers: `KeypairAuthProvider` (Node/CI/bots), `CustomAuthProvider` (remote signer).
 
-**Frontend wallets (Phantom / Privy).** WS auth requires `signMessage` (ed25519 over the UTF-8 challenge). For sponsored-tx signing, `signSponsoredTxBase64(...)` signs approved message bytes after the intent comparison described below (no `@solana/web3.js`); or call `wallet.signTransaction(...)` if you want the wallet's own tx preview. If a wallet doesn't expose `signMessage`, use `CustomAuthProvider` with a backend signer.
+Frontend wallets (Phantom, Privy): WS auth needs `signMessage` (ed25519 over the UTF-8 challenge). Without it, use `CustomAuthProvider` with a backend signer. For the sponsored tx, `signSponsoredTxBase64(...)` signs after the byte comparison in step 8 and does not need `@solana/web3.js`. `wallet.signTransaction(...)` gives the wallet's own preview.
 
 ### 2. Connect
 
@@ -84,13 +73,11 @@ const sessionId = savedSessionId && Date.now() / 1000 < savedExpiresAt
 ws.connectAndAuthenticate(authProvider, { sessionId });
 ```
 
-Register application handlers before calling `connectAndAuthenticate`. It tries the supplied session, then the auth provider on `session_expired`. Do not also send `ResumeAuth` or start another authentication from `connected`. `connected` means the socket is open, before the Welcome/auth exchange has completed; `authenticated` means authentication and the server's connection handoff are complete.
+Register handlers before `connectAndAuthenticate`. It tries the saved session, then the auth provider on `session_expired`. Do not send `ResumeAuth` yourself from `connected`. `connected` fires when the socket opens, before Welcome and auth. `authenticated` fires after auth and the server's connection handoff.
 
-Persist credentials per wallet and environment. Resume succeeds without a wallet popup. Fresh authentication does not restore ownership of an older credential's pending signature. See [Delivery & recovery](../reference/taker-api.md#delivery-and-recovery).
+Store sessions per wallet and environment. Resume needs no wallet popup. Fresh authentication does not recover an older session's pending signature. See [Delivery and recovery](../reference/taker-api.md#delivery-and-recovery).
 
-`expiresAt` is always a number in Unix seconds. A saved credential with a missing,
-`null`, or expired deadline should use fresh authentication. The deadline limits
-starting another resume; it does not end an already authenticated connection.
+`expiresAt` is Unix seconds. It limits when you can resume. It does not close an authenticated connection.
 
 ### 4. Subscribe to live updates
 
@@ -104,10 +91,10 @@ ws.on("chainEvent", (ev) => {
   console.log("Chain event:", ev);
 });
 
-// After a fill, refresh authoritative state with getPositions().
+// After a fill, refresh with getPositions().
 ```
 
-Subscriptions auto-restore on reconnect.
+The SDK restores subscriptions on reconnect.
 
 ### 5. Browse markets
 
@@ -122,9 +109,9 @@ ws.getMarketDescriptors({ active_only: true });
 
 ### 6. Create RFQ
 
-**Prerequisite:** call `getMarketDescriptors()` before `createRfq`. The SDK validates `quantity` against the market's `size_rule` (`min_size <= quantity <= max_size`, `(quantity - min_size) % step === 0`). Local failures throw before send; a missing server-side rule returns `missing_size_rule_for_underlying_mint`.
+Call `getMarketDescriptors()` first. The SDK checks `quantity` against the market's `size_rule` (`min_size <= quantity <= max_size`, `(quantity - min_size) % step === 0`) and throws before sending. A missing server-side rule returns `missing_size_rule_for_underlying_mint`.
 
-`quantity` is always in **underlying atomic units**, including for cash-secured puts. For CSP UIs that take USDC input, convert with `quoteAmountToQuantity(usdc, strike1e9, underlying_decimals)` from `@acta-markets/ts-sdk/ws` (see [CSP conversion in ws-common.md](../reference/ws-common.md)).
+`quantity` is in underlying atomic units, including for cash-secured puts. For USDC input, convert with `quoteAmountToQuantity(usdc, strike1e9, underlying_decimals)` from `@acta-markets/ts-sdk/ws`. The formula is in [WebSocket conventions](../reference/ws-common.md).
 
 ```typescript
 ws.on("rfqCreated", (rfq) => console.log(rfq.rfq_id, rfq.expires_at));
@@ -156,16 +143,7 @@ ws.cancelRfq(rfqId);
 
 ### 8. Accept quote and sign
 
-SDK 0.1.6 requires `expectedMessageBytes`: the exact message independently
-built from the selected order and approved transaction parameters. It compares
-all bytes before calling the wallet, including every instruction, account flag,
-fee payer, blockhash and ALT reference. Never copy the expected bytes from the
-received transaction. Resolve ALT references against trusted table contents when
-building the approved message. Matching `orderIdHex` alone is insufficient.
-
-Your application supplies `approvedMessageForOrder(id)`.
-Older SDKs without this argument require equivalent application checks;
-`signSponsoredTxBase64Unverified` explicitly retains server-template trust.
+SDK 0.1.6 requires `expectedMessageBytes`, the message you build from the selected order and approved transaction parameters, with ALT references resolved against table contents you trust. The SDK compares every byte (instructions, account flags, fee payer, blockhash, ALT references) before calling the wallet. Do not copy the expected bytes from the received transaction. A matching `orderIdHex` is not enough. Your application supplies `approvedMessageForOrder(id)`. Older SDKs leave this check to the application. `signSponsoredTxBase64Unverified` skips it and trusts the server's transaction.
 
 ```typescript
 import { signSponsoredTxBase64 } from "@acta-markets/ts-sdk/ws";
@@ -194,9 +172,9 @@ ws.on("sponsoredTxToSign", async (id, txBase64, signatureDeadline) => {
 ws.acceptQuote(rfqId, makerPubkey, orderIdHex);
 ```
 
-`orderIdHex` is the application's selected order. If the wallet, connection or selection changes during signing, discard that result. Track sent state before submitting and use the recovery rules below when the result is uncertain.
+`orderIdHex` is the selected order. If the wallet, connection or selection changes during signing, discard the result. Record that you sent the transaction before submitting (see step 10).
 
-**Browser wallets.** To show the wallet's own transaction preview/simulation, deserialize with `@solana/web3.js` and call `wallet.signTransaction(tx)` instead. `@solana/web3.js` is only needed for that UX path — it's the wallet adapter's own dependency, not the SDK's.
+Browser wallets: for the wallet's own preview or simulation, deserialize with `@solana/web3.js` and call `wallet.signTransaction(tx)`. Only this path needs `@solana/web3.js`. The SDK does not depend on it.
 
 ### 9. Track order status
 
@@ -213,9 +191,9 @@ ws.on("rfqClosed", (data) => {
 
 ### 10. Recover an interrupted order
 
-Persist the selected `rfq_id`, maker, `order_id`, auth session and whether `SubmitSignedSponsoredTx` was sent, scoped to the wallet and backend. Keep them across reconnect and page reload, separately from the browsing cache. Do not persist signed transaction payloads for replay.
+Store the selected `rfq_id`, maker, `order_id`, auth session and whether `SubmitSignedSponsoredTx` was sent, per wallet and backend, so they survive reconnect and page reload. Do not store signed transactions.
 
-After successful resume of the same auth session, reconcile with `GetMyActiveRfqs`. If the same order is still `pending_signature`, repeat only that exact `AcceptQuote` to retrieve its signing payload; respect the original signature deadline. If it is `enqueued`, or the transaction was already sent, query `GetOrderStatus` instead of signing or submitting again.
+After resuming the same auth session, check `GetMyActiveRfqs`. If the order is still `pending_signature`, repeat that exact `AcceptQuote` to get its signing payload. The original signature deadline still applies. If it is `enqueued` or already sent, query `GetOrderStatus` and do not sign or submit again.
 
 ```typescript
 ws.on("orderStatus", ({ order_id, state }) => {
@@ -233,9 +211,7 @@ ws.on("orderStatus", ({ order_id, state }) => {
 });
 ```
 
-`OrderFailed`, timeout and `unknown` do not prove nonexecution. Do not automatically replay a trading command after losing its response. When `RfqAvailableAgain` reopens an auction, refresh the available quotes; the discarded winning quote is not an automatic retry target.
-
----
+After `OrderFailed`, a timeout or `unknown`, the order may still have executed, so do not replay it. When `RfqAvailableAgain` reopens the auction, pick from the current quotes. The old winning quote is discarded.
 
 ## Connection management
 
@@ -261,12 +237,8 @@ ws.on("versionMismatch", (msg) => {
 });
 ```
 
-**Recovery on reconnect.** The SDK reconnects and resumes authentication after network drops, but not after `VersionMismatch`. After `authenticated`, it restores desired subscriptions and, with the default `autoReconcile`, requests `GetMyActiveRfqs` and `GetPositions`. Authentication alone does not mean these reads have completed.
+The SDK reconnects and resumes after network drops, but not after `VersionMismatch`. After `authenticated` it restores subscriptions and, with the default `autoReconcile`, requests `GetMyActiveRfqs` and `GetPositions`. Wait for those responses before rebuilding state, and request `GetOrderStatus` for each pending order. An order missing from those responses is still unknown.
 
-Wait for those responses before rebuilding application state, and request `GetOrderStatus` for each unresolved order. Apply the exact-order recovery rules above. Do not clear an unresolved order because it is missing from an RFQ or position response.
-
-
----
 
 ## Error handling
 
@@ -281,32 +253,26 @@ ws.on("requestError", (envelope) => {
 });
 ```
 
-Most query methods (`getMarkets`, `getPositions`, `getOrderStatus`, ...) return a `request_id`; match it against `msg.request_id` on the corresponding response event to pair UI state with responses.
+Most query methods (`getMarkets`, `getPositions`, `getOrderStatus`, ...) return a `request_id`. Match it to `msg.request_id` on the response event.
 
-Error codes and `OrderFailed` reasons: [taker-api.md](../reference/taker-api.md). Common cases: [faq.md](../reference/faq.md).
-
----
+Error codes and `OrderFailed` reasons are in the [Taker API reference](../reference/taker-api.md). Common cases are in the [Integration FAQ](../reference/faq.md).
 
 ## Other features
 
-- **Invite gating (closed mainnet).** If `requireInvite` fires, redeem before trading via `redeemInvite(rawCode)`; claim your own code via `claimReferralCode`; inspect stats via `getMyReferralInfo`. Errors: [taker-api.md](../reference/taker-api.md).
-- **Token caps.** `getTokenCaps()` -> `tokenCaps` event. OI and notional capacity per token. Schema: [caps.md](../reference/caps.md).
-- **Earn summary.** `getEarnSummary()` -> `earnSummary` event. APR ranges and capacity per asset for landing pages.
-- **Market price snapshot.** `getTokenMarketsInfo(underlyingMint)` -> `tokenMarketsInfo` returns backend `reference_price`, size rules, decimals and indicative premiums together. See [TokenMarketsInfo](../reference/taker-api.md#tokenmarketsinfo). Correlate the response with the returned request ID and the mint you requested; the response does not echo the mint. Refresh while the view is active.
-- **Indicative prices.** `getIndicativePrices({ market, position_type })` -> `indicativePrices` event. Non-binding UI reference prices; server refreshes roughly every 30s.
-- **APR inputs.** Use spot and indicative premium from the same `TokenMarketsInfo` response. Suppress the preview when the price is unavailable or the indicative has `is_stale: true`; clear cached metadata after a failed refresh or disconnect. Pyth credentials belong on the backend, not in browser code.
-- **APR/APY helper.** `computeApyFromScaledPrices({ positionType, underlyingAmount, grossPremiumPerUnit1e9, strike1e9, spotPrice1e9, secondsToExpiry })` from `@acta-markets/ts-sdk/ws` returns `{ apy, apr, termYield }`. For the market preview, pass backend `best_price` as `grossPremiumPerUnit1e9`: the backend applies the quote-mint fee adjustment when fee configuration is present. Do not subtract the fee a second time.
-
----
+- Invite gating (closed mainnet): if `requireInvite` fires, redeem with `redeemInvite(rawCode)` before trading. Claim your own code with `claimReferralCode` and read stats with `getMyReferralInfo`. Errors are in the [Taker API reference](../reference/taker-api.md).
+- Token caps: `getTokenCaps()` -> `tokenCaps` event. OI and notional capacity per token. Schema in [Capacity limits](../reference/caps.md).
+- Earn summary: `getEarnSummary()` -> `earnSummary` event. APR ranges and capacity per asset for landing pages.
+- Market price snapshot: `getTokenMarketsInfo(underlyingMint)` -> `tokenMarketsInfo` returns backend `reference_price`, size rules, decimals and indicative premiums. The response does not echo the mint; map it by request ID. See [TokenMarketsInfo](../reference/taker-api.md#tokenmarketsinfo).
+- Indicative prices: `getIndicativePrices({ market, position_type })` -> `indicativePrices` event. Non-binding. The server refreshes them roughly every 30s.
+- APR inputs: use spot and indicative premium from the same `TokenMarketsInfo` response. Skip the preview when the price is missing or `is_stale: true`.
+- APR/APY helper: `computeApyFromScaledPrices({ positionType, underlyingAmount, grossPremiumPerUnit1e9, strike1e9, spotPrice1e9, secondsToExpiry })` from `@acta-markets/ts-sdk/ws` returns `{ apy, apr, termYield }`. Pass backend `best_price` as `grossPremiumPerUnit1e9`. It already includes the quote-mint fee adjustment, so do not subtract the fee again.
 
 ## Signing requirements
 
-- Sponsored transactions use v0 `VersionedTransaction`. Use a wallet with versioned transaction support for `wallet.signTransaction` and its transaction preview. `signSponsoredTxBase64` signs raw message bytes; preview support depends on the signer.
-- If the wallet can't sign arbitrary bytes, WS auth won't work directly - use a server-side signer via `CustomAuthProvider`.
-
----
+- Sponsored transactions are v0 `VersionedTransaction`. `wallet.signTransaction` needs a wallet with versioned transaction support. `signSponsoredTxBase64` signs raw message bytes.
+- WS auth needs arbitrary-byte signing. Without it, use a server-side signer via `CustomAuthProvider`.
 
 ## Endpoints
 
-- **Devnet:** `wss://devnet-api.acta.markets`
-- **Mainnet:** `wss://beta-api.acta.markets`
+- Devnet: `wss://devnet-api.acta.markets`
+- Mainnet: `wss://beta-api.acta.markets`

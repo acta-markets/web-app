@@ -15,17 +15,9 @@ Solana accounts record positions, balances and vault state. The backend matches 
 
 ## Reading state
 
-HTTP endpoints return vaults, cycles, positions and request history. Read vault accounts, share balances and request PDAs directly from finalized Solana state after a wallet transaction.
+Solana accounts are the source of truth. HTTP data lags them by listener indexing time. After your own transaction confirms, read the affected accounts directly.
 
-HTTP data updates after the listener indexes a transaction. After confirmation, read the affected chain accounts and refresh the HTTP data.
-
-The RFQ server keeps live RFQs, quotes and capacity reservations in memory. Confirmed positions and vault state are read from Solana accounts.
-
-## Readiness and recovery
-
-Trading requires authentication and up-to-date projections. When indexed history is incomplete, operations that use that history wait for the listener to recover it.
-
-The listener records a position's final outcome from its chain history. The keeper selects work from PostgreSQL and checks live accounts before execution.
+Live RFQs, quotes and capacity reservations exist only in the RFQ server. If indexed history falls behind, new trades are rejected with `history_projection_incomplete` until the listener catches up.
 
 ## Prices
 

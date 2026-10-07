@@ -1,23 +1,23 @@
 # Vault HTTP API
 
-Public vault endpoints return indexed state and history. Capital transactions are wallet-signed; operator commands use the authenticated `/vault` WebSocket session.
+Public vault endpoints return indexed state and history. Capital transactions are wallet-signed. Operator commands go over the authenticated `/vault` WebSocket session.
 
 ## Base URL and types
 
-Use `https://devnet-api.acta.markets/api/v1` or `https://beta-api.acta.markets/api/v1` for the corresponding environment.
+Devnet: `https://devnet-api.acta.markets/api/v1`. Beta: `https://beta-api.acta.markets/api/v1`.
 
 Addresses are base58 strings. Token amounts, share amounts, large counters and Unix-second timestamps are decimal strings unless a field is listed as a JSON number. Share prices and the high-water mark use a scale of `1_000_000_000`. Parse exact values with `BigInt` or another integer-safe representation.
 
-Basis-point fields are JSON numbers; 100 basis points means 1%. Percent-return fields are JSON numbers in percentage units. Nullable fields contain `null` when the observation or result is unavailable.
+Basis-point fields are JSON numbers. 100 basis points is 1%. Percent-return fields are JSON numbers in percent. A nullable field is `null` when the value is not available.
 
 ## Vault list and detail
 
 - `GET /vaults` returns `{ "vaults": Vault[] }`.
 - `GET /vaults/{pda}` returns one `Vault` object.
 
-The list has no query filters or pagination. Filter the returned vaults in the client.
+The list has no query filters or pagination. Filter on the client.
 
-Closed vaults are omitted from the list; closed or unknown vault detail returns `404`. Their indexed history can remain available.
+Closed vaults are left out of the list. Detail for a closed or unknown vault returns `404`. History routes still serve closed vaults.
 
 ### Vault fields
 
@@ -42,15 +42,15 @@ Closed vaults are omitted from the list; closed or unknown vault detail returns 
 | `last_hwm_update_ts`, `last_hwm_reset_ts`, `last_settlement_ts` | string | Recorded timestamps. |
 | `cap_limit`, `capital_fallback_delay_secs` | string | Deposit capacity and fallback delay. |
 | `deposit_window_set_ts` | string or null | Recorded intake-window timestamp. |
-| `main_balance`, `second_balance`, `live_share_supply`, `observed_manager_stake_shares` | string or null | Separately observed balances and supply. |
-| `balance_updated_at`, `balance_chain_slot` | string or null | Freshness and chain slot of those observations. |
+| `main_balance`, `second_balance`, `live_share_supply`, `observed_manager_stake_shares` | string or null | Balances and supply read from chain separately from events. |
+| `balance_updated_at`, `balance_chain_slot` | string or null | When those balances were read, and at which chain slot. |
 | `policy` | object | Policy fields below. |
 | `projection` | object | Indexed event coordinate below. |
 | `performance` | object | Performance variant below. |
 
 `policy` contains the numeric fields `max_open_positions`, `max_rebalance_drift_bps` and `min_main_liquidity_bps`.
 
-`projection` contains `version` and `slot` as strings, `transaction_index` and `event_index` as numbers, and `signature` as a string. Balance observations have separate freshness fields: `balance_updated_at` and `balance_chain_slot`.
+`projection` contains `version` and `slot` as strings, `transaction_index` and `event_index` as numbers, and `signature` as a string. Balances carry their own timestamps in `balance_updated_at` and `balance_chain_slot`.
 
 `performance` is one of:
 
@@ -59,7 +59,7 @@ Closed vaults are omitted from the list; closed or unknown vault detail returns 
 - `status: "short_track_record"` with `cycles_completed`, `last_cycle_return_pct`, `cumulative_return_pct` as numbers and `track_record_secs` as a string.
 - `status: "annualized"` with the same fields plus numeric `annualized_return_pct`.
 
-Annualization requires at least 30 days of completed-cycle history. See [NAV and fees](../protocol/vault-accounting.md) for the distinction between boundary equity, share price and live share ownership.
+Annualization needs at least 30 days of completed-cycle history. [Shares, equity and fees](../protocol/vault-accounting.md) explains boundary equity, share price and live share ownership.
 
 ## Position memberships
 
@@ -113,7 +113,7 @@ Both accept `limit` (default 50, range 1–100) and an optional `cursor`. Both r
 
 A deposit request contains `wallet`, `amount`, `created_at` as strings and nullable string `transaction_signature`. A withdrawal request contains `wallet`, `shares`, `created_at` as strings and nullable string `transaction_signature`.
 
-These routes return pending requests. Completed payouts are recorded in depositor history.
+Completed payouts are in depositor history.
 
 ## Depositor state
 
@@ -133,7 +133,7 @@ These routes return pending requests. Completed payouts are recorded in deposito
 
 For a valid wallet with no indexed activity, the single-vault route returns `vault` and `wallet` with the three optional fields set to `null`. The cross-vault route can return an empty `vaults` array.
 
-The totals summarize indexed capital activity. Read current share balances from the wallet's token accounts on Solana, including shares transferred between wallets.
+The totals sum indexed capital activity. Shares can move between wallets, so read current balances from the wallet's token accounts on Solana.
 
 ## Depositor history
 
@@ -149,11 +149,11 @@ Both accept `limit` (default 50, range 1–200) and an optional opaque `cursor`.
 | `amount`, `second_amount`, `shares`, `event_time`, `transaction_signature` | string |
 | `boundary_price` | string or null |
 
-A final redemption can return the second asset; `second_amount` records it separately from the main-asset `amount`. Events record processed requests and cancellations.
+A final redemption can pay out the second asset. `second_amount` records it apart from the main-asset `amount`.
 
 ## Pagination example
 
-Fetch the first page, then pass back the returned cursor unchanged:
+Fetch the first page, then pass the returned cursor back:
 
 ```sh
 curl 'https://devnet-api.acta.markets/api/v1/vaults/<vault-pda>/cycles?limit=50'
@@ -162,11 +162,11 @@ curl --get 'https://devnet-api.acta.markets/api/v1/vaults/<vault-pda>/cycles' \
   --data-urlencode 'cursor=<returned-next_cursor>'
 ```
 
-`next_cursor: null` ends pagination. Return the cursor unchanged to the same route with the same filters, and URL-encode it in the query string.
+`next_cursor: null` is the last page. Send the cursor unchanged to the same route with the same filters, URL-encoded.
 
 ## Errors and freshness
 
-List and detail use an in-memory read model. Other routes require the database. List, detail, positions, cycles and pending queues may be cached for five seconds.
+List and detail are served from memory. Other routes read the database. List, detail, positions, cycles and pending queues can be cached for five seconds.
 
 Errors use `{ "error": "Human-readable message", "code": "error_code" }`.
 
@@ -175,8 +175,8 @@ Errors use `{ "error": "Human-readable message", "code": "error_code" }`.
 | 400 | `invalid_cursor`, `invalid_limit`, `invalid_wallet`, `invalid_request` | Correct the input. |
 | 404 | `not_found` | Check the address and route. Closed vaults no longer have list/detail entries. |
 | 503 | `db_disabled` | Database access is not configured for this route. |
-| 503 | `db_busy`, `unavailable`, `caps_projection_unavailable`, `chain_replay_unavailable`, `position_history_unavailable` | Back off and retry while retaining the last known result and its freshness. |
-| 500 | `history_projection_incomplete`, `data_validation_error`, `schema_error`, `db_error` | Report the failed read and retain the previous data. |
-| 429 | Rate limit | Slow requests and follow any retry guidance in the response. |
+| 503 | `db_busy`, `unavailable`, `caps_projection_unavailable`, `chain_replay_unavailable`, `position_history_unavailable` | Retry later. Keep showing the last result with its timestamp. |
+| 500 | `history_projection_incomplete`, `data_validation_error`, `schema_error`, `db_error` | Report the failed read. Keep the previous data. |
+| 429 | Rate limit | Slow down. |
 
-After submitting a wallet transaction, confirm it and read the affected chain accounts. HTTP data updates after indexing. See [Backend services and data](../protocol/backend.md) and [Transaction recovery](../protocol/recovery.md).
+HTTP data changes only after the backend indexes a transaction, so read chain accounts right after you submit one. See [Backend services and data](../protocol/backend.md) and [Transaction recovery](../protocol/recovery.md).

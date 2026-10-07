@@ -1,12 +1,12 @@
 # Governance and Security Model
 
-Acta separates cold governance from hot operations. The cold authority controls protocol configuration and the timelock; the hot wallet runs routine market and oracle operations within those limits. The guardian is an emergency canceller/pause key.
+Acta separates cold governance from hot operations. The cold authority controls protocol configuration and the timelock. The hot wallet runs routine market and oracle operations. The guardian can cancel queued actions and pause.
 
 ## Roles
 
 ### Cold authority (`ACTA_ADMIN`)
 
-The cold authority is the hardcoded public key `CLSYf1AL9rXYjGbSjvexMRegriqpLR37kmLkcqvAgBnN`. Squads v4 supplies the vault PDA's signature after its configured approvals. Acta verifies the `ACTA_ADMIN` signature; membership, approval thresholds and Squads execution delays are enforced by Squads.
+The cold authority is the hardcoded public key `CLSYf1AL9rXYjGbSjvexMRegriqpLR37kmLkcqvAgBnN`. Squads v4 supplies the vault PDA's signature after its configured approvals. Acta verifies the `ACTA_ADMIN` signature. Membership, approval thresholds and Squads execution delays are enforced by Squads.
 
 Cold authority operations:
 - initialize the global config
@@ -26,7 +26,7 @@ The cold authority is separate from the program upgrade authority.
 
 ### Hot wallet (`GlobalConfig.hot_authority`)
 
-The hot wallet is the online key used by backend services. It is stored in `GlobalConfig.hot_authority` and can be rotated by the cold authority without a redeploy.
+The online key used by backend services. The cold authority can rotate it without a redeploy.
 
 Hot wallet operations:
 - create, finalize, and close markets
@@ -39,13 +39,13 @@ The hot wallet cannot modify cold configuration, rotate itself, bypass maker quo
 
 ### Guardian (`GlobalConfig.guardian`)
 
-The guardian is an optional emergency key. It defaults to unset; the default public key does not authorize anyone. The cold authority sets, rotates, or clears it with `SetGuardian`.
+Optional emergency key, unset by default (the default public key authorizes no one). The cold authority sets, rotates, or clears it with `SetGuardian`.
 
 Guardian operations:
 - cancel any queued pending action before execution
-- engage the emergency pause (releasing it / unpause is cold-only)
+- engage the emergency pause (unpause is cold-only)
 
-The guardian cannot queue actions, change configuration, rotate keys or unpause. The cold authority can replace it immediately through `SetGuardian`.
+The guardian cannot queue actions, change configuration, rotate keys or unpause.
 
 ### Permissionless exits
 
@@ -82,11 +82,11 @@ Settlement and liquidation are permissionless. Any signer may settle an expired 
 
 ## Timelock
 
-Acta uses one global delay for timelocked actions: `GlobalConfig.timelock_secs`, from `0` to 604,800 seconds (7 days). Its initial value is `0`. Zero permits immediate execution of a queued action; cold authorization and the instruction commitment still apply.
+Acta uses one global delay for timelocked actions: `GlobalConfig.timelock_secs`, from `0` to 604,800 seconds (7 days). Its initial value is `0`. At `0`, a queued action can execute immediately. It still needs cold authorization and must match its commitment.
 
-The timelock uses a generic store-and-replay model. Queue stores a commitment to the exact wrapped instruction; execute replays the same wrapped instruction after `execute_at`.
+The timelock uses a generic store-and-replay model. Queue stores a commitment to the exact wrapped instruction. Execute replays the same wrapped instruction after `execute_at`.
 
-Cold authorizes the action when queueing it. Once its delay has elapsed, any signer can execute that exact action. The executor pays transaction costs and funds accounts created during execution; closing the pending-action account returns its rent to the original proposer.
+Cold authorizes the action when queueing it. Once its delay has elapsed, any signer can execute that exact action. The executor pays transaction costs and funds accounts created during execution. Closing the pending-action account returns its rent to the original proposer.
 
 Supported premium mints are configured through premium config PDAs. `InitializeConfig` creates a premium config, `UpdateConfig` updates it, and `CloseConfig` closes that premium config.
 
@@ -104,7 +104,7 @@ Timelockable wrapped opcodes:
 | 30 | `RevokeSettlementAttestor` |
 | 26 | `UpdateActionTimelock` |
 
-In production, all listed operations except the immediate raise/keep form of `UpdateActionTimelock` reject direct calls with `DirectCallDisabled`; they must go through queue -> execute. `UpdateActionTimelock` is special: raising or keeping the delay is immediate; lowering it must be queued and waited out under the current delay.
+In production, direct calls to these operations fail with `DirectCallDisabled`. They go through queue -> execute. The exception is `UpdateActionTimelock` raising or keeping the delay, which is immediate. Lowering it is queued under the current delay.
 
 ### Wire Shape
 
@@ -133,15 +133,15 @@ While paused, `OpenPosition` fails with `ProtocolPaused`. Settlement, liquidatio
 
 ## Settlement Attestation
 
-`GlobalConfig.settlement_attestor` optionally names an Ed25519 second signer for hot settlement publication. When unset, the hot wallet uses `UpdateOraclePrice`.
+`GlobalConfig.settlement_attestor` names an optional Ed25519 second signer for hot settlement publication. When unset, the hot wallet uses `UpdateOraclePrice`.
 
 When configured through `SetSettlementAttestor`, the hot wallet uses `UpdateOraclePriceAttested`. An Ed25519 verification instruction for the attestor's domain-separated signature immediately precedes the update in the same transaction. Direct hot publication returns `SettlementAttestationRequired` (1090).
 
-The cold authority retains direct publication because Squads CPI cannot produce the required Ed25519 precompile instruction. `RevokeSettlementAttestor` clears the key and restores direct hot publication. The 32-byte replay domain is retained. Setting and revoking the attestor are cold-authorized, timelocked operations.
+The cold authority retains direct publication because Squads CPI cannot produce the required Ed25519 precompile instruction. `RevokeSettlementAttestor` clears the key and restores direct hot publication. The 32-byte replay domain is retained.
 
 ## Squads Integration
 
-Squads handles approvals and member rotation; Acta checks the cold vault signature. The approval threshold and Squads delay are stored in the multisig account. The Acta timelock separately controls when queued protocol actions become executable, and the guardian can cancel them before execution.
+Squads handles approvals and member rotation and stores the approval threshold and its own delay in the multisig account. Acta checks only the cold vault signature. The Acta timelock is separate and applies to queued protocol actions.
 
 ## Program Upgrade
 
