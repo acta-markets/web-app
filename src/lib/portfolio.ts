@@ -4,29 +4,25 @@ export type PortfolioPosition = {
   id: string;
   asset: string;
   type: PortfolioPositionType;
-  maturityTs: number; // unix seconds
+  maturityTs: number;
 
-  // Position sizing (kept generic; can map to on-chain later)
-  size: number; // base amount (for CSP this can represent quote units received on settlement)
+  size: number;
   notionalUsd: number;
 
-  // Strategy terms
-  apr: number; // percent, e.g. 28 = 28%
+  apr: number;
   currentPriceUsd: number;
   targetPriceUsd: number;
 
-  // Yield received upfront at open
   upfrontYieldUsd: number;
-  openedTs: number; // unix seconds
+  openedTs: number;
 
-  // When closed/settled, add this (optional for now)
   closedTs?: number;
   outcome?: string;
 };
 
 export type PortfolioEarningsEvent = {
-  t: number; // unix seconds
-  deltaUsd: number; // +income, -loss
+  t: number;
+  deltaUsd: number;
 };
 
 export type PortfolioApiResponse =
@@ -40,7 +36,7 @@ export type PortfolioApiResponse =
   | { ok: false; error: string };
 
 export type PortfolioSummary = {
-  weightedApr: number; // percent
+  weightedApr: number;
   nextMaturityTs: number | null;
   totalIncomeUsd: number;
   incomeLast30dUsd: number;

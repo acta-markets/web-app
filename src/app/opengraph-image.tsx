@@ -5,8 +5,6 @@ export const alt = "Acta — Hold and get paid more";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-// Note: satori (behind ImageResponse) requires an explicit `display: flex` on any
-// element with more than one child, so every wrapper below sets it.
 export default function OpengraphImage() {
   return new ImageResponse(
     (

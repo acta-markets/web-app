@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppPill } from "@/components/app-ui/app-pill";
-import { formatUsdSmart } from "@/lib/markets";
+import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 
 type Point = { t: number; v: number };
 type Range = "1w" | "1m" | "3m";
@@ -51,7 +51,6 @@ export function MarketChart({
           .map(([ms, price]) => ({ t: Math.round(ms / 1000), v: price }));
         setHistoryPoints(pts);
       } catch {
-        // ignore
       }
     }
     void loadHistory();
@@ -104,7 +103,6 @@ export function MarketChart({
     const pad = 12;
 
     const s = combinedSeries;
-    // Anchor "now" to the end of the loaded history window so history doesn't reflow on each live tick.
     const nowT =
       historySeries.length >= 2
         ? historySeries[historySeries.length - 1].t
@@ -231,12 +229,12 @@ export function MarketChart({
             </div>
           ) : (
           <svg viewBox={`0 0 ${svg.w} ${svg.h}`} className="block h-full w-full">
-            {/* grid */}
+            {          }
             <g opacity="0.25" stroke="rgba(255,255,255,0.25)" strokeWidth="1">
               <line x1="0" y1={svg.h / 2} x2={svg.w} y2={svg.h / 2} />
             </g>
 
-            {/* future region tint */}
+            {                        }
             <rect
               x={Math.max(0, svg.xNow)}
               y="0"
@@ -245,7 +243,7 @@ export function MarketChart({
               fill="rgba(255,255,255,0.03)"
             />
 
-            {/* strike line */}
+            {                 }
             <g>
               <line
                 x1="0"
@@ -263,11 +261,11 @@ export function MarketChart({
                 fontSize="10"
                 fontFamily="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
               >
-                Strike {formatUsdSmart(strikePrice)} {svg.strikeOff === "above" ? "\u2191" : svg.strikeOff === "below" ? "\u2193" : ""}
+                Strike {formatStrikePrice(strikePrice)} {svg.strikeOff === "above" ? "\u2191" : svg.strikeOff === "below" ? "\u2193" : ""}
               </text>
             </g>
 
-            {/* projection to expiry */}
+            {                          }
             <g>
               <line
                 x1={svg.xNow}
@@ -299,7 +297,7 @@ export function MarketChart({
               </text>
             </g>
 
-            {/* price line */}
+            {                }
             <path d={svg.hist} fill="none" stroke="rgba(128,201,182,0.75)" strokeWidth="2" strokeLinejoin="round" />
             {svg.livePath ? (
               <path
@@ -311,7 +309,7 @@ export function MarketChart({
               />
             ) : null}
 
-            {/* last dot */}
+            {              }
             <circle cx={svg.xNow} cy={svg.yLast} r="3" fill="rgba(128,201,182,0.95)" />
           </svg>
           )}

@@ -20,7 +20,6 @@ export function clearPendingRefCode(): void {
   try {
     window.localStorage.removeItem(STORAGE_KEY);
   } catch {
-    // ignore storage errors
   }
 }
 
@@ -28,7 +27,6 @@ function writePendingRefCode(code: string): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, code);
   } catch {
-    // ignore storage errors
   }
 }
 

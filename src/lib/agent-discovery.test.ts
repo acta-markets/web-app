@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   acceptsMarkdown,
   getAuthMarkdown,
@@ -11,6 +11,20 @@ import {
 } from "@/lib/agent-discovery";
 
 describe("agent discovery", () => {
+  it.each([undefined, "mainnet-beta"])("uses the app network for production discovery with %s", network => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_SOLANA_NETWORK", network);
+    try {
+      expect(getDeploymentContext("http://127.0.0.1:3115/openapi.json")).toMatchObject({
+        environment: "beta",
+        apiOrigin: "https://beta-api.acta.markets",
+        solanaCluster: "mainnet-beta",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("maps devnet hosts to devnet services", () => {
     expect(getDeploymentContext("https://devnet.acta.markets/docs")).toEqual({
       environment: "devnet",

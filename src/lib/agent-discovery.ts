@@ -1,3 +1,5 @@
+import { getNetwork } from "./tokens";
+
 export type ActaEnvironment = "devnet" | "beta";
 
 export interface DeploymentContext {
@@ -11,7 +13,7 @@ export interface DeploymentContext {
 export const DOCS_SITE_ORIGIN = "https://docs.acta.markets";
 
 function configuredEnvironment(): ActaEnvironment {
-  return process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet" ? "beta" : "devnet";
+  return getNetwork() === "mainnet" ? "beta" : "devnet";
 }
 
 export function configuredSiteOrigin(): string {

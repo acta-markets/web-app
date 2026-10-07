@@ -13,16 +13,11 @@ export function getNetwork(): Network {
   if (env === "devnet") return "devnet";
   if (env === "mainnet" || env === "mainnet-beta") return "mainnet";
 
-  // Safer default for local development: avoid accidental mainnet mints
-  // when env vars are not loaded.
   return process.env.NODE_ENV === "production" ? "mainnet" : "devnet";
 }
 
 export const IS_MAINNET = getNetwork() === "mainnet";
 
-// ============================================================================
-// Token Configuration
-// ============================================================================
 
 export interface TokenConfig {
   symbol: string;
@@ -58,7 +53,7 @@ export const TOKENS: Record<string, TokenConfig> = {
     logo: "/tokens/jitosol.png",
     mint: {
       mainnet: "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
-      devnet: "So11111111111111111111111111111111111111112", // Devnet underlying mint
+      devnet: "So11111111111111111111111111111111111111112",
     },
   },
   JLP: {
@@ -118,14 +113,11 @@ export const TOKENS: Record<string, TokenConfig> = {
     logo: "/tokens/usdc-official.svg",
     mint: {
       mainnet: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-      devnet: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr", // Devnet quote/premium mint
+      devnet: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr",
     },
   },
 };
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
 /**
  * Get token config by symbol (case-insensitive)

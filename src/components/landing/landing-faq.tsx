@@ -29,7 +29,6 @@ const ITEMS = [
     a: "At the end of any weekly cycle. Deposits and withdrawals are processed at cycle boundaries so every position stays fully collateralized for the whole week.",
   },
   {
-    // TODO(tim): confirm
     q: "Is it audited?",
     a: "Audit is in progress. The protocol is non-custodial and settles on-chain. Reports will be linked in the docs when complete.",
   },

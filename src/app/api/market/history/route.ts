@@ -53,7 +53,6 @@ export async function GET(req: Request) {
 
   try {
     const res = await fetch(endpoint, {
-      // Cache a bit to avoid rate limits.
       next: { revalidate: 60 }
     });
     if (!res.ok) {
@@ -61,7 +60,6 @@ export async function GET(req: Request) {
     }
     const json = (await res.json()) as { prices?: Array<[number, number]> };
     const points = Array.isArray(json.prices) ? json.prices : [];
-    // Return as ms timestamp + price
     return NextResponse.json({ ok: true, source: "coingecko", points });
   } catch {
     return NextResponse.json({ ok: true, source: "none", points: [] as Array<[number, number]> });

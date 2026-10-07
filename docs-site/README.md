@@ -1,25 +1,22 @@
-# Acta Protocol — Tech Docs
+# Getting started
 
-## Overview
+On Acta you choose a price at which you want to buy or sell an asset, and earn yield while you wait. Market makers pay you that yield up front. On the chosen date, if the market has reached your price, the trade happens at your price; if not, you get your funds back. The yield is yours either way.
 
-- [Protocol flow](reference/protocol-flow.md) — actors, RFQ mechanics, trade lifecycle, economics, fees, risk
+There are three ways to use it:
 
-## Quickstart
+- **Earn.** Pick an asset, the price you want to buy or sell at, and a date. A market maker pays you yield right away. [How Earn works](guide/options.md).
+- **Deposit into a vault.** A manager trades pooled funds on Acta; you hold shares. [How vaults work](guide/vaults.md).
+- **Make markets.** Market makers connect over WebSocket and quote the yield on incoming requests. [How the maker works](protocol/maker.md).
 
-- [Taker quickstart](quickstart/taker-quickstart.md) — auth, RFQ, accept, sponsored tx (language-neutral)
-- [Taker wire examples](quickstart/taker-wire-examples.md) — complete JSON session + branch scenarios
-- [Web client SDK (TypeScript)](quickstart/web-client-ts-sdk.md) — taker integration via TS SDK
-- [Maker quickstart](quickstart/maker-quickstart.md) — keypairs, registration, first quote
-- [Maker wire examples](quickstart/maker-wire-examples.md) — complete JSON session
-- [Rust Maker SDK](quickstart/maker-rust-sdk.md) — Rust SDK integration guide
+## Your first trade
 
-## Reference
+1. Open **Earn** and choose a side:
+   - **Calls**: sell higher. You lock SOL. If SOL ends above your price, it is sold at your price.
+   - **Puts**: buy lower. You lock USDC. If SOL ends below your price, your USDC buys SOL at your price.
+2. Pick the asset and a price. Each price comes with its date.
+3. Enter the amount and click **Deposit**. The app gets a live quote from market makers and shows the yield.
+4. Click **Sign & submit transaction**. The yield lands in your wallet when the transaction confirms.
 
-- [Maker API](reference/maker-api.md) — WS messages, quote rules, events, enums
-- [Taker API](reference/taker-api.md) — WS messages, RFQs, sponsored transactions
-- [WS common conventions](reference/ws-common.md) — encodings, units, collateral formulas, timeouts
-- [HTTP API](reference/http-api.md) — REST endpoints
-- [Capacity limits](reference/caps.md) — OI caps, maker limits, monitoring
-- [Governance and security](reference/governance.md) — cold/hot authority split, authority matrix, on-chain timelock
-- [Sandbox / Devnet](reference/sandbox.md) — test environment, endpoints, program addresses
-- [FAQ](reference/faq.md) — common questions and troubleshooting
+On the date you get back either your funds or the other asset at your price. You keep the yield in both cases. Keep a little SOL for transaction fees.
+
+APIs, SDKs and contract rules are in [Protocol & integrations](protocol.md).
