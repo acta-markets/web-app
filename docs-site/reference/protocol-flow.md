@@ -16,6 +16,12 @@ API payloads are in [Maker API](maker-api.md), [Taker API](taker-api.md), and [W
 
 The maker is the option buyer and the taker is the writer. The `is_taker_buy` field in the order-id preimage is fixed at `0`; a taker-buys-the-option market type is reserved but not implemented.
 
+Vaults can participate on either side. A writer vault locks its collateral; a
+holder vault pays premium and signs quotes through its active primary delegate.
+Vault execution uses the operator transaction signature and the holder's quote
+signature rather than the ordinary hot-authority co-signature. See
+[Roles and permissions](../protocol/vault-permissions.md).
+
 ## What an RFQ does
 
 There is no order book. The taker drives a sealed auction, makers stream signed quotes, and the taker picks the winner.
@@ -56,7 +62,7 @@ Makers receive `RfqBroadcast`, choose a premium, build a 32-byte `order_id`, sig
 
 ### 4. Accept and open
 
-The taker sends `AcceptQuote { maker, order_id }`. The backend returns a sponsored transaction; the taker signs it and returns it with `SubmitSignedSponsoredTx`. On chain, `OpenPosition` requires the taker's signature, the maker's Ed25519 signature over `order_id`, and the keeper co-signature. If those pass, the position opens atomically; risk transfers here (see [Risk model](#risk-model)).
+The taker sends `AcceptQuote { maker, order_id }`. The backend returns a sponsored transaction; the taker signs it and returns it with `SubmitSignedSponsoredTx`. Ordinary `OpenPosition` requires the taker's signature, the maker's Ed25519 signature over `order_id`, and the keeper co-signature. Vault paths use the operator and holder signatures described above. The transaction atomically opens the position and transfers the premium. See [Custody and settlement funding](#custody-and-settlement-funding).
 
 ## Timing and deadlines
 
@@ -183,19 +189,17 @@ Who holds and receives what:
 | ITM: maker receives | Taker's underlying collateral | Taker's quote collateral |
 | OTM: each side keeps | Taker keeps collateral; maker keeps settlement deposit | Same |
 
-## Risk model
+## Custody and settlement funding
 
-Every position is fully collateralized at open in its own escrow. There is no leverage, no maintenance margin, no mark-to-market, no margin call, and no early exercise. Positions open before expiry and resolve only after market finalization.
+The writer deposits the full collateral into position escrow at open. Options have no leverage or maintenance margin and cannot be exercised early. Positions open before expiry and settle after market finalization.
 
-Custody is per-position. Taker collateral and the maker's settlement deposit each sit in escrow accounts owned by the position PDA; the maker's premium balance sits in the maker PDA. The protocol never holds principal risk; it custodies escrow and routes settlement. The counterparty is a specific maker, not a pool or the protocol: each position names one taker and one maker.
+Taker collateral and maker settlement funds sit in separate escrow accounts owned by the position PDA. The maker's premium balance sits in the maker PDA. Each position names one taker and one maker.
 
-Taker collateral is locked at open. An ITM payout requires the maker to fund settlement or a liquidator to supply the settlement asset. The contract provides both paths; it does not guarantee when a willing, funded liquidator will execute the latter.
+The maker pays the premium at open and funds settlement separately through `DepositFundsToPosition`. For an ITM position without that deposit, normal settlement fails and the position stays `open`. A liquidator can supply the settlement asset, pay the taker, receive the taker's collateral and close the position as `liquidated`. The maker loses the premium already paid; no further debt is recorded against it.
 
-The maker pays the premium at open and may fund the settlement leg later. The settlement leg is not pre-funded at open. If the option expires ITM and the maker never called `DepositFundsToPosition`, normal settlement fails and the position stays `open`; a liquidator then pays the taker the settlement asset, takes the taker's collateral, and closes the position as `liquidated`. The maker forfeits the premium already paid, and the protocol enforces no further debt. The contract does not create an additional claim against the maker for an unfunded settlement leg.
+Liquidation is available for unfunded ITM positions after expiry and market finalization. Any participant can execute it by supplying the required settlement asset. The taker receives payment when that transaction confirms.
 
-Liquidation is post-expiry only: an ITM, unfunded position after finalization, not a price-threshold or maintenance call. It is permissionless but not automatic; the protocol exposes the path and does not run the liquidator. The taker is paid when the liquidation transaction lands.
-
-Backend caps are a separate risk control layered on top: platform caps (token open interest per underlying, quote notional per quote mint, market open interest) apply to everyone; maker caps (open position count, notional per underlying, deposited premium balance) apply to makers. See [Capacity limits](caps.md).
+Platform caps limit token open interest, quote notional and market open interest. Maker caps limit open positions, notional exposure and premium commitments. See [Capacity limits](caps.md).
 
 ## State machine and events
 
@@ -204,7 +208,7 @@ Terminal states:
 - RFQ: expired, cancelled, or filled.
 - Position: settled or liquidated.
 
-Events worth tracking end to end:
+Lifecycle events:
 
 | Event | When |
 | --- | --- |
@@ -215,12 +219,12 @@ Events worth tracking end to end:
 | `ChainEvent(position_settled)` | Assets distributed. |
 | `ChainEvent(position_liquidated)` | Unfunded ITM position liquidated. |
 
-`RegisterMaker`, `DepositPremium`, `WithdrawPremium`, and `DepositFundsToPosition` are Solana on-chain instructions, not WebSocket messages; build and submit them as transactions signed by the relevant owner wallet. Contact the Acta team for the program IDL and account layouts.
+`RegisterMaker`, `DepositPremium`, `WithdrawPremium` and `DepositFundsToPosition` are Solana instructions, not WebSocket messages. Build and submit them in transactions signed by the required authorities.
 
 ## Related docs
 
 - [Maker API](maker-api.md) / [Taker API](taker-api.md) — full WS message catalogues
-- [WS common conventions](ws-common.md) — encodings, units, time hierarchy, collateral formulas
-- [Capacity limits](caps.md) — cap layers and monitoring
-- [Governance and security](governance.md) — authority split, permissionless settlement/liquidation
-- [Sandbox / Devnet](sandbox.md) — onboarding, endpoints, program addresses
+- [WS common conventions](ws-common.md): encodings, units, time hierarchy, collateral formulas
+- [Capacity limits](caps.md): cap layers and monitoring
+- [Governance and security](governance.md): authority split, permissionless settlement/liquidation
+- [Endpoints and maker registration](sandbox.md)

@@ -31,7 +31,7 @@ The hot wallet is the online key used by backend services. It is stored in `Glob
 Hot wallet operations:
 - create, finalize, and close markets
 - create and close concrete oracle accounts from already-approved oracle sources
-- publish a post-expiry scalar settlement price to an oracle account. `UpdateOraclePrice` checks the live `hot_authority`, and works for the hot wallet only while no settlement attestor is configured: once `GlobalConfig.settlement_attestor` is set, direct hot publication is rejected on-chain (`SettlementAttestationRequired`, 1090) and settlement requires `UpdateOraclePriceAttested` with an Ed25519 attestation from that key — a 2-of-2 of hot key and attestor key. The cold authority retains a break-glass direct path
+- publish post-expiry settlement prices through `UpdateOraclePrice`, or through `UpdateOraclePriceAttested` when an attestor is configured
 - co-sign `OpenPosition`
 - withdraw collected protocol fees
 
@@ -45,7 +45,7 @@ Guardian operations:
 - cancel any queued pending action before execution
 - engage the emergency pause (releasing it / unpause is cold-only)
 
-The guardian cannot queue pending actions, rotate itself, rotate the hot wallet, unpause, or authorize hot/cold configuration changes. A guardian is a single trusted key: if compromised it can only grief (veto-spam queued actions, re-engage the pause) and the cold authority recovers by rotating it with `SetGuardian` (immediate).
+The guardian cannot queue actions, change configuration, rotate keys or unpause. The cold authority can replace it immediately through `SetGuardian`.
 
 ### Permissionless exits
 
@@ -123,17 +123,21 @@ sha256(
 )
 ```
 
-Client note: generated Codama builders for `QueuePendingAction` and `ExecutePendingAction` expose only the wrapped `opcode`, so they are not sufficient for real generic timelock payloads. Use the SDK flow helpers or manually build the full wrapped wire layout above.
+`QueuePendingAction` and `ExecutePendingAction` Codama builders expose only the wrapped `opcode`. Generic timelock payloads require SDK flow helpers or the full wire layout above.
 
 ## Emergency Pause
 
-`SetPause` sets the `PAUSED` bit in `GlobalConfig.flags`. **Engaging** the pause is immediate for cold or guardian; **releasing** it (unpause) is **cold-only**, so a compromised guardian cannot unpause to resume an attack.
+`SetPause` sets the `PAUSED` bit in `GlobalConfig.flags`. Cold authority or guardian can pause immediately. Only cold authority can unpause.
 
 While paused, `OpenPosition` fails with `ProtocolPaused`. Settlement, liquidation, and other exit paths remain available.
 
 ## Settlement Attestation
 
-`GlobalConfig.settlement_attestor` optionally names an independent Ed25519 second signer for hot settlement publication. While it is unset (all-zero), `UpdateOraclePrice` behaves as described above. Once set (`SetSettlementAttestor`, cold-only), the hot wallet's direct call fails with `SettlementAttestationRequired` (1090); settlement then requires `UpdateOraclePriceAttested`, where an Ed25519 verify instruction signed by the attestor over a domain-separated message must immediately precede the update in the same transaction. The cold authority keeps the direct path as break-glass (Ed25519 precompile instructions cannot be produced through Squads CPI). `RevokeSettlementAttestor` (cold-only) clears the key and deliberately returns hot settlement to direct mode; the 32-byte replay domain is retained so signatures can never be replayed across deployments.
+`GlobalConfig.settlement_attestor` optionally names an Ed25519 second signer for hot settlement publication. When unset, the hot wallet uses `UpdateOraclePrice`.
+
+When configured through `SetSettlementAttestor`, the hot wallet uses `UpdateOraclePriceAttested`. An Ed25519 verification instruction for the attestor's domain-separated signature immediately precedes the update in the same transaction. Direct hot publication returns `SettlementAttestationRequired` (1090).
+
+The cold authority retains direct publication because Squads CPI cannot produce the required Ed25519 precompile instruction. `RevokeSettlementAttestor` clears the key and restores direct hot publication. The 32-byte replay domain is retained. Setting and revoking the attestor are cold-authorized, timelocked operations.
 
 ## Squads Integration
 

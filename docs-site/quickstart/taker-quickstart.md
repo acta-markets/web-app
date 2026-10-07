@@ -1,8 +1,8 @@
 # Acta Taker Quickstart
 
-JSON-layer path for a taker: auth, discover markets, open an RFQ, accept a quote, sign the sponsored transaction, and track the resulting position. This is the language-neutral protocol walkthrough; a TypeScript SDK wraps the same flow in [`web-client-ts-sdk.md`](web-client-ts-sdk.md).
+Authenticate, discover markets, request quotes, sign a trade and track the resulting position. The [TypeScript client SDK](web-client-ts-sdk.md) wraps this WebSocket flow.
 
-The message catalogue is in [`../reference/taker-api.md`](../reference/taker-api.md); units and envelopes are in [`../reference/ws-common.md`](../reference/ws-common.md); trade mechanics and settlement are in [`../reference/protocol-flow.md`](../reference/protocol-flow.md); onboarding is in [`../reference/sandbox.md`](../reference/sandbox.md).
+See [Taker API reference](../reference/taker-api.md) for message fields and [WebSocket conventions](../reference/ws-common.md) for units and signing rules.
 
 A taker needs only a Solana wallet keypair. There is no registration and no on-chain setup step: any wallet can open RFQs (rate-limited, and invite-gated on closed mainnet — see [Invite gating](#invite-gating-closed-mainnet)).
 
@@ -134,8 +134,8 @@ Makers stream `QuoteReceived`. Each quote is firm and hash-bound via `order_id`:
 }
 ```
 
-- `price` — gross premium per 1 underlying unit (1e9 scale). Use this and `order_id` for all order operations.
-- `net_price` — display-only estimate after protocol fee. Show `net_price`; the authoritative net is computed on-chain at open.
+- `price`: gross premium per 1 underlying unit (1e9 scale). Use this and `order_id` for all order operations.
+- `net_price`: display-only estimate after protocol fee. Show `net_price`; the authoritative net is computed on-chain at open.
 
 You pick the winner — the server's "best" ranking is advisory only. Winner-take-all: one quote fills the full quantity, no partial fills.
 
@@ -242,7 +242,7 @@ Apply updates only when `order_version` / `rfq_version` increases; ignore stale 
 
 | Reason | Retryable? |
 |---|---|
-| `blockhash_expired` | Keeper may retry within five attempts. This does not guarantee rollback; reconcile `GetOrderStatus` and wait for `RfqAvailableAgain` or `RfqClosed`. Do not replay the old order. |
+| `blockhash_expired` | Keeper may retry within five attempts. Reconcile `GetOrderStatus` and wait for `RfqAvailableAgain` or `RfqClosed` before selecting another quote. |
 | `on_chain`, `submission_rejected`, `safety_timeout`, `shutdown` | No. Surface to the user. |
 
 On a signature timeout or tx-build failure, only the winning quote is discarded; still-valid losing quotes are restored and the RFQ reverts to active if not expired.
@@ -257,7 +257,7 @@ The server responds with `RfqClosed { reason: "taker_cancelled" }`.
 
 ## Position lifecycle
 
-Once open, the position's collateral is locked in its own escrow — no margin, no early exercise. Settlement requires a finalized market. For an ITM position, the maker supplies the settlement asset; if it remains unfunded, a permissionless liquidator can supply that asset and receive the corresponding collateral. Locked collateral does not guarantee a liquidation deadline: completion depends on someone providing the required funding.
+Position collateral stays in escrow until settlement after market finalization. Options cannot be exercised early. For an ITM position, the maker supplies the settlement asset. If the position remains unfunded, a permissionless liquidator can supply that asset and receive the collateral.
 
 | Status | Meaning |
 |---|---|
@@ -301,7 +301,7 @@ The authenticated session proves wallet ownership; no separate signature is need
 | Signature deadline | `min(now + 30s, quote effective_expiry, rfq.expires_at)`. Sign promptly after `AcceptQuote`. |
 | Rate limits | Per-taker active-RFQ cap (default 10) and platform cap; `RateLimit` errors carry a reason code. |
 
-Note: `valid_until` (on-chain order validity) is the maker's concern, not the taker's — the taker never sets it.
+`valid_until` is set by the maker; the taker never sets it.
 
 ## Integrating from other languages
 
@@ -311,17 +311,17 @@ The reference docs are the language-neutral wire spec. To build a taker client i
 2. A Solana library that can deserialize, partially sign, and re-serialize a **v0 `VersionedTransaction`** — e.g. `solders` / `solana-py` (Python), `solana-sdk` (Rust), `@solana/web3.js` (TS).
 3. A WebSocket client that answers protocol pings.
 
-No on-chain RPC is required for the RFQ flow itself — markets, quotes, positions, and the sponsored transaction all arrive over WS. Contact the Acta team for a Rust or Python starter if you are not on TypeScript.
+The RFQ flow itself does not require direct RPC: markets, quotes, positions and the sponsored transaction arrive over WebSocket.
 
 ## Reference
 
-- [Taker API reference](../reference/taker-api.md) — message catalogue and error variants
-- [Taker wire examples](taker-wire-examples.md) — complete JSON session + branch scenarios
-- [Web client SDK (TypeScript)](web-client-ts-sdk.md) — the same flow via `@acta-markets/ts-sdk`
-- [Protocol flow](../reference/protocol-flow.md) — trade lifecycle, economics, settlement, risk
-- [WS common conventions](../reference/ws-common.md) — units, envelopes, collateral formulas, timeouts
-- [Capacity limits](../reference/caps.md) — OI and notional caps
-- [Sandbox / Devnet](../reference/sandbox.md) — endpoints, faucets, program addresses
+- [Taker API reference](../reference/taker-api.md): message catalogue and error variants
+- [Taker wire examples](taker-wire-examples.md): complete JSON session + branch scenarios
+- [Web client SDK (TypeScript)](web-client-ts-sdk.md): the same flow via `@acta-markets/ts-sdk`
+- [Protocol flow](../reference/protocol-flow.md): trade lifecycle, economics, settlement, risk
+- [WS common conventions](../reference/ws-common.md): units, envelopes, collateral formulas, timeouts
+- [Capacity limits](../reference/caps.md): OI and notional caps
+- [Endpoints and maker registration](../reference/sandbox.md)
 - [FAQ](../reference/faq.md)
 
 ## Recovery after reconnect

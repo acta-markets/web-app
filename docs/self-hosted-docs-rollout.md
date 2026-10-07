@@ -20,10 +20,6 @@ The implementation does not require a second Vercel project:
 ## Architecture
 
 ```text
-public-docs
-      │
-      │ npm run sync:docs
-      ▼
 web-app/docs-site ── SUMMARY.md
       │
       ├── Next.js server-rendered Markdown
@@ -40,14 +36,15 @@ web-app/docs-site ── SUMMARY.md
 Canonical URLs use `https://docs.acta.markets`. The `/docs` versions remain
 available for previews and same-origin navigation.
 
+Content is maintained in this repository. The separate `public-docs` repository
+has no build or synchronization dependency here.
+
 ## Repository checks
 
 Run before review or deployment:
 
 ```bash
-npm run sync:docs
 npm run check:docs
-npm run check:docs-source
 npm test
 npm run build
 ```
@@ -58,9 +55,7 @@ npm run build
 - duplicate `SUMMARY.md` entries;
 - documentation pages missing from the sidebar.
 
-`check:docs-source` additionally detects drift from `public-docs` when that
-sibling repository is available. The regular validation remains runnable in an
-isolated CI checkout.
+Validation runs in an isolated checkout.
 
 ## Local verification
 

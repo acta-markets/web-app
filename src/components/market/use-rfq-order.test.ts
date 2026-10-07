@@ -218,7 +218,6 @@ describe("taker order flow", () => {
     h.sign.mockImplementation(() => new Promise(r => { resolve = r; })); await h.select();
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.sign).toHaveBeenCalled());
-    // Public disconnect emits stateChange, not the remote-close disconnected event.
     h.emit("stateChange", "disconnected");
     expect(h.result.current.flow.type).toBe("recovering");
     await act(async () => resolve({ serialize: () => new Uint8Array([1]) } as VersionedTransaction));

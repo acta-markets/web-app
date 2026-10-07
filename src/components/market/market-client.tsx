@@ -103,7 +103,6 @@ function useTokenBalance(walletAddress: string | undefined, tokenSymbol: string)
     async function fetch() {
       try {
         const owner = new PublicKey(walletAddress!);
-        // For SOL/WSOL: use native SOL balance
         if (tokenSymbol.toUpperCase() === "SOL" || tokenSymbol.toUpperCase() === "WSOL") {
           const lamports = await conn.getBalance(owner);
           if (!cancelled) setBalance(lamports / 10 ** decimals);
@@ -116,7 +115,6 @@ function useTokenBalance(walletAddress: string | undefined, tokenSymbol: string)
         });
         let total = 0;
         for (const { account } of accounts.value) {
-          // SPL token account data: amount is at offset 64, 8 bytes LE
           const data = account.data;
           const raw = data.readBigUInt64LE(64);
           total += Number(raw) / 10 ** decimals;
@@ -145,8 +143,6 @@ export function MarketClient({ asset }: { asset: string }) {
 
   const market = useMemo(() => getMarket(asset, type), [asset, type]);
   const [assetOpen, setAssetOpen] = useState(false);
-  // const [chartOpen, setChartOpen] = useState(false);
-  // const [chartRange, setChartRange] = useState<"1w" | "1m" | "3m">("1w");
   const assetOptions = useMemo(() => {
     const uniq = new Map<string, string>();
     for (const m of MARKETS) uniq.set(m.asset.toUpperCase(), m.asset);
@@ -166,7 +162,6 @@ export function MarketClient({ asset }: { asset: string }) {
   const [deposit, setDeposit] = useState("");
   const depositInputRef = useRef<HTMLInputElement>(null);
 
-  // RFQ Flow state
   const [rfqModalOpen, setRfqModalOpen] = useState(false);
   const [rfqRequestNonce, setRfqRequestNonce] = useState(0);
   const [isRequestingQuote, setIsRequestingQuote] = useState(false);
@@ -174,7 +169,6 @@ export function MarketClient({ asset }: { asset: string }) {
   const [orderPreview, setOrderPreview] = useState<RfqOrderPreview | null>(null);
   const [indicativeRequestedKey, setIndicativeRequestedKey] = useState<string | null>(null);
 
-  // Global RFQ context (markets already fetched on app load)
   const {
     markets: rfqMarkets,
     tokenCaps,
@@ -195,7 +189,6 @@ export function MarketClient({ asset }: { asset: string }) {
     ? tokenMarketsSnapshot.data : null;
   const isReferralGated = referralStatus === "required";
 
-  // All RFQ markets matching this asset+type, sorted by expiry (nearest first).
   const matchingMarkets = useMemo(() => {
     if (!market) return [];
     const isPut = type === "csp";
@@ -234,7 +227,6 @@ export function MarketClient({ asset }: { asset: string }) {
       .sort((a, b) => Number(a.expiry_ts) - Number(b.expiry_ts));
   }, [tokenMarketsInfo, rfqMarkets, type, market]);
 
-  // Resolve RFQ market PDA
   const rfqMarketPda = useMemo(() => {
     if (matchingMarkets.length > 0) {
       const m = matchingMarkets[strikeIdx];
@@ -250,7 +242,6 @@ export function MarketClient({ asset }: { asset: string }) {
     return undefined;
   }, [marketParam, rfqMarkets, matchingMarkets, strikeIdx, market]);
 
-  // Sync strikeIdx when arriving via ?market=<pda> URL param.
   useEffect(() => {
     if (!marketParam || matchingMarkets.length === 0) return;
     const idx = matchingMarkets.findIndex(m => m.pda === marketParam);
@@ -260,7 +251,6 @@ export function MarketClient({ asset }: { asset: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketParam, matchingMarkets]);
 
-  // Clamp strikeIdx when matching markets change.
   useEffect(() => {
     if (matchingMarkets.length > 0 && strikeIdx >= matchingMarkets.length) {
       setStrikeIdx(0);
@@ -289,14 +279,12 @@ export function MarketClient({ asset }: { asset: string }) {
     isResolvingRfqMarket ||
     (!!currentIndicativeKey && (!hasRequestedCurrentIndicative || !hasCurrentIndicativePrices));
 
-  // Expiry dates from all matching markets (one button per date).
   const strikeDates = useMemo(
     () => matchingMarkets.map(m => new Date(Number(m.expiry_ts) * 1000)),
     [matchingMarkets]
   );
   const expiryFromMarket = strikeDates.length > 0 ? strikeDates[strikeIdx] ?? strikeDates[0] : null;
 
-  // Refresh spot and indicative premiums together from the selected backend.
   const wsReady = connectionState === "connected" || connectionState === "authenticated";
   useEffect(() => {
     if (!wsReady || !market) return;
@@ -307,7 +295,6 @@ export function MarketClient({ asset }: { asset: string }) {
     return () => window.clearInterval(id);
   }, [wsReady, market, getTokenMarketsInfo]);
 
-  // Mark indicative as requested when market PDA is resolved.
   useEffect(() => {
     if (!rfqMarketPda) return;
     setIndicativeRequestedKey(`${rfqMarketPda}:${positionType}`);
@@ -319,7 +306,6 @@ export function MarketClient({ asset }: { asset: string }) {
     }
   }, [currentIndicativeKey]);
 
-  // Solana wallet via Wallet Standard
   const { selectedAccount, signTransaction: solanaSignTransaction } = useSolana();
   const { openSidebar } = useWalletSidebar();
 
@@ -328,10 +314,7 @@ export function MarketClient({ asset }: { asset: string }) {
   const depositToken = type === "call" ? market?.asset ?? asset : "USDC";
   const walletBalance = useTokenBalance(walletAddress, depositToken);
 
-  // useEffect(() => {
-  //   setChartOpen(window.innerWidth >= 1024);
   //   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // }, []);
 
   useEffect(() => {
     if (!assetOpen) return;
@@ -352,7 +335,6 @@ export function MarketClient({ asset }: { asset: string }) {
     };
   }, [assetOpen]);
 
-  // Price options with APR calculated from indicative prices
   const priceOptionsWithApr = useMemo(() => {
     const expiryTs = matchingMarkets[strikeIdx]?.expiry_ts ? Number(matchingMarkets[strikeIdx].expiry_ts) : 0;
     const secondsToExpiry = expiryTs > 0 ? expiryTs - Math.floor(Date.now() / 1000) : 0;
@@ -374,7 +356,6 @@ export function MarketClient({ asset }: { asset: string }) {
             });
             apr = result.apr;
           } catch {
-            // ignore
           }
         }
 
@@ -395,7 +376,6 @@ export function MarketClient({ asset }: { asset: string }) {
     type,
   ]);
 
-  // Extract just the strike prices for backward compatibility
   const priceOptions = useMemo(() => priceOptionsWithApr.map(o => o.strike), [priceOptionsWithApr]);
 
   useEffect(() => {
@@ -466,7 +446,6 @@ export function MarketClient({ asset }: { asset: string }) {
     []
   );
 
-  // Calculate term from expiry date
   const expiryDate = strikeDates[strikeIdx] ?? strikeDates[0] ?? new Date();
   const isLiveMarketReady = !!expiryFromMarket;
   const msToExpiry = expiryDate.getTime() - Date.now();
@@ -511,7 +490,6 @@ export function MarketClient({ asset }: { asset: string }) {
     type === "call" ? (depositOk ? depositNum * (spot ?? 0) : 0) : depositOk ? depositNum : 0;
   const selectedApr = selectedPriceOption?.apr != null ? selectedPriceOption.apr * 100 : null;
 
-  // Premium directly from indicative best_price (per-unit, 1e9 scale).
   const bestPricePerUnit = selectedPriceOption?.bestPrice
     ? Number(selectedPriceOption.bestPrice) / 1_000_000_000
     : 0;
@@ -562,7 +540,6 @@ export function MarketClient({ asset }: { asset: string }) {
   const sizeRuleMin = depositRule?.min ?? 0;
   const sizeRuleStep = depositRule?.step ?? 0;
   const rawMax = walletBalance != null ? Math.min(walletBalance, sizeRuleMax) : sizeRuleMax;
-  // Snap down to the nearest valid step
   const maxPresetNum = sizeRuleStep > 0
     ? Math.max(sizeRuleMin, sizeRuleMin + Math.floor((rawMax - sizeRuleMin) / sizeRuleStep) * sizeRuleStep)
     : rawMax;
@@ -773,9 +750,9 @@ export function MarketClient({ asset }: { asset: string }) {
 
   return (
     <div>
-      {/* Header */}
+      {            }
       <header className="mx-auto w-full max-w-[850px] space-y-6 pb-20 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pb-10 max-md:pt-16">
-        {/* Breadcrumb */}
+        {                }
         <div className="flex items-center gap-0.5 font-mono text-base leading-[1.2] tracking-[-0.32px]">
           <Link href="/earn" className="text-content-secondary hover:text-content-primary">
             Earn
@@ -785,7 +762,7 @@ export function MarketClient({ asset }: { asset: string }) {
         </div>
 
         <div className="flex items-start justify-between gap-4">
-          {/* Left: asset name + description */}
+          {                                    }
           <div className="flex w-[298px] min-w-0 flex-col gap-4 max-md:w-auto">
             <div className="flex items-center gap-5">
               <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary">
@@ -804,7 +781,7 @@ export function MarketClient({ asset }: { asset: string }) {
             </p>
           </div>
 
-          {/* Right: Spot / Cap info box */}
+          {                                }
           <AppCard className="hidden shrink-0 items-center gap-3 px-4 py-2.5 md:flex">
             <div className="flex flex-col items-center gap-1.5 text-center">
               <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
@@ -834,7 +811,7 @@ export function MarketClient({ asset }: { asset: string }) {
           </AppCard>
         </div>
 
-        {/* Mobile spot/cap */}
+        {                     }
         <AppCard className="flex items-center justify-center gap-3 px-4 py-4 md:hidden">
           <div className="flex flex-1 flex-col items-center gap-1.5">
             <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
@@ -864,14 +841,14 @@ export function MarketClient({ asset }: { asset: string }) {
         </AppCard>
       </header>
 
-      {/* Main content */}
+      {                  }
       <div className="mx-auto flex w-full max-w-[850px] gap-5 pb-16 max-xl:px-[71px] max-lg:px-6 max-md:flex-col max-md:px-3">
-        {/* Mobile chart (above form on small screens) */}
-        {/* {chartOpen && <div className="hidden max-lg:block">{chartEl}</div>} */}
+        {                                                }
+        {                                                                         }
 
-        {/* Left column: form */}
+        {                       }
         <div className="min-w-0 flex-1 space-y-5">
-          {/* Expiry */}
+          {            }
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <h3 className="shrink-0 font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary max-md:text-xl">
@@ -907,7 +884,7 @@ export function MarketClient({ asset }: { asset: string }) {
               </div>
             </div>
 
-            {/* Price selection */}
+            {                     }
             <AppCard className="p-4 max-md:p-3">
               <p className="font-mono text-base leading-[1.2] tracking-[-0.32px] text-content-secondary">
                 {type === "call" ? "Choose the price you\u2019re happy to sell" : "Choose the price you\u2019re happy to buy"}{" "}
@@ -959,9 +936,9 @@ export function MarketClient({ asset }: { asset: string }) {
               ) : null}
             </AppCard>
 
-            {/* Deposit box */}
+            {                 }
             <AppCard className="p-4 max-md:p-3">
-              {/* Deposit tabs */}
+              {                  }
               <div className="flex">
                 <button
                   type="button"
@@ -997,20 +974,20 @@ export function MarketClient({ asset }: { asset: string }) {
                 </button>
               </div>
 
-              {/* Deposit input + info */}
+              {                          }
               <div className="mt-4 flex flex-col gap-3">
-                {/* Input */}
+                {           }
                 <div
                   className="flex cursor-text flex-col gap-2 overflow-clip border border-[rgba(240,240,240,0.1)] bg-action-primary p-4"
                   onClick={() => depositInputRef.current?.focus()}
                 >
-                  {/* Top row */}
+                  {             }
                   <div className="flex items-center justify-between font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
                     <span>Deposit</span>
                     <span>~${depositOk ? Math.round(notionalUsd).toLocaleString("en-US") : "0"}</span>
                   </div>
 
-                  {/* Token + value */}
+                  {                   }
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="h-6 w-6 overflow-hidden rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary">
@@ -1034,7 +1011,7 @@ export function MarketClient({ asset }: { asset: string }) {
                     />
                   </div>
 
-                  {/* Balance + HALF/MAX */}
+                  {                        }
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-primary">
                       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="shrink-0 text-content-primary">
@@ -1061,7 +1038,7 @@ export function MarketClient({ asset }: { asset: string }) {
                   </div>
                 </div>
 
-                {/* Size rule info / violation */}
+                {                                }
                 {depositRule ? (
                   <div
                     className={`font-mono text-xs leading-[1.2] tracking-[-0.24px] ${
@@ -1082,7 +1059,7 @@ export function MarketClient({ asset }: { asset: string }) {
                   </div>
                 ) : null}
 
-                {/* Info row */}
+                {              }
                 <div className="flex items-center gap-4 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
                   <div className="flex items-center gap-1.5">
                     <span className="text-content-secondary">APR</span>
@@ -1103,10 +1080,10 @@ export function MarketClient({ asset }: { asset: string }) {
             </AppCard>
           </div>
 
-          {/* Divider */}
+          {             }
           <div className="h-px w-full bg-bg-border" />
 
-          {/* Now section */}
+          {                 }
           <div className="flex flex-col gap-3">
             <h3 className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary max-md:text-xl">
               Now
@@ -1126,7 +1103,7 @@ export function MarketClient({ asset }: { asset: string }) {
             </div>
           </div>
 
-          {/* On date section */}
+          {                     }
           <div className="flex flex-col gap-3">
             <h3 className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary max-md:text-xl">
               On {formatDate(expiryDate)}
@@ -1170,7 +1147,7 @@ export function MarketClient({ asset }: { asset: string }) {
             </div>
           </div>
 
-          {/* Deposit button */}
+          {                    }
           {!walletAddress ? (
             <AppButton
               size="lg"
@@ -1200,14 +1177,9 @@ export function MarketClient({ asset }: { asset: string }) {
           )}
         </div>
 
-        {/* Desktop chart sidebar */}
-        {/* {chartOpen && (
-          <aside className="hidden w-[260px] shrink-0 lg:block">
-            <div className="sticky top-24">
-              {chartEl}
-            </div>
-          </aside>
-        )} */}
+        {                           }
+        {
+             }
       </div>
 
       {rfqModal}

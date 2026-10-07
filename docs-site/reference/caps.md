@@ -172,20 +172,19 @@ Response `MyCaps`:
 
 ## How quotes consume capacity
 
-Capacity is a concurrent-risk budget, not a lifetime quota — and **a live
-quote holds capacity the moment it is accepted by the venue**, not on fill:
+Capacity is a concurrent-risk budget. The venue reserves capacity for a live
+quote as soon as it accepts the quote, before a fill:
 
 - Submitting a quote atomically reserves the full quantity/premium against
   every applicable dimension (platform OI and notional, your position count,
   your notional and committed premium) for the quote's validity window.
 - The reservation is released when the quote is cancelled, replaced (a
-  replacement only needs headroom for the delta), expires, or is rejected —
-  and converts into position exposure when it fills.
-- Your own polled numbers (`GetTokenCaps`, `GetMyCaps`) **include your live
-  reservations**: quoting many RFQs concurrently visibly consumes your
-  position-count and notional ceilings even with zero fills. Size
-  `max_open_positions` and notional limits for your intended quoting breadth,
-  not just expected inventory.
+  replacement only needs headroom for the delta), expires, or is rejected.
+  It converts into position exposure when the quote fills.
+- `GetTokenCaps` and `GetMyCaps` include your live reservations. Quotes on
+  concurrent RFQs consume position-count and notional capacity even before
+  any fill. Size `max_open_positions` and notional limits for the intended
+  quoting breadth.
 - Competing quotes on one RFQ each reserve full size while the auction runs.
   Near a platform cap this crowds out later quoters; expect
   `token_oi_cap_exceeded` rejections close to the cap even when your own
@@ -240,11 +239,11 @@ These variants appear in error responses when a cap is breached.
 
 ## Monitoring caps
 
-`GetMyCaps` is cheap enough to poll; 60 seconds is a reasonable default. `utilization` on platform caps is `current / max` and is **not clamped**: values above `1.0` are a real over-budget state (limits can be tightened below live usage). A zero platform limit reports saturated utilization `1.0`, not spare capacity. Many makers stop submitting new quotes once utilization exceeds `0.9`, leaving headroom for in-flight quotes.
+Poll `GetMyCaps` periodically, for example every 60 seconds. Platform `utilization` is `current / max` and can exceed `1.0` when a limit is lowered below existing usage. A zero platform limit reports saturated utilization `1.0`.
 
 `PositionUpdated` carries `caps_snapshot` only for `update_type: "funded"`; fills and settlements do not push it. Poll `GetMyCaps` (or refetch on `ChainEvent` notifications) to track capacity freed by settlement.
 
-`caps_unavailable` rejections mean the venue's risk projection is catching up (typically after a fill, for well under a second, or during listener incidents). They are retryable venue state: back off briefly and requote. They do not mean your balance or limits changed.
+`caps_unavailable` means the venue's risk projection is updating or recovering. Retry with backoff once it becomes available.
 
 ## Freeing capacity
 

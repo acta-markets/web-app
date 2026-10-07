@@ -1,6 +1,6 @@
 # Acta Maker Wire Examples
 
-Payloads illustrate wire shapes. Replace abbreviated IDs, addresses, signatures and past timestamps with real values; request/session/RFQ IDs must be UUIDs and order IDs must decode to 32 bytes. These examples are not transactions to send unchanged.
+Replace placeholder addresses, signatures, IDs and timestamps before use. Request, session and RFQ IDs are UUIDs; order IDs decode to 32 bytes.
 
 
 ## Complete Session
@@ -221,9 +221,7 @@ At example time `1710000000`, this quote has 140 seconds of on-chain validity an
 }
 ```
 
-`RfqClosed` is the terminal RFQ event for maker-side state.
-For successful fills, the winning maker receives `QuoteFilled` before `RfqClosed`.
-`QuoteFilled` is the fill-details event; RFQ closure should still be keyed by `RfqClosed`.
+The winning maker receives `QuoteFilled` with fill details, followed by `RfqClosed` to close the RFQ.
 
 ## Additional scenarios
 

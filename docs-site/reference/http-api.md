@@ -42,19 +42,7 @@ Returns service health and metadata.
 
 ### GET `/ready`
 
-Returns readiness status: `200` when every gated component is healthy, `503`
-otherwise. The required components depend on the server configuration:
-
-<!-- generated:rfq-ready -->
-| Configuration | `/ready` gates on |
-|---|---|
-| database + DB feed ids + caps (production) | redis, kernel, maker_registry, market_metadata, postgres, feed_mapping, price_stream, caps |
-| database + caps, static feed ids | redis, kernel, maker_registry, market_metadata, postgres, caps |
-| database only | redis, kernel, maker_registry, market_metadata, postgres |
-| no database (local demo) | redis, kernel, maker_registry, market_metadata |
-
-`kernel` is also the `/live` gate: a closed kernel channel needs a restart. During shutdown drain, `/ready` returns 503 while `/live` remains governed by the kernel.
-<!-- /generated:rfq-ready -->
+Returns `200` when the required service components are healthy and `503` otherwise. During shutdown, readiness returns `503`.
 
 ### GET `/live`
 
@@ -130,9 +118,13 @@ Get a single maker DTO.
 
 ---
 
+## Vaults and depositors
+
+The [Vault HTTP API](vault-http-api.md) covers `/api/v1/vaults`, vault detail, cycles, positions and depositor state/history. These public endpoints serve indexed projections; current share ownership comes from Solana token accounts.
+
 ## Participant history
 
-RFQ, quote, and order history is not exposed by the public HTTP API. Use the
+Ordinary participant RFQ, quote, and order history is not exposed by the public HTTP API. Use the
 authenticated maker/taker session protocols for participant-specific state.
 
 ---
@@ -161,11 +153,3 @@ signed transaction is submitted; only confirmed trades are counted. USDC uses it
 oracle price too. `priced_trades_24h < total_trades_24h` means some confirmed trades
 lack a stored USD valuation; those are not repriced using today's market.
 The legacy `total_volume_24h` fields are raw aggregates, not dollars.
-
----
-
-## Related
-
-- [WS common conventions](ws-common.md)
-- [Maker API reference](maker-api.md)
-- [Taker API reference](taker-api.md)

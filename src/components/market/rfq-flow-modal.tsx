@@ -92,7 +92,6 @@ export function RfqFlowModal({
     if (isRestoredOrder && isAuthenticated && flow.type !== "idle") setRecoveredOpen(true);
   }, [flow.type, isAuthenticated, isRestoredOrder]);
 
-  // Reset state when modal opens
   useEffect(() => {
     if (open && preview && !isRestoredOrder) {
       setStep(initialQuote ? "quote_received" : "requesting_quote");
@@ -102,7 +101,6 @@ export function RfqFlowModal({
     }
   }, [open, requestNonce, initialQuote, preview, isRestoredOrder, reset]);
 
-  // Handle quote received
   useEffect(() => {
     if (
       preview && currentQuote &&
@@ -114,7 +112,6 @@ export function RfqFlowModal({
     }
   }, [currentQuote, preview, step]);
 
-  // Handle RFQ errors
   useEffect(() => {
     if (!rfqError || flow.type !== "idle" || step === "idle") {
       return;
@@ -207,7 +204,7 @@ export function RfqFlowModal({
   return (
     <AppModal open={modalOpen} onClose={handleClose} title="Submit Order" showHowItWorks={false}>
       <div className="space-y-4">
-        {/* Order Summary */}
+        {                   }
         {isRestoredOrder ? (
           <div className={panelClass}>
             <div className="font-mono text-sm font-medium text-content-secondary">Recovered order</div>
@@ -251,7 +248,7 @@ export function RfqFlowModal({
           </div>
         </div> : null}
 
-        {/* Progress */}
+        {              }
         <div className="flex items-center gap-2 font-mono text-sm">
           {(step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting") ? (
             <Loader2 className="h-4 w-4 animate-spin text-accent-primary" />
@@ -265,7 +262,7 @@ export function RfqFlowModal({
           <span className="text-content-secondary">{progressText}</span>
         </div>
 
-        {/* Initial quote wait state */}
+        {                              }
         {step === "requesting_quote" && (
           <div className={panelClass}>
             <div className="flex items-center gap-2 font-mono text-sm font-semibold text-accent-primary">
@@ -278,7 +275,7 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {/* Quote Details */}
+        {                   }
         {!isRestoredOrder && quote && step === "quote_received" && (
           <div className={panelClass}>
             <div className="font-mono text-sm font-semibold text-accent-primary">Quote Received</div>
@@ -297,7 +294,7 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {/* Success State */}
+        {                   }
         {step === "confirmed" && (
           <div className={`${panelClass} text-center`}>
             <CheckCircle2 className="mx-auto h-12 w-12 text-additional-green-primary" />
@@ -322,7 +319,7 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {/* Error State */}
+        {                 }
         {step === "failed" && flowError && (
           <div className={panelClass}>
             <div className="flex items-start gap-3">
@@ -346,7 +343,7 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {/* Action Buttons */}
+        {                    }
         <div className="flex gap-2">
           {step === "quote_received" && (
             <>

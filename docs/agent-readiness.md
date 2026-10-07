@@ -34,23 +34,21 @@ Agent access uses browser WebMCP and the read-only skill index listed above.
 Documentation is built from:
 
 ```text
-public-docs
-    │ npm run sync:docs
-    ▼
 web-app/docs-site → Next.js renderer → docs.acta.markets and /docs
 ```
 
-`public-docs` is the authored source. `docs-site` is its synchronized copy used by the website build; `docs-site/SUMMARY.md` defines the sidebar.
+`docs-site` is authored and versioned in this repository. `SUMMARY.md` defines
+the User guide and Protocol & integrations navigation. `public-docs` is a
+separate technical documentation repository; the website does not sync from it.
 
 Run the following after editing the source documentation:
 
 ```bash
-npm run sync:docs
 npm run check:docs
-npm run check:docs-source
 ```
 
-`check:docs` works in an isolated checkout and fails on missing Markdown link targets, duplicate sidebar entries, or documentation pages omitted from the sidebar. `check:docs-source` additionally checks drift when the sibling `public-docs` source is available.
+`check:docs` works in an isolated checkout and fails on missing Markdown link
+targets or anchors, duplicate sidebar entries, or pages omitted from navigation.
 
 ### Metrics coverage
 

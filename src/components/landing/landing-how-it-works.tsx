@@ -26,7 +26,6 @@ const STEPS: Step[] = [
     offset: [30, 20],
   },
   {
-    // the punchline: there is no step three
     n: "03",
     title: "Oh wait",
     copy: "There is no step three. You can withdraw at the end of any cycle.",
@@ -58,7 +57,7 @@ export function LandingHowItWorks() {
               className={`grid items-stretch max-md:grid-cols-1 md:grid-cols-[140px_1fr] ${i === 0 ? "border-t border-bg-border" : ""
                 } border-b border-bg-border`}
             >
-              {/* tinted ASCII numeral */}
+              {                          }
               <div
                 className="relative overflow-hidden max-md:h-[140px] md:min-h-[180px]"
                 style={{ backgroundColor: step.bg }}
