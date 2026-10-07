@@ -1,23 +1,18 @@
 # Returns, fees and risks
 
-The vault's return reflects changes in asset value and the results of its option trades and swaps.
+## Returns
 
-## What your shares are worth
+A vault's return comes from option premiums, option payouts, swaps and the price of the assets it holds. The app shows the share price from the last completed cycle. Your withdrawal uses the price calculated when it is processed.
 
-Your shares represent your portion of the vault. If the vault holds 100 SOL after fees and has 100 shares, each share is worth 1 SOL. If its value grows to 110 SOL and the share count stays the same, each share is worth 1.1 SOL. Your 10 shares are then worth 11 SOL.
+Annualized return appears once a vault has 30 days of history.
 
-If the vault's value falls to 90 SOL, those same 10 shares are worth 9 SOL.
+## Fees
 
-The page shows the last calculated share price. Your payout uses the price at which your withdrawal is processed.
+A vault can charge a management fee and a performance fee. Both are paid by minting new shares to the manager, so your share count stays the same while your slice of the vault shrinks. The performance fee applies only above the vault's previous high. Solana network fees and account rent are separate. The exact math is in [Shares, equity and fees](../protocol/vault-accounting.md).
 
-## Returns and fees
+## Risks
 
-Recorded returns reflect completed cycles and include vault fees. An annualized return requires at least 30 days of recorded history.
-
-A vault can charge management and performance fees. These fees give the manager additional shares, reducing your percentage of the vault without changing your share count. Check the vault's fee settings before depositing. Transaction fees and account rent are separate.
-
-The calculation is covered in [Shares, equity and fees](../protocol/vault-accounting.md).
-
-## Risk
-
-Selling calls gives up gains above the strike. Selling puts can leave the vault buying an asset above its market value. Bought options can expire worthless.
+- Selling calls caps your upside: gains above the strike go to the buyer.
+- Selling puts can leave the vault buying an asset for more than it is worth.
+- Bought options can expire worthless.
+- The manager can make bad trades. You carry the losses.

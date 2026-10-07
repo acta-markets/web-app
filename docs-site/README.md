@@ -1,23 +1,22 @@
 # Getting started
 
-Acta lets you earn premiums from options or invest in managed vaults on Solana.
+On Acta you choose a price at which you want to buy or sell an asset, and earn yield while you wait. Market makers pay you that yield up front. On the chosen date, if the market has reached your price, the trade happens at your price; if not, you get your funds back. The yield is yours either way.
 
-## Choose a product
+There are three ways to use it:
 
-Choose a price at which you are willing to sell or buy an asset, and receive a premium when the trade opens. You choose the amount and expiry. [See how options work](guide/options.md).
+- **Earn.** Pick an asset, the price you want to buy or sell at, and a date. A market maker pays you yield right away. [How Earn works](guide/options.md).
+- **Deposit into a vault.** A manager trades pooled funds on Acta; you hold shares. [How vaults work](guide/vaults.md).
+- **Make markets.** Market makers connect over WebSocket and quote the yield on incoming requests. [How the maker works](protocol/maker.md).
 
-In a vault, a manager trades pooled funds. You hold shares whose value changes with the strategy's results. [See how vaults work](guide/vaults.md).
+## Your first trade
 
-## Connect your wallet
+1. Open **Earn** and choose a side:
+   - **Calls**: sell higher. You lock SOL. If SOL ends above your price, it is sold at your price.
+   - **Puts**: buy lower. You lock USDC. If SOL ends below your price, your USDC buys SOL at your price.
+2. Pick the asset and a price. Each price comes with its date.
+3. Enter the amount and click **Deposit**. The app gets a live quote from market makers and shows the yield.
+4. Click **Sign & submit transaction**. The yield lands in your wallet when the transaction confirms.
 
-Connect a Solana wallet and keep some SOL for transaction fees. Signing the login message proves ownership of your wallet. Moving funds requires a separate transaction signature.
+On the date you get back either your funds or the other asset at your price. You keep the yield in both cases. Keep a little SOL for transaction fees.
 
-## Open an option
-
-In Earn, select Calls or Puts, choose an asset, strike and expiry, then enter the deposit amount. The strike is your agreed selling or buying price.
-
-Deposit requests a live quote. Review the premium and trade terms before signing. The estimate shown earlier can change.
-
-Your collateral stays locked until payout after expiry. An exchange at the strike requires funds from the buyer or a liquidator, so expiry does not guarantee when you will be paid.
-
-Contract rules, APIs and SDKs are in [Protocol & integrations](protocol.md).
+APIs, SDKs and contract rules are in [Protocol & integrations](protocol.md).

@@ -3,13 +3,12 @@
 ## Using Acta
 
 * [Getting started](README.md)
-* [Earning with options](guide/options.md)
+* [How Earn works](guide/options.md)
 
 ## Vaults
 
 * [How vaults work](guide/vaults.md)
 * [Deposits and withdrawals](guide/deposits-and-withdrawals.md)
-* [The vault cycle](guide/vault-cycle.md)
 * [Returns, fees and risks](guide/returns-and-risks.md)
 
 # Protocol & integrations

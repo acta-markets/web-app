@@ -1,23 +1,22 @@
 # How vaults work
 
-A vault pools deposits under a manager's strategy. The manager trades the funds. Depositors hold shares in the vault.
+A vault is a pool of deposits that a manager trades on Acta. You deposit one asset, get shares, and the share price moves with the strategy's results.
 
-## Your shares
+## Shares
 
-Deposits use the vault's main asset. For example, a SOL vault can hold WSOL and USDC while accepting deposits in WSOL, the token form of SOL.
+Each vault has a main asset that it accepts and pays out, for example WSOL (the token form of SOL) in a SOL vault. The vault can also hold a second asset, such as USDC, that it receives from trades.
 
-When your deposit is completed, you receive shares. Their value rises or falls with the vault's trading results and fees. A pending deposit has not received shares yet.
+If a vault holds 100 SOL after fees and has 100 shares, one share is worth 1 SOL, and a 10 SOL deposit gets 10 shares. If the vault grows to 110 SOL, those 10 shares are worth 11 SOL. [Returns, fees and risks](returns-and-risks.md) has the details.
 
-If a vault is worth 100 SOL after fees and has 100 shares, each share is worth 1 SOL. A completed 10 SOL deposit receives 10 shares, ignoring rounding. [Share value and fees](returns-and-risks.md) explains how this changes over time.
+## The strategy
 
-## The manager's strategy
+A vault can sell options, buy options and swap between its two assets, depending on what it is allowed to do. The manager decides what to trade and how much to commit. Read the strategy, fees and withdrawal terms before you deposit. The manager can lose money, and the manager's own stake does not cover your losses.
 
-A vault can sell options, buy options and swap assets, depending on its permissions. The strategy determines which trades it makes and how much capital it commits.
+## The cycle
 
-Check the strategy, fees and withdrawal terms before depositing. The manager can make losing trades. The manager's own stake does not insure your deposit.
+1. The manager trades options. The money in those trades is locked until expiry.
+2. After expiry the trades settle. The vault gets its money back or receives the other asset at the strike price.
+3. The vault values its assets, takes fees and sets a new share price.
+4. Pending deposits get shares at that price and pending withdrawals are paid out. The next cycle can start.
 
-## Deposits and withdrawals
-
-Deposits and withdrawals are requests. They complete when the vault is ready to calculate the share price and pay out. Funds committed to open trades must settle first.
-
-[Deposits and withdrawals](deposits-and-withdrawals.md) explains what happens to a pending request. [The vault cycle](vault-cycle.md) explains when requests are completed.
+Deposits and withdrawals are processed at step 4, not when you submit them. See [Deposits and withdrawals](deposits-and-withdrawals.md).

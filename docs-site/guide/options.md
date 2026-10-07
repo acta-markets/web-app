@@ -1,35 +1,25 @@
-# Earning with options
+# How Earn works
 
-You can receive a premium for agreeing to buy or sell an asset at a price you choose. You also choose when the option expires.
+Pick a price at which you want to sell or buy, and a date. You get paid yield right away. On the date, if the market reached your price, the trade happens at your price. If not, you get your funds back. The yield stays with you either way.
 
-## Sell at your chosen price
+## Calls: sell higher
 
-Suppose SOL is trading at $160. You hold 1 SOL and want to sell it at $170. You choose an option that expires in a week, deposit your SOL and receive a $3 premium.
+SOL is $160. You want to sell at $170. You lock 1 SOL for a week and get $3 now.
 
-If SOL is priced at $180 when the option expires, you sell your 1 SOL for $170 and keep the $3 premium. The sale uses the price you agreed to when opening the trade.
+- SOL ends at $180: your SOL is sold for $170. You have $170 + $3.
+- SOL ends at $150: you get your 1 SOL back. You have 1 SOL + $3.
 
-If SOL is priced at $150 instead, the sale does not happen. You receive your 1 SOL back and keep the $3 premium.
+## Puts: buy lower
 
-## Buy at your chosen price
+SOL is $160. You want to buy at $150. You lock 150 USDC for a week and get $3 now.
 
-Suppose SOL is trading at $160, but you want to buy 1 SOL at $150. You choose an option that expires in a week, deposit 150 USDC and receive a $3 premium.
+- SOL ends at $140: you buy 1 SOL for $150. You have 1 SOL + $3.
+- SOL ends at $170: you get your 150 USDC back. You have 150 USDC + $3.
 
-If SOL is priced at $140 when the option expires, your deposit pays for 1 SOL at the agreed price of $150. You receive 1 SOL and keep the $3 premium.
+## Good to know
 
-If SOL is priced at $170 instead, the purchase does not happen. You receive your 150 USDC back and keep the $3 premium.
+- The yield is paid by market makers, who compete to offer you the best rate.
+- Your funds are isolated: each trade has its own account in the contract, not shared with anyone else, and stays locked until the date.
+- APR shows the yield as a yearly rate.
 
-The result depends on the price at expiry. If it exactly matches your chosen price, you receive your deposit back. The examples exclude fees.
-
-## Opening and settlement
-
-In Earn, choose Calls to sell or Puts to buy, then select the asset, amount, price and expiry. Review the quoted premium and sign the transaction.
-
-You receive the premium once the transaction is confirmed. Your deposit stays in the contract until the trade is settled after expiry.
-
-The option buyer supplies the funds for the exchange. If they have not funded the trade, it can be completed by another participant through liquidation.
-
-## APR
-
-APR expresses the quoted premium as an annual rate. It does not include changes in the collateral's value or predict what you will earn over a year.
-
-[Vaults](vaults.md) let a manager trade on your behalf. [Options and settlement](../reference/protocol-flow.md) covers the contract's payout and fee rules.
+Payout and fee rules for integrators: [Options and settlement](../reference/protocol-flow.md).
