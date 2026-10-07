@@ -1,39 +1,33 @@
 # Protocol Flow
 
-Acta is an RFQ options venue on Solana. Positions are fully collateralized against on-chain escrow accounts and settle physically after expiry. There is no continuous margin engine, no leverage, and no early exercise.
-
-API payloads are in [Maker API](maker-api.md), [Taker API](taker-api.md), and [WS common conventions](ws-common.md).
+Acta is an RFQ options venue on Solana. Positions are fully collateralized against on-chain escrow accounts and settle physically after expiry. There is no margin engine, leverage or early exercise.
 
 ## Actors
 
 | Actor | Role | Access |
 | --- | --- | --- |
-| **Taker** | Writes the option (covered call or cash-secured put), posts collateral, opens the RFQ. | Open. Any wallet; no registration, no KYC. Only rate-limited (active RFQ count). |
-| **Maker** | Buys the option, pays premium, may fund the settlement leg. | Permissioned. On-chain `RegisterMaker` is admin-gated and timelocked. Subject to caps. |
-| **Keeper** (hot authority) | Relays fills on-chain, co-signs `OpenPosition`, calls `FinalizeMarket`. | Protocol-operated. |
-| **Liquidator** | Closes ITM positions the maker never funded; fronts the settlement to the taker. | Permissionless. Anyone can run it. |
-| **Oracle / admin** | Publishes the scalar settlement price after expiry. | Protocol-operated; settlement/liquidation that consume it are permissionless. |
+| Taker | Writes the option (covered call or cash-secured put), posts collateral, opens the RFQ. | Any wallet. No registration or KYC. Rate-limited by active RFQ count. |
+| Maker | Buys the option, pays premium, may fund the settlement leg. | Permissioned. On-chain `RegisterMaker` is admin-gated and timelocked. Subject to caps. |
+| Keeper (hot authority) | Relays fills on-chain, co-signs `OpenPosition`, calls `FinalizeMarket`. | Protocol-operated. |
+| Liquidator | Closes ITM positions the maker did not fund and fronts the settlement to the taker. | Permissionless. |
+| Oracle / admin | Publishes the scalar settlement price after expiry. | Protocol-operated. Settlement and liquidation that consume it are permissionless. |
 
-The maker is the option buyer and the taker is the writer. The `is_taker_buy` field in the order-id preimage is fixed at `0`; a taker-buys-the-option market type is reserved but not implemented.
+The maker is the option buyer and the taker is the writer. The `is_taker_buy` field in the order-id preimage is fixed at `0`. A taker-buys-the-option market type is reserved but not implemented.
 
-Vaults can participate on either side. A writer vault locks its collateral; a
-holder vault pays premium and signs quotes through its active primary delegate.
-Vault execution uses the operator transaction signature and the holder's quote
-signature rather than the ordinary hot-authority co-signature. See
-[Roles and permissions](../protocol/vault-permissions.md).
+Vaults can trade on either side. A writer vault locks its collateral. A holder vault pays premium and signs quotes through its active primary delegate. Vault execution uses the operator transaction signature and the holder's quote signature instead of the hot-authority co-signature. See [Roles and permissions](../protocol/vault-permissions.md).
 
 ## What an RFQ does
 
 There is no order book. The taker drives a sealed auction, makers stream signed quotes, and the taker picks the winner.
 
-- The taker sends `RfqRequest` (market, position type, strike, quantity). The backend broadcasts it to eligible makers.
-- Makers reply with signed `Quote`s. Each quote is a `(strike, price, valid_until)` against the fixed request — makers cannot quote partial size or change the side.
-- The taker selects the winner by sending `AcceptQuote { maker, order_id }`. Whatever `order_id` the taker names wins. The server's "best price" (`QuoteBestStatus` / `QuoteOutbid`) is advisory only and never selects the winner.
-- Winner-take-all: one quote is locked for the full RFQ quantity. No partial fills, no multiple winners. Every live quote reserves full capacity against caps (open interest, notional, position count) for its validity window; the reservation is released on cancel, expiry, or rejection, and converts into position exposure on fill. See [caps.md](caps.md#how-quotes-consume-capacity).
+- The taker sends `RfqRequest` (market, position type, strike, quantity). The backend broadcasts it to makers.
+- Makers reply with signed `Quote`s. Each quote is a `(strike, price, valid_until)` against the fixed request. Makers cannot quote partial size or change the side.
+- The taker picks the winner with `AcceptQuote { maker, order_id }`. The server's best-price signals (`QuoteBestStatus` / `QuoteOutbid`) are advisory. They do not select the winner.
+- Winner-take-all: one quote fills the full RFQ quantity. Every live quote reserves full capacity against caps (open interest, notional, position count) for its validity window. The reservation is released on cancel, expiry or rejection and becomes position exposure on fill. See [Capacity limits](caps.md#how-quotes-consume-capacity).
 - One quote per `(maker, strike)`: a maker's new quote on the same strike replaces the prior one. A maker may quote several distinct strikes.
-- The advisory "best" ranking (used only for `QuoteBestStatus` / `best_price`) is: higher premium wins, ties broken by earlier `received_at`, then by smaller `order_id`.
+- Advisory ranking for `QuoteBestStatus` / `best_price`: higher premium, then earlier `received_at`, then smaller `order_id`.
 
-Indicative pricing: after connecting, makers may receive `IndicativePricesRequest` and reply with non-binding reference prices per strike. Takers see these while browsing, before opening an RFQ.
+Indicative pricing: makers may receive `IndicativePricesRequest` and reply with non-binding prices per strike. Takers see them before opening an RFQ.
 
 ## Trade lifecycle
 
@@ -50,11 +44,11 @@ market traded
 
 ### 1. Market
 
-A market carries underlying mint, quote mint, expiry timestamp, put/call side and oracle setup. Strikes belong to its orders/positions, not the market identity. Backend tradability also applies the configured pre-expiry cutoff, disable state and finalization state; market expiry alone is not an admission check. After expiry, oracle finalization is required before any settlement or liquidation.
+A market carries underlying mint, quote mint, expiry timestamp, put/call side and oracle setup. Strikes belong to orders and positions, not to the market. The backend stops trading a market at the configured pre-expiry cutoff, or when it is disabled or finalized. Settlement and liquidation require oracle finalization after expiry.
 
 ### 2. RFQ
 
-The taker sends `RfqRequest` with market, position type, strike, and quantity. `quantity` is always in underlying atomic units. Before broadcasting, the backend checks: market is active, taker can trade, trading is not paused, size and tick rules pass, caps do not block. A maker blocked by caps may receive `RfqSkipped` instead of `RfqBroadcast`.
+The taker sends `RfqRequest` with market, position type, strike, and quantity. `quantity` is in underlying atomic units. Before broadcasting, the backend checks: market is active, taker can trade, trading is not paused, size and tick rules pass, caps do not block. A maker blocked by caps may receive `RfqSkipped` instead of `RfqBroadcast`.
 
 ### 3. Quote
 
@@ -62,11 +56,11 @@ Makers receive `RfqBroadcast`, choose a premium, build a 32-byte `order_id`, sig
 
 ### 4. Accept and open
 
-The taker sends `AcceptQuote { maker, order_id }`. The backend returns a sponsored transaction; the taker signs it and returns it with `SubmitSignedSponsoredTx`. Ordinary `OpenPosition` requires the taker's signature, the maker's Ed25519 signature over `order_id`, and the keeper co-signature. Vault paths use the operator and holder signatures described above. The transaction atomically opens the position and transfers the premium. See [Custody and settlement funding](#custody-and-settlement-funding).
+The taker sends `AcceptQuote { maker, order_id }`. The backend returns a sponsored transaction. The taker signs it and returns it with `SubmitSignedSponsoredTx`. Ordinary `OpenPosition` requires the taker's signature, the maker's Ed25519 signature over `order_id`, and the keeper co-signature. Vault paths use the operator and holder signatures described above. The transaction atomically opens the position and transfers the premium. See [Custody and settlement funding](#custody-and-settlement-funding).
 
 ## Timing and deadlines
 
-Defaults below are rendered from the server's config defaults by a test in `rfq-server-config`; all are configurable.
+Server defaults, generated from `rfq-server-config`. All are configurable.
 
 <!-- generated:rfq-timing-defaults -->
 | Parameter | Default | Meaning |
@@ -75,15 +69,15 @@ Defaults below are rendered from the server's config defaults by a test in `rfq-
 | `settlement_buffer` | 90 s | The trailing window reserved for settlement confirmation. A quote's effective trading cutoff is `valid_until - settlement_buffer`; quotes whose `valid_until` is closer than `settlement_buffer + quote_refresh_lead` are rejected. |
 | `quote_refresh_lead` | 10 s | At `effective_expiry - quote_refresh_lead` the server fires `QuoteRefreshRequested` and freezes the quote (unacceptable until re-quoted). |
 | `signature_timeout` | 30 s | Max time the taker has to sign the sponsored tx after `AcceptQuote`. The signature deadline is the minimum of `now + signature_timeout`, the quote's effective expiry, and the RFQ's `expires_at`. |
-| `submitted_watchdog_timeout` | 120 s | Watchdog records missing keeper/listener progress; the RFQ stays Enqueued until authoritative execution evidence or a proven-unforwarded failure. |
+| `submitted_watchdog_timeout` | 120 s | The watchdog logs a stalled keeper or listener. The RFQ stays Enqueued until the trade confirms on-chain or the server knows the transaction was never sent. |
 | `closed_rfq_ttl` | 300 s | How long a closed RFQ is retained before purge. |
 | `max_quotes_per_rfq` | 50 | Cap on quotes per RFQ across all makers. |
 | `max_rfqs_per_taker / max_active_rfqs` | 50 / 1000 | Concurrency limits (`0` disables the corresponding limit). |
 <!-- /generated:rfq-timing-defaults -->
 
-`rfq.expires_at` is the auction deadline; `quote.valid_until` is the on-chain order validity. They are distinct clocks.
+`rfq.expires_at` is the auction deadline. `quote.valid_until` is the on-chain order validity. They are distinct clocks.
 
-On a signature timeout or tx-build failure, the locked (winning) quote is discarded and only the still-valid losing quotes are restored; the RFQ reverts to active if it has not yet expired.
+On a signature timeout or tx-build failure, the locked (winning) quote is discarded and only the still-valid losing quotes are restored. The RFQ reverts to active if it has not yet expired.
 
 ## Economics
 
@@ -123,7 +117,7 @@ On a successful `OpenPosition`:
 | Covered call | `quantity` underlying atomic units | `scaled_quote_amount(strike, quantity)` quote atomic units |
 | Cash-secured put | `scaled_quote_amount(strike, quantity)` quote atomic units | `quantity` underlying atomic units |
 
-Taker collateral is fully locked at open. The maker settlement leg is **not** locked at open: the maker pays premium at open and may deposit the settlement asset later with `DepositFundsToPosition` (status `open` → `funded`). The maker also needs a deposited program quote balance (via `DepositPremium`) for the premium debit; idle balance is retrieved with `WithdrawPremium`.
+The maker settlement leg is not locked at open. The maker pays premium at open and may deposit the settlement asset later with `DepositFundsToPosition` (status `open` → `funded`). The maker also needs a deposited program quote balance (via `DepositPremium`) for the premium debit. Idle balance is retrieved with `WithdrawPremium`.
 
 ### Fees
 
@@ -144,7 +138,7 @@ fee_total   = min(premium_fee, volume_fee)
 net_premium = gross_premium - fee_total
 ```
 
-The taker receives `net_premium`; `Position.total_premium` stores the same net value. `protocol_fee_bps_premium` and `protocol_fee_bps_volume` are on-chain config set by governance (each ≤ 10000 bps). `net_price` in WS payloads is a display estimate only; for accounting use the formula above or the on-chain `total_premium`.
+The taker receives `net_premium`. `Position.total_premium` stores the same net value. `protocol_fee_bps_premium` and `protocol_fee_bps_volume` are on-chain config set by governance (each ≤ 10000 bps). `net_price` in WS payloads is a display estimate. For accounting, use the formula above or on-chain `total_premium`.
 
 ## Settlement and payoff
 
@@ -157,9 +151,9 @@ settlement_price = floor(underlying_price * PRICE_SCALE / quote_price)
 Price publication has two modes, selected by `GlobalConfig.settlement_attestor`:
 
 - **Direct** (no attestor configured): `UpdateOraclePrice` writes the backend-published scalar.
-- **Attested** (attestor configured): the hot authority must submit `UpdateOraclePriceAttested`, immediately preceded in the same transaction by an Ed25519 signature from the configured attestor key over a domain-separated message binding the program, config, oracle, price, expiry and a short validity window; the on-chain program verifies the binding. The published price is computed off-chain from Pyth Benchmarks history under a fixed canonical TWAP policy.
+- **Attested** (attestor configured): the hot authority submits `UpdateOraclePriceAttested`, immediately preceded in the same transaction by the attestor's Ed25519 signature over a domain-separated message binding program, config, oracle, price, expiry and a short validity window. The program verifies the binding. The published price is computed off-chain from Pyth Benchmarks history under a fixed canonical TWAP policy.
 
-Neither mode verifies a Pyth price-update account on-chain; settlement trusts the Acta oracle (plus, in attested mode, the independent second signature), not an on-chain Pyth proof.
+Neither mode verifies a Pyth price-update account on-chain. Settlement trusts the Acta oracle and, in attested mode, the attestor signature.
 
 At-the-money counts as OTM.
 
@@ -175,7 +169,7 @@ Outcomes by status and moneyness:
 | `open` | OTM | Taker gets collateral back. |
 | `funded` | OTM | Taker gets collateral back; maker gets settlement deposit back. |
 | `funded` | ITM | Taker collateral goes to maker; maker settlement deposit goes to taker (a swap at the strike). |
-| `open` | ITM | Normal settlement fails; the position must be liquidated. |
+| `open` | ITM | Normal settlement fails. The position must be liquidated. |
 
 Who holds and receives what:
 
@@ -191,13 +185,9 @@ Who holds and receives what:
 
 ## Custody and settlement funding
 
-The writer deposits the full collateral into position escrow at open. Options have no leverage or maintenance margin and cannot be exercised early. Positions open before expiry and settle after market finalization.
-
 Taker collateral and maker settlement funds sit in separate escrow accounts owned by the position PDA. The maker's premium balance sits in the maker PDA. Each position names one taker and one maker.
 
-The maker pays the premium at open and funds settlement separately through `DepositFundsToPosition`. For an ITM position without that deposit, normal settlement fails and the position stays `open`. A liquidator can supply the settlement asset, pay the taker, receive the taker's collateral and close the position as `liquidated`. The maker loses the premium already paid; no further debt is recorded against it.
-
-Liquidation is available for unfunded ITM positions after expiry and market finalization. Any participant can execute it by supplying the required settlement asset. The taker receives payment when that transaction confirms.
+An ITM position without a `DepositFundsToPosition` deposit fails normal settlement and stays `open`. After expiry and market finalization, anyone can liquidate it: the liquidator supplies the settlement asset, the taker is paid, the liquidator receives the taker's collateral and the position closes as `liquidated`. The maker loses the premium already paid. No further debt is recorded.
 
 Platform caps limit token open interest, quote notional and market open interest. Maker caps limit open positions, notional exposure and premium commitments. See [Capacity limits](caps.md).
 
@@ -223,7 +213,7 @@ Lifecycle events:
 
 ## Related docs
 
-- [Maker API](maker-api.md) / [Taker API](taker-api.md) — full WS message catalogues
+- [Maker API](maker-api.md) / [Taker API](taker-api.md): full WS message catalogues
 - [WS common conventions](ws-common.md): encodings, units, time hierarchy, collateral formulas
 - [Capacity limits](caps.md): cap layers and monitoring
 - [Governance and security](governance.md): authority split, permissionless settlement/liquidation

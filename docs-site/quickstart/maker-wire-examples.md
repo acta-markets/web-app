@@ -46,7 +46,7 @@ Replace placeholder addresses, signatures, IDs and timestamps before use. Reques
 }
 ```
 
-Validate the complete [canonical challenge](../reference/ws-common.md#what-to-sign) before signing. Then echo it and send the `maker_owner` pubkey:
+Validate the whole [canonical challenge](../reference/ws-common.md#what-to-sign), sign it, then echo it with the `maker_owner` pubkey:
 
 ```json
 {
@@ -59,7 +59,7 @@ Validate the complete [canonical challenge](../reference/ws-common.md#what-to-si
 }
 ```
 
-The server verifies the signature by `quote_signing` key.
+The server verifies the signature against the registered `quote_signing` key.
 
 ```json
 {
@@ -72,7 +72,7 @@ The server verifies the signature by `quote_signing` key.
 }
 ```
 
-`maker_pda` is the on-chain maker account PDA for this pubkey. It is `null` if the maker is not yet registered on-chain.
+`maker_pda` is the on-chain maker account PDA, or `null` if the maker is not registered yet.
 
 
 ### 4) Snapshot
@@ -221,13 +221,13 @@ At example time `1710000000`, this quote has 140 seconds of on-chain validity an
 }
 ```
 
-The winning maker receives `QuoteFilled` with fill details, followed by `RfqClosed` to close the RFQ.
+The winning maker gets `QuoteFilled`, then `RfqClosed`.
 
 ## Additional scenarios
 
 ### QuoteRefreshRequested
 
-If the quote remains active instead of being selected, refresh fires at `1710000040`: ten seconds before its trading cutoff. The minimum new validity is that time plus the 90-second buffer and 10-second refresh lead.
+If the quote remains active instead of being selected, refresh fires at `1710000040`, ten seconds before its trading cutoff. The minimum new validity is that time plus the 90-second buffer and 10-second refresh lead.
 
 ```json
 {
@@ -241,9 +241,9 @@ If the quote remains active instead of being selected, refresh fires at `1710000
 }
 ```
 
-### Reconcile after reconnect
+### Recovery after reconnect
 
-Send maker-private recovery reads on `/maker/data`:
+Send recovery reads on `/maker/data`:
 
 ```json
 { "type": "GetMyQuotes", "data": { "request_id": "a1b2c3d4-0001", "scope": "live" } }
@@ -252,17 +252,15 @@ Send maker-private recovery reads on `/maker/data`:
 { "type": "GetMmSummary", "data": { "request_id": "a1b2c3d4-0005" } }
 ```
 
-`GetSubscriptions` stays on the quote connection because it reports `/maker`
-subscription state:
+`GetSubscriptions` reports `/maker` subscriptions, so send it on the quote connection:
 
 ```json
 { "type": "GetSubscriptions", "data": { "request_id": "a1b2c3d4-0004" } }
 ```
 
-`GetMyQuotes { scope: "live" }` returns the full, unpaged owner set, including retained and selected quotes; History is queried separately with `scope: "history"`. Keep unresolved orders across reconnect and query `GetOrderStatus`; missing rows do not prove nonexecution.
-Use `GetMmSummary` for dashboard bootstrap or recovery, not as a polling request. `GetMyTrades`
-defaults to `50` rows and caps at `200`; `GetMyQuotes { scope: "history" }` defaults to `200`
-historical rows and caps at `1000`.
+`GetMyQuotes { scope: "live" }` returns the full, unpaged owner set, including retained and selected quotes. `scope: "history"` returns history, `200` rows by default and `1000` at most. If the ACK for an order was lost, query `GetOrderStatus`. A missing live row does not tell you the order is gone.
+
+`GetMyTrades` returns `50` rows by default and `200` at most. Do not poll `GetMmSummary`.
 
 ### GetMyTrades (paginated)
 
@@ -398,7 +396,7 @@ Next page (keyset pagination):
 }
 ```
 
-`CancelAllQuotesAck` follows Core application. This example means no orders were removed, not merely that the command was queued. Selected/executing obligations may remain. The receipt is correlated by `request_id`; lifecycle `QuoteCancelled` messages do not replace it.
+`CancelAllQuotesAck` is sent after Core applies the cancel, so this example means no orders were removed. Selected and executing orders are not cancelled. The ack is matched by `request_id`. `QuoteCancelled` events are separate.
 
 ### QuoteBestStatus
 
