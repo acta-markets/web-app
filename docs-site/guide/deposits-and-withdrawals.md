@@ -1,25 +1,21 @@
 # Deposits and withdrawals
 
-Deposits and withdrawals are requested first and completed later. They use the share price calculated when the vault processes them.
+You submit a request. The vault completes it at the end of the cycle, at the share price it calculates then.
 
 ## Deposit
 
-Deposit the vault's main asset while it accepts deposits. Your funds remain pending until the deposit completes and you receive shares. They do not yet give you a share of the strategy's results.
-
-A 10 SOL deposit receives 10 shares at a price of 1 SOL per share, or 8 shares at 1.25 SOL per share. These examples ignore rounding.
+Deposit the vault's main asset while the vault accepts deposits. Until the request completes, your funds are held aside and earn nothing. Then you get shares: 10 SOL buys 10 shares at 1 SOL per share, or 8 shares at 1.25.
 
 ## Withdraw
 
-Request a withdrawal using your vault shares. Once it completes, those shares are exchanged for the vault's main asset.
+Request a withdrawal for some or all of your shares. When it completes you are paid in the main asset: 10 shares at 1.1 SOL pay 11 SOL. You get the price calculated at processing, which can differ from the last price shown.
 
-For example, 10 shares at a withdrawal price of 1.1 SOL pay 11 SOL, ignoring rounding. The last recorded share price can differ from the price used for your withdrawal.
+If you are the last holder and redeem every remaining share, you receive whatever the vault holds, which can include the second asset.
 
-A withdrawal redeeming all remaining shares can return both assets held by the vault.
+## Waiting and cancelling
 
-## Waiting and cancellation
+A request waits until the vault's trades have settled and the share price is calculated. Expiry is when trading ends, not when you are paid.
 
-A request waits while the vault finishes trades and calculates its share price. Expiry marks the end of trading, not a guaranteed withdrawal time.
+You can cancel a pending request until the cycle reaches expiry or the vault starts pricing. Cancelling a withdrawal returns your shares. A completed deposit cannot be cancelled. Withdraw instead.
 
-Cancellation is restricted during valuation and after the cycle's expiry. A completed deposit cannot be cancelled; you leave by requesting a withdrawal. Cancelling a pending withdrawal returns your shares and cannot reverse a completed payout.
-
-[The vault cycle](vault-cycle.md) explains the timing. Exact cancellation and refund rules are in [Request processing](../protocol/vault-lifecycle.md#request-processing).
+If the manager does not process requests, anyone can process them after a delay, 12 hours by default. The exact rules are in [Request processing](../protocol/vault-lifecycle.md#request-processing).

@@ -32,7 +32,7 @@ export interface DocsSearchItem extends DocsNavItem {
 const DOCS_ROOT = path.join(process.cwd(), "docs-site");
 const SUMMARY_PATH = path.join(DOCS_ROOT, "SUMMARY.md");
 const DOCS_DESCRIPTIONS: Record<string, string> = {
-  "": "Connect a wallet, choose between options and vaults, and understand signatures, collateral, and settlement.",
+  "": "Choose a price to buy or sell an asset at and earn yield while you wait. Earn, vaults, and market making on Acta.",
   protocol: "How Acta settles options, manages vault capital, and connects contracts, backend services, APIs, and SDKs.",
   "guide/returns-and-risks": "NAV, value per share, vault returns, management and performance fees, and risks to deposited assets.",
   "protocol/vault-accounting": "Vault NAV and equity checkpoints, share supply, price per share, fee dilution, and final redemption.",
