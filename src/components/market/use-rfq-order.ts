@@ -117,7 +117,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
     if (typeof storageKey !== "string") return;
     const existing = readStoredOrder(storageKey);
     if (!existing || existing.orderId !== orderId) return;
-    try { window.localStorage.removeItem(storageKey); } catch { /* terminal cleanup is best-effort */ }
+    try { window.localStorage.removeItem(storageKey); } catch {                                       }
   }, [storageKey]);
   const update = useCallback((next: OrderFlow) => {
     if (next.type === "confirmed" || next.type === "failed") clearTerminalRecord(next.orderId);
@@ -280,7 +280,6 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
         update({ type: "failed", orderId: id, message: reason });
         return;
       }
-      // A lifecycle failure does not prove that a submitted transaction cannot execute.
       update({ type: "unknown", order: active.order, submission: "sent" });
       checkStatus();
     };

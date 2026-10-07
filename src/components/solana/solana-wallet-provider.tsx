@@ -2,19 +2,17 @@
 
 import React, { createContext, useContext, useState, useMemo, useCallback, useEffect, type ReactNode } from "react";
 import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
+import type { VersionedTransaction } from "@solana/web3.js";
 
-// Network configuration
 const NETWORK = process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet" ? "mainnet-beta" : "devnet";
 const RPC_ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
   (NETWORK === "mainnet-beta" ? "https://api.mainnet-beta.solana.com" : "https://api.devnet.solana.com");
 const WS_ENDPOINT = RPC_ENDPOINT.replace("https://", "wss://").replace("http://", "ws://");
 const CHAIN = NETWORK === "mainnet-beta" ? "solana:mainnet" : "solana:devnet";
 
-// Create RPC connections
 const rpc = createSolanaRpc(RPC_ENDPOINT);
 const rpcSubscriptions = createSolanaRpcSubscriptions(WS_ENDPOINT);
 
-// Wallet types (simplified for our use case)
 export interface WalletAccount {
   address: string;
   publicKey?: Uint8Array;
@@ -27,12 +25,10 @@ export interface Wallet {
 }
 
 interface SolanaContextState {
-  // RPC
   rpc: ReturnType<typeof createSolanaRpc>;
   rpcSubscriptions: ReturnType<typeof createSolanaRpcSubscriptions>;
   chain: string;
   
-  // Wallet State
   wallets: Wallet[];
   selectedWallet: Wallet | null;
   selectedAccount: WalletAccount | null;
@@ -40,15 +36,14 @@ interface SolanaContextState {
   isConnecting: boolean;
   isReady: boolean;
   
-  // Wallet Actions
   connectWallet: (wallet: Wallet) => Promise<void>;
   disconnectWallet: () => Promise<void>;
   
-  // Sign message
   signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   
-  // Sign transaction (for sponsored tx signing)
   signTransaction: <T extends { serialize(): Uint8Array }>(transaction: T) => Promise<T>;
+
+  signAllTransactions: (transactions: VersionedTransaction[]) => Promise<VersionedTransaction[]>;
 }
 
 const SolanaContext = createContext<SolanaContextState | undefined>(undefined);
@@ -68,10 +63,8 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
   const [selectedAccount, setSelectedAccount] = useState<WalletAccount | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   
-  // Keep reference to underlying wallet standard wallets
   const walletsRef = React.useRef<Map<string, any>>(new Map());
   
-  // Initialize wallet standard on client side only
   useEffect(() => {
     if (typeof window === "undefined") return;
     
@@ -84,11 +77,9 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
           w.chains?.some((c: string) => c.startsWith("solana:"))
         );
         
-        // Store references
         walletsRef.current.clear();
         solanaWallets.forEach(w => walletsRef.current.set(w.name, w));
         
-        // Update state with simplified wallet objects
         setWallets(solanaWallets.map(w => ({
           name: w.name,
           icon: w.icon,
@@ -101,15 +92,12 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
         console.log("[SolanaProvider] Wallets updated:", solanaWallets.map(w => w.name));
       };
       
-      // Initial load
       updateWallets();
       setIsReady(true);
       
-      // Listen for wallet changes
       const offRegister = walletsApi.on("register", updateWallets);
       const offUnregister = walletsApi.on("unregister", updateWallets);
       
-      // Store cleanup functions
       (window as any).__solanaWalletCleanup = () => {
         offRegister();
         offUnregister();
@@ -124,33 +112,27 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   
-  // Check if connected
   const isConnected = useMemo(() => {
     return !!(selectedWallet && selectedAccount);
   }, [selectedWallet, selectedAccount]);
   
-  // Connect to wallet
   const connectWallet = useCallback(async (wallet: Wallet) => {
     try {
       setIsConnecting(true);
       console.log("[SolanaProvider] Connecting to:", wallet.name);
       
-      // Get the underlying wallet standard wallet
       const underlyingWallet = walletsRef.current.get(wallet.name);
       if (!underlyingWallet) {
         throw new Error("Wallet not found in registry");
       }
       
-      // Get the connect feature
       const connectFeature = underlyingWallet.features["standard:connect"];
       if (!connectFeature) {
         throw new Error("Wallet does not support connect");
       }
       
-      // Call connect
       await connectFeature.connect();
       
-      // Get accounts after connecting
       const accounts = underlyingWallet.accounts.map((a: any) => ({
         address: a.address,
         publicKey: a.publicKey
@@ -174,7 +156,6 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   
-  // Disconnect from wallet
   const disconnectWallet = useCallback(async () => {
     try {
       if (selectedWallet) {
@@ -193,7 +174,6 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     }
   }, [selectedWallet]);
   
-  // Sign message
   const signMessage = useCallback(async (message: Uint8Array): Promise<Uint8Array> => {
     if (!selectedWallet || !selectedAccount) {
       throw new Error("No wallet connected");
@@ -203,7 +183,6 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     console.log("[SolanaProvider] Using wallet:", selectedWallet.name);
     console.log("[SolanaProvider] Account:", selectedAccount.address);
     
-    // Get the underlying wallet
     const underlyingWallet = walletsRef.current.get(selectedWallet.name);
     if (!underlyingWallet) {
       throw new Error("Wallet not found in registry");
@@ -211,13 +190,11 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     
     console.log("[SolanaProvider] Wallet features:", Object.keys(underlyingWallet.features));
     
-    // Get the signMessage feature
     const signMessageFeature = underlyingWallet.features["solana:signMessage"];
     if (!signMessageFeature?.signMessage) {
       throw new Error("Wallet does not support message signing");
     }
     
-    // Find the account in the underlying wallet
     const account = underlyingWallet.accounts.find(
       (a: any) => a.address === selectedAccount.address
     );
@@ -226,7 +203,6 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
       throw new Error("Account not found in wallet");
     }
 
-    // Some wallet implementations require a mutable message buffer.
     const mutableMessage = new Uint8Array(message);
     
     const isPhantomWallet = selectedWallet.name.toLowerCase().includes("phantom");
@@ -262,7 +238,6 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     return results[0].signature;
   }, [selectedWallet, selectedAccount]);
   
-  // Sign transaction
   const signTransaction = useCallback(async <T extends { serialize(): Uint8Array }>(transaction: T): Promise<T> => {
     if (!selectedWallet || !selectedAccount) {
       throw new Error("No wallet connected");
@@ -272,7 +247,6 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     console.log("[SolanaProvider] Using wallet:", selectedWallet.name);
     console.log("[SolanaProvider] Account:", selectedAccount.address);
     
-    // Get the underlying wallet
     const underlyingWallet = walletsRef.current.get(selectedWallet.name);
     if (!underlyingWallet) {
       throw new Error("Wallet not found in registry");
@@ -280,13 +254,11 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     
     console.log("[SolanaProvider] Wallet features:", Object.keys(underlyingWallet.features));
     
-    // Get the signTransaction feature
     const signTransactionFeature = underlyingWallet.features["solana:signTransaction"];
     if (!signTransactionFeature?.signTransaction) {
       throw new Error("Wallet does not support transaction signing");
     }
     
-    // Find the account in the underlying wallet
     const account = underlyingWallet.accounts.find(
       (a: any) => a.address === selectedAccount.address
     );
@@ -317,11 +289,9 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Serialize the transaction to bytes
     const serializedTx = transaction.serialize();
     console.log("[SolanaProvider] Transaction bytes length:", serializedTx.length);
     
-    // Wallet Standard fallback
     console.log("[SolanaProvider] Calling Wallet Standard signTransaction...");
     const results = await signTransactionFeature.signTransaction({
       account,
@@ -331,15 +301,31 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     
     console.log("[SolanaProvider] Got signed transaction");
     
-    // The result contains the signed transaction bytes
-    // We need to deserialize it back to the same type
     const { VersionedTransaction } = await import("@solana/web3.js");
     const signedTx = VersionedTransaction.deserialize(results[0].signedTransaction);
     
     return signedTx as unknown as T;
   }, [selectedWallet, selectedAccount]);
   
-  // Context value
+  const signAllTransactions = useCallback(async (transactions: VersionedTransaction[]): Promise<VersionedTransaction[]> => {
+    if (!selectedWallet || !selectedAccount) {
+      throw new Error("No wallet connected");
+    }
+    const underlyingWallet = walletsRef.current.get(selectedWallet.name);
+    const feature = underlyingWallet?.features["solana:signTransaction"];
+    const account = underlyingWallet?.accounts.find((a: any) => a.address === selectedAccount.address);
+    if (!feature?.signTransaction || !account) {
+      throw new Error("Wallet does not support transaction signing");
+    }
+    const results = await feature.signTransaction(
+      ...transactions.map((transaction) => ({ account, transaction: transaction.serialize(), chain: CHAIN })),
+    );
+    const { VersionedTransaction } = await import("@solana/web3.js");
+    return results.map((result: { signedTransaction: Uint8Array }) =>
+      VersionedTransaction.deserialize(result.signedTransaction),
+    );
+  }, [selectedWallet, selectedAccount]);
+
   const contextValue = useMemo<SolanaContextState>(
     () => ({
       rpc,
@@ -355,8 +341,9 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
       disconnectWallet,
       signMessage,
       signTransaction,
+      signAllTransactions,
     }),
-    [wallets, selectedWallet, selectedAccount, isConnected, isConnecting, isReady, connectWallet, disconnectWallet, signMessage, signTransaction]
+    [wallets, selectedWallet, selectedAccount, isConnected, isConnecting, isReady, connectWallet, disconnectWallet, signMessage, signTransaction, signAllTransactions]
   );
   
   return (

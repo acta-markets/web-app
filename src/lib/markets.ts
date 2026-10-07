@@ -5,9 +5,8 @@ export type Market = {
   type: MarketType;
   minApr: number;
   maxApr: number;
-  capFilledPct: number; // 0..100
+  capFilledPct: number;
   spotPrice: number;
-  // price options are the "I’m ok to sell/buy at" prices
   priceOptions: number[];
 };
 
@@ -171,8 +170,6 @@ export function formatStrikePrice(n: number) {
 export function formatUsdSmart(n: number) {
   const abs = Math.abs(n);
 
-  // For large ticket assets (e.g. zBTC), decimals are mostly noise.
-  // Keep grouping so the magnitude is readable in locales that group with spaces.
   if (abs >= 1000) {
     return n.toLocaleString("en-US", {
       style: "currency",
@@ -183,7 +180,6 @@ export function formatUsdSmart(n: number) {
     });
   }
   
-  // For 3-digit prices (100-999), no decimals for cleaner display
   if (abs >= 100) {
     return n.toLocaleString("en-US", {
       style: "currency",

@@ -8,7 +8,6 @@ import { LandingBar, LandingButton } from "./landing-primitives";
 
 function VaultCta({ vault }: { vault: LandingVault }) {
   if (vault.status === "soon") {
-    // non-interactive: there is nothing to click yet
     return (
       <div
         className="font-mono text-sm font-medium text-content-tertiary"
@@ -107,7 +106,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
                 )}
               </div>
 
-              {/* riskNote and note are held in the data, not shown on the card yet */}
+              {                                                                       }
             </>
           ) : (
             <div
@@ -147,7 +146,7 @@ export function LandingVaults() {
           Pick a vault
         </h2>
 
-        {/* auto-rows-fr keeps every card the same height across both rows */}
+        {                                                                    }
         <div className="grid auto-rows-fr grid-cols-1 border-t border-bg-border md:grid-cols-2">
           {LANDING_VAULTS.map((vault, i) => (
             <div

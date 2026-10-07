@@ -7,7 +7,6 @@ import { LandingPartnersStack } from "@/components/landing/landing-partners-stac
 import { LandingPartnersCta } from "@/components/landing/landing-partners-cta";
 
 export const metadata: Metadata = {
-  // root layout applies the "%s | Acta" template, so the brand is not repeated here
   title: "Partners",
   description:
     "Partner with Acta's options venue on Solana. Trading desks quote the flow, apps route deposits into curated vaults, treasuries put idle assets to work.",

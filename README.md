@@ -11,7 +11,7 @@ npm run dev
 
 ## RFQ integration
 
-The app uses the published `@acta-markets/ts-sdk` 0.1.6, pinned in `package.json`
+The app uses the published `@acta-markets/ts-sdk` 0.1.6-vaults.2, pinned in `package.json`
 and `package-lock.json`. A separate SDK checkout or build is not required.
 WebSocket integration imports `@acta-markets/ts-sdk/ws`.
 
@@ -33,9 +33,13 @@ submission state, and an optional transaction signature only. Transaction
 payloads are never stored or replayed; recovery reconciles authoritative order
 state before an unsigned same-session order can retrieve its signing payload.
 
-Public documentation lives in the sibling `public-docs` repository. After editing
-it, run `npm run sync:docs`, `npm run check:docs-source`, and `npm run check:docs`
-to update and validate the site's copy in `docs-site`.
+## Documentation
+
+Website documentation is authored in `docs-site`. It has two sections: User guide
+and Protocol & integrations. `SUMMARY.md` defines their navigation and search index.
+Run `npm run check:docs` to validate pages, links and heading anchors, then
+`npm run build` to check rendering. The separate `public-docs` repository is
+maintained independently; its contents are not copied into this site.
 
 ## MongoDB (whitelist)
 

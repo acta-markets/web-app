@@ -1,9 +1,9 @@
 # Acta Taker Wire Examples
 
-Payloads illustrate wire shapes. Replace abbreviated IDs, addresses, signatures and past timestamps with real values; request/session/RFQ IDs must be UUIDs and order IDs must decode to 32 bytes. These examples are not transactions to send unchanged.
+Replace placeholder addresses, signatures, IDs and timestamps before use. Request, session and RFQ IDs are UUIDs; order IDs decode to 32 bytes.
 
 
-Concrete JSON for a full taker session and the common branch scenarios. Message shapes and field semantics are in [`../reference/taker-api.md`](../reference/taker-api.md); the narrative walkthrough is in [`taker-quickstart.md`](taker-quickstart.md).
+Message fields are in [Taker API reference](../reference/taker-api.md); the connection flow is in [Taker quickstart](taker-quickstart.md).
 
 All pubkeys/mints are base58, `order_id` is 64-char hex (optional `0x`), amounts are `u64` (price/strike 1e9-scaled, quantity in underlying atomic units), timestamps are Unix seconds unless the field name ends in `_ms`. Placeholder strings like `MarketPdaBase58` stand in for real base58 values.
 
@@ -355,7 +355,7 @@ Valid session → `AuthSuccess` (as in step 3, no `AuthRequest`/signing). Invali
 
 ### Blockhash expiry → reopen and reconcile
 
-Keeper may retry retryable submission failures within five attempts. Exhaustion does not guarantee either message below. An uncertain keeper failure leaves Core `Enqueued`; reconcile with `GetOrderStatus`. A wire failure observation can look like:
+Keeper retries eligible submission failures up to five times. If the result remains uncertain, Core stays `Enqueued`; recover it with `GetOrderStatus`. For a reported blockhash failure:
 
 ```json
 {
@@ -469,9 +469,9 @@ Subscriptions and in-flight state are not replayed; re-auth, resubscribe, then q
 
 ## Related
 
-- [Taker API reference](../reference/taker-api.md) — message catalogue and error variants
-- [Taker quickstart](taker-quickstart.md) — narrative walkthrough + raw sponsored-tx signing
-- [WS common conventions](../reference/ws-common.md) — units, envelopes, timeouts
+- [Taker API reference](../reference/taker-api.md): message catalogue and error variants
+- [Taker quickstart](taker-quickstart.md): narrative walkthrough + raw sponsored-tx signing
+- [WS common conventions](../reference/ws-common.md): units, envelopes, timeouts
 
 ## Recovery after reconnect
 

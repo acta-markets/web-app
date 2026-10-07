@@ -34,7 +34,9 @@ export default function DocumentationPage({ params }: DocsPageProps) {
   const page = getDocsPage(params.slug);
   if (!page) notFound();
 
-  const items = getDocsNavigation().flatMap((group) => group.items);
+  const groups = getDocsNavigation();
+  const audience = groups.find((group) => group.items.some((item) => item.slug === page.slug))?.audience;
+  const items = groups.filter((group) => group.audience === audience).flatMap((group) => group.items);
   const index = items.findIndex((item) => item.slug === page.slug);
 
   return (

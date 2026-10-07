@@ -56,7 +56,6 @@ export interface CreateClientOptions {
 
 function normalizeWsUrl(url: string): string {
   if (typeof window === "undefined") return url;
-  // Browsers block insecure ws:// from secure https pages.
   if (window.location.protocol === "https:" && url.startsWith("ws://")) {
     return `wss://${url.slice("ws://".length)}`;
   }

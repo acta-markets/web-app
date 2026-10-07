@@ -32,18 +32,14 @@ test.describe("Earn page", () => {
   });
 
   test("Calls/Puts selector uses correct active state colors", async ({ page }) => {
-    // Calls should be active by default — look for the teal-bg div
     const callsButton = page.locator("button").filter({ hasText: "Calls" }).first();
     await expect(callsButton).toBeVisible();
 
-    // The inner div should have teal active styling
     const callsDiv = callsButton.locator("div").first();
     const bgColor = await callsDiv.evaluate((el) => getComputedStyle(el).backgroundColor);
-    // rgba(42, 162, 134, 0.2) is the active tab fill
     expect(bgColor).toContain("42");
     expect(bgColor).toMatch(/16[12]/);
 
-    // Click Puts and verify it becomes active
     const putsButton = page.locator("button").filter({ hasText: "Puts" }).first();
     await putsButton.click();
     await page.waitForTimeout(100);
@@ -58,11 +54,9 @@ test.describe("Earn page", () => {
     const popularHeading = page.locator("h2").filter({ hasText: "Popular" });
     await expect(popularHeading).toBeVisible();
 
-    // Verify H2 font size (40px)
     const fontSize = await popularHeading.evaluate((el) => getComputedStyle(el).fontSize);
     expect(fontSize).toBe("40px");
 
-    // Check cards exist (220px height token cards)
     const cards = page.locator("[class*='h-\\[220px\\]']");
     const count = await cards.count();
     expect(count).toBeGreaterThanOrEqual(1);
@@ -72,15 +66,12 @@ test.describe("Earn page", () => {
     const allMarketsHeading = page.locator("h2").filter({ hasText: "All markets" });
     await expect(allMarketsHeading).toBeVisible();
 
-    // Table wrapper should have border-bg-border
     const tableWrapper = allMarketsHeading.locator("~ div").first();
     await expect(tableWrapper).toBeVisible();
 
     const borderColor = await tableWrapper.evaluate((el) => getComputedStyle(el).borderColor);
-    // #282828 = rgb(40, 40, 40)
     expect(borderColor).toBe("rgb(40, 40, 40)");
 
-    // Check rows exist (60px height)
     const rows = tableWrapper.locator("[class*='h-\\[60px\\]']");
     const rowCount = await rows.count();
     expect(rowCount).toBeGreaterThanOrEqual(1);

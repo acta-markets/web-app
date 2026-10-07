@@ -3,7 +3,7 @@ import { LandingButton } from "./landing-primitives";
 export function LandingHero() {
   return (
     <section className="relative overflow-hidden" style={{ backgroundColor: "#000" }}>
-      {/* layer 1: ASCII noise */}
+      {                          }
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -14,7 +14,7 @@ export function LandingHero() {
           opacity: 0.24,
         }}
       />
-      {/* layer 2: big Acta A-mark silhouette */}
+      {                                         }
       <div
         aria-hidden
         className="pointer-events-none absolute bottom-0 top-0 max-md:hidden"
@@ -28,7 +28,7 @@ export function LandingHero() {
           backgroundPosition: "right center",
         }}
       />
-      {/* layer 3: bottom fade to black */}
+      {                                   }
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -52,7 +52,6 @@ export function LandingHero() {
           <h1
             className="m-0 font-space font-semibold text-content-primary"
             style={{
-              // sized so "Put your assets" holds one line in the 720px hero column
               fontSize: "clamp(48px, 9vw, 96px)",
               lineHeight: 0.95,
               letterSpacing: "-0.04em",

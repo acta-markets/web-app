@@ -1,4 +1,5 @@
 import Link from "next/link";
+import GithubSlugger from "github-slugger";
 import ReactMarkdown from "react-markdown";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
@@ -40,7 +41,7 @@ function normalizeMarkdownHref(href: string, currentSlug: string) {
   const [withoutHash, hash] = href.split("#", 2);
   const target = withoutHash.replace(/\.md$/i, "");
   const resolved = resolveRelativeSlug(currentSlug, target);
-  const normalized = docsHref(resolved);
+  const normalized = docsHref(resolved === "README" ? "" : resolved.replace(/\/README$/, ""));
   return hash ? `${normalized}#${hash}` : normalized;
 }
 
@@ -49,6 +50,38 @@ export function DocsArticle({
   previous,
   next,
 }: DocsArticleProps) {
+  const markdown = getDocsDisplayMarkdown(page);
+  const slugger = new GithubSlugger();
+  const headings: Array<{ title: string; id: string }> = [];
+  let fence: string | undefined;
+  for (const line of markdown.split("\n")) {
+    const marker = line.match(/^\s*(`{3,}|~{3,})/)?.[1];
+    if (marker) {
+      if (!fence) fence = marker[0];
+      else if (fence === marker[0]) fence = undefined;
+      continue;
+    }
+    if (fence) continue;
+    const match = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (!match) continue;
+    const title = match[2].replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/<[^>]+>/g, "").replace(/[`*_]/g, "");
+    const id = slugger.slug(title);
+    if (match[1].length === 2) headings.push({ title, id });
+  }
+
+  const tableOfContents = markdown.length > 4500 && headings.length >= 4 ? (
+    <nav aria-label="On this page" className="mb-10 rounded-lg border border-bg-border p-5">
+      <p className="mb-3 text-sm font-medium text-content-primary">On this page</p>
+      <ul className="grid gap-2 text-sm sm:grid-cols-2">
+        {headings.map((heading) => (
+          <li key={heading.id}>
+            <a href={`#${heading.id}`} className="text-content-secondary hover:text-accent-secondary">{heading.title}</a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  ) : null;
+
   return (
     <>
       <article className="docs-prose">
@@ -56,6 +89,7 @@ export function DocsArticle({
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeSlug]}
           components={{
+            h1: ({ id, children }) => <><h1 id={id}>{children}</h1>{tableOfContents}</>,
             hr: () => null,
             a: ({ href = "", children, ...props }) => {
               const external = /^[a-z][a-z0-9+.-]*:/i.test(href);
@@ -80,7 +114,7 @@ export function DocsArticle({
             },
           }}
         >
-          {getDocsDisplayMarkdown(page)}
+          {markdown}
         </ReactMarkdown>
       </article>
 
