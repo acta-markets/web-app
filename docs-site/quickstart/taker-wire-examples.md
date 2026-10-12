@@ -105,7 +105,7 @@ Sent after `AuthSuccess`. `markets` uses the compact `MarketInfo` shape; full de
 Full descriptors carry `size_rule`, decimals and oracle PDAs, needed to validate `quantity` and render prices.
 
 ```json
-{ "type": "GetMarketDescriptors", "data": { "request_id": "req-md-1", "active_only": true } }
+{ "type": "GetMarketDescriptors", "data": { "request_id": "req-md-1" } }
 ```
 
 ```json

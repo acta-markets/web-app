@@ -299,7 +299,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         persistSession(walletAddressRef.current, sessionId, expiresAt);
       }
       client.getEarnSummary();
-      client.getMarketDescriptors({ active_only: true });
+      client.getMarketDescriptors();
       client.getTokenCaps({ include_markets: false });
       client.getMyReferralInfo();
     });
@@ -734,7 +734,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         console.warn("[RfqProvider] Missing descriptor for market before RFQ; refreshing descriptors", {
           market: params.market,
         });
-        client.getMarketDescriptors({ active_only: true });
+        client.getMarketDescriptors();
         setError(new Error("Market metadata is still loading. Please retry in a moment."));
         return;
       }
@@ -747,7 +747,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         pendingRfqRef.current = null;
         const message = err instanceof Error ? err.message : String(err);
         if (isMissingMarketDescriptorError(message)) {
-          client.getMarketDescriptors({ active_only: true });
+          client.getMarketDescriptors();
           setError(new Error("Market metadata refreshed. Please retry quote request."));
           return;
         }
