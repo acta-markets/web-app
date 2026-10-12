@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Earn page", () => {
+test.describe("Trade page", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/earn");
+    await page.goto("/trade");
     await page.waitForLoadState("networkidle");
   });
 
@@ -10,7 +10,7 @@ test.describe("Earn page", () => {
     await page.waitForFunction(() => document.fonts.ready);
     await page.waitForTimeout(500);
 
-    await expect(page).toHaveScreenshot("earn-full.png", {
+    await expect(page).toHaveScreenshot("trade-full.png", {
       fullPage: true,
       maxDiffPixelRatio: 0.05
     });

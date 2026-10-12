@@ -8,6 +8,8 @@ import {
   getRequestDeploymentContext,
   getRobotsText,
   getSitemapUrls,
+  getTradeMarkdown,
+  getVaultsMarkdown,
 } from "@/lib/agent-discovery";
 
 describe("agent discovery", () => {
@@ -84,6 +86,7 @@ describe("agent discovery", () => {
     expect(getSitemapUrls(context)).toEqual([
       "https://devnet.acta.markets/",
       "https://devnet.acta.markets/earn",
+      "https://devnet.acta.markets/trade",
       "https://devnet.acta.markets/partners",
     ]);
   });
@@ -93,6 +96,20 @@ describe("agent discovery", () => {
     expect(markdown).toContain("Environment: beta");
     expect(markdown).toContain("https://beta-api.acta.markets");
     expect(markdown).toContain("Do not infer consent to trade");
+    expect(markdown).toContain("[Vaults](https://beta.acta.markets/earn)");
+    expect(markdown).toContain("[Markets](https://beta.acta.markets/trade)");
+  });
+
+  it("describes vaults at /earn and option markets at /trade", () => {
+    const context = getDeploymentContext("https://beta.acta.markets/");
+    const vaults = getVaultsMarkdown(context);
+    expect(vaults).toContain("# Acta vaults");
+    expect(vaults).toContain("https://beta-api.acta.markets/api/v1/vaults");
+    expect(vaults).toContain("Do not infer consent to deposit");
+
+    const markets = getTradeMarkdown(context);
+    expect(markets).toContain("# Acta markets");
+    expect(markets).toContain("https://beta-api.acta.markets/api/v1/markets");
   });
 
   it("documents the distinct taker and maker authentication flows", () => {
