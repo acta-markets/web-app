@@ -64,7 +64,7 @@ export function LandingPartnersCta() {
             Read docs
           </LandingButton>
         </div>
-        {/* the address the vault card used to point at, kept reachable */}
+        {                                                                 }
         <p
           className="mt-6 font-mono text-[#B0E8D6]"
           style={{ fontSize: 14, letterSpacing: "-0.02em" }}

@@ -55,7 +55,7 @@ export function LandingPartnersTracks() {
               className={`grid items-stretch max-md:grid-cols-1 md:grid-cols-[140px_1fr] ${i === 0 ? "border-t border-bg-border" : ""
                 } border-b border-bg-border`}
             >
-              {/* tinted ASCII glyph */}
+              {                        }
               <div
                 className="relative overflow-hidden max-md:h-[140px] md:min-h-[180px]"
                 style={{ backgroundColor: track.bg }}

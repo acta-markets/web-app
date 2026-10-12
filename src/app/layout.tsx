@@ -25,10 +25,6 @@ export const viewport: Viewport = {
   themeColor: "#121212",
 };
 
-// Absolute base for the generated OG image URL. Without it Next falls back to
-// the ephemeral VERCEL_URL (or localhost), so shared links point at a preview host.
-// acta.markets 301s to beta.acta.markets, so the fallback names the host that
-// actually serves the app — a redirecting og:image URL trips some crawlers.
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ||
   (process.env.VERCEL_PROJECT_PRODUCTION_URL

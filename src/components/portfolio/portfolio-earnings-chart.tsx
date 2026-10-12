@@ -50,7 +50,6 @@ function toStepData(points: Point[]) {
 
   for (let i = 1; i < s.length; i++) {
     const cur = s[i]!;
-    // Ensure strictly increasing times to keep lightweight-charts happy.
     const t = Math.max(cur.t, lastTime + 1);
     out.push({ time: t as UTCTimestamp, value: cur.v });
     lastTime = t;
@@ -64,7 +63,7 @@ export function PortfolioEarningsChart({
   range
 }: {
   points: Point[];
-  now: number; // unix seconds
+  now: number;
   range: Range;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -76,7 +75,6 @@ export function PortfolioEarningsChart({
     return toStepData(filtered);
   }, [now, points, range]);
 
-  // Create chart once.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -101,8 +99,6 @@ export function PortfolioEarningsChart({
         secondsVisible: false
       },
       crosshair: {
-        // Snap the horizontal crosshair + price label to the series value at the hovered time.
-        // This prevents the label from changing based on mouse Y position.
         mode: CrosshairMode.Magnet,
         vertLine: {
           color: "rgba(128,201,182,0.55)",
@@ -119,7 +115,6 @@ export function PortfolioEarningsChart({
           labelBackgroundColor: "#121212"
         }
       },
-      // Keep interactions stable: range is controlled by pills.
       handleScale: { mouseWheel: false, pinch: false, axisPressedMouseMove: false },
       handleScroll: { mouseWheel: false, pressedMouseMove: false, horzTouchDrag: false, vertTouchDrag: false }
     });
@@ -142,7 +137,6 @@ export function PortfolioEarningsChart({
     chartRef.current = chart;
     seriesRef.current = series;
 
-    // Resize handling
     const ro = new ResizeObserver(() => {
       chart.applyOptions({ width: el.clientWidth });
     });
@@ -156,14 +150,12 @@ export function PortfolioEarningsChart({
     };
   }, []);
 
-  // Push data + visible range
   useEffect(() => {
     const chart = chartRef.current;
     const series = seriesRef.current;
     if (!chart || !series) return;
 
     series.setData(data);
-    // Lightweight Charts throws if the requested visible range is outside the loaded data.
     if (data.length < 2) {
       chart.timeScale().fitContent();
       return;

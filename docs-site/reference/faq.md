@@ -1,62 +1,56 @@
 # FAQ
 
-Integration questions and protocol-level errors.
-
 ## Questions
 
 ### What happens to active quotes when the maker disconnects?
 
-With cancel-on-disconnect (COD), Core removes the session's active and retained non-winning quotes after detecting disconnect. The client requests `cancel_on_disconnect` in `Hello.features`; the server confirms it in `Welcome.enabled_features`. The managed Rust quote SDK requests it by default. Selected/executing obligations survive. Without COD, resting quotes can remain fillable while offline.
+With cancel-on-disconnect (COD), Core removes the session's active and retained non-winning quotes when it detects the disconnect. Request `cancel_on_disconnect` in `Hello.features`; the server confirms it in `Welcome.enabled_features`. The managed Rust quote SDK requests it by default. Selected or executing quotes are not removed. Without COD, resting quotes stay fillable while you are offline.
 
-Resume restores server-side subscriptions; fresh authentication requires establishing them again. The managed SDK reconciles its desired target on either path. After reconnect, apply `GetMyQuotes { scope: "live" }` and use `GetOrderStatus` for unresolved orders. An empty quote or position list is not proof of nonexecution. See [cancellation semantics](maker-api.md#cancelallquotes-maker---server).
+Session resume restores subscriptions. After fresh authentication, subscribe again. The managed SDK does this either way. After reconnect, read `GetMyQuotes { scope: "live" }` and call `GetOrderStatus` for pending orders. See [cancellation semantics](maker-api.md#cancelallquotes-maker---server).
 
-Events in flight during disconnect can be delivered again after recovery, for example a `QuoteAcknowledged` or `QuoteFilled` already processed before the disconnect. Treat lifecycle events as idempotent by `order_id`.
+Events in flight at disconnect, such as `QuoteAcknowledged` or `QuoteFilled`, can be redelivered after reconnect. Dedupe by `order_id`.
 
 ### Can multiple maker bots share a single key?
 
-No. Only one active quote WebSocket per maker pubkey is allowed, alongside the separate data connection. A second quote connection replaces the first; the displaced session receives `Error` with `generic.code = "session_replaced"` and is closed. Use separate maker keys for parallel bots.
+No. Each maker pubkey gets one quote WebSocket (the `/maker/data` connection is separate). A second quote connection replaces the first. The old session receives `Error` with `generic.code = "session_replaced"` and is closed. Use separate maker keys for parallel bots.
 
 ### Why was a quote rejected?
 
-`QuoteRejected.reason` identifies the cause. Common values:
+Common `QuoteRejected.reason` values:
 
 | Reason | Meaning |
 |---|---|
 | `invalid_strike` | The strike is not in the RFQ's `order_options` set. |
 | `order_id_mismatch` | The submitted `order_id` does not equal `SHA-256(preimage182)`. See [Troubleshooting](#troubleshooting). |
-| `quote_expiry_too_short` | `valid_until < now + 310s` (the server's settlement buffer floor). |
-| `cap_exceeded` | A position-count, notional, or balance cap was breached. See [`caps.md`](caps.md). |
+| `quote_expiry_too_short` | `valid_until < now + 100s`. |
+| `cap_exceeded` | A position-count, notional or balance cap was breached. See [Capacity limits](caps.md). |
 | `rfq_not_active` | The RFQ expired or filled before the quote arrived. |
-
-Fix the cause before retrying. Re-sending the same payload will fail the same way.
 
 ### Why are some RFQs not delivered?
 
-The server pre-filters RFQs against the maker's caps before broadcast. When a pre-filter triggers, the maker receives `RfqSkipped` with a `reason` field (typical values include `token_oi_cap_exceeded` and `maker_insufficient_balance`) in place of `RfqBroadcast`. Current cap headroom can be inspected via `GetMyCaps`. Cap mechanics are documented in [`caps.md`](caps.md).
+The server checks RFQs against the maker's caps before broadcast. If one fails, the maker gets `RfqSkipped` with a `reason` (e.g. `token_oi_cap_exceeded`, `maker_insufficient_balance`) instead of `RfqBroadcast`. `GetMyCaps` returns current headroom. See [Capacity limits](caps.md).
 
 ### What is the appropriate value for `valid_until`?
 
-The hard floor is `now + 310s`; lower values are rejected with `quote_expiry_too_short`. The hard ceiling is the market's `expiry_ts`; later values are rejected with `market_expired`. The server reserves the trailing 300 seconds as the settlement buffer, so the trading cutoff is `valid_until - 300s`. Use `now + 320..360s` unless you have a reason not to, while remaining at or below market expiry. Longer windows leave stale quotes live without helping fills, because the taker cannot accept after `rfq.expires_at`. Track server clock offset from `Welcome.server_time_unix_ms` and `Pong.server_time_unix_ms`.
+Floor: `now + 100s`. Lower values get `quote_expiry_too_short`. Ceiling: the market's `expiry_ts`. Later values get `market_expired`. The last 90 seconds are the settlement buffer, so the trading cutoff is `valid_until - 90s`. `rfq.expires_at + 100s` covers the auction plus the settlement buffer and refresh lead. Add a few seconds for clock skew and stay at or below market expiry. Longer windows keep stale quotes live without helping fills, since the taker cannot accept after `rfq.expires_at`. Get the server clock offset from `Welcome.server_time_unix_ms` and `Pong.server_time_unix_ms`.
 
 ## Troubleshooting
 
 ### `order_id_mismatch`
 
-The `order_id` must equal the SHA-256 hash of the 182-byte preimage laid out in [`maker-api.md`](maker-api.md) (Quote rules). Common causes:
+`order_id` must be the SHA-256 of the 182-byte preimage in the [Maker API reference](maker-api.md) (Quote rules). Common causes:
 
-- **Endianness.** All `u64` fields are written little-endian in the binary preimage.
-- **Field offsets.** Offsets are exact (`domain_tag` at byte 0, `chain_id` at byte 4, `program_id` at byte 12, etc.). A single-byte misalignment cascades through the remainder of the preimage.
-- **`taker` field.** The `taker` field in the preimage carries the taker's pubkey from `RfqBroadcast`, not the maker's pubkey.
-- **`is_taker_buy` flag.** This field is fixed at `0` (false); the taker is always the option writer. Implementations that default the field to `true` must override it explicitly.
+- Endianness: all `u64` fields are little-endian.
+- Field offsets: offsets are exact (`domain_tag` at byte 0, `chain_id` at byte 4, `program_id` at byte 12, etc.). One byte off shifts every later field.
+- `taker` field: the taker's pubkey from `RfqBroadcast`, not the maker's.
+- `is_taker_buy` flag: `0` (false). The taker is the option writer.
 
-The Rust SDK's `compute_order_id()` builds this preimage. Other languages should test against a known-good preimage and `order_id` pair before deployment.
+The Rust SDK's `compute_order_id()` builds this preimage. In other languages, test against a known-good preimage and `order_id` pair.
 
 ### `rfq_not_active`
 
-The RFQ expired or another maker filled it before your quote arrived. You can only reduce this race: lower submission latency and use `BatchQuotes` when quoting several strikes for one RFQ.
+The RFQ expired or was filled before your quote arrived. Use `BatchQuotes` to send several strikes for one RFQ at once.
 
 ### Persistent disconnects
 
-The server emits WebSocket-protocol-level pings every 30 seconds and closes idle connections after a 90-second timeout. The Rust and TypeScript SDKs respond to protocol pings automatically. Raw WebSocket clients must respond to protocol pings; those pongs maintain liveness. Application-layer `Ping` is optional and returns `Pong.server_time_unix_ms` for clock-offset estimation.
-
-If drops persist with a correctly responding client, check the network path. Corporate proxies and firewalls often terminate TCP connections they consider idle.
+The server sends WebSocket protocol pings every 30 seconds and closes connections idle for 90 seconds. The Rust and TypeScript SDKs answer them automatically. Raw clients must answer them. Those pongs keep the connection alive. Application `Ping` is optional and returns `Pong.server_time_unix_ms` for clock offset.

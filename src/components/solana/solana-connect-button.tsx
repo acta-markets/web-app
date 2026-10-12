@@ -25,7 +25,6 @@ export function SolanaConnectButton({ fullWidth = false }: SolanaConnectButtonPr
     }
   };
   
-  // Show loading state while wallet standard initializes
   if (!isReady) {
     return (
       <AppButton variant="secondary" disabled className={fullWidth ? "w-full" : ""}>

@@ -6,7 +6,6 @@ import { X, Wallet, ChevronRight, Loader2, Check, Users } from "lucide-react";
 import { useSolana, type Wallet as WalletType } from "@/components/solana/solana-wallet-provider";
 import { cn } from "@/lib/cn";
 
-// Context for sidebar state
 interface WalletSidebarContextValue {
   isOpen: boolean;
   openSidebar: () => void;
@@ -23,14 +22,12 @@ export function useWalletSidebar() {
   return context;
 }
 
-// Provider component
 export function WalletSidebarProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const openSidebar = useCallback(() => setIsOpen(true), []);
   const closeSidebar = useCallback(() => setIsOpen(false), []);
 
-  // Prevent body scroll when sidebar is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -50,13 +47,11 @@ export function WalletSidebarProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Sidebar component
 function WalletSidebar() {
   const { isOpen, closeSidebar } = useWalletSidebar();
   const { wallets, selectedWallet, selectedAccount, isConnecting, isReady, connectWallet, disconnectWallet } = useSolana();
   const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
 
-  // Close on escape key
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -87,7 +82,7 @@ function WalletSidebar() {
 
   return (
     <>
-      {/* Backdrop */}
+      {              }
       <div
         className={cn(
           "fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm transition-opacity duration-300",
@@ -97,7 +92,7 @@ function WalletSidebar() {
         aria-hidden="true"
       />
 
-      {/* Sidebar */}
+      {             }
       <aside
         className={cn(
           "fixed right-0 top-0 z-[101] h-full w-full max-w-md",
@@ -110,7 +105,7 @@ function WalletSidebar() {
         aria-modal="true"
         aria-label="Connect Wallet"
       >
-        {/* Header */}
+        {            }
         <header className="flex items-center justify-between border-b border-bg-border px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center border border-bg-border bg-accent-primary/20">
@@ -135,7 +130,7 @@ function WalletSidebar() {
           </button>
         </header>
 
-        {/* Content */}
+        {             }
         <div className="flex-1 overflow-y-auto p-6">
           {!isReady ? (
             <div className="flex flex-col items-center justify-center py-12">
@@ -161,7 +156,7 @@ function WalletSidebar() {
           )}
         </div>
 
-        {/* Footer */}
+        {            }
         <footer className="border-t border-bg-border px-6 py-4">
           <p className="text-center font-mono text-xs text-content-tertiary">
             By connecting, you agree to our Terms of Service
@@ -172,7 +167,6 @@ function WalletSidebar() {
   );
 }
 
-// Connected wallet view
 function ConnectedView({
   wallet,
   account,
@@ -193,7 +187,7 @@ function ConnectedView({
 
   return (
     <div className="space-y-6">
-      {/* Connected wallet card */}
+      {                           }
       <div className="border border-accent-primary/30 bg-accent-primary/5 p-5">
         <div className="flex items-center gap-4">
           {wallet.icon ? (
@@ -219,7 +213,7 @@ function ConnectedView({
         </div>
       </div>
 
-      {/* Address details */}
+      {                     }
       <div className="space-y-3">
         <h3 className="font-mono text-sm font-medium text-content-secondary">Wallet Address</h3>
         <div className="border border-bg-border bg-action-primary/50 p-4">
@@ -229,7 +223,7 @@ function ConnectedView({
         </div>
       </div>
 
-      {/* Referrals entry */}
+      {                     }
       <button
         type="button"
         onClick={goToReferrals}
@@ -245,7 +239,7 @@ function ConnectedView({
         <ChevronRight className="h-5 w-5 text-content-tertiary transition-transform group-hover:translate-x-1 group-hover:text-accent-primary" />
       </button>
 
-      {/* Disconnect button */}
+      {                       }
       <button
         type="button"
         onClick={onDisconnect}
@@ -257,7 +251,6 @@ function ConnectedView({
   );
 }
 
-// Wallet list view
 function WalletListView({
   wallets,
   onConnect,
@@ -269,7 +262,6 @@ function WalletListView({
   connectingWallet: string | null;
   isConnecting: boolean;
 }) {
-  // Map of known wallet icons as fallbacks
   const walletIcons: Record<string, string> = {
     phantom: "/wallets/phantom.png",
     backpack: "/wallets/backpack.png",
@@ -327,7 +319,7 @@ function WalletListView({
         })}
       </div>
 
-      {/* Info note */}
+      {               }
       <div className="border border-bg-border bg-action-primary/50 p-4">
         <p className="font-mono text-sm text-content-secondary">
           <span className="font-medium text-content-primary">New to Solana?</span>{" "}
@@ -338,7 +330,6 @@ function WalletListView({
   );
 }
 
-// Empty wallets view
 function EmptyWalletsView() {
   const popularWallets = [
     { name: "Phantom", url: "https://phantom.app", icon: "/wallets/phantom.png" },

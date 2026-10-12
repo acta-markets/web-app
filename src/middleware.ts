@@ -9,7 +9,6 @@ import {
 } from "@/lib/agent-discovery";
 
 function isAppEnabled() {
-  // Default: enabled. Set to "false" in prod to ship landing-only + waitlist.
   const v = process.env.NEXT_PUBLIC_APP_ENABLED;
   if (!v) return true;
   return !(v === "false" || v === "0");
@@ -127,8 +126,6 @@ export function middleware(req: NextRequest) {
     pathname.toLowerCase().endsWith(".md") &&
     (docsHost || pathname.startsWith("/docs/"));
 
-  // Browsers navigating to a .md alias get the canonical HTML page; every
-  // other client (curl, agent fetchers) gets the Markdown itself.
   if (
     markdownPath &&
     !acceptsMarkdown(req.headers.get("accept")) &&

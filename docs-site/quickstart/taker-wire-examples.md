@@ -1,15 +1,10 @@
 # Acta Taker Wire Examples
 
-Payloads illustrate wire shapes. Replace abbreviated IDs, addresses, signatures and past timestamps with real values; request/session/RFQ IDs must be UUIDs and order IDs must decode to 32 bytes. These examples are not transactions to send unchanged.
-
-
-Concrete JSON for a full taker session and the common branch scenarios. Message shapes and field semantics are in [`../reference/taker-api.md`](../reference/taker-api.md); the narrative walkthrough is in [`taker-quickstart.md`](taker-quickstart.md).
-
-All pubkeys/mints are base58, `order_id` is 64-char hex (optional `0x`), amounts are `u64` (price/strike 1e9-scaled, quantity in underlying atomic units), timestamps are Unix seconds unless the field name ends in `_ms`. Placeholder strings like `MarketPdaBase58` stand in for real base58 values.
+Addresses, signatures, IDs and timestamps below are placeholders. Request, session and RFQ IDs are UUIDs. `order_id` is 64-char hex (32 bytes, optional `0x`). Pubkeys and mints are base58. Amounts are `u64`: price and strike are 1e9-scaled, quantity is in underlying atomic units. Timestamps are Unix seconds unless the field name ends in `_ms`.
 
 ## Complete Session (happy path)
 
-### 1) Hello — client → server
+### 1) Hello (client → server)
 
 ```json
 {
@@ -23,7 +18,7 @@ All pubkeys/mints are base58, `order_id` is 64-char hex (optional `0x`), amounts
 }
 ```
 
-### 2) Welcome — server → client
+### 2) Welcome (server → client)
 
 ```json
 {
@@ -40,37 +35,37 @@ All pubkeys/mints are base58, `order_id` is 64-char hex (optional `0x`), amounts
 
 ### 3) StartAuth → AuthRequest → AuthChallenge → AuthSuccess
 
-Taker auth is lazy; you may defer it until the first authenticated action. Start the fresh-sign flow with your wallet pubkey:
+Taker auth is lazy and can wait until the first action that needs it. Fresh sign starts with your wallet pubkey:
 
 ```json
 { "type": "StartAuth", "data": { "pubkey": "TakerWalletPubkeyBase58" } }
 ```
 
-The server replies with a challenge. The **taker** challenge includes a `Wallet:` line (the maker challenge does not):
+The taker challenge has a `Wallet:` line. The maker challenge does not:
 
 ```json
 {
   "type": "AuthRequest",
   "data": {
-    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nWallet: TakerWalletPubkeyBase58\nNonce: a1b2c3d4e5f6...hex64\nIssued At: 2024-03-09T12:00:00Z"
+    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nWallet: TakerWalletPubkeyBase58\nNonce: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nIssued At: 2024-03-09T12:00:00Z\n"
   }
 }
 ```
 
-Sign the raw UTF-8 bytes of `challenge` with your wallet key, base58-encode the 64-byte signature, and echo it back:
+Validate the [canonical challenge](../reference/ws-common.md#what-to-sign), including the wallet. Sign its original UTF-8 bytes, base58-encode the 64-byte signature, and echo it back:
 
 ```json
 {
   "type": "AuthChallenge",
   "data": {
-    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nWallet: TakerWalletPubkeyBase58\nNonce: a1b2c3d4e5f6...hex64\nIssued At: 2024-03-09T12:00:00Z",
+    "challenge": "Acta RFQ Authentication\n\nSign this message to authenticate your wallet.\n\nWallet: TakerWalletPubkeyBase58\nNonce: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nIssued At: 2024-03-09T12:00:00Z\n",
     "signature": "3q7uQqYc3...base58sig",
     "pubkey": "TakerWalletPubkeyBase58"
   }
 }
 ```
 
-The signature is verified directly against `pubkey`. On success:
+The signature is verified against `pubkey`. On success:
 
 ```json
 {
@@ -82,11 +77,11 @@ The signature is verified directly against `pubkey`. On success:
 }
 ```
 
-For takers, `expires_at` is always a number. Persist `session_id` + `expires_at` for `ResumeAuth`.
+For takers, `expires_at` is a number. Store `session_id` and `expires_at` for `ResumeAuth`.
 
-### 4) Snapshot — server → client
+### 4) Snapshot (server → client)
 
-Sent automatically after `AuthSuccess`. `markets` is the compact `MarketInfo` shape — fetch full descriptors separately (step 5) before creating an RFQ:
+Sent after `AuthSuccess`. `markets` uses the compact `MarketInfo` shape; full descriptors come from step 5:
 
 ```json
 {
@@ -107,7 +102,7 @@ Sent automatically after `AuthSuccess`. `markets` is the compact `MarketInfo` sh
 
 ### 5) GetMarketDescriptors → MarketDescriptors
 
-Full descriptors carry `size_rule`, decimals, and oracle PDAs needed to validate `quantity` and render prices. Call this before `RfqRequest`.
+Full descriptors carry `size_rule`, decimals and oracle PDAs, needed to validate `quantity` and render prices.
 
 ```json
 { "type": "GetMarketDescriptors", "data": { "request_id": "req-md-1", "active_only": true } }
@@ -146,7 +141,7 @@ Full descriptors carry `size_rule`, decimals, and oracle PDAs needed to validate
 
 ### 6) Subscribe → SubscribeAck
 
-`request_id` is required for takers. A taker subscribes to `chain_events` (position settled/liquidated), and optionally `trades` / `stats` / `markets`. `rfqs` and `positions` are **maker** channels — a taker's own RFQ/quote/order events arrive session-direct, and `PositionUpdated` is never delivered to takers.
+`request_id` is required. Takers subscribe to `chain_events` (position settled or liquidated) and optionally `trades`, `stats` and `markets`. `rfqs` and `positions` are maker channels. A taker's own RFQ, quote and order events arrive directly on the session.
 
 ```json
 {
@@ -199,7 +194,7 @@ Full descriptors carry `size_rule`, decimals, and oracle PDAs needed to validate
 }
 ```
 
-### 8) QuoteReceived (streamed, 0..N) — server → client
+### 8) QuoteReceived, streamed 0..N (server → client)
 
 Each quote is firm and hash-bound via `order_id`. Two makers respond:
 
@@ -235,7 +230,7 @@ Each quote is firm and hash-bound via `order_id`. Two makers respond:
 }
 ```
 
-You pick the winner by `order_id` (here maker B, the higher premium). Show `net_price`; use `price` + `order_id` for the accept.
+You pick the winner by `order_id` (here maker B, the higher premium). `net_price` is for display. Accept with `price` and `order_id`.
 
 ### 9) AcceptQuote → SponsoredTxToSign
 
@@ -261,7 +256,7 @@ You pick the winner by `order_id` (here maker B, the higher premium). Show `net_
 }
 ```
 
-Sign `tx_base64` and return it before `signature_deadline`. The taker fills **signature slot 1** (slot 0 is the keeper fee-payer); see [Sponsored transaction: raw signing](taker-quickstart.md#sponsored-transaction-raw-signing) for the byte-level layout.
+Sign `tx_base64` and return it before `signature_deadline`. The taker fills signature slot 1. Slot 0 is the keeper fee payer. Byte layout: [Sponsored transaction: raw signing](taker-quickstart.md#sponsored-transaction-raw-signing).
 
 ### 10) SubmitSignedSponsoredTx → OrderAccepted → OrderSubmitted → OrderConfirmed
 
@@ -303,9 +298,9 @@ Sign `tx_base64` and return it before `signature_deadline`. The taker fills **si
 
 `tx_signature` arrives on `OrderSubmitted` (not repeated on `OrderConfirmed`).
 
-### 11) RfqClosed — server → client
+### 11) RfqClosed (server → client)
 
-Terminal RFQ event; follows `OrderConfirmed` on a fill. Drop per-RFQ state here.
+Terminal RFQ event. On a fill it follows `OrderConfirmed`. Drop per-RFQ state here.
 
 ```json
 {
@@ -324,8 +319,6 @@ Terminal RFQ event; follows `OrderConfirmed` on a fill. Drop per-RFQ state here.
 }
 ```
 
----
-
 ## Additional scenarios
 
 ### Session resume (skip the wallet signature)
@@ -334,7 +327,7 @@ Terminal RFQ event; follows `OrderConfirmed` on a fill. Drop per-RFQ state here.
 { "type": "ResumeAuth", "data": { "session_id": "sess-abc-123" } }
 ```
 
-Valid session → `AuthSuccess` (as in step 3, no `AuthRequest`/signing). Invalid/expired → `AuthError`:
+Valid session: `AuthSuccess` as in step 3, without signing. Invalid or expired: `AuthError`:
 
 ```json
 { "type": "AuthError", "data": { "reason": "session_expired" } }
@@ -353,9 +346,9 @@ Valid session → `AuthSuccess` (as in step 3, no `AuthRequest`/signing). Invali
 }
 ```
 
-### Blockhash expiry → reopen and reconcile
+### Blockhash expiry → reopen
 
-Keeper may retry retryable submission failures within five attempts. Exhaustion does not guarantee either message below. An uncertain keeper failure leaves Core `Enqueued`; reconcile with `GetOrderStatus`. A wire failure observation can look like:
+The keeper retries submission failures up to five times. If the outcome is still uncertain, the order stays `Enqueued`. Check it with `GetOrderStatus`. A reported blockhash failure:
 
 ```json
 {
@@ -364,7 +357,7 @@ Keeper may retry retryable submission failures within five attempts. Exhaustion 
 }
 ```
 
-Only a locally proven-unforwarded failure may reopen an eligible RFQ with `reason: "tx_failed"`:
+If the server knows the transaction was never forwarded, it reopens the RFQ with `reason: "tx_failed"`:
 
 ```json
 {
@@ -378,11 +371,10 @@ Only a locally proven-unforwarded failure may reopen an eligible RFQ with `reaso
 }
 ```
 
-Refresh the reopened RFQ and select a currently available quote. Rollback discards the winning quote; do not replay its old `order_id`. `reason` for a signature timeout is `signature_timeout`; for a tx-build failure, `tx_build_failed`. Non-retryable `OrderFailed` reasons: `on_chain`, `submission_rejected`, `safety_timeout`, `shutdown` — surface to the user, do not re-accept.
+The winning quote is discarded. Pick from the remaining quotes and do not replay the old `order_id`. Other `reason` values: `signature_timeout`, `tx_build_failed`. `OrderFailed` reasons `on_chain`, `submission_rejected`, `safety_timeout` and `shutdown` are not retryable. Do not re-accept after them.
 
-Reconcile by `order_version`: accepted is `1`, submitted `2`, failed/expired `3`,
-and confirmed `4`. A late on-chain confirmation may therefore replace a local
-failure; a later failure can never replace confirmation.
+`order_version`: accepted `1`, submitted `2`, failed/expired `3`, confirmed `4`.
+A late on-chain confirmation replaces a local failure. A failure does not replace a confirmation.
 
 ### RFQ expired with no fill
 
@@ -414,7 +406,7 @@ Redeem before trading:
 }
 ```
 
-An `RfqRequest` before redemption fails with a typed `InviteRequired` error (delivered as `RequestError` when the request carried a `request_id`). Devnet is open — no invite needed.
+An `RfqRequest` before redemption fails with `InviteRequired` (as `RequestError` when the request carried a `request_id`). Devnet needs no invite.
 
 ### Size-rule violation (RequestError)
 
@@ -430,9 +422,9 @@ An `RfqRequest` before redemption fails with a typed `InviteRequired` error (del
 }
 ```
 
-### Reconcile after reconnect
+### Recovery after reconnect
 
-Subscriptions and in-flight state are not replayed; re-auth, resubscribe, then query:
+Subscriptions and in-flight state are not replayed. Re-auth, resubscribe, then query. Pending signatures and `OrderStatus` states are covered in [Delivery and recovery](../reference/taker-api.md#delivery-and-recovery).
 
 ```json
 { "type": "GetMyActiveRfqs", "data": { "request_id": "req-rec-1" } }
@@ -465,16 +457,8 @@ Subscriptions and in-flight state are not replayed; re-auth, resubscribe, then q
 }
 ```
 
----
-
 ## Related
 
-- [Taker API reference](../reference/taker-api.md) — message catalogue and error variants
-- [Taker quickstart](taker-quickstart.md) — narrative walkthrough + raw sponsored-tx signing
-- [WS common conventions](../reference/ws-common.md) — units, envelopes, timeouts
-
-## Recovery after reconnect
-
-After `AuthSuccess`, reconcile `GetMyActiveRfqs`, `GetPositions` and `GetOrderStatus`. Only a successful resume of the same credential transfers ownership of an unfinished signature. For the same pending order whose signature was not sent, repeat the exact `AcceptQuote` to retrieve the signing payload. For a submitted/enqueued order, query status without replaying trading commands.
-
-`OrderStatus` carries `{ request_id, order_id, state }`, with `state` equal to `{ "type": "pending" }`, `{ "type": "confirmed", "position_pda": "..." }` or `{ "type": "unknown" }`. It has no `order_version`; versions apply to lifecycle pushes. `unknown`, missing positions and timeouts leave the outcome unresolved. See [Delivery & recovery](../reference/taker-api.md#delivery-and-recovery).
+- [Taker API reference](../reference/taker-api.md): messages and error variants
+- [Taker quickstart](taker-quickstart.md): walkthrough and raw sponsored-tx signing
+- [WebSocket conventions](../reference/ws-common.md): units, envelopes, timeouts

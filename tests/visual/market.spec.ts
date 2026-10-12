@@ -40,7 +40,6 @@ test.describe("Market page", () => {
   });
 
   test("info box uses design system border", async ({ page }) => {
-    // Target the spot/cap info card specifically
     const infoBox = page.locator("[class*='border-bg-border'][class*='bg-bg-primary']").first();
     await expect(infoBox).toBeVisible();
 
@@ -59,7 +58,6 @@ test.describe("Market page", () => {
   });
 
   test("price tabs render 3 options", async ({ page }) => {
-    // Price option buttons inside the price selection AppCard
     const priceCard = page.locator("[class*='border-bg-border']").filter({
       hasText: "Choose the price"
     });
@@ -69,7 +67,6 @@ test.describe("Market page", () => {
     const count = await priceBtns.count();
     expect(count).toBe(3);
 
-    // First should be active with teal styling
     const firstClasses = await priceBtns.first().getAttribute("class");
     expect(firstClasses).toContain("bg-accent-primary/20");
     expect(firstClasses).toContain("flex-1");
@@ -91,7 +88,6 @@ test.describe("Market page", () => {
     await expect(depositJito).toBeVisible();
     await expect(depositUsdc).toBeVisible();
 
-    // Active tab (call=jitoSOL) should have teal border
     const activeClasses = await depositJito.getAttribute("class");
     expect(activeClasses).toContain("border-accent-primary");
     expect(activeClasses).toContain("bg-accent-primary/20");
@@ -143,7 +139,6 @@ test.describe("Market page", () => {
   });
 
   test("chart sidebar renders with teal line colors", async ({ page }) => {
-    // Check chart SVG elements use teal, not lime
     const chartLines = page.locator("path[stroke*='128,201,182']");
     const count = await chartLines.count();
     expect(count).toBeGreaterThanOrEqual(1);
@@ -153,7 +148,6 @@ test.describe("Market page", () => {
     const onDateHeading = page.locator("h3").filter({ hasText: /^On / });
     await expect(onDateHeading).toBeVisible();
 
-    // Two info boxes below the heading
     const infoBoxes = onDateHeading.locator("~ div").first().locator("[class*='border-bg-border']");
     const count = await infoBoxes.count();
     expect(count).toBe(2);

@@ -121,8 +121,6 @@ export function registerWebMcpTools(
     void Promise.all(
       tools.map((tool) => registerTool(tool, { signal: controller.signal })),
     ).catch(() => {
-      // WebMCP is experimental. A browser may reject registration by policy
-      // or because a hot reload already registered the same tool names.
     });
 
     return () => controller.abort();

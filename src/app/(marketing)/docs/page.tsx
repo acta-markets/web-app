@@ -7,9 +7,9 @@ import {
 } from "@/lib/docs-content";
 
 export const metadata: Metadata = {
-  title: "Acta Protocol Documentation",
+  title: "Acta User Guide",
   description:
-    "Protocol, API, taker, and maker documentation for Acta Markets.",
+    "Using Acta: options, vaults, deposits, withdrawals, fees, and risks.",
   alternates: {
     canonical: getDocsCanonicalUrl(),
     types: { "text/markdown": getDocsCanonicalUrl() },
@@ -20,6 +20,6 @@ export default function DocsHomePage() {
   const page = getDocsPage();
   if (!page) return null;
 
-  const items = getDocsNavigation().flatMap((group) => group.items);
+  const items = getDocsNavigation("user").flatMap((group) => group.items);
   return <DocsArticle page={page} next={items[1]} />;
 }

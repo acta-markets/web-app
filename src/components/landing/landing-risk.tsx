@@ -23,16 +23,13 @@ const HOLD = [
   100, 104, 98, 97, 106, 111, 108, 118, 132, 128, 135, 133, 144, 149, 138, 133, 136, 135,
   145, 151,
 ];
-// identical to HOLD until the swap, dampened while partly exposed, and identical again
-// from the buy-back on. The collateral comes back whole, so the paths rejoin instead of
-// running parallel: the only thing given up is the gap between those two points.
 const VAULT = [
   100, 104, 98, 97, 106, 111, 108, 118, 123, 122, 135, 133, 144, 149, 138, 133, 136, 135,
   145, 151,
 ];
-const SWAP_WEEK = 7; // the asset rips through here and the deposit is swapped
-const BUYBACK_WEEK = 10; // partly exposed until here, then back in step with HOLD
-const DIVERGE_WEEK = 7; // the paths are one line until here, then they fork
+const SWAP_WEEK = 7;
+const BUYBACK_WEEK = 10;
+const DIVERGE_WEEK = 7;
 
 function CapChart() {
   const x = (i: number) => (i / (HOLD.length - 1)) * 100;
@@ -40,7 +37,6 @@ function CapChart() {
   const path = (vals: number[]) =>
     vals.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
 
-  // the lens between the two paths: it opens at the swap and closes at the buy-back
   const givenUp = [
     ...HOLD.slice(DIVERGE_WEEK, BUYBACK_WEEK + 1).map(
       (v, i) => `${i === 0 ? "M" : "L"} ${x(i + DIVERGE_WEEK)} ${y(v)}`,
@@ -68,7 +64,7 @@ function CapChart() {
           strokeWidth="1"
           vectorEffect="non-scaling-stroke"
         />
-        {/* the hot week */}
+        {                  }
         <rect
           x={x(SWAP_WEEK)}
           y="4"
@@ -95,9 +91,8 @@ function CapChart() {
       </svg>
 
       <div className="pointer-events-none absolute inset-0 font-mono text-[11px] uppercase">
-        {/* the two ends of the flat: the swap, and the buy-back that follows it. Square
-            markers rather than circles because the SVG stretches and would turn a circle
-            into an ellipse, so these live in HTML instead. */}
+        {
+                                                              }
         <span
           className="absolute -translate-x-1/2 whitespace-nowrap"
           style={{
@@ -142,9 +137,8 @@ function CapChart() {
         >
           Given up
         </span>
-        {/* premium accrues under the paths, one step per week, anchored to the same
-            vertices as the line above. A stack says "this only goes up" where a row of
-            identical marks says nothing. No amounts: none are measured. */}
+        {
+                                                                           }
         {HOLD.map((_, i) => (
           <span
             key={i}
@@ -165,9 +159,8 @@ function CapChart() {
           Premium paid
         </span>
 
-        {/* legend, not inline annotation: the paths wander, so nothing sits safely
-            against them at every aspect ratio. Both start low-left, so this corner
-            stays clear. */}
+        {
+                           }
         <div className="absolute flex flex-col gap-2" style={{ left: "2%", top: "4%" }}>
           <span
             className="flex items-center gap-2 whitespace-nowrap"
@@ -214,10 +207,8 @@ export function LandingRisk() {
 
         <CapChart />
 
-        {/* accent-coloured on purpose, and deliberately NOT a link: there is no page
-            documenting the cadence yet. Do not add an href here without a destination
-            that actually shows the measurement, and do not "fix" the colour back to
-            tertiary either. */}
+        {
+                               }
         <p
           className="mt-8 max-w-[620px] font-mono text-[12px] text-accent-secondary"
           style={{ letterSpacing: "-0.02em" }}

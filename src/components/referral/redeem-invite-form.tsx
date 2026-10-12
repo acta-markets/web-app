@@ -11,7 +11,6 @@ interface RedeemInviteFormProps {
   autoSubmitFromUrl?: boolean;
 }
 
-// Survives strict-mode double-mount in dev: auto-submit fires at most once per page load.
 let urlRefAutoAttempted = false;
 
 export function RedeemInviteForm({
@@ -32,7 +31,6 @@ export function RedeemInviteForm({
     }
   }, []);
 
-  // Any response (server error or status flip away from "required") clears the pending flag.
   useEffect(() => {
     if (referralError) setSubmitting(false);
   }, [referralError]);
