@@ -37,7 +37,7 @@ function summaryToRow(s: EarnAssetSummary): EarnRow {
   };
 }
 
-export function EarnClient() {
+export function TradeClient() {
   const [type, setType] = useState<MarketType>("call");
   const router = useRouter();
   const [howOpen, setHowOpen] = useState(false);
@@ -81,11 +81,10 @@ export function EarnClient() {
 
   return (
     <div>
-      {                                            }
       <div className="flex flex-col items-center gap-8 pb-20 pt-[104px]">
         <div className="flex w-[298px] flex-col items-center gap-3">
           <h1 className="w-full text-center font-space text-[64px] font-semibold leading-[1.2] tracking-[-1.28px] text-content-primary max-md:text-[40px]">
-            Earn
+            Trade
           </h1>
           <div className="flex w-full flex-col items-center gap-1.5">
             <p className="w-full text-center text-base font-normal leading-[1.2] tracking-[-0.32px] text-content-secondary">
@@ -105,7 +104,6 @@ export function EarnClient() {
           </div>
         </div>
 
-        {                                           }
         <div className="flex w-full max-w-[850px] gap-2 max-xl:px-[71px] max-lg:px-6">
           {(["call", "csp"] as const).map((t) => (
             <button key={t} type="button" onClick={() => setType(t)} className="flex-1">
@@ -132,9 +130,7 @@ export function EarnClient() {
         </div>
       </div>
 
-      {                              }
       <div className="mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6">
-        {                                        }
         <section className="flex flex-col gap-4">
           <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
             Popular
@@ -162,9 +158,7 @@ export function EarnClient() {
                 href={`/market/${encodeURIComponent(m.asset)}?type=${m.type}&market=${encodeURIComponent(m.nearestMarketPda)}`}
                 className="group block"
               >
-                {                                                                                                 }
                 <div className="relative flex h-[220px] flex-col items-start justify-end gap-3 overflow-clip border border-bg-border bg-bg-primary backdrop-blur-[4px] pb-6 pt-5 px-6 transition-colors hover:bg-[rgba(40,40,40,0.24)] hover:border-[rgba(240,240,240,0.15)]">
-                  {                         }
                   <div
                     className="absolute left-[-1px] right-[-1px] top-0 h-[74px] overflow-clip bg-black"
                     style={{
@@ -174,7 +168,6 @@ export function EarnClient() {
                     }}
                   />
 
-                  {                 }
                   <div className="relative z-10 flex w-full flex-col items-center gap-2.5">
                     <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-clip rounded-full border border-[rgba(240,240,240,0.1)] bg-[#f0f0f0] shadow-[0_0_0_5px_#121212]">
                       <img
@@ -189,7 +182,6 @@ export function EarnClient() {
                     </span>
                   </div>
 
-                  {               }
                   <div className="relative z-10 flex w-full items-center gap-1">
                     <div className="flex flex-1 flex-col items-start gap-1.5 text-center leading-[1.2]">
                       <span className="w-full text-sm tracking-[-0.28px] text-content-secondary">
@@ -225,15 +217,12 @@ export function EarnClient() {
 
         <div className="h-16" />
 
-        {                           }
         <section className="flex flex-col gap-4">
           <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
             All markets
           </h2>
 
-          {           }
           <div className="overflow-clip border border-bg-border backdrop-blur-[4px]">
-            {            }
             <div className="flex items-center gap-2 border-b border-bg-border bg-bg-primary py-3 pl-5 pr-12">
               <div className="flex-1 text-xs font-medium leading-[1.2] tracking-[-0.24px] text-content-secondary">Asset</div>
               <div className="w-[120px] text-xs font-medium leading-[1.2] tracking-[-0.24px] text-content-secondary">Type</div>
@@ -254,7 +243,6 @@ export function EarnClient() {
               <div className="w-[120px] text-xs font-medium leading-[1.2] tracking-[-0.24px] text-content-secondary">Cap filled</div>
             </div>
 
-            {          }
             {isLoading
               ? Array.from({ length: 5 }).map((_, idx) => (
                   <div key={`table-skeleton-${idx}`} className="flex h-[60px] items-center gap-2 border-b border-bg-border bg-bg-primary p-5 last:border-b-0">
@@ -295,7 +283,7 @@ export function EarnClient() {
         </section>
       </div>
 
-      <AppModal open={howOpen} onClose={() => setHowOpen(false)} title="Acta Earn">
+      <AppModal open={howOpen} onClose={() => setHowOpen(false)} title="Acta Trade">
         <div className="space-y-3 text-[15px]">
           {[
             { n: "1) Choose strategy", t: <>Pick <span className="font-medium text-accent-secondary">Calls</span> or <span className="font-medium text-accent-secondary">Puts</span>.</> },

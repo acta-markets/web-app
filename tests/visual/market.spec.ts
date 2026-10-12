@@ -17,11 +17,13 @@ test.describe("Market page", () => {
   });
 
   test("breadcrumb renders with correct structure", async ({ page }) => {
-    const earnLink = page.locator("a").filter({ hasText: "Earn" }).first();
-    await expect(earnLink).toBeVisible();
+    // scoped to <main>: the nav tabs are links with the same label
+    const tradeLink = page.getByRole("main").getByRole("link", { name: "Trade", exact: true });
+    await expect(tradeLink).toBeVisible();
+    await expect(tradeLink).toHaveAttribute("href", "/trade");
 
-    const earnClasses = await earnLink.getAttribute("class");
-    expect(earnClasses).toContain("text-content-secondary");
+    const tradeClasses = await tradeLink.getAttribute("class");
+    expect(tradeClasses).toContain("text-content-secondary");
 
     const marketText = page.locator("span").filter({ hasText: /^Market$/ }).first();
     await expect(marketText).toBeVisible();

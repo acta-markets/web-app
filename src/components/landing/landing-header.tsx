@@ -5,7 +5,7 @@ import { LandingButton } from "./landing-primitives";
 const NAV = [
   { label: "Docs", href: "/docs", external: false },
   { label: "Partners", href: "/partners", external: false },
-  { label: "Markets", href: "/earn", external: false },
+  { label: "Markets", href: "/trade", external: false },
 ] as const;
 
 export function LandingHeader() {
@@ -38,7 +38,6 @@ export function LandingHeader() {
             ),
           )}
         </nav>
-        {                                                                }
         <LandingButton variant="primary" size="sm" href="/earn">
           Launch app ↗
         </LandingButton>

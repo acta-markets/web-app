@@ -677,7 +677,7 @@ export function MarketClient({ asset }: { asset: string }) {
         <div className="space-y-6">
           <h1 className="font-space text-4xl font-semibold">Market not found</h1>
           <div className="font-mono text-content-secondary">
-            Try <Link className="text-accent-secondary hover:text-accent-primary" href="/earn">/earn</Link>.
+            Try <Link className="text-accent-secondary hover:text-accent-primary" href="/trade">/trade</Link>.
           </div>
         </div>
         {rfqModal}
@@ -690,8 +690,8 @@ export function MarketClient({ asset }: { asset: string }) {
       <div>
         <header className="mx-auto w-full max-w-[850px] space-y-6 pb-20 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pb-10 max-md:pt-16">
           <div className="flex items-center gap-0.5 font-mono text-base leading-[1.2] tracking-[-0.32px]">
-            <Link href="/earn" className="text-content-secondary hover:text-content-primary">
-              Earn
+            <Link href="/trade" className="text-content-secondary hover:text-content-primary">
+              Trade
             </Link>
             <span className="text-content-primary">/</span>
             <span className="text-content-primary">Market</span>
@@ -754,8 +754,8 @@ export function MarketClient({ asset }: { asset: string }) {
       <header className="mx-auto w-full max-w-[850px] space-y-6 pb-20 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pb-10 max-md:pt-16">
         {                }
         <div className="flex items-center gap-0.5 font-mono text-base leading-[1.2] tracking-[-0.32px]">
-          <Link href="/earn" className="text-content-secondary hover:text-content-primary">
-            Earn
+          <Link href="/trade" className="text-content-secondary hover:text-content-primary">
+            Trade
           </Link>
           <span className="text-content-primary">/</span>
           <span className="text-content-primary">Market</span>

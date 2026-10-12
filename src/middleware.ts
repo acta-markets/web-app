@@ -3,9 +3,10 @@ import {
   acceptsMarkdown,
   DOCS_SITE_ORIGIN,
   getDiscoveryLinkHeader,
-  getEarnMarkdown,
   getHomeMarkdown,
   getRequestDeploymentContext,
+  getTradeMarkdown,
+  getVaultsMarkdown,
 } from "@/lib/agent-discovery";
 
 function isAppEnabled() {
@@ -14,9 +15,9 @@ function isAppEnabled() {
   return !(v === "false" || v === "0");
 }
 
-const BLOCKED_PAGE_PREFIXES = ["/earn", "/portfolio", "/market"];
+const BLOCKED_PAGE_PREFIXES = ["/earn", "/trade", "/portfolio", "/market"];
 const BLOCKED_API_PREFIXES = ["/api/market", "/api/portfolio"];
-const MARKDOWN_PATHS = new Set(["/", "/earn"]);
+const MARKDOWN_PATHS = new Set(["/", "/earn", "/trade"]);
 const DOCS_HOSTNAME = "docs.acta.markets";
 const DOCS_RESERVED_PATHS = [
   "/_next",
@@ -72,7 +73,9 @@ function markdownForPath(req: NextRequest): string | null {
     case "/":
       return getHomeMarkdown(context);
     case "/earn":
-      return getEarnMarkdown(context);
+      return getVaultsMarkdown(context);
+    case "/trade":
+      return getTradeMarkdown(context);
     default:
       return null;
   }
