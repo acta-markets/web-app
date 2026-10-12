@@ -12,7 +12,7 @@ The application serves `devnet.acta.markets` and `beta.acta.markets`. Host-aware
 - `/robots.txt` with explicit general and AI crawler groups, private-path exclusions, Content Signals, the host sitemap, and the self-hosted documentation sitemap.
 - `/sitemap.xml` with public canonical pages only.
 - Homepage `Link` response headers for `api-catalog`, `service-desc`, `service-doc`, and `describedby`.
-- `Accept: text/markdown` negotiation for `/`, `/earn`, and every documentation page, with `Vary: Accept`.
+- `Accept: text/markdown` negotiation for `/`, `/earn` (vaults), `/trade` (markets), and every documentation page, with `Vary: Accept`.
 - `/.well-known/api-catalog` using the RFC 9727 JSON Linkset format.
 - `/openapi.json` for the public read-only HTTP API.
 - `/auth.md` documenting the actual Solana wallet challenge flow and its transaction-consent boundary.

@@ -141,3 +141,20 @@ Native-SOL vaults (`isNativeVault`) wrap and unwrap automatically. `buildRequest
 2. Join with the `/vaults` list by `vault` for the name, share price and performance. Don't call `/vaults/{pda}` per row. A vault missing from `/vaults` is closed: show the row from `totals` and history alone.
 3. Current position value is share balance (RPC) × `share_price` / `PRICE_SCALE` (`sharesToMain`). The backend does not track share transfers between wallets, so the RPC balance is the truth.
 4. `GET /depositors/{wallet}/history` gives a cross-vault feed; each event carries `vault`.
+
+## UI
+
+`/earn` is the vault grid and `/earn/[vault]` (by PDA) the vault page. The option-markets table that used to live at `/earn` is now `/trade`.
+
+- **Metadata.** The backend serves no name, curator or category, so `registry.ts` maps a vault PDA to them. Unregistered vaults still render: the name comes from the deposit asset, the curator shows as the short governance address, and the category is derived from the asset (Majors, Stables, Stocks, otherwise Other). Register a vault when it launches.
+- **Deposit availability** comes from `requestDepositBlock`, never from `accepting_deposits` alone: deposits are open in `active` before expiry whatever the flag says. A vault whose safety mode rules out deposits shows "Manage" and opens the modal on Withdraw.
+- **One request per kind.** A wallet can hold one pending deposit and one pending withdrawal per vault (`VAULT_REQUEST_EXISTS`). The modal blocks a second request and offers Cancel instead.
+- **Invite gate.** New deposits follow the trading invite gate (`openReferralGate`). Withdraw, cancel, refund and self-processing are never gated.
+- **Metrics** (`metrics.ts`) use completed cycles only (`finished_at != null`):
+  - The return series compounds per-cycle `return_pct`, so a share-price reset on a new capital generation does not show as a drop.
+  - 30d avg APR is the compounded return of cycles that finished in the last 30 days, annualized simply over the calendar time they span.
+  - Sharpe ratio is mean over sample standard deviation of per-cycle returns with a zero risk-free rate, annualized by the vault's mean cadence. It needs 8 completed cycles.
+  - Max drawdown is the worst fall of the compounded index, measured at cycle ends.
+  - 30d avg APR and Sharpe show only once `performance.status` is `annualized`, matching the 30-day rule above.
+  - TVL is `equity` in the deposit asset. There is no USD price source for vault assets yet.
+- **Sample data.** `NEXT_PUBLIC_VAULTS_SAMPLE=1` makes `source.ts` serve fixtures from `sample.ts` (six vaults across the categories, with cycle history and wallet positions) and disables transactions. Nothing on screen marks the figures as made up, so screenshots of this mode are not real results. It is off whenever `NODE_ENV` is `production`, so builds ignore it.
