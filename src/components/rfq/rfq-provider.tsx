@@ -165,7 +165,6 @@ function isMissingMarketDescriptorError(message: string): boolean {
 
 function resetToAnonymous(client: ActaWsClient) {
   client.disconnect();
-  // Reconnect without auth intent so market data keeps working.
   window.setTimeout(() => {
     client.connectAnonymous();
   }, 250);
@@ -200,7 +199,6 @@ function persistSession(walletAddress: string, sessionId: string, expiresAt: num
       JSON.stringify({ walletAddress, sessionId, expiresAt })
     );
   } catch {
-    // ignore storage errors
   }
 }
 
@@ -255,7 +253,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const fetchPortfolioPrereqs = useCallback(() => {
     const client = clientRef.current;
     if (!client) return;
-    // Markets arrive via Snapshot on auth — only positions need explicit fetch.
     client.getPositions();
   }, []);
 
@@ -263,13 +260,11 @@ export function RfqProvider({ children }: RfqProviderProps) {
     walletAddressRef.current = selectedAccount?.address ?? null;
   }, [selectedAccount?.address]);
 
-  // Initialize client and connect anonymously on mount
   useEffect(() => {
     console.log("[RfqProvider] Initializing...");
     const client = createRfqClient({ debug: true });
     clientRef.current = client;
 
-    // Connection events
     client.on("connecting", () => {
       console.log("[RfqProvider] Connecting...");
       setConnectionState("connecting");
@@ -303,9 +298,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       if (walletAddressRef.current) {
         persistSession(walletAddressRef.current, sessionId, expiresAt);
       }
-      // Markets arrive via SDK Snapshot on auth — no explicit GetMarkets needed.
-      // Positions are fetched by portfolio page on mount (avoids duplicate).
-      // EarnSummary + TokenMarketsInfo fetched by their respective pages on mount.
       client.getEarnSummary();
       client.getMarketDescriptors({ active_only: true });
       client.getTokenCaps({ include_markets: false });
@@ -320,7 +312,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setTokenMarketsInfo(null);
       pendingRfqRef.current = null;
       setCurrentQuote(null);
-      // Drop in-flight referral request ids — replies after reconnect cannot be matched anyway.
       pendingReferralReqsRef.current.clear();
       setWsHealth("recovering");
     });
@@ -328,21 +319,17 @@ export function RfqProvider({ children }: RfqProviderProps) {
     client.on("error", (serverErr) => {
       console.error("[RfqProvider] Error:", serverErr);
 
-      // session_replaced means another tab/connection took over — stop
-      // reconnecting to avoid an infinite error loop.
       if ((serverErr.type === "generic" || serverErr.type === "Generic") && serverErr.data.code === "session_replaced") {
         console.warn("[RfqProvider] Session replaced by newer connection, disconnecting.");
         client.disconnect();
         return;
       }
 
-      // Invite gate: flip status; do not show as a modal error.
       if (serverErr.type === "InviteRequired") {
         setReferralStatus("required");
         return;
       }
 
-      // Prevent reconnect-auth loops after user rejection/timeouts.
       if (isAuthFailureError(serverErr)) {
         resetToAnonymous(client);
       }
@@ -394,7 +381,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       }
     });
 
-    // Data events
     client.on("message", () => {
       lastWsMessageAtRef.current = Date.now();
       setWsHealth("healthy");
@@ -435,7 +421,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       if (!pending || pending.requestId !== data.request_id) return;
       tokenMarketsRequest.current = null;
       setTokenMarketsInfo({ underlyingMint: pending.underlyingMint, data });
-      // Populate indicativePricesByKey so getIndicativePricesCached works transparently.
       const updates: Record<string, IndicativePricesMessage> = {};
       for (const mkt of data.markets ?? []) {
         for (const ind of mkt.indicatives ?? []) {
@@ -479,24 +464,15 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setCurrentQuote(null);
     });
 
-    // Order events
     client.on("orderSubmitted", (orderId, sig) => {
       console.log("[RfqProvider] Order submitted:", orderId, sig);
     });
 
     client.on("orderConfirmed", (orderId, positionPda) => {
       console.log("[RfqProvider] Order confirmed:", orderId, positionPda);
-      // Taker flips from "pending" → "active" on first successful trade; refresh.
       client.getMyReferralInfo();
     });
 
-    client.on("orderFailed", (orderId, reason) => {
-      console.error("[RfqProvider] Order failed:", orderId, reason);
-      setError(new Error(`Order failed: ${reason}`));
-    });
-
-    // Always connect once. If wallet is available, auth will upgrade
-    // this same connection in-place (no second WS).
     console.log("[RfqProvider] Connecting...");
     client.connectAnonymous();
 
@@ -507,8 +483,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
     };
   }, [getIndicativeKey]);
 
-  // No periodic refresh here — earn summary is fetched once on connect and on
-  // auth.  Pages that need periodic updates (e.g. /earn) should refresh locally.
 
   useEffect(() => {
     if (connectionState === "disconnected" || connectionState === "error") return;
@@ -534,7 +508,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
     return () => window.clearInterval(intervalId);
   }, [connectionState]);
 
-  // Authenticate with wallet
   const authenticate = useCallback(
     async (walletAddress: string, signMessage: (msg: Uint8Array) => Promise<Uint8Array>) => {
       const client = clientRef.current;
@@ -599,7 +572,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const walletAddress = selectedAccount?.address;
   const rfqConnected = connectionState !== "disconnected" && connectionState !== "error";
 
-  // Trigger RFQ auth from provider so it works regardless of active page.
   useEffect(() => {
     if (!walletConnected || !walletAddress || !selectedAccount) {
       pendingRfqAuthWalletRef.current = null;
@@ -652,11 +624,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       });
   }, [walletConnected, walletAddress, rfqConnected, authWarmupDone, authenticate, signMessage]);
 
-  // Mirror referral status to gate visibility:
-  //   required  → auto-open (first probe / server re-prompt)
-  //   redeemed  → auto-close
-  //   unknown   → auto-close (wallet disconnect / skip)
-  // User dismissals don't change referralStatus, so they don't re-trigger this effect.
   useEffect(() => {
     setReferralGateOpen(referralStatus === "required");
   }, [referralStatus]);
@@ -700,7 +667,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
   }, []);
 
   const fetchPositions = useCallback(() => {
-    // Keep metadata warm together with positions to avoid Unknown assets.
     fetchPortfolioPrereqs();
   }, [fetchPortfolioPrereqs]);
 
@@ -863,8 +829,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
     setReferralGateOpen(true);
   }, []);
 
-  // Closing the gate drops the wallet connection — the user backed out of
-  // redeeming, so we put them back in the anonymous browsing state.
   const closeReferralGate = useCallback(() => {
     setReferralGateOpen(false);
     void disconnectWallet();
@@ -943,4 +907,3 @@ export function RfqProvider({ children }: RfqProviderProps) {
     </RfqContext.Provider>
   );
 }
-

@@ -281,6 +281,16 @@ export function getOpenApiDocument(context: DeploymentContext) {
             "connected_makers",
           ],
           properties: {
+            usd: {
+              type: "object",
+              description: "USD estimates captured at submission for confirmed trades; unpriced trades are excluded.",
+              required: ["notional_24h", "premium_24h", "priced_trades_24h"],
+              properties: {
+                notional_24h: { type: "string", description: "Underlying notional in dollars, exact decimal text." },
+                premium_24h: { type: "string", description: "Gross paid premium in dollars, exact decimal text." },
+                priced_trades_24h: { type: "integer", minimum: 0 },
+              },
+            },
             total_volume_24h: { type: "integer", format: "int64" },
             total_trades_24h: { type: "integer", format: "int64" },
             active_markets: { type: "integer", format: "int64" },

@@ -17,7 +17,6 @@ export function PrivyAppProvider({ children }: { children: React.ReactNode }) {
     return () => solanaConnectors.onUnmount();
   }, [appId, solanaConnectors]);
 
-  // Allow the app to render even if Privy is not configured (button will be disabled).
   if (!appId) return <>{children}</>;
 
   return (
@@ -27,8 +26,6 @@ export function PrivyAppProvider({ children }: { children: React.ReactNode }) {
         appearance: {
           theme: "dark",
           walletChainType: "solana-only",
-          // Matches the "Detected" behavior from the screenshot, while still
-          // allowing "Other wallets" (via wallet list overflow).
           walletList: [
             "detected_solana_wallets",
             "phantom",

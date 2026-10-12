@@ -123,7 +123,6 @@ function YourCodeCard({
       setFlag(true);
       window.setTimeout(() => setFlag(false), 1500);
     } catch {
-      // ignore clipboard errors
     }
   };
 
@@ -222,7 +221,6 @@ function ClaimVanityCard({
   const [vanity, setVanity] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Any response (server error or the code updating on success) clears the pending flag.
   useEffect(() => {
     if (referralError) setSubmitting(false);
   }, [referralError]);

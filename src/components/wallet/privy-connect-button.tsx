@@ -44,11 +44,9 @@ export function PrivyConnectButton() {
     if (!wallets[0] && !connectedWallet) return;
     setDisconnecting(true);
     try {
-      // If authenticated + linked wallet, unlink it (best-effort).
       if (wallets[0]) await wallets[0].unlink();
     } catch {}
     try {
-      // ConnectedWallet.disconnect() is best-effort/no-op for some wallets.
       if (wallets[0]) wallets[0].disconnect();
       if (connectedWallet?.disconnect) connectedWallet.disconnect();
     } catch {}
@@ -79,7 +77,6 @@ export function PrivyConnectButton() {
     );
   }
 
-  // Connected state: show address + a disconnect action.
   return (
     <div className="inline-flex items-center">
       <AppButton

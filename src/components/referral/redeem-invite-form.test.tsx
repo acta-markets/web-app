@@ -54,7 +54,6 @@ const freshCtx = (): CtxShape => ({
 beforeEach(() => {
   refStore.pending = null;
   ctxState.current = freshCtx();
-  // Re-evaluate the form module so its module-scoped urlRefAutoAttempted resets.
   vi.resetModules();
 });
 
@@ -95,7 +94,6 @@ describe("RedeemInviteForm", () => {
 
     await userEvent.type(screen.getByLabelText("Invite code"), "ACTA");
 
-    // Give React a tick for any (unwanted) effect to fire.
     await new Promise((r) => setTimeout(r, 50));
     expect(ctxState.current.redeemInvite).not.toHaveBeenCalled();
   });
@@ -107,17 +105,14 @@ describe("RedeemInviteForm", () => {
 
     const { rerender } = render(<Form />);
 
-    // Pre-fill from pending.
     await waitFor(() => {
       expect(inputValue()).toBe("ACTA");
     });
     expect(ctxState.current.redeemInvite).not.toHaveBeenCalled();
 
-    // User edits before auth completes — code is no longer URL-derived.
     await userEvent.type(screen.getByLabelText("Invite code"), "2");
     expect(inputValue()).toBe("ACTA2");
 
-    // Auth completes.
     ctxState.current = { ...ctxState.current, isAuthenticated: true };
     rerender(<Form />);
 
@@ -136,7 +131,7 @@ describe("RedeemInviteForm", () => {
     });
     first.unmount();
 
-    refStore.pending = "ACTA"; // simulate the same URL ref still in storage
+    refStore.pending = "ACTA";
     render(<Form />);
     await new Promise((r) => setTimeout(r, 50));
 
@@ -153,11 +148,8 @@ describe("RedeemInviteForm", () => {
       expect(ctxState.current.redeemInvite).toHaveBeenCalledTimes(1);
     });
 
-    // While the request is in flight the button shows the busy label.
     expect(buttonText()).toBe("Redeeming...");
 
-    // Server replies with an error; submitting may still be true for one tick,
-    // but the button must immediately show the actionable label.
     ctxState.current = {
       ...ctxState.current,
       referralError: "We couldn't find that invite code.",

@@ -1,5 +1,6 @@
 # Acta HTTP API
-> Trading is WebSocket-based. See the [Maker API reference](maker-api.md) and [Taker API reference](taker-api.md).
+
+Trading runs over WebSocket. See the [Maker API reference](maker-api.md) and [Taker API reference](taker-api.md).
 
 ## Base URL
 
@@ -32,8 +33,6 @@ Common codes:
 
 Temporary unavailability may return HTTP `503`.
 
----
-
 ## Health
 
 ### GET `/health`
@@ -42,21 +41,7 @@ Returns service health and metadata.
 
 ### GET `/ready`
 
-Returns readiness status: `200` when every gated component is healthy, `503`
-otherwise. Which components gate depends on how the server is configured; the
-table is rendered from the server's own selector, so it cannot drift from the
-code.
-
-<!-- generated:rfq-ready -->
-| Configuration | `/ready` gates on |
-|---|---|
-| database + DB feed ids + caps (production) | redis, kernel, maker_registry, market_metadata, postgres, feed_mapping, price_stream, caps |
-| database + caps, static feed ids | redis, kernel, maker_registry, market_metadata, postgres, caps |
-| database only | redis, kernel, maker_registry, market_metadata, postgres |
-| no database (local demo) | redis, kernel, maker_registry, market_metadata |
-
-`kernel` is also the `/live` gate: a closed kernel channel needs a restart.
-<!-- /generated:rfq-ready -->
+Returns `200` when required components are healthy, `503` otherwise, including during shutdown.
 
 ### GET `/live`
 
@@ -65,8 +50,6 @@ Returns process liveness.
 ### GET `/metrics`
 
 Prometheus metrics endpoint.
-
----
 
 ## Markets
 
@@ -77,7 +60,7 @@ List markets.
 Query:
 - `underlying` (optional symbol string)
 
-`GET /api/v1/markets` returns tradable markets only: not finalized, not disabled, and before the effective trading cutoff. `underlying` filters by symbol before that tradability filter. There is no `active=false` mode; use `/api/v1/markets/{pda}` for a specific market.
+Returns tradable markets only: not finalized, not disabled, and before the effective trading cutoff. `underlying` filters by symbol. There is no `active=false` mode. Use `/api/v1/markets/{pda}` for a specific market.
 
 Response:
 
@@ -99,13 +82,11 @@ Response:
 }
 ```
 
-`underlying_feed_id_hex` / `quote_feed_id_hex` are not part of current HTTP `MarketDto`.
+HTTP `MarketDto` has no `underlying_feed_id_hex` / `quote_feed_id_hex`.
 
 ### GET `/api/v1/markets/{pda}`
 
 Get a single market DTO.
-
----
 
 ## Makers
 
@@ -130,14 +111,13 @@ Get a single market DTO.
 
 Get a single maker DTO.
 
----
+## Vaults and depositors
+
+The [Vault HTTP API](vault-http-api.md) covers `/api/v1/vaults`, vault detail, cycles, positions and depositor state/history. They serve indexed data. Current share ownership is in Solana token accounts.
 
 ## Participant history
 
-RFQ, quote, and order history is not exposed by the public HTTP API. Use the
-authenticated maker/taker session protocols for participant-specific state.
-
----
+Participant RFQ, quote and order history is not in the public HTTP API. Use the authenticated maker/taker WebSocket sessions.
 
 ## Stats
 
@@ -145,7 +125,9 @@ authenticated maker/taker session protocols for participant-specific state.
 
 ```json
 {
+  "usd": { "notional_24h": "1500.00", "premium_24h": "49.00", "priced_trades_24h": 149 },
   "total_volume_24h": 1000000,
+  "total_volume_24h_exact": "1000000",
   "total_trades_24h": 150,
   "active_markets": 12,
   "active_makers": 5,
@@ -155,10 +137,8 @@ authenticated maker/taker session protocols for participant-specific state.
 
 This differs from WS `GlobalStats` in `Snapshot` and `StatsUpdate`. HTTP includes `connected_makers` (live WS sessions) and omits `total_price_24h` and `active_rfqs`.
 
----
-
-## Related
-
-- [WS common conventions](ws-common.md)
-- [Maker API reference](maker-api.md)
-- [Taker API reference](taker-api.md)
+`usd` holds underlying notional and gross paid premium as exact decimal dollar strings.
+USD prices, USDC included, come from the local oracle cache when the signed transaction is
+submitted. Only confirmed trades count. `priced_trades_24h < total_trades_24h` means some
+confirmed trades have no stored USD value. They are not repriced at current prices.
+The legacy `total_volume_24h` fields are raw aggregates, not dollars.

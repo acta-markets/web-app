@@ -85,7 +85,7 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
 **RFQ Infrastructure**: WebSocket client using `@acta-markets/ts-sdk` (see `package.json` for the pinned version):
 - `src/lib/rfq-client.ts` - Thin wrapper around SDK's `ActaWsClient`
 - `src/components/rfq/rfq-provider.tsx` - Shared React connection, discovery and RFQ request state; token metadata is bound to its underlying mint and request ID
-- `src/components/market/use-rfq-order.ts` - Preserves selected order identity and whether its signature was sent. After same-credential resume, `GetMyActiveRfqs` can authorize repeating `AcceptQuote` for the same pending order to retrieve its signing payload. Submitted transactions are never replayed; `GetOrderStatus` reconciles execution.
+- `src/components/market/use-rfq-order.ts` - Persists selected order identity per wallet and RFQ backend through reload, and whether its signature was sent. After same-credential resume, `GetMyActiveRfqs` can authorize repeating `AcceptQuote` for the same pending order to retrieve its signing payload. Submitted transactions are never replayed; `GetOrderStatus` reconciles execution.
 - Connects via `NEXT_PUBLIC_RFQ_WS_URL` env variable
 - Auth flow: `connectAnonymous()` → user clicks connect → `authenticate(walletAuthProvider)`
 - Challenge is human-readable text signed as UTF-8 bytes
