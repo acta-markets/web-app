@@ -56,13 +56,15 @@ NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
 NEXT_PUBLIC_RFQ_WS_URL="wss://beta-api.acta.markets"  # RFQ infrastructure WebSocket (mainnet)
 NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "devnet" - controls token mints
 NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied through /api/rpc
+# NEXT_PUBLIC_API_URL="https://beta-api.acta.markets"  # Optional: vault HTTP API; defaults to the RFQ WebSocket host
+# NEXT_PUBLIC_VAULTS_SAMPLE="1"  # Dev only: sample vaults on /earn; ignored by production builds
 ```
 
 ## Architecture
 
 **Next.js 14 App Router** with two route groups:
 - `(marketing)` - Landing page at `/`
-- `(app)` - Protected app routes: `/earn`, `/portfolio`, `/market/[asset]`
+- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (option markets), `/portfolio`, `/market/[asset]`
 
 **Middleware** (`middleware.ts`) gates app routes based on `NEXT_PUBLIC_APP_ENABLED`. When disabled, app routes redirect to landing but `/api/whitelist` remains accessible.
 
@@ -74,6 +76,12 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
 **Market prices and APR**: The market page uses the configured RFQ backend’s `GetTokenMarketsInfo.reference_price` and indicative premiums, refreshed together every 30 seconds. APR uses the existing SDK formula and is unavailable for stale indicatives. The backend owns oracle access; the frontend has no direct Hermes integration.
 
 **Markets**: Static market definitions in `src/lib/markets.ts` with call/CSP (cash-secured put) types, APR ranges, and price options.
+
+**Vaults**: `/earn` lists vaults by category and `/earn/[vault]` shows one, read from the vault HTTP API (`/api/v1/vaults`, `/vaults/{pda}`, `/cycles`) through `@acta-markets/ts-sdk/http`:
+- `src/lib/vaults/` - API client, contract rules, depositor transactions, plus `registry.ts` (name, curator and category by vault PDA, which the backend does not serve), `metrics.ts` (30d avg APR, Sharpe ratio, drawdown, from completed cycles only) and `presentation.ts` (status, sort order, block copy)
+- `src/components/vaults/` - polling hooks (`use-vaults.ts`), the grid, the vault page and the deposit/withdraw modal
+- `docs/vaults-integration.md` - data sources, polling budget and UI rules
+- `NEXT_PUBLIC_VAULTS_SAMPLE=1` swaps in fixtures from `src/lib/vaults/sample.ts` in development; production builds ignore it
 
 **Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
 - Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)
