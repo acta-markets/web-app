@@ -1,10 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { SAMPLE_VAULTS, buildSampleData } from "@/lib/vaults/sample";
+import { getTokenMint } from "@/lib/tokens";
+import { makeVault, parseSampleData } from "@/lib/vaults/sample";
+import sampleFile from "@/lib/vaults/sample-data.json";
 import type { Vault } from "@/lib/vaults/types";
 
 const NOW = 1_800_000_000;
+const SAMPLE = parseSampleData(sampleFile, NOW);
+
+// not in the sample set: a vault that only takes withdrawals now, with the best APR on paper
+const CLOSING = makeVault({
+  vault_pda: "Wind1ngDown111111111111111111111111111111111",
+  main_mint: getTokenMint("USDC")!,
+  safety: "closing",
+  performance: {
+    status: "annualized",
+    annualized_return_pct: 40,
+    cycles_completed: 9,
+    last_cycle_return_pct: 1,
+    cumulative_return_pct: 5,
+    track_record_secs: "5000000",
+  },
+});
 
 const state = vi.hoisted(() => ({
   vaults: {
@@ -13,10 +31,17 @@ const state = vi.hoisted(() => ({
     loading: false,
     refresh: () => {},
   },
+  prices: {
+    data: null as Record<string, number> | null,
+    error: null as Error | null,
+    loading: false,
+    refresh: () => {},
+  },
 }));
 
 vi.mock("./use-vaults", () => ({
   useVaults: () => state.vaults,
+  useUsdPrices: () => state.prices,
   useNowSecs: () => NOW,
 }));
 
@@ -27,19 +52,23 @@ vi.mock("./vault-deposit-modal-lazy", () => ({
   usePrefetchVaultModal: () => {},
 }));
 
-// sample vaults carry their names in the sample registry, which is off outside sample mode
+// fixture vaults carry their names in sample-data.json, which the registry only reads in fixture mode
 vi.mock("@/lib/vaults/registry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/vaults/registry")>();
-  const { SAMPLE_VAULT_META } = await import("@/lib/vaults/sample");
-  return { ...actual, resolveVaultMeta: (vault: Vault) => actual.resolveVaultMeta(vault, SAMPLE_VAULT_META) };
+  const { parseSampleData } = await import("@/lib/vaults/sample");
+  const file = (await import("@/lib/vaults/sample-data.json")).default;
+  const { meta } = parseSampleData(file, file.anchor);
+  return { ...actual, resolveVaultMeta: (vault: Vault) => actual.resolveVaultMeta(vault, meta) };
 });
 
 import { VaultsClient } from "./vaults-client";
 
 const cardNames = () => screen.queryAllByRole("article").map((card) => card.getAttribute("aria-label"));
+const card = (name: string) => within(screen.getByRole("article", { name }));
 
 beforeEach(() => {
-  state.vaults = { data: buildSampleData(NOW).vaults, error: null, loading: false, refresh: vi.fn() };
+  state.vaults = { data: SAMPLE.vaults, error: null, loading: false, refresh: vi.fn() };
+  state.prices = { data: { ...SAMPLE.pricesUsd }, error: null, loading: false, refresh: vi.fn() };
   window.history.replaceState(null, "", "/earn");
 });
 
@@ -48,55 +77,87 @@ afterEach(() => {
 });
 
 describe("VaultsClient", () => {
-  it("lists proven yield first and vaults winding down last", () => {
+  it("lists the highest proven APR first and vaults winding down last", () => {
+    state.vaults = { ...state.vaults, data: [CLOSING, ...SAMPLE.vaults] };
     render(<VaultsClient initialCategory="all" />);
-    const names = cardNames();
-    expect(names).toHaveLength(6);
-    expect(new Set(names.slice(0, 2))).toEqual(new Set(["SOL income", "USDC income"]));
-    expect(names.slice(2)).toEqual([
-      "jitoSOL income",
-      "zBTC income",
-      "xTSLA income",
-      "USDC legacy",
-    ]);
+    expect(cardNames()).toEqual(["SPCX", "ZEC", "NVDAx", "HYPE", "jitoSOL", "USDC", "SPYx", "USDC vault"]);
   });
 
-  it("filters by category and keeps the URL shareable", async () => {
+  it("filters by section and keeps the URL shareable", async () => {
     const user = userEvent.setup();
     render(<VaultsClient initialCategory="all" />);
+    expect(screen.getAllByRole("button", { pressed: false }).map((b) => b.textContent)).toEqual(["Crypto3", "Stocks3", "Stables1"]);
 
-    await user.click(screen.getByRole("button", { name: /^Stables/ }));
-    expect(cardNames()).toEqual(["USDC income", "USDC legacy"]);
-    expect(window.location.search).toBe("?category=stables");
+    await user.click(screen.getByRole("button", { name: /^Stocks/ }));
+    expect(cardNames()).toEqual(["SPCX", "NVDAx", "SPYx"]);
+    expect(window.location.search).toBe("?category=stocks");
 
     await user.click(screen.getByRole("button", { name: /^All/ }));
-    expect(cardNames()).toHaveLength(6);
+    expect(cardNames()).toHaveLength(7);
     expect(window.location.search).toBe("");
   });
 
-  it("keeps a linked category with no vaults and offers the way back", async () => {
+  it("keeps a linked section with no vaults and offers the way back", async () => {
     const user = userEvent.setup();
-    render(<VaultsClient initialCategory="Other" />);
-    expect(screen.getByRole("button", { name: /^Other/ }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("Nothing in Other yet.")).toBeTruthy();
+    const stocks = new Set([SAMPLE.keys.nvdax, SAMPLE.keys.spyx, SAMPLE.keys.spcx]);
+    state.vaults = { ...state.vaults, data: SAMPLE.vaults.filter((v) => !stocks.has(v.vault_pda)) };
+    render(<VaultsClient initialCategory="Stocks" />);
+    expect(screen.getByRole("button", { name: /^Stocks/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Nothing in Stocks yet.")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Show all vaults" }));
-    expect(cardNames()).toHaveLength(6);
+    expect(cardNames()).toEqual(["ZEC", "HYPE", "jitoSOL", "USDC"]);
+  });
+
+  it("sorts by TVL or name, and keeps the order inside a section", async () => {
+    const user = userEvent.setup();
+    state.vaults = { ...state.vaults, data: [CLOSING, ...SAMPLE.vaults] };
+    render(<VaultsClient initialCategory="all" />);
+    const sort = screen.getByRole("combobox", { name: "Sort vaults" });
+
+    await user.selectOptions(sort, "TVL");
+    expect(cardNames()).toEqual(["ZEC", "HYPE", "USDC", "SPYx", "SPCX", "NVDAx", "jitoSOL", "USDC vault"]);
+
+    await user.selectOptions(sort, "Name");
+    expect(cardNames()).toEqual(["HYPE", "jitoSOL", "NVDAx", "SPCX", "SPYx", "USDC", "USDC vault", "ZEC"]);
+
+    await user.click(screen.getByRole("button", { name: /^Stocks/ }));
+    expect(cardNames()).toEqual(["NVDAx", "SPCX", "SPYx"]);
+  });
+
+  it("shows TVL in dollars, and in the asset itself when it has no price", () => {
+    const { ZEC: _unpriced, ...prices } = SAMPLE.pricesUsd;
+    state.prices = { ...state.prices, data: prices };
+    render(<VaultsClient initialCategory="all" />);
+    expect(card("jitoSOL").getByText("$102K")).toBeTruthy();
+    expect(card("USDC").getByText("$2.11M")).toBeTruthy();
+    expect(card("ZEC").getByText("7,238 ZEC")).toBeTruthy();
+  });
+
+  it("holds TVL until prices answer, and shows asset amounts if they never do", () => {
+    state.prices = { ...state.prices, data: null };
+    const { rerender } = render(<VaultsClient initialCategory="all" />);
+    expect(card("jitoSOL").queryByText(/TVL/)).toBeNull();
+
+    state.prices = { ...state.prices, data: null, error: new Error("down") };
+    rerender(<VaultsClient initialCategory="all" />);
+    expect(card("jitoSOL").getByText("707.85 jitoSOL")).toBeTruthy();
   });
 
   it("opens deposits on Deposit, and a closing vault on Withdraw", async () => {
     const user = userEvent.setup();
+    state.vaults = { ...state.vaults, data: [CLOSING, ...SAMPLE.vaults] };
     render(<VaultsClient initialCategory="all" />);
 
-    const sol = screen.getByRole("article", { name: "SOL income" });
-    await user.click(within(sol).getByRole("button", { name: "Deposit" }));
-    expect(screen.getByTestId("vault-modal").dataset).toMatchObject({ pda: SAMPLE_VAULTS.sol, tab: "deposit" });
+    const jito = screen.getByRole("article", { name: "jitoSOL" });
+    await user.click(within(jito).getByRole("button", { name: "Deposit" }));
+    expect(screen.getByTestId("vault-modal").dataset).toMatchObject({ pda: SAMPLE.keys.jitosol, tab: "deposit" });
 
-    const closing = screen.getByRole("article", { name: "USDC legacy" });
+    const closing = screen.getByRole("article", { name: "USDC vault" });
     await user.click(within(closing).getByRole("button", { name: "Manage" }));
-    expect(screen.getByTestId("vault-modal").dataset).toMatchObject({ pda: SAMPLE_VAULTS.usdcClosing, tab: "withdraw" });
+    expect(screen.getByTestId("vault-modal").dataset).toMatchObject({ pda: CLOSING.vault_pda, tab: "withdraw" });
 
-    expect(within(sol).getByRole("link", { name: "Details" }).getAttribute("href")).toBe(`/earn/${SAMPLE_VAULTS.sol}`);
+    expect(within(jito).getByRole("link", { name: "Details" }).getAttribute("href")).toBe(`/earn/${SAMPLE.keys.jitosol}`);
   });
 
   it("shows skeletons first and a retry when nothing could load", async () => {

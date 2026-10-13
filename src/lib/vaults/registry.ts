@@ -1,6 +1,6 @@
 import { getTokenSymbolByMint } from "@/lib/tokens";
 import { shortAddress } from "./format";
-import { SAMPLE_VAULT_META, VAULTS_SAMPLE_MODE } from "./sample";
+import { VAULTS_SAMPLE_MODE, peekSampleData } from "./sample";
 import type { Vault } from "./types";
 
 /**
@@ -9,8 +9,8 @@ import type { Vault } from "./types";
  * fallbacks that never invent anything.
  */
 
-export type VaultCategory = "Majors" | "Stables" | "Stocks" | "Other";
-export const VAULT_CATEGORIES: readonly VaultCategory[] = ["Majors", "Stables", "Stocks", "Other"];
+export type VaultCategory = "Crypto" | "Stocks" | "Stables";
+export const VAULT_CATEGORIES: readonly VaultCategory[] = ["Crypto", "Stocks", "Stables"];
 export type CategoryFilter = "all" | VaultCategory;
 
 export type VaultMeta = {
@@ -21,47 +21,37 @@ export type VaultMeta = {
   /** for deposit mints the token list does not know */
   assetSymbol?: string;
   description?: string;
+  /**
+   * Yearly staking yield of the deposit asset itself (jitoSOL and other LSTs), in
+   * percent. The vault's share price is denominated in the asset, so it misses
+   * this part; the headline APR adds it to the vault's premium.
+   */
+  stakingAprPct?: number;
 };
 
 export const VAULT_REGISTRY: Readonly<Record<string, VaultMeta>> = {
   // TODO(tim): confirm the display name. Curator follows LANDING_VAULTS, where Acta
   // runs the SOL vault; governance is 9amKA1ezPyPoYik7N1QCBE4N3d9mm2fQfmFfLNbSSbUf.
-  "3irb63eaXBmm3bvUY7hvpFHnXzeaFZSvtsirPMsfctuS": { name: "SOL vault", curator: "Acta", category: "Majors" },
+  "3irb63eaXBmm3bvUY7hvpFHnXzeaFZSvtsirPMsfctuS": { name: "SOL vault", curator: "Acta", category: "Crypto" },
 };
 
 const STABLES = new Set(["USDC", "USDT", "PYUSD", "USDS", "USDG", "FDUSD", "DAI", "EURC", "USDE", "USDH"]);
-const MAJORS = new Set([
-  "SOL",
-  "WSOL",
-  "JITOSOL",
-  "MSOL",
-  "BSOL",
-  "JUPSOL",
-  "INF",
-  "BNSOL",
-  "BTC",
-  "ZBTC",
-  "CBBTC",
-  "WBTC",
-  "TBTC",
-  "ETH",
-  "WETH",
-  "JLP",
-]);
-// Tokenized equities: xTSLA style or TSLAx style. Case-sensitive, so XRP stays out.
-const TOKENIZED_STOCK = /^x[A-Z]{1,5}$|^[A-Z]{1,5}x$/;
+// Tokenized equities: NVDAx style (xStocks) or xNVDA style. Case-sensitive, so XRP stays out.
+const TOKENIZED_STOCK = /^[A-Z]{1,5}x$|^x[A-Z]{1,5}$/;
+// tokenized equities whose tickers follow no pattern
+const STOCKS = new Set(["SPCX"]);
 
+/** Stablecoins and tokenized stocks are recognised by symbol; every other asset is crypto. */
 export function deriveCategory(symbol: string | undefined): VaultCategory {
-  if (!symbol) return "Other";
-  const upper = symbol.toUpperCase();
-  if (STABLES.has(upper)) return "Stables";
-  if (MAJORS.has(upper)) return "Majors";
-  if (TOKENIZED_STOCK.test(symbol)) return "Stocks";
-  return "Other";
+  if (symbol && STABLES.has(symbol.toUpperCase())) return "Stables";
+  if (symbol && (TOKENIZED_STOCK.test(symbol) || STOCKS.has(symbol.toUpperCase()))) return "Stocks";
+  return "Crypto";
 }
 
+// Fixture names come from sample-data.json, which source.ts loads before any vault renders.
 function activeRegistry(): Readonly<Record<string, VaultMeta>> {
-  return VAULTS_SAMPLE_MODE ? { ...SAMPLE_VAULT_META, ...VAULT_REGISTRY } : VAULT_REGISTRY;
+  if (!VAULTS_SAMPLE_MODE) return VAULT_REGISTRY;
+  return { ...peekSampleData()?.meta, ...VAULT_REGISTRY };
 }
 
 export function getRegisteredVaultMeta(pda: string): VaultMeta | undefined {
@@ -79,6 +69,8 @@ export type ResolvedVaultMeta = {
   assetKnown: boolean;
   registered: boolean;
   description?: string;
+  /** 0 unless the registry gives the deposit asset's own staking yield */
+  stakingAprPct: number;
 };
 
 export function resolveVaultMeta(
@@ -96,6 +88,7 @@ export function resolveVaultMeta(
     assetKnown: knownSymbol !== undefined,
     registered: meta !== undefined,
     description: meta?.description,
+    stakingAprPct: meta?.stakingAprPct ?? 0,
   };
 }
 

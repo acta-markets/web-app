@@ -7,6 +7,7 @@ import {
   formatPercent,
   formatSharePrice,
   formatTokenAmount,
+  formatUsd,
   shortAddress,
   solscanUrl,
 } from "./format";
@@ -23,6 +24,17 @@ describe("formatPercent", () => {
     expect(formatPercent(-0.001)).toBe("0.00%");
     expect(formatPercent(null)).toBe(NONE);
     expect(formatPercent(Number.NaN)).toBe(NONE);
+  });
+});
+
+describe("formatUsd", () => {
+  it("keeps three significant digits and goes compact from a thousand", () => {
+    expect(formatUsd(950)).toBe("$950");
+    expect(formatUsd(101_797)).toBe("$102K");
+    expect(formatUsd(2_108_855)).toBe("$2.11M");
+    expect(formatUsd(0)).toBe("$0");
+    expect(formatUsd(null)).toBe("—");
+    expect(formatUsd(Number.NaN)).toBe("—");
   });
 });
 

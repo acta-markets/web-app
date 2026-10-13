@@ -1,14 +1,13 @@
-import { getTokenMint } from "@/lib/tokens";
 import type { VaultDepositorState } from "./depositor";
 import { PRICE_SCALE } from "./math";
-import type { VaultMeta } from "./registry";
-import type { Vault, VaultCycle, VaultPerformance } from "./types";
+import type { VaultCategory, VaultMeta } from "./registry";
+import type { Vault, VaultCycle } from "./types";
 
 /**
  * Dev-only fixture vaults (`NEXT_PUBLIC_VAULTS_SAMPLE=1`) so the vault UI can be
- * built and checked while the backend has little to show. The figures are made
- * up and the UI does not mark them, so screenshots of this mode are not real
- * results. Never active in a production build.
+ * built and checked while the backend has little to show. The data lives in
+ * sample-data.json; the figures are made up and the UI does not mark them, so
+ * screenshots of this mode are not real results. Never active in a production build.
  */
 export function isSampleModeEnabled(nodeEnv: string | undefined, flag: string | undefined): boolean {
   return nodeEnv !== "production" && flag === "1";
@@ -17,53 +16,23 @@ export function isSampleModeEnabled(nodeEnv: string | undefined, flag: string | 
 // Literal reads so Next inlines both; `next build` and `next start` always run with NODE_ENV=production.
 export const VAULTS_SAMPLE_MODE = isSampleModeEnabled(process.env.NODE_ENV, process.env.NEXT_PUBLIC_VAULTS_SAMPLE);
 
-const NATIVE_SOL_MINT = "So11111111111111111111111111111111111111112";
-const MAINNET_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-
-// Well-formed but made-up addresses: random base58 keys with no account on chain.
-export const SAMPLE_VAULTS = {
-  sol: "7ESb3PEPvCmHSdaw8J2YfZERsSfjewfhEgZ6zzfrLiHL",
-  jitosol: "BBYt9VSPf118Kt2kGhgyH9rapBqiNoQhHvWqtXvdiKAc",
-  zbtc: "Honen6jgcy75yRSDWsXUJT9LcPZArza1QaMjxp1aFB7q",
-  usdc: "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
-  usdcClosing: "3KfLJggsXX54D3orfRpp4uggiuqMzHKQSR2Q7jNL962H",
-  xtsla: "8oDdcWSv5QtSfEE51K7guQL4uy3xbmisoqrjawqmY3Vm",
-} as const;
-
-const SHARE_MINTS = {
-  sol: "AgTu8srVNXcdBvzFc68ZZURyMBSAve8BzLVkAhAdPo6d",
-  jitosol: "bMsK1QyBcKEJnFFPKibjDUzySHLBwQ5D9na22SVBrey",
-  zbtc: "UrQobXWuKSY3FGUD71FEDwaC84ErAVPSzKbSRERCSKU",
-  usdc: "5CETfzWydmdWoDvfok97VPxKxkdMkedpdwuVwpK5VHVY",
-  usdcClosing: "C9XdEVn7rxrLHqvp6rngRb11Q4iSw5V22igLpT5vJ6gv",
-  xtsla: "GXaeMwEPLq3RT22w1jy3Pyzgky1uW9Q7J8YjBfymiFoG",
-} as const;
-
-const DESKS = {
-  a: "9uj9NDtFUMY2wViFZZx6VfPCPpwL85oDPSZrb8FKGNZ6",
-  b: "TE1ApPCcrSmJAAeAfJ3BJ8LWG3KKh9SpsEXfJzqzrAV",
-  c: "BWKhmQ5886puiBzFDFCHqqi8NWHvbZ4waNWNUcMTXnto",
-} as const;
-
-const XTSLA_MINT = "8kL3MEcLpoSMuc2rXcJx12stBs1xGwycVqrp7QJ89Ef3";
-
-function managedBy(desk: string): Pick<Vault, "governance" | "fee_recipient" | "primary_delegate"> {
-  return { governance: desk, fee_recipient: desk, primary_delegate: desk };
-}
-
 const DAY = 86_400;
-const WEEK = 7 * DAY;
-const SETTLEMENT_GAP = 6 * 3_600;
+const HOUR = 3_600;
+const PLACEHOLDER_ADDRESS = "11111111111111111111111111111111";
+const MAINNET_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const NATIVE_SOL_MINT = "So11111111111111111111111111111111111111112";
 
-/** Full Vault shape with neutral defaults; tests build on it too. */
+/** Full Vault shape with neutral defaults, for tests. */
 export function makeVault(overrides: Partial<Vault> = {}): Vault {
   return {
-    vault_pda: SAMPLE_VAULTS.usdc,
+    vault_pda: PLACEHOLDER_ADDRESS,
     vault_id: "00".repeat(32),
-    ...managedBy(DESKS.a),
+    governance: PLACEHOLDER_ADDRESS,
+    fee_recipient: PLACEHOLDER_ADDRESS,
+    primary_delegate: PLACEHOLDER_ADDRESS,
     main_mint: MAINNET_USDC_MINT,
     second_mint: NATIVE_SOL_MINT,
-    share_mint: SHARE_MINTS.usdc,
+    share_mint: PLACEHOLDER_ADDRESS,
     main_token_program: "legacy_spl",
     second_token_program: "legacy_spl",
     main_decimals: 6,
@@ -106,386 +75,161 @@ export function makeVault(overrides: Partial<Vault> = {}): Vault {
   };
 }
 
-export const SAMPLE_VAULT_META: Readonly<Record<string, VaultMeta>> = {
-  [SAMPLE_VAULTS.sol]: {
-    name: "SOL income",
-    curator: "Desk A",
-    category: "Majors",
-    assetSymbol: "SOL",
-    description: "Sells weekly calls against deposited SOL and keeps the premium in the vault.",
-  },
-  [SAMPLE_VAULTS.jitosol]: {
-    name: "jitoSOL income",
-    curator: "Desk B",
-    category: "Majors",
-    assetSymbol: "jitoSOL",
-  },
-  [SAMPLE_VAULTS.zbtc]: {
-    name: "zBTC income",
-    curator: "Desk A",
-    category: "Majors",
-    assetSymbol: "zBTC",
-  },
-  [SAMPLE_VAULTS.usdc]: {
-    name: "USDC income",
-    curator: "Desk C",
-    category: "Stables",
-    assetSymbol: "USDC",
-    description: "Sells weekly puts secured by deposited USDC.",
-  },
-  [SAMPLE_VAULTS.usdcClosing]: {
-    name: "USDC legacy",
-    curator: "Desk B",
-    category: "Stables",
-    assetSymbol: "USDC",
-  },
-  [SAMPLE_VAULTS.xtsla]: {
-    name: "xTSLA income",
-    curator: "Desk C",
-    category: "Stocks",
-    assetSymbol: "xTSLA",
-  },
-};
-
 export type SampleData = {
   vaults: Vault[];
-  /** Newest first, like the cycles route. */
+  meta: Record<string, VaultMeta>;
+  /** newest first, like the cycles route */
   cycles: Record<string, VaultCycle[]>;
   depositors: Record<string, VaultDepositorState>;
+  /** the file's short handles, e.g. `sol`, mapped to vault PDAs */
+  keys: Record<string, string>;
+  /** USD price per deposit asset symbol, standing in for the live price route */
+  pricesUsd: Record<string, number>;
 };
 
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
-  };
-}
-
-function gaussian(rand: () => number): number {
-  const u = Math.max(rand(), 1e-12);
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand());
-}
-
-type CycleSpec = {
-  seed: number;
-  finished: number;
-  meanPct: number;
-  sdPct: number;
-  /** cycle indexes forced to lose money */
-  negatives?: number[];
-  /** a new capital generation starts here: share price restarts at 1 */
-  resetAt?: number;
-  startEquity: number;
-  /** net deposits added at each boundary, % of equity */
-  flowPct: number;
-  decimals: number;
-  lastFinishedAt: number;
-  running?: { startedAt: number; expiry: number };
+// What sample-data.json holds: API shapes, plus a position with amounts as strings.
+type RawPosition = {
+  shareBalance: string;
+  mainTokenBalance: string;
+  nativeLamports: string | null;
+  depositRequest: { amount: string; createdAt: number } | null;
+  withdrawRequest: { shares: string; createdAt: number } | null;
 };
+type RawEntry = { key: string; meta: VaultMeta; vault: Vault; cycles: VaultCycle[]; position: RawPosition };
+type RawFile = { anchor: number; pricesUsd?: Record<string, number>; vaults: RawEntry[] };
 
-type BuiltHistory = {
-  cycles: VaultCycle[];
-  sharePrice: bigint;
-  equity: bigint;
-  generation: number;
-  performance: VaultPerformance;
-};
+const PHASES = new Set(["idle", "active", "settling", "processing_capital"]);
+const SAFETIES = new Set(["normal", "frozen", "emergency_unwind", "withdraw_only", "closing"]);
+const PERFORMANCE = new Set(["unavailable", "no_track_record", "short_track_record", "annualized"]);
+const CATEGORIES: ReadonlySet<VaultCategory> = new Set<VaultCategory>(["Crypto", "Stocks", "Stables"]);
 
-function scaleBy(value: bigint, returnPct: number): bigint {
-  return (value * BigInt(Math.round((1 + returnPct / 100) * 1e9))) / 1_000_000_000n;
+function fail(where: string, message: string): never {
+  throw new Error(`sample-data.json: ${where}: ${message}`);
 }
 
-function buildHistory(spec: CycleSpec): BuiltHistory {
-  const rand = mulberry32(spec.seed);
-  const unit = 10n ** BigInt(spec.decimals);
-  let sharePrice = PRICE_SCALE;
-  let equity = BigInt(Math.round(spec.startEquity)) * unit;
-  let generation = 0;
-  const cycles: VaultCycle[] = [];
-  const returns: number[] = [];
-  let firstStartedAt = 0;
+function isPositive(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
 
-  for (let i = 0; i < spec.finished; i++) {
-    if (spec.resetAt === i) {
-      sharePrice = PRICE_SCALE;
-      generation += 1;
+function amount(value: unknown, where: string): bigint {
+  if (typeof value !== "string" || !/^\d+$/.test(value)) fail(where, `expected a base-unit string, got ${JSON.stringify(value)}`);
+  return BigInt(value);
+}
+
+/** Checks the fields a hand edit is most likely to break, so a typo reads as an error instead of a blank page. */
+function validate(file: unknown): RawFile {
+  const raw = file as RawFile;
+  if (typeof raw?.anchor !== "number" || !Array.isArray(raw.vaults)) fail("root", "expected { anchor, vaults: [...] }");
+  for (const [symbol, price] of Object.entries(raw.pricesUsd ?? {})) {
+    if (!isPositive(price)) fail(`pricesUsd.${symbol}`, `expected a positive number, got ${JSON.stringify(price)}`);
+  }
+  for (const entry of raw.vaults) {
+    const where = `vault "${entry?.key ?? "?"}"`;
+    if (typeof entry?.key !== "string") fail(where, "missing key");
+    if (typeof entry.meta?.name !== "string" || typeof entry.meta.curator !== "string") fail(where, "meta needs name and curator");
+    if (entry.meta.category !== undefined && !CATEGORIES.has(entry.meta.category)) {
+      fail(where, `unknown category ${JSON.stringify(entry.meta.category)}`);
     }
-    const finishedAt = spec.lastFinishedAt - (spec.finished - 1 - i) * WEEK;
-    const startedAt = finishedAt - (WEEK - SETTLEMENT_GAP);
-    if (i === 0) firstStartedAt = startedAt;
-
-    let returnPct = spec.meanPct + spec.sdPct * gaussian(rand);
-    if (spec.negatives?.includes(i)) returnPct = -Math.abs(returnPct) - 0.2;
-    returnPct = Math.round(returnPct * 10_000) / 10_000;
-
-    const priceEnd = scaleBy(sharePrice, returnPct);
-    const equityEnd = scaleBy(equity, returnPct);
-    const positions = 2 + Math.floor(rand() * 3);
-    cycles.push({
-      cycle_number: String(i),
-      capital_generation: String(generation),
-      expiry: String(finishedAt - SETTLEMENT_GAP),
-      started_at: String(startedAt),
-      finished_at: String(finishedAt),
-      share_price_start: sharePrice.toString(),
-      share_price_end: priceEnd.toString(),
-      equity_start: equity.toString(),
-      equity_end: equityEnd.toString(),
-      positions_opened: positions,
-      positions_settled: positions,
-      return_pct: returnPct,
-      performance_fee_assessed: "0",
-      management_fee_assessed: "0",
-    });
-    returns.push(returnPct);
-    sharePrice = priceEnd;
-    const flow = (spec.flowPct / 100) * (0.5 + rand());
-    equity = equityEnd + BigInt(Math.round(Number(equityEnd) * flow));
+    if (entry.meta.stakingAprPct !== undefined && !isPositive(entry.meta.stakingAprPct)) {
+      fail(where, `stakingAprPct must be a positive percentage, got ${JSON.stringify(entry.meta.stakingAprPct)}`);
+    }
+    if (typeof entry.vault?.vault_pda !== "string") fail(where, "vault.vault_pda is missing");
+    if (!PHASES.has(entry.vault.phase)) fail(where, `unknown phase ${JSON.stringify(entry.vault.phase)}`);
+    if (!SAFETIES.has(entry.vault.safety)) fail(where, `unknown safety ${JSON.stringify(entry.vault.safety)}`);
+    if (!PERFORMANCE.has(entry.vault.performance?.status)) {
+      fail(where, `unknown performance status ${JSON.stringify(entry.vault.performance?.status)}`);
+    }
+    if (!Array.isArray(entry.cycles)) fail(where, "cycles must be an array");
+    if (typeof entry.position !== "object" || entry.position === null) fail(where, "position is missing");
   }
+  return raw;
+}
 
-  if (spec.running) {
-    cycles.push({
-      cycle_number: String(spec.finished),
-      capital_generation: String(generation),
-      expiry: String(spec.running.expiry),
-      started_at: String(spec.running.startedAt),
-      finished_at: null,
-      share_price_start: sharePrice.toString(),
-      // the backend can fill these in before the cycle is final; the UI must ignore them
-      share_price_end: scaleBy(sharePrice, 0.12).toString(),
-      equity_start: equity.toString(),
-      equity_end: scaleBy(equity, 0.12).toString(),
-      positions_opened: 3,
-      positions_settled: 0,
-      return_pct: 0.12,
-      performance_fee_assessed: "0",
-      management_fee_assessed: "0",
+// "0" means unset on chain and stays put; everything else moves with the clock.
+function shifted(value: string, shift: number): string {
+  return value === "0" ? value : String(Number(value) + shift);
+}
+
+function shiftedOrNull(value: string | null, shift: number): string | null {
+  return value === null ? null : shifted(value, shift);
+}
+
+/**
+ * Turns sample-data.json into typed data. Timestamps were written against the
+ * file's `anchor`; they are shifted so the anchor lands on `nowSecs` (to the
+ * hour), keeping expiries, request ages and 30-day windows current.
+ */
+export function parseSampleData(file: unknown, nowSecs: number): SampleData {
+  const raw = validate(file);
+  const shift = Math.floor(nowSecs / HOUR) * HOUR - raw.anchor;
+  const data: SampleData = { vaults: [], meta: {}, cycles: {}, depositors: {}, keys: {}, pricesUsd: {} };
+  for (const [symbol, price] of Object.entries(raw.pricesUsd ?? {})) data.pricesUsd[symbol.toUpperCase()] = price;
+
+  for (const entry of raw.vaults) {
+    const pda = entry.vault.vault_pda;
+    const where = `vault "${entry.key}" position`;
+    const v = entry.vault;
+    data.vaults.push({
+      ...v,
+      active_expiry: shifted(v.active_expiry, shift),
+      last_hwm_update_ts: shifted(v.last_hwm_update_ts, shift),
+      last_hwm_reset_ts: shifted(v.last_hwm_reset_ts, shift),
+      last_settlement_ts: shifted(v.last_settlement_ts, shift),
+      deposit_window_set_ts: shiftedOrNull(v.deposit_window_set_ts, shift),
+      balance_updated_at: shiftedOrNull(v.balance_updated_at, shift),
     });
-  }
-
-  let performance: VaultPerformance = { status: "no_track_record" };
-  if (returns.length > 0) {
-    const cumulative = (returns.reduce((index, r) => index * (1 + r / 100), 1) - 1) * 100;
-    const trackSecs = spec.lastFinishedAt - firstStartedAt;
-    const record = {
-      cycles_completed: returns.length,
-      last_cycle_return_pct: returns[returns.length - 1],
-      cumulative_return_pct: cumulative,
-      track_record_secs: String(trackSecs),
+    data.meta[pda] = entry.meta;
+    data.keys[entry.key] = pda;
+    data.cycles[pda] = entry.cycles.map((c) => ({
+      ...c,
+      expiry: shifted(c.expiry, shift),
+      started_at: shifted(c.started_at, shift),
+      finished_at: shiftedOrNull(c.finished_at, shift),
+    }));
+    const p = entry.position;
+    data.depositors[pda] = {
+      shareBalance: amount(p.shareBalance, where),
+      mainTokenBalance: amount(p.mainTokenBalance, where),
+      nativeLamports: p.nativeLamports === null ? null : amount(p.nativeLamports, where),
+      depositRequest: p.depositRequest
+        ? { amount: amount(p.depositRequest.amount, where), createdAt: BigInt(p.depositRequest.createdAt + shift) }
+        : null,
+      withdrawRequest: p.withdrawRequest
+        ? { shares: amount(p.withdrawRequest.shares, where), createdAt: BigInt(p.withdrawRequest.createdAt + shift) }
+        : null,
     };
-    performance = trackSecs >= 30 * DAY
-      ? { status: "annualized", annualized_return_pct: (cumulative * 365 * DAY) / trackSecs, ...record }
-      : { status: "short_track_record", ...record };
   }
-
-  return { cycles: cycles.reverse(), sharePrice, equity, generation, performance };
+  return data;
 }
 
-function sharesFor(equity: bigint, sharePrice: bigint): string {
-  return sharePrice === 0n ? "0" : ((equity * PRICE_SCALE) / sharePrice).toString();
-}
+let loaded: { day: number; data: SampleData } | null = null;
+let loading: Promise<SampleData> | null = null;
 
-function liveFields(history: BuiltHistory): Partial<Vault> {
-  const shares = sharesFor(history.equity, history.sharePrice);
-  return {
-    share_price: history.sharePrice.toString(),
-    equity: history.equity.toString(),
-    total_shares: shares,
-    live_share_supply: shares,
-    capital_generation: String(history.generation),
-    performance: history.performance,
-  };
-}
-
-const NO_POSITION: VaultDepositorState = {
-  depositRequest: null,
-  withdrawRequest: null,
-  shareBalance: 0n,
-  mainTokenBalance: 0n,
-  nativeLamports: null,
-};
-
-export function buildSampleData(nowSecs: number): SampleData {
-  const now = Math.floor(nowSecs / 3_600) * 3_600;
-  const usdcMint = getTokenMint("USDC") ?? MAINNET_USDC_MINT;
-  const sol = 10n ** 9n;
-  const usdc = 10n ** 6n;
-
-  const solHistory = buildHistory({
-    seed: 11,
-    finished: 20,
-    meanPct: 0.24,
-    sdPct: 0.32,
-    negatives: [6, 13],
-    resetAt: 10,
-    startEquity: 900,
-    flowPct: 6,
-    decimals: 9,
-    lastFinishedAt: now - 4 * DAY,
-    running: { startedAt: now - 4 * DAY + SETTLEMENT_GAP, expiry: now + 3 * DAY - SETTLEMENT_GAP },
-  });
-  const jitoHistory = buildHistory({
-    seed: 23,
-    finished: 2,
-    meanPct: 0.5,
-    sdPct: 0.2,
-    startEquity: 260,
-    flowPct: 12,
-    decimals: 9,
-    lastFinishedAt: now - DAY,
-  });
-  const usdcHistory = buildHistory({
-    seed: 37,
-    finished: 12,
-    meanPct: 0.3,
-    sdPct: 0.18,
-    negatives: [4],
-    startEquity: 1_200_000,
-    flowPct: 4,
-    decimals: 6,
-    lastFinishedAt: now - 2 * DAY,
-    running: { startedAt: now - 2 * DAY + SETTLEMENT_GAP, expiry: now + 5 * DAY - SETTLEMENT_GAP },
-  });
-  const closingHistory = buildHistory({
-    seed: 41,
-    finished: 3,
-    meanPct: 0.15,
-    sdPct: 0.25,
-    startEquity: 85_000,
-    flowPct: 0,
-    decimals: 6,
-    lastFinishedAt: now - 2 * DAY,
-  });
-
-  const usdcPending = 30_000n * usdc;
-  const vaults: Vault[] = [
-    makeVault({
-      vault_pda: SAMPLE_VAULTS.sol,
-      share_mint: SHARE_MINTS.sol,
-      ...managedBy(DESKS.a),
-      main_mint: NATIVE_SOL_MINT,
-      second_mint: usdcMint,
-      main_decimals: 9,
-      second_decimals: 6,
-      phase: "active",
-      active_expiry: String(now + 3 * DAY - SETTLEMENT_GAP),
-      open_positions: "3",
-      accepting_deposits: false,
-      cap_limit: (10_000n * sol).toString(),
-      pending_deposit_count: 3,
-      pending_deposit_amount: (42n * sol).toString(),
-      pending_withdraw_count: 1,
-      pending_withdraw_shares: (2n * sol).toString(),
-      ...liveFields(solHistory),
-    }),
-    makeVault({
-      vault_pda: SAMPLE_VAULTS.jitosol,
-      share_mint: SHARE_MINTS.jitosol,
-      ...managedBy(DESKS.b),
-      main_mint: "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
-      second_mint: usdcMint,
-      main_decimals: 9,
-      second_decimals: 6,
-      phase: "idle",
-      accepting_deposits: true,
-      ...liveFields(jitoHistory),
-    }),
-    makeVault({
-      vault_pda: SAMPLE_VAULTS.zbtc,
-      share_mint: SHARE_MINTS.zbtc,
-      ...managedBy(DESKS.a),
-      main_mint: "zeusLhUcFiPKG5NFuKrXEkChBXGNKPJBnqR2BC5v6R5",
-      second_mint: usdcMint,
-      main_decimals: 8,
-      second_decimals: 6,
-      phase: "idle",
-      accepting_deposits: false,
-      equity: (3n * 10n ** 8n).toString(),
-      total_shares: (3n * 10n ** 8n).toString(),
-      live_share_supply: (3n * 10n ** 8n).toString(),
-    }),
-    makeVault({
-      vault_pda: SAMPLE_VAULTS.usdc,
-      share_mint: SHARE_MINTS.usdc,
-      ...managedBy(DESKS.c),
-      main_mint: usdcMint,
-      second_mint: NATIVE_SOL_MINT,
-      phase: "active",
-      active_expiry: String(now + 5 * DAY - SETTLEMENT_GAP),
-      open_positions: "4",
-      accepting_deposits: false,
-      // nearly full: 20,000 USDC of room left
-      cap_limit: (usdcHistory.equity + usdcPending + 20_000n * usdc).toString(),
-      pending_deposit_count: 6,
-      pending_deposit_amount: usdcPending.toString(),
-      ...liveFields(usdcHistory),
-    }),
-    makeVault({
-      vault_pda: SAMPLE_VAULTS.usdcClosing,
-      share_mint: SHARE_MINTS.usdcClosing,
-      ...managedBy(DESKS.b),
-      main_mint: usdcMint,
-      second_mint: NATIVE_SOL_MINT,
-      phase: "idle",
-      safety: "closing",
-      accepting_deposits: false,
-      ...liveFields(closingHistory),
-    }),
-    makeVault({
-      vault_pda: SAMPLE_VAULTS.xtsla,
-      share_mint: SHARE_MINTS.xtsla,
-      ...managedBy(DESKS.c),
-      main_mint: XTSLA_MINT,
-      second_mint: usdcMint,
-      main_decimals: 8,
-      second_decimals: 6,
-      phase: "idle",
-      accepting_deposits: true,
-      performance: { status: "unavailable" },
-    }),
-  ];
-
-  const solSharePrice = BigInt(vaults[0].share_price);
-  return {
-    vaults,
-    cycles: {
-      [SAMPLE_VAULTS.sol]: solHistory.cycles,
-      [SAMPLE_VAULTS.jitosol]: jitoHistory.cycles,
-      [SAMPLE_VAULTS.zbtc]: [],
-      [SAMPLE_VAULTS.usdc]: usdcHistory.cycles,
-      [SAMPLE_VAULTS.usdcClosing]: closingHistory.cycles,
-      [SAMPLE_VAULTS.xtsla]: [],
-    },
-    depositors: {
-      [SAMPLE_VAULTS.sol]: {
-        ...NO_POSITION,
-        shareBalance: (125n * sol * PRICE_SCALE) / (10n * solSharePrice),
-        withdrawRequest: { shares: 2n * sol, createdAt: BigInt(now - 2 * 3_600) },
-        nativeLamports: (32n * sol) / 10n,
-      },
-      [SAMPLE_VAULTS.jitosol]: { ...NO_POSITION, mainTokenBalance: 25n * sol },
-      [SAMPLE_VAULTS.zbtc]: { ...NO_POSITION, mainTokenBalance: 15n * 10n ** 6n },
-      [SAMPLE_VAULTS.usdc]: {
-        ...NO_POSITION,
-        depositRequest: { amount: 500n * usdc, createdAt: BigInt(now - 20 * 3_600) },
-        mainTokenBalance: 1_250n * usdc,
-      },
-      [SAMPLE_VAULTS.usdcClosing]: { ...NO_POSITION, shareBalance: 300n * usdc },
-      [SAMPLE_VAULTS.xtsla]: NO_POSITION,
-    },
-  };
-}
-
-let cached: { day: number; data: SampleData } | null = null;
-
-/** Stable for the rest of the day, so list and detail pages agree. */
-export function sampleData(): SampleData {
+/**
+ * Loads sample-data.json on first use. It is a separate chunk that nothing
+ * requests outside sample mode. Stable for the rest of the day, so list and
+ * detail pages agree.
+ */
+export function loadSampleData(): Promise<SampleData> {
   const nowSecs = Math.floor(Date.now() / 1000);
   const day = Math.floor(nowSecs / DAY);
-  if (!cached || cached.day !== day) cached = { day, data: buildSampleData(nowSecs) };
-  return cached.data;
+  if (loaded?.day === day) return Promise.resolve(loaded.data);
+  loading ??= import("./sample-data.json").then(
+    (file) => {
+      const data = parseSampleData(file.default, nowSecs);
+      loaded = { day, data };
+      loading = null;
+      return data;
+    },
+    (err: unknown) => {
+      loading = null;
+      throw err;
+    },
+  );
+  return loading;
+}
+
+/** The data from the last load, for synchronous readers that run after one (names, positions). */
+export function peekSampleData(): SampleData | null {
+  return loaded?.data ?? null;
 }

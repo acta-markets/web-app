@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { getToken } from "@/lib/tokens";
 import { finishedCycles, sharpeRatio, trailingApr } from "./metrics";
 import { resolveVaultMeta } from "./registry";
-import { SAMPLE_VAULTS, SAMPLE_VAULT_META, buildSampleData, isSampleModeEnabled } from "./sample";
+import { isSampleModeEnabled, loadSampleData, parseSampleData, peekSampleData } from "./sample";
+import sampleFile from "./sample-data.json";
 
-const NOW = 1_800_000_000;
+const DAY = 86_400;
+// parsing at the file's own anchor applies no shift
+const NOW = sampleFile.anchor;
+
+function copyOfFile(): typeof sampleFile {
+  return JSON.parse(JSON.stringify(sampleFile));
+}
 
 describe("sample mode", () => {
   it("can never turn on in a production build", () => {
@@ -14,50 +22,120 @@ describe("sample mode", () => {
   });
 });
 
-describe("sample data", () => {
-  const data = buildSampleData(NOW);
+describe("sample-data.json", () => {
+  const data = parseSampleData(sampleFile, NOW);
+  const usdc = data.keys.usdc;
 
-  it("is deterministic for a given time", () => {
-    expect(buildSampleData(NOW)).toEqual(data);
-  });
-
-  it("covers every category and the states the UI must handle", () => {
-    const metas = data.vaults.map((v) => resolveVaultMeta(v, SAMPLE_VAULT_META));
-    expect(metas.every((m) => m.registered)).toBe(true);
-    expect(new Set(metas.map((m) => m.category))).toEqual(new Set(["Majors", "Stables", "Stocks"]));
-    expect(new Set(data.vaults.map((v) => v.performance.status))).toEqual(
-      new Set(["annualized", "short_track_record", "no_track_record", "unavailable"]),
-    );
-    expect(data.vaults.some((v) => v.main_mint === "So11111111111111111111111111111111111111112")).toBe(true);
-    expect(data.vaults.some((v) => v.safety === "closing")).toBe(true);
-    expect(data.vaults.some((v) => v.phase === "idle" && !v.accepting_deposits && v.safety === "normal")).toBe(true);
+  it("gives every vault a name, cycles and a wallet position", () => {
+    expect(data.vaults).toHaveLength(7);
     for (const vault of data.vaults) {
+      expect(data.meta[vault.vault_pda]).toBeDefined();
       expect(data.cycles[vault.vault_pda]).toBeDefined();
       expect(data.depositors[vault.vault_pda]).toBeDefined();
     }
+    expect(data.depositors[usdc].mainTokenBalance).toBeTypeOf("bigint");
+    expect(data.depositors[usdc].depositRequest?.createdAt).toBeTypeOf("bigint");
+  });
+
+  it("fills every section with established vaults", () => {
+    const metas = data.vaults.map((v) => resolveVaultMeta(v, data.meta));
+    expect(new Set(metas.map((m) => m.category))).toEqual(new Set(["Crypto", "Stocks", "Stables"]));
+    expect(metas.every((m) => m.registered && m.curator === "Velar")).toBe(true);
+    // no new, closing or half-loaded vaults: every card shows a real APR
+    expect(data.vaults.every((v) => v.performance.status === "annualized" && v.safety === "normal")).toBe(true);
+  });
+
+  it("shows a real token logo for every vault, never the initials fallback", () => {
+    const missing = data.vaults
+      .map((v) => resolveVaultMeta(v, data.meta).assetSymbol)
+      .filter((symbol) => !getToken(symbol)?.logo);
+    expect(missing).toEqual([]);
+  });
+
+  it("uses the real NVIDIA xStock token for the stock vault", () => {
+    const nvda = data.vaults.find((v) => v.vault_pda === data.keys.nvdax)!;
+    expect(nvda).toMatchObject({
+      main_mint: "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+      main_decimals: 8,
+      main_token_program: "token_2022",
+    });
+    expect(resolveVaultMeta(nvda, data.meta)).toMatchObject({ assetSymbol: "NVDAx", category: "Stocks" });
+  });
+
+  it("prices every deposit asset, so each card shows TVL in dollars", () => {
+    const unpriced = data.vaults
+      .map((v) => resolveVaultMeta(v, data.meta).assetSymbol)
+      .filter((symbol) => !(data.pricesUsd[symbol.toUpperCase()] > 0));
+    expect(unpriced).toEqual([]);
+  });
+
+  it("splits jitoSOL's APR into 5% staking and a 10% premium", () => {
+    const jito = data.vaults.find((v) => v.vault_pda === data.keys.jitosol)!;
+    expect(resolveVaultMeta(jito, data.meta).stakingAprPct).toBe(5);
+    expect(jito.performance.status === "annualized" && jito.performance.annualized_return_pct).toBeCloseTo(10, 2);
   });
 
   it("never says sample anywhere the UI shows it", () => {
     const shown = data.vaults.flatMap((v) => {
-      const meta = resolveVaultMeta(v, SAMPLE_VAULT_META);
+      const meta = resolveVaultMeta(v, data.meta);
       return [meta.name, meta.curator, meta.description ?? "", v.vault_pda, v.share_mint, v.governance, v.main_mint];
     });
     expect(shown.filter((text) => /sample/i.test(text))).toEqual([]);
   });
 
-  it("gives the long-running vault enough history for every metric", () => {
-    const cycles = finishedCycles(data.cycles[SAMPLE_VAULTS.sol]);
+  it("gives a vault enough history for every metric", () => {
+    const cycles = finishedCycles(data.cycles[usdc]);
     // the running cycle carries a provisional return and must not count
-    expect(data.cycles[SAMPLE_VAULTS.sol]).toHaveLength(21);
-    expect(cycles).toHaveLength(20);
+    expect(data.cycles[usdc]).toHaveLength(13);
+    expect(cycles).toHaveLength(12);
     expect(cycles.some((c) => c.returnPct < 0)).toBe(true);
     expect(sharpeRatio(cycles).value).not.toBeNull();
     expect(trailingApr(cycles, NOW)).not.toBeNull();
   });
 
-  it("restarts the share price on a new capital generation", () => {
-    const cycles = [...data.cycles[SAMPLE_VAULTS.sol]].reverse();
-    expect(cycles[10].share_price_start).toBe("1000000000");
-    expect(cycles[10].capital_generation).toBe("1");
+  it("moves every timestamp with the clock, so the data does not go stale", () => {
+    const shift = 30 * DAY;
+    const later = parseSampleData(sampleFile, NOW + shift);
+    const vaultNow = data.vaults.find((v) => v.vault_pda === usdc)!;
+    const vaultLater = later.vaults.find((v) => v.vault_pda === usdc)!;
+    expect(Number(vaultLater.active_expiry) - Number(vaultNow.active_expiry)).toBe(shift);
+    expect(Number(later.cycles[usdc][0].started_at) - Number(data.cycles[usdc][0].started_at)).toBe(shift);
+    expect(later.depositors[usdc].depositRequest!.createdAt - data.depositors[usdc].depositRequest!.createdAt).toBe(
+      BigInt(shift),
+    );
+    // "0" means unset on chain and stays that way
+    expect(later.vaults.find((v) => v.phase === "idle")!.active_expiry).toBe("0");
+    // a month on, the 30-day window still has cycles in it
+    expect(trailingApr(finishedCycles(later.cycles[usdc]), NOW + shift)).not.toBeNull();
+  });
+
+  it("explains a broken hand edit instead of rendering nonsense", () => {
+    const badPhase = copyOfFile();
+    badPhase.vaults[0].vault.phase = "sideways";
+    expect(() => parseSampleData(badPhase, NOW)).toThrow(
+      `sample-data.json: vault "${badPhase.vaults[0].key}": unknown phase "sideways"`,
+    );
+
+    const badAmount = copyOfFile();
+    badAmount.vaults[0].position.mainTokenBalance = "12.5";
+    expect(() => parseSampleData(badAmount, NOW)).toThrow(/expected a base-unit string, got "12\.5"/);
+
+    expect(() => parseSampleData({ vaults: [] }, NOW)).toThrow("expected { anchor, vaults: [...] }");
+
+    const badPrice = copyOfFile();
+    (badPrice.pricesUsd as Record<string, unknown>).USDC = "1";
+    expect(() => parseSampleData(badPrice, NOW)).toThrow('sample-data.json: pricesUsd.USDC: expected a positive number, got "1"');
+
+    const badStaking = copyOfFile();
+    (badStaking.vaults[0].meta as { stakingAprPct?: unknown }).stakingAprPct = -5;
+    expect(() => parseSampleData(badStaking, NOW)).toThrow(/stakingAprPct must be a positive percentage, got -5/);
+  });
+
+  it("loads on first use and keeps the result", async () => {
+    expect(peekSampleData()).toBeNull();
+    const loaded = await loadSampleData();
+    expect(loaded.vaults).toHaveLength(7);
+    expect(peekSampleData()).toBe(loaded);
+    expect(await loadSampleData()).toBe(loaded);
   });
 });

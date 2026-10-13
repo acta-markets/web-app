@@ -1,4 +1,4 @@
-import { formatDate, formatPercent, NONE } from "./format";
+import { formatDate, formatPercent, formatTokenAmount, NONE } from "./format";
 import {
   processIdleWithdrawalBlock,
   requestDepositBlock,
@@ -8,24 +8,42 @@ import {
 } from "./rules";
 import type { Vault, VaultPerformance, VaultPhase, VaultSafety } from "./types";
 
-/** How a vault's headline return reads, by how much history it has. */
-export type HeadlineReturn = { label: string; value: string; detail: string | null; muted: boolean };
+export type AprSource = { label: "Staking" | "Premium"; pct: number };
 
-export function headlineReturn(performance: VaultPerformance): HeadlineReturn {
+export type AprView = {
+  value: string;
+  muted: boolean;
+  /** the parts the headline adds up, when there are figures to show */
+  sources: AprSource[];
+  note: string;
+};
+
+const PREMIUM_NOTE = "Premium is what the vault earns selling options, after fees.";
+const STAKING_NOTE = "Staking is the deposit asset's own yield, which the vault's share price does not include.";
+
+/**
+ * The one APR every surface shows. Premium is the backend's annualized return,
+ * which needs 30 days of history; younger vaults read "New", and a vault whose
+ * performance has not loaded reads as empty. A staked deposit asset adds its
+ * own yield, so the headline is always the sum of its parts.
+ */
+export function vaultApr(performance: VaultPerformance, stakingAprPct = 0): AprView {
+  const staking: AprSource[] = stakingAprPct > 0 ? [{ label: "Staking", pct: stakingAprPct }] : [];
   switch (performance.status) {
-    case "annualized":
-      return { label: "APR", value: formatPercent(performance.annualized_return_pct), detail: "After fees", muted: false };
-    case "short_track_record":
+    case "annualized": {
+      const premium = performance.annualized_return_pct;
       return {
-        label: "Return so far",
-        value: formatPercent(performance.cumulative_return_pct, { signed: true }),
-        detail: "APR after 30 days",
+        value: formatPercent(stakingAprPct + premium),
         muted: false,
+        sources: [...staking, { label: "Premium", pct: premium }],
+        note: staking.length ? `${STAKING_NOTE} ${PREMIUM_NOTE}` : PREMIUM_NOTE,
       };
+    }
+    case "short_track_record":
     case "no_track_record":
-      return { label: "APR", value: "New vault", detail: "No completed cycles yet", muted: true };
+      return { value: "New", muted: true, sources: staking, note: "Premium shows after 30 days of history." };
     default:
-      return { label: "APR", value: NONE, detail: null, muted: true };
+      return { value: NONE, muted: true, sources: [], note: "Not available yet." };
   }
 }
 
@@ -42,8 +60,24 @@ const STATUS_RANK: Record<string, number> = {
   unavailable: 3,
 };
 
-function yieldOf(performance: VaultPerformance): number {
-  if (performance.status === "annualized") return performance.annualized_return_pct;
+/** What the grid sorts on: the vault, its display name and staking yield, and its TVL in dollars. */
+export type VaultSortEntry = {
+  vault: Vault;
+  meta: { name: string; stakingAprPct: number };
+  /** null when the deposit asset has no price */
+  tvlUsd: number | null;
+};
+
+export type VaultSort = "apr" | "tvl" | "name";
+
+function byName(a: VaultSortEntry, b: VaultSortEntry): number {
+  return a.meta.name.localeCompare(b.meta.name, "en", { sensitivity: "base", numeric: true });
+}
+
+// the APR people see, staking included, so the order matches the cards
+function yieldOf({ vault, meta }: VaultSortEntry): number {
+  const performance = vault.performance;
+  if (performance.status === "annualized") return performance.annualized_return_pct + meta.stakingAprPct;
   if (performance.status === "short_track_record") return performance.cumulative_return_pct;
   return 0;
 }
@@ -53,14 +87,45 @@ function yieldOf(performance: VaultPerformance): number {
  * short track records by cumulative return, then new vaults. Vaults winding
  * down go last whatever their history.
  */
-export function compareVaultsByYield(a: Vault, b: Vault, nameOf: (vault: Vault) => string): number {
-  const windDown = Number(isWindingDown(a)) - Number(isWindingDown(b));
+export function compareVaultsByYield(a: VaultSortEntry, b: VaultSortEntry): number {
+  const windDown = Number(isWindingDown(a.vault)) - Number(isWindingDown(b.vault));
   if (windDown !== 0) return windDown;
-  const rank = (STATUS_RANK[a.performance.status] ?? 4) - (STATUS_RANK[b.performance.status] ?? 4);
+  const rank = (STATUS_RANK[a.vault.performance.status] ?? 4) - (STATUS_RANK[b.vault.performance.status] ?? 4);
   if (rank !== 0) return rank;
-  const byYield = yieldOf(b.performance) - yieldOf(a.performance);
-  if (byYield !== 0) return byYield;
-  return nameOf(a).localeCompare(nameOf(b));
+  return yieldOf(b) - yieldOf(a) || byName(a, b);
+}
+
+/** Largest TVL first. Vaults whose asset has no price cannot be compared, so they follow by name. */
+export function compareVaultsByTvl(a: VaultSortEntry, b: VaultSortEntry): number {
+  if (a.tvlUsd === null || b.tvlUsd === null) {
+    return Number(a.tvlUsd === null) - Number(b.tvlUsd === null) || byName(a, b);
+  }
+  return b.tvlUsd - a.tvlUsd || byName(a, b);
+}
+
+type VaultCompare = (a: VaultSortEntry, b: VaultSortEntry) => number;
+
+export const VAULT_SORTS: readonly { value: VaultSort; label: string; compare: VaultCompare }[] = [
+  { value: "apr", label: "APR", compare: compareVaultsByYield },
+  { value: "tvl", label: "TVL", compare: compareVaultsByTvl },
+  { value: "name", label: "Name", compare: byName },
+];
+
+/** Vault equity in dollars at its last valuation, or null when the deposit asset has no price. */
+export function vaultTvlUsd(
+  vault: Pick<Vault, "equity" | "main_decimals">,
+  priceUsd: number | undefined,
+): number | null {
+  if (priceUsd === undefined) return null;
+  return (Number(vault.equity) / 10 ** vault.main_decimals) * priceUsd;
+}
+
+/** Vault equity in the deposit asset, short enough for a tile: whole units from a thousand, two decimals from one. */
+export function formatVaultEquity(vault: Pick<Vault, "equity" | "main_decimals">): string {
+  const equity = BigInt(vault.equity);
+  const unit = 10n ** BigInt(vault.main_decimals);
+  const maxFractionDigits = equity >= 1000n * unit ? 0 : equity >= unit ? 2 : undefined;
+  return formatTokenAmount(equity, vault.main_decimals, { compact: true, maxFractionDigits });
 }
 
 export type VaultStatusTone = "open" | "neutral" | "warning";

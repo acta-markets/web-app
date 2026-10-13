@@ -81,7 +81,7 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
 - `src/lib/vaults/` - API client, contract rules, depositor transactions, plus `registry.ts` (name, curator and category by vault PDA, which the backend does not serve), `metrics.ts` (30d avg APR, Sharpe ratio, drawdown, from completed cycles only) and `presentation.ts` (status, sort order, block copy)
 - `src/components/vaults/` - polling hooks (`use-vaults.ts`), the grid, the vault page and the deposit/withdraw modal
 - `docs/vaults-integration.md` - data sources, polling budget and UI rules
-- `NEXT_PUBLIC_VAULTS_SAMPLE=1` swaps in fixtures from `src/lib/vaults/sample.ts` in development; production builds ignore it
+- `NEXT_PUBLIC_VAULTS_SAMPLE=1` swaps in fixture vaults from `src/lib/vaults/sample-data.json` in development (loaded on demand by `sample.ts`); production builds ignore it
 
 **Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
 - Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)
