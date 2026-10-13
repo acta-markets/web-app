@@ -116,6 +116,56 @@ export const TOKENS: Record<string, TokenConfig> = {
       devnet: "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr",
     },
   },
+  NVDAX: {
+    symbol: "NVDAx",
+    name: "NVIDIA xStock",
+    decimals: 8,
+    logo: "/tokens/nvdax.png",
+    mint: {
+      mainnet: "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+      devnet: "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+    },
+  },
+  SPCX: {
+    symbol: "SPCX",
+    name: "SpaceX (Backpack Securities)",
+    decimals: 6,
+    logo: "/tokens/spcx.svg",
+    mint: {
+      mainnet: "SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb",
+      devnet: "SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb",
+    },
+  },
+  SPYX: {
+    symbol: "SPYx",
+    name: "SP500 xStock",
+    decimals: 8,
+    logo: "/tokens/spyx.png",
+    mint: {
+      mainnet: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",
+      devnet: "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",
+    },
+  },
+  HYPE: {
+    symbol: "HYPE",
+    name: "Hyperliquid",
+    decimals: 9,
+    logo: "/tokens/hype.png",
+    mint: {
+      mainnet: "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
+      devnet: "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
+    },
+  },
+  ZEC: {
+    symbol: "ZEC",
+    name: "Zcash",
+    decimals: 8,
+    logo: "/tokens/zec.svg",
+    mint: {
+      mainnet: "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
+      devnet: "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
+    },
+  },
 };
 
 
