@@ -11,7 +11,7 @@ npm run dev
 
 ## RFQ integration
 
-The app uses the published `@acta-markets/ts-sdk` 0.1.6-vaults.2, pinned in `package.json`
+The app uses the published `@acta-markets/ts-sdk` 0.1.6-vaults.4, pinned in `package.json`
 and `package-lock.json`. A separate SDK checkout or build is not required.
 WebSocket integration imports `@acta-markets/ts-sdk/ws`.
 
@@ -53,5 +53,5 @@ See `ENV_SETUP.md` to set `MONGODB_URI` / `MONGODB_DB` and `NEXT_PUBLIC_PRIVY_AP
   - `Button`, `Card`, `Badge`, `Container`, `Input`
 - **Page sections**: `src/components/sections/`
   - `Navbar`, `Hero`, `Marquee`, `Architecture`, `Solution`, `Whitelist`, `Team`, `Footer`
-- **Global styles + legacy effects**: `src/app/globals.css`
-- **Legacy snapshots**: `legacy/oldindex.html` (original) and `legacy/index.html` (whitelist version)
+- **Global styles**: `src/app/globals.css`
+- **Vaults**: data layer in `src/lib/vaults/`, hooks in `src/components/vaults/` (see `docs/vaults-integration.md`)
