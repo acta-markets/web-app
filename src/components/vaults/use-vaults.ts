@@ -1,25 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Instruction } from "@solana/kit";
-import type { VersionedTransaction } from "@solana/web3.js";
-import { useSolana } from "@/components/solana/solana-wallet-provider";
-import { fetchVault, fetchVaults } from "@/lib/vaults/api";
-import {
-  buildCancelDepositInstructions,
-  buildCancelWithdrawInstructions,
-  buildEmergencyRefundInstructions,
-  buildRequestDepositInstructions,
-  buildRequestWithdrawInstructions,
-  buildSelfProcessDepositInstructions,
-  buildSelfProcessWithdrawInstructions,
-  createVaultDepositor,
-  fetchVaultDepositorState,
-  isNativeVault,
-  type VaultDepositor,
-  type VaultDepositorState,
-} from "@/lib/vaults/depositor";
-import { createVaultManager } from "@/lib/vaults/operator";
-import { sendWalletTransaction } from "@/lib/vaults/transaction";
-import type { Vault } from "@/lib/vaults/types";
+import { VaultApiError } from "@/lib/vaults/api";
+import { loadUsdPrices, loadVault, loadVaultCycles, loadVaults } from "@/lib/vaults/source";
+import type { Vault, VaultCyclesPage } from "@/lib/vaults/types";
 
 const VAULT_REFRESH_MS = 30_000;
 
@@ -91,101 +73,45 @@ export function usePolled<T>(load: (signal: AbortSignal) => Promise<T>, initial:
 }
 
 export function useVaults(): Loadable<Vault[]> {
-  return usePolled(fetchVaults, [], "vaults");
+  return usePolled(loadVaults, [], "vaults");
 }
 
 export function useVault(pda: string | null): Loadable<Vault | null> {
-  return usePolled((signal) => (pda ? fetchVault(pda, signal) : Promise.resolve(null)), null, pda);
+  return usePolled((signal) => (pda ? loadVault(pda, signal) : Promise.resolve(null)), null, pda);
 }
 
-export type VaultDepositorActions = {
-  requestDeposit: (amount: bigint) => Promise<string>;
-  cancelDeposit: () => Promise<string>;
-  emergencyRefund: () => Promise<string>;
-  requestWithdraw: (shares: bigint) => Promise<string>;
-  cancelWithdraw: () => Promise<string>;
-  processOwnDeposit: () => Promise<string>;
-  processOwnWithdraw: () => Promise<string>;
-};
-
-export type UseVaultDepositor = Loadable<VaultDepositorState | null> & {
-  actions: VaultDepositorActions | null;
-  pending: boolean;
-};
-
-export function useVaultDepositor(vault: Vault | null): UseVaultDepositor {
-  const { rpc, selectedAccount, signTransaction } = useSolana();
-  const owner = selectedAccount?.address ?? null;
-  const [depositor, setDepositor] = useState<VaultDepositor | null>(null);
-  const [depositorError, setDepositorError] = useState<Error | null>(null);
-  const [pending, setPending] = useState(false);
-
-  const vaultKey = vault ? `${vault.vault_pda}:${vault.share_mint}` : null;
-  useEffect(() => {
-    setDepositor(null);
-    setDepositorError(null);
-    if (!vault || !owner) return;
-    let cancelled = false;
-    createVaultDepositor(vault, owner).then(
-      (next) => {
-        if (!cancelled) setDepositor(next);
-      },
-      (err: unknown) => {
-        if (!cancelled) setDepositorError(err instanceof Error ? err : new Error(String(err)));
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vaultKey, owner]);
-
-  const native = vault ? isNativeVault(vault) : false;
+/**
+ * Latest page of a vault's cycles. A server without its database answers
+ * `db_disabled`, which is permanent: polling stops and `disabled` is set so the
+ * page can hide history instead of showing an error.
+ */
+export function useVaultCycles(pda: string | null): Loadable<VaultCyclesPage | null> & { disabled: boolean } {
+  const [disabledFor, setDisabledFor] = useState<string | null>(null);
+  const disabled = pda !== null && disabledFor === pda;
   const state = usePolled(
-    () => (depositor ? fetchVaultDepositorState(rpc, depositor, native) : Promise.resolve(null)),
+    (signal) => (pda ? loadVaultCycles(pda, signal) : Promise.resolve(null)),
     null,
-    depositor && owner ? `${vaultKey}:${owner}` : null,
+    pda && !disabled ? `cycles:${pda}` : null,
   );
-  const { refresh } = state;
+  const { error } = state;
+  useEffect(() => {
+    if (pda && error instanceof VaultApiError && error.code === "db_disabled") setDisabledFor(pda);
+  }, [error, pda]);
+  return { ...state, disabled };
+}
 
-  const send = useCallback(
-    async (instructions: Instruction[]) => {
-      if (!owner) throw new Error("No wallet connected");
-      setPending(true);
-      try {
-        return await sendWalletTransaction({
-          rpc,
-          feePayer: owner,
-          instructions,
-          signTransaction: (tx: VersionedTransaction) => signTransaction(tx),
-        });
-      } finally {
-        setPending(false);
-        refresh();
-      }
-    },
-    [owner, rpc, signTransaction, refresh],
-  );
+/** USD prices for these asset symbols, keyed in upper case; null until the first answer. */
+export function useUsdPrices(symbols: readonly string[]): Loadable<Record<string, number> | null> {
+  const key = symbols.length > 0 ? `prices:${[...symbols].sort().join(",")}` : null;
+  return usePolled((signal) => loadUsdPrices(symbols, signal), null, key);
+}
 
-  const current = state.data;
-  const unwrap = native && current !== null && current.mainTokenBalance === 0n;
-  const actions: VaultDepositorActions | null = depositor && vault && owner
-    ? {
-        requestDeposit: async (amount) => {
-          const wrapped = current?.mainTokenBalance ?? 0n;
-          const wrapLamports = native && amount > wrapped ? amount - wrapped : 0n;
-          return send(await buildRequestDepositInstructions(depositor, amount, wrapLamports));
-        },
-        cancelDeposit: () => send(buildCancelDepositInstructions(depositor, unwrap)),
-        emergencyRefund: () => send(buildEmergencyRefundInstructions(depositor, unwrap)),
-        requestWithdraw: (shares) => send(buildRequestWithdrawInstructions(depositor, shares)),
-        cancelWithdraw: () => send(buildCancelWithdrawInstructions(depositor)),
-        processOwnDeposit: async () =>
-          send(await buildSelfProcessDepositInstructions(await createVaultManager(vault, owner), unwrap)),
-        processOwnWithdraw: async () =>
-          send(await buildSelfProcessWithdrawInstructions(rpc, await createVaultManager(vault, owner), vault)),
-      }
-    : null;
-
-  return { ...state, error: depositorError ?? state.error, actions, pending };
+/** Wall-clock seconds, refreshed on an interval, for countdowns and phase checks. */
+export function useNowSecs(intervalMs = 15_000): number {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
 }

@@ -141,3 +141,22 @@ Native-SOL vaults (`isNativeVault`) wrap and unwrap automatically. `buildRequest
 2. Join with the `/vaults` list by `vault` for the name, share price and performance. Don't call `/vaults/{pda}` per row. A vault missing from `/vaults` is closed: show the row from `totals` and history alone.
 3. Current position value is share balance (RPC) × `share_price` / `PRICE_SCALE` (`sharesToMain`). The backend does not track share transfers between wallets, so the RPC balance is the truth.
 4. `GET /depositors/{wallet}/history` gives a cross-vault feed; each event carries `vault`.
+
+## UI
+
+`/earn` is the vault grid and `/earn/[vault]` (by PDA) the vault page. The option-markets table that used to live at `/earn` is now `/trade`.
+
+- **Metadata.** The backend serves no name, curator or category, so `registry.ts` maps a vault PDA to them. Unregistered vaults still render: the name comes from the deposit asset, the curator shows as the short governance address, and the category is derived from the asset (Stables for stablecoins, Stocks for tokenized equities such as NVDAx, otherwise Crypto). The grid's sections are Crypto, Stocks and Stables. Register a vault when it launches.
+- **One APR field.** Cards, the vault page and the modal all show `APR`: `annualized_return_pct` once performance is `annualized`, "New" for `no_track_record` and `short_track_record`, and "—" for `unavailable`. A short track record's cumulative return stays on the vault page, in its own tile. A deposit asset that earns its own yield (jitoSOL) gets `stakingAprPct` in the registry: the share price is denominated in that asset and misses this part, so the APR adds it to the premium. An (i) next to every APR label breaks the figure into Staking and Premium, and the parts always sum to the headline.
+- **Sorting and TVL.** The grid sorts by APR (the default, in the yield order above), TVL or name. Cards show TVL in dollars: `equity` times the deposit asset's USD price from `/api/market/price`, which asks CoinGecko and caches the answer for 60 seconds (ids by symbol in `src/lib/coingecko.ts`). A vault whose asset has no price shows TVL in the asset itself and sorts after the priced ones.
+- **Deposit availability** comes from `requestDepositBlock`, never from `accepting_deposits` alone: deposits are open in `active` before expiry whatever the flag says. A vault whose safety mode rules out deposits shows "Manage" and opens the modal on Withdraw.
+- **One request per kind.** A wallet can hold one pending deposit and one pending withdrawal per vault (`VAULT_REQUEST_EXISTS`). The modal blocks a second request and offers Cancel instead.
+- **Invite gate.** New deposits follow the trading invite gate (`openReferralGate`). Withdraw, cancel, refund and self-processing are never gated.
+- **Metrics** (`metrics.ts`) use completed cycles only (`finished_at != null`):
+  - The return series compounds per-cycle `return_pct`, so a share-price reset on a new capital generation does not show as a drop.
+  - 30d avg APR is the compounded return of cycles that finished in the last 30 days, annualized simply over the calendar time they span.
+  - Sharpe ratio is mean over sample standard deviation of per-cycle returns with a zero risk-free rate, annualized by the vault's mean cadence. It needs 8 completed cycles.
+  - Max drawdown is the worst fall of the compounded index, measured at cycle ends.
+  - 30d avg APR and Sharpe show only once `performance.status` is `annualized`, matching the 30-day rule above.
+  - TVL on the vault page is `equity` in the deposit asset.
+- **Sample data.** `NEXT_PUBLIC_VAULTS_SAMPLE=1` makes `source.ts` serve the fixture vaults in `sample-data.json`, one file with a vault per section. Each entry has its UI metadata, the vault and its cycles in the HTTP API shapes (real responses can be pasted in as they are) and a wallet position, and `pricesUsd` stands in for the price route with a USD price per deposit asset. Timestamps were written against the file's `anchor` and are shifted to the current time on load, so expiries and the 30-day window stay current. `sample.ts` validates the file and loads it as its own chunk, which nothing requests outside this mode. Transactions are disabled. Nothing on screen marks the figures as made up, so screenshots of this mode are not real results. It is off whenever `NODE_ENV` is `production`, so builds ignore it.

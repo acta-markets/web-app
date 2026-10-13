@@ -105,7 +105,8 @@ Acta is a structured-yield and European-style options protocol on Solana. Takers
 
 ## Public resources
 
-- [Markets](${context.siteOrigin}/earn)
+- [Vaults](${context.siteOrigin}/earn)
+- [Markets](${context.siteOrigin}/trade)
 - [Documentation](${DOCS_SITE_ORIGIN})
 - [API catalog](${context.siteOrigin}/.well-known/api-catalog)
 - [OpenAPI description](${context.siteOrigin}/openapi.json)
@@ -119,7 +120,24 @@ Public HTTP discovery endpoints are read-only and require no authentication. Tra
 `;
 }
 
-export function getEarnMarkdown(context: DeploymentContext): string {
+export function getVaultsMarkdown(context: DeploymentContext): string {
+  return `# Acta vaults
+
+Browse Acta's open vaults in the ${context.environment} environment. A vault pools deposits under a manager's options strategy, and depositors hold shares in it.
+
+## Read-only vault data
+
+- Vault list: ${context.apiOrigin}/api/v1/vaults
+- Vault detail: ${context.apiOrigin}/api/v1/vaults/{vault_pda}
+- Cycle history: ${context.apiOrigin}/api/v1/vaults/{vault_pda}/cycles
+- How vaults work: ${DOCS_SITE_ORIGIN}/guide/vaults
+- Vault HTTP API: ${DOCS_SITE_ORIGIN}/reference/vault-http-api
+
+Vault data is public and does not require authentication. Deposits and withdrawals are requests that the wallet owner signs as Solana transactions. They complete when the vault next processes capital, at the share price calculated then. Do not infer consent to deposit from access to this page or its public APIs.
+`;
+}
+
+export function getTradeMarkdown(context: DeploymentContext): string {
   return `# Acta markets
 
 Browse Acta's currently available structured-yield markets in the ${context.environment} environment.
@@ -250,5 +268,5 @@ Sitemap: ${DOCS_SITE_ORIGIN}/sitemap.xml
 }
 
 export function getSitemapUrls(context: DeploymentContext): string[] {
-  return ["/", "/earn", "/partners"].map((path) => `${context.siteOrigin}${path}`);
+  return ["/", "/earn", "/trade", "/partners"].map((path) => `${context.siteOrigin}${path}`);
 }
