@@ -21,7 +21,7 @@ vi.mock("@/components/rfq/rfq-provider", () => ({
 vi.mock("@/components/app-ui/toast", () => ({ useToast: () => ({ show: vi.fn() }) }));
 
 import { resolveVaultMeta } from "@/lib/vaults/registry";
-import { SAMPLE_VAULTS, SAMPLE_VAULT_META, sampleData } from "@/lib/vaults/sample";
+import { loadSampleData } from "@/lib/vaults/sample";
 import { VaultDepositModal } from "./vault-deposit-modal";
 
 afterEach(() => {
@@ -31,10 +31,10 @@ afterEach(() => {
 describe("VaultDepositModal with fixture vaults", () => {
   it("reads like the real thing and never sends anything", async () => {
     const user = userEvent.setup();
-    const vault = sampleData().vaults.find((v) => v.vault_pda === SAMPLE_VAULTS.jitosol)!;
-    render(
-      <VaultDepositModal vault={vault} meta={resolveVaultMeta(vault, SAMPLE_VAULT_META)} onClose={vi.fn()} />,
-    );
+    // the app loads the JSON before any vault renders; the modal then reads it synchronously
+    const data = await loadSampleData();
+    const vault = data.vaults.find((v) => v.vault_pda === data.keys.jitosol)!;
+    render(<VaultDepositModal vault={vault} meta={resolveVaultMeta(vault, data.meta)} onClose={vi.fn()} />);
 
     expect(document.body.textContent).not.toMatch(/sample/i);
     expect(screen.queryByRole("button", { name: "Connect wallet" })).toBeNull();

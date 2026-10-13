@@ -142,6 +142,7 @@ export function VaultDetailClient({ pda }: { pda: string }) {
         <VaultMetrics
           vault={vault}
           symbol={meta.assetSymbol}
+          stakingAprPct={meta.stakingAprPct}
           finished={finished}
           nowSecs={nowSecs}
           historyLoading={historyLoading}

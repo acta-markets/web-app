@@ -3,15 +3,20 @@ import {
   LAST_SHARES_COPY,
   REQUEST_EXISTS_COPY,
   cancelBlockMessage,
+  VAULT_SORTS,
+  compareVaultsByTvl,
   compareVaultsByYield,
   depositBlockMessage,
   depositSelfProcessView,
-  headlineReturn,
+  formatVaultEquity,
   isLastSharesWithdrawal,
   primaryVaultAction,
+  vaultApr,
   vaultStatus,
+  vaultTvlUsd,
   withdrawBlockMessage,
   withdrawSelfProcessView,
+  type VaultSortEntry,
 } from "./presentation";
 import type { VaultActionBlock } from "./rules";
 import { makeVault } from "./sample";
@@ -20,38 +25,102 @@ import type { Vault, VaultPerformance } from "./types";
 const NOW = 1_800_000_000;
 const track = { cycles_completed: 3, last_cycle_return_pct: 0.4, cumulative_return_pct: 1.2, track_record_secs: "1814400" };
 
-describe("headlineReturn", () => {
-  it("leads with APR only once the backend annualizes", () => {
-    expect(headlineReturn({ status: "annualized", annualized_return_pct: 12.3, ...track })).toMatchObject({
-      label: "APR",
+describe("vaultApr", () => {
+  it("shows a figure only once the backend annualizes, and New before that", () => {
+    expect(vaultApr({ status: "annualized", annualized_return_pct: 12.3, ...track })).toMatchObject({
       value: "12.30%",
+      muted: false,
+      sources: [{ label: "Premium", pct: 12.3 }],
     });
-    expect(headlineReturn({ status: "short_track_record", ...track })).toMatchObject({
-      label: "Return so far",
-      value: "+1.20%",
-      detail: "APR after 30 days",
-    });
-    expect(headlineReturn({ status: "no_track_record" })).toMatchObject({ value: "New vault", muted: true });
-    expect(headlineReturn({ status: "unavailable" })).toMatchObject({ value: "—", muted: true });
+    expect(vaultApr({ status: "short_track_record", ...track })).toMatchObject({ value: "New", muted: true, sources: [] });
+    expect(vaultApr({ status: "no_track_record" })).toMatchObject({ value: "New", muted: true });
+    expect(vaultApr({ status: "unavailable" })).toMatchObject({ value: "—", muted: true, sources: [] });
+  });
+
+  it("adds the deposit asset's staking yield to the premium, so the parts sum to the headline", () => {
+    const apr = vaultApr({ status: "annualized", annualized_return_pct: 10, ...track }, 5);
+    expect(apr.value).toBe("15.00%");
+    expect(apr.sources).toEqual([
+      { label: "Staking", pct: 5 },
+      { label: "Premium", pct: 10 },
+    ]);
+    // before the premium has history, the staking part is still known
+    expect(vaultApr({ status: "no_track_record" }, 5)).toMatchObject({ value: "New", sources: [{ label: "Staking", pct: 5 }] });
   });
 });
 
-describe("compareVaultsByYield", () => {
-  const vault = (pda: string, performance: VaultPerformance, extra: Partial<Vault> = {}) =>
-    makeVault({ vault_pda: pda, performance, ...extra });
+describe("vault sorts", () => {
+  const annualized = (pct: number): VaultPerformance => ({ status: "annualized", annualized_return_pct: pct, ...track });
+  const entry = (
+    name: string,
+    performance: VaultPerformance,
+    opts: { vault?: Partial<Vault>; stakingAprPct?: number; tvlUsd?: number | null } = {},
+  ): VaultSortEntry => ({
+    vault: makeVault({ performance, ...opts.vault }),
+    meta: { name, stakingAprPct: opts.stakingAprPct ?? 0 },
+    tvlUsd: opts.tvlUsd ?? null,
+  });
+  const sorted = (entries: VaultSortEntry[], compare: (a: VaultSortEntry, b: VaultSortEntry) => number) =>
+    [...entries].sort(compare).map((e) => e.meta.name);
 
   it("ranks proven yield first and puts vaults winding down last", () => {
-    const vaults = [
-      vault("new", { status: "no_track_record" }),
-      vault("short-high", { status: "short_track_record", ...track, cumulative_return_pct: 3 }),
-      vault("closing", { status: "annualized", annualized_return_pct: 40, ...track }, { safety: "closing" }),
-      vault("annualized-low", { status: "annualized", annualized_return_pct: 8, ...track }),
-      vault("unknown", { status: "unavailable" }),
-      vault("annualized-high", { status: "annualized", annualized_return_pct: 15, ...track }),
-      vault("short-low", { status: "short_track_record", ...track, cumulative_return_pct: 1 }),
+    const entries = [
+      entry("new", { status: "no_track_record" }),
+      entry("short-high", { status: "short_track_record", ...track, cumulative_return_pct: 3 }),
+      entry("closing", annualized(40), { vault: { safety: "closing" } }),
+      entry("annualized-low", annualized(8)),
+      entry("unknown", { status: "unavailable" }),
+      entry("annualized-high", annualized(15)),
+      entry("short-low", { status: "short_track_record", ...track, cumulative_return_pct: 1 }),
     ];
-    const order = [...vaults].sort((a, b) => compareVaultsByYield(a, b, (v) => v.vault_pda)).map((v) => v.vault_pda);
-    expect(order).toEqual(["annualized-high", "annualized-low", "short-high", "short-low", "new", "unknown", "closing"]);
+    expect(sorted(entries, compareVaultsByYield)).toEqual([
+      "annualized-high",
+      "annualized-low",
+      "short-high",
+      "short-low",
+      "new",
+      "unknown",
+      "closing",
+    ]);
+  });
+
+  it("orders by the APR the cards show, staking included", () => {
+    const entries = [entry("premium 12", annualized(12)), entry("staked 8 + 5", annualized(8), { stakingAprPct: 5 })];
+    expect(sorted(entries, compareVaultsByYield)).toEqual(["staked 8 + 5", "premium 12"]);
+  });
+
+  it("puts the largest TVL first and vaults without a price last, by name", () => {
+    const entries = [
+      entry("b-unpriced", annualized(9)),
+      entry("small", annualized(9), { tvlUsd: 1_000 }),
+      entry("a-unpriced", annualized(9)),
+      entry("large", annualized(9), { tvlUsd: 2_000_000 }),
+      entry("empty", annualized(9), { tvlUsd: 0 }),
+    ];
+    expect(sorted(entries, compareVaultsByTvl)).toEqual(["large", "small", "empty", "a-unpriced", "b-unpriced"]);
+  });
+
+  it("offers APR first, then TVL and name, with name ignoring case", () => {
+    expect(VAULT_SORTS.map((s) => s.label)).toEqual(["APR", "TVL", "Name"]);
+    const byName = VAULT_SORTS.find((s) => s.value === "name")!.compare;
+    const entries = ["USDC", "jitoSOL", "HYPE", "ZEC"].map((name) => entry(name, annualized(9)));
+    expect(sorted(entries, byName)).toEqual(["HYPE", "jitoSOL", "USDC", "ZEC"]);
+  });
+});
+
+describe("TVL", () => {
+  it("is in dollars only when the deposit asset has a price", () => {
+    const vault = makeVault({ equity: "2500000000", main_decimals: 6 });
+    expect(vaultTvlUsd(vault, 1.5)).toBe(3750);
+    expect(vaultTvlUsd(vault, undefined)).toBeNull();
+  });
+
+  it("in the asset itself stays short: whole units from a thousand, two decimals from one", () => {
+    const equity = (base: string, decimals: number) => formatVaultEquity(makeVault({ equity: base, main_decimals: decimals }));
+    expect(equity("2108855470000", 6)).toBe("2.11M");
+    expect(equity("2500999999", 6)).toBe("2,500");
+    expect(equity("707856612345", 9)).toBe("707.85");
+    expect(equity("1234", 6)).toBe("0.001234");
   });
 });
 

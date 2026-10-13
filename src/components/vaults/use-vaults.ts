@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { VaultApiError } from "@/lib/vaults/api";
-import { loadVault, loadVaultCycles, loadVaults } from "@/lib/vaults/source";
+import { loadUsdPrices, loadVault, loadVaultCycles, loadVaults } from "@/lib/vaults/source";
 import type { Vault, VaultCyclesPage } from "@/lib/vaults/types";
 
 const VAULT_REFRESH_MS = 30_000;
@@ -98,6 +98,12 @@ export function useVaultCycles(pda: string | null): Loadable<VaultCyclesPage | n
     if (pda && error instanceof VaultApiError && error.code === "db_disabled") setDisabledFor(pda);
   }, [error, pda]);
   return { ...state, disabled };
+}
+
+/** USD prices for these asset symbols, keyed in upper case; null until the first answer. */
+export function useUsdPrices(symbols: readonly string[]): Loadable<Record<string, number> | null> {
+  const key = symbols.length > 0 ? `prices:${[...symbols].sort().join(",")}` : null;
+  return usePolled((signal) => loadUsdPrices(symbols, signal), null, key);
 }
 
 /** Wall-clock seconds, refreshed on an interval, for countdowns and phase checks. */

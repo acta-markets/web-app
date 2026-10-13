@@ -1,18 +1,7 @@
 import { NextResponse } from "next/server";
+import { COINGECKO_IDS } from "@/lib/coingecko";
 
 type Range = "1w" | "1m" | "3m";
-
-const COINGECKO_IDS: Record<string, string> = {
-  SOL: "solana",
-  WSOL: "solana",
-  ETH: "ethereum",
-  ZBTC: "bitcoin",
-  BTC: "bitcoin",
-  BONK: "bonk",
-  JITOSOL: "jito-staked-sol",
-  JLP: "jupiter-perpetuals-liquidity-provider-token",
-  PUMP: "pump-fun"
-};
 
 function normalizeSymbol(symbol: string) {
   return symbol.trim().toUpperCase();

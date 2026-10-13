@@ -11,12 +11,15 @@ export function VaultAssetLogo({
   symbol,
   size = 24,
   ring = false,
+  label,
   className,
 }: {
   symbol: string;
   size?: number;
   /** the separating ring used where a logo overlaps the card band */
   ring?: boolean;
+  /** set where the logo is the only thing naming the asset; decorative otherwise */
+  label?: string;
   className?: string;
 }) {
   const logo = getToken(symbol)?.logo;
@@ -29,6 +32,9 @@ export function VaultAssetLogo({
         className,
       )}
       style={{ width: size, height: size }}
+      role={label ? "img" : undefined}
+      aria-label={label}
+      title={label}
     >
       {logo ? (
         <img src={logo} alt="" className="h-full w-full object-cover" loading="lazy" />

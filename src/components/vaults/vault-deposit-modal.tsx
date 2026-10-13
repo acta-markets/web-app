@@ -17,19 +17,20 @@ import {
   LAST_SHARES_COPY,
   REQUEST_EXISTS_COPY,
   depositBlockMessage,
-  headlineReturn,
   isLastSharesWithdrawal,
+  vaultApr,
   vaultStatus,
   withdrawBlockMessage,
   type VaultModalTab,
 } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
 import { requestDepositBlock, requestWithdrawBlock } from "@/lib/vaults/rules";
-import { VAULTS_SAMPLE_MODE, sampleData } from "@/lib/vaults/sample";
+import { VAULTS_SAMPLE_MODE, peekSampleData } from "@/lib/vaults/sample";
 import { describeVaultTxError } from "@/lib/vaults/tx-errors";
 import type { Vault } from "@/lib/vaults/types";
 import { useVaultDepositor, type VaultDepositorActions } from "./use-vault-depositor";
 import { useNowSecs } from "./use-vaults";
+import { AprLabel } from "./vault-apr";
 import { VaultAssetLogo } from "./vault-asset-logo";
 import { VaultPositionPanel, type PositionAction } from "./vault-position-panel";
 import { VaultStatusLabel } from "./vault-status-label";
@@ -117,7 +118,7 @@ export function VaultDepositModal({
   // sample vaults have no accounts on chain: read fixtures and never build a transaction
   const live = useVaultDepositor(VAULTS_SAMPLE_MODE ? null : vault);
   const position: VaultDepositorState | null = VAULTS_SAMPLE_MODE
-    ? sampleData().depositors[vault.vault_pda] ?? null
+    ? peekSampleData()?.depositors[vault.vault_pda] ?? null
     : live.data;
   const actions = VAULTS_SAMPLE_MODE ? null : live.actions;
 
@@ -131,7 +132,7 @@ export function VaultDepositModal({
   const decimals = vault.main_decimals;
   const sharePrice = BigInt(vault.share_price);
   const native = isNativeVault(vault);
-  const headline = headlineReturn(vault.performance);
+  const apr = vaultApr(vault.performance, meta.stakingAprPct);
   const status = vaultStatus(vault, nowSecs);
   const pending = tx.kind === "pending";
 
@@ -233,8 +234,12 @@ export function VaultDepositModal({
         <div className="flex min-w-0 items-center gap-3">
           <VaultAssetLogo symbol={symbol} size={32} />
           <div className="min-w-0">
-            <div className="font-mono text-sm leading-[1.2] text-content-secondary">{headline.label}</div>
-            <div className="font-mono text-base font-medium leading-[1.3] tabular-nums text-content-primary">{headline.value}</div>
+            <AprLabel apr={apr} className="font-mono text-sm leading-[1.2] text-content-secondary" />
+            <div
+              className={`font-mono text-base font-medium leading-[1.3] tabular-nums ${apr.muted ? "text-content-secondary" : "text-content-primary"}`}
+            >
+              {apr.value}
+            </div>
           </div>
         </div>
         <VaultStatusLabel status={status} showDetail={false} />

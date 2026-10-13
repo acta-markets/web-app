@@ -19,6 +19,17 @@ export function formatPercent(
   return `${sign}${abs}%`;
 }
 
+/** Dollars to three significant digits, compact from a thousand up: $950, $102K, $2.11M. */
+export function formatUsd(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return NONE;
+  return value.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: "compact",
+    maximumSignificantDigits: 3,
+  });
+}
+
 function groupDigits(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
