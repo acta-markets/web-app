@@ -17,7 +17,8 @@
 
 * [Overview](protocol.md)
 * [Options and settlement](reference/protocol-flow.md)
-* [Governance and security](reference/governance.md)
+* [Security](reference/security.md)
+* [Governance and timelock](reference/governance.md)
 * [Capacity limits](reference/caps.md)
 * [Backend services and data](protocol/backend.md)
 

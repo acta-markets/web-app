@@ -1,4 +1,4 @@
-# Governance and Security Model
+# Governance
 
 Acta separates cold governance from hot operations. The cold authority controls protocol configuration and the timelock. The hot wallet runs routine market and oracle operations. The guardian can cancel queued actions and pause.
 
@@ -19,10 +19,13 @@ Cold authority operations:
 - set, rotate, or clear the guardian immediately
 - set, rotate, or revoke the settlement attestor through the timelock
 - toggle pause immediately
+- correct a published settlement price with `CorrectOraclePrice` immediately
 - queue pending actions
 - cancel pending actions
 
-The cold authority is separate from the program upgrade authority.
+The cold authority is also the program upgrade authority.
+
+The security model and incident response are in [Security](security.md).
 
 ### Hot wallet (`GlobalConfig.hot_authority`)
 
@@ -55,7 +58,7 @@ Settlement and liquidation are permissionless. Any signer may settle an expired 
 
 | Action | Authority | Timing |
 |--------|-----------|--------|
-| Program upgrade | Separate program-upgrade authority | Its configured Squads approvals and delay |
+| Program upgrade | Cold | Its Squads approvals; not timelocked |
 | Initialize global config | Cold | Immediate |
 | Rotate hot wallet | Cold | Immediate |
 | Set / rotate / clear guardian (`SetGuardian`, op 27) | Cold | Immediate |
@@ -75,6 +78,7 @@ Settlement and liquidation are permissionless. Any signer may settle an expired 
 | Publish attested settlement price (`UpdateOraclePriceAttested`, op 31) | Hot wallet + attestor Ed25519 proof (2-of-2) | After expiry, attestor set |
 | Set / rotate settlement attestor (`SetSettlementAttestor`, op 29) | Cold | Timelocked |
 | Revoke settlement attestor (`RevokeSettlementAttestor`, op 30) | Cold | Timelocked |
+| Correct settlement price (`CorrectOraclePrice`, op 82) | Cold | Immediate; reaches only markets not yet finalized |
 | Withdraw protocol fees | Hot wallet | Immediate |
 | Open position | Hot wallet + taker tx signer + maker Ed25519 quote | Immediate |
 | Settle position | Permissionless | After market finalization |
@@ -145,4 +149,4 @@ Squads handles approvals and member rotation and stores the approval threshold a
 
 ## Program Upgrade
 
-Program upgrades use a separate Squads vault and its configured approvals and execution delay. The program's upgrade authority authorizes deployment of the program buffer. `GlobalConfig.timelock_secs` applies to Acta's queued instructions, not to program upgrades.
+The program upgrade authority is the cold authority. An upgrade can replace any logic, including the timelock and guardian, and is not gated by `GlobalConfig.timelock_secs` or guardian veto. Its control is the Squads approval threshold.
