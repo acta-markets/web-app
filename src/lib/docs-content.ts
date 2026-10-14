@@ -40,6 +40,8 @@ const DOCS_DESCRIPTIONS: Record<string, string> = {
   "protocol/vault-owner": "Create and bootstrap a vault, configure governance and delegates, trade options, swap assets, and process capital.",
   "reference/protocol-flow":
     "Actors, RFQ mechanics, trade lifecycle, settlement scenarios, economics, fees, and protocol risk.",
+  "reference/security":
+    "Key roles, what each key can do if it leaks, the three signatures on a position, settlement price rules, and incident response.",
   "reference/governance":
     "Cold and hot authority boundaries, guardian controls, timelocks, and the on-chain governance permission matrix.",
   "reference/caps":
