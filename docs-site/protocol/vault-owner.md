@@ -22,6 +22,10 @@ The TypeScript SDK exports `chain.flows.VaultManagerPlanner` to build vault inst
 | Options and funding | `trading.openPositionAsTaker()`, `trading.openPositionAsMaker()`, `trading.fundMakerPosition()` |
 | Normal rebalance | `swaps.spotRebalance()` |
 
+TypeScript 0.2.0 renamed the capital and liquidation payout fields (`refundDestination` → `refundTo`, `shareDestination` → `sharesTo` / `sharesBackTo`, `liquidateVaultPosition(l, { owner, paidTo }, pos)`). Old names are silently ignored in JavaScript and the payout goes to the canonical ATA. See [Capital transactions](vault-integration.md#capital-transactions).
+
+A bought option must be funded before expiry, or liquidators take its intrinsic value. See [Funding bought options](vault-integration.md#funding-bought-options).
+
 ## Permissions
 
 Delegate permissions cover option trading (`OPEN_TAKER`, `SIGN_MAKER_QUOTES`, `FUND_MAKER`), swaps (`REBALANCE`) and capital processing (`PROCESS_CAPITAL`). Strategy capabilities and policy limit which trades the vault can open.
@@ -34,7 +38,7 @@ Authenticate the operator for the vault on `/vault`, load the current state and 
 
 - To write options, use vault collateral on the taker side of an RFQ.
 - To buy options, quote RFQs as a vault maker under the active primary-delegate grant. `is_taker_buy` stays zero.
-- To swap assets, run a Jupiter rebalance: review the transaction, sign, submit and confirm it.
+- To swap assets, run a rebalance swap: review the transaction, sign, submit and confirm it.
 
 Phase, safety mode and policy all gate trading. Normal rebalance cannot touch unpriced idle capital.
 

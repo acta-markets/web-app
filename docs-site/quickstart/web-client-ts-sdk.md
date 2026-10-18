@@ -7,10 +7,12 @@ SDK event callbacks use the wire message names in lowerCamelCase. TypeScript typ
 ## Installation
 
 ```bash
-yarn add @acta-markets/ts-sdk@0.1.6-vaults.2
+npm install @acta-markets/ts-sdk
 ```
 
-0.1.6-vaults.2 adds canonical auth-challenge, market-PDA and declared-signer checks (not in 0.1.5). `ActaWsClient` validates the challenge before calling the auth provider. Raw clients can call `validateAuthChallenge`.
+This guide covers version 0.2.1, which targets the program deployed to devnet and mainnet on 2026-10-17. Its instruction opcodes and program error codes differ from the program 0.1.6 was built against, so upgrade both together. The package README has a "Migrating from 0.1.6" table. Refer to opcodes and errors by name through the generated constants exported from `@acta-markets/ts-sdk` (`*_DISCRIMINATOR` for instruction opcodes, `ACTA_CONTRACT_ERROR__*` for program errors), not by number.
+
+`ActaWsClient` validates the challenge before calling the auth provider. Raw clients can call `validateAuthChallenge` (`assertVaultAuthChallenge` for a `/vault` session).
 
 The client rejects frames where any of these is missing or `null`: `Welcome.server_time_unix_ms`, `AuthSuccess.expires_at`, `RfqBroadcast.sent_at_unix_ms`, `order_version` on order events, and `instruction_index` on known chain events. `*_unix_ms` fields are milliseconds. `expires_at` is Unix seconds. WS protocol version: `1.0.0`.
 
@@ -143,7 +145,7 @@ ws.cancelRfq(rfqId);
 
 ### 8. Accept quote and sign
 
-SDK 0.1.6 requires `expectedMessageBytes`, the message you build from the selected order and approved transaction parameters, with ALT references resolved against table contents you trust. The SDK compares every byte (instructions, account flags, fee payer, blockhash, ALT references) before calling the wallet. Do not copy the expected bytes from the received transaction. A matching `orderIdHex` is not enough. Your application supplies `approvedMessageForOrder(id)`. Older SDKs leave this check to the application. `signSponsoredTxBase64Unverified` skips it and trusts the server's transaction.
+`signSponsoredTxBase64` requires `expectedMessageBytes`, the message you build from the selected order and approved transaction parameters, with ALT references resolved against table contents you trust. The SDK compares every byte (instructions, account flags, fee payer, blockhash, ALT references) before calling the wallet. Do not copy the expected bytes from the received transaction. A matching `orderIdHex` is not enough. Your application supplies `approvedMessageForOrder(id)`.
 
 ```typescript
 import { signSponsoredTxBase64 } from "@acta-markets/ts-sdk/ws";
@@ -171,6 +173,8 @@ ws.on("sponsoredTxToSign", async (id, txBase64, signatureDeadline) => {
 
 ws.acceptQuote(rfqId, makerPubkey, orderIdHex);
 ```
+
+`signSponsoredTxBase64` fills signature slot 1, the taker's slot for an ordinary maker quote (slot 0 is the keeper fee payer). When a vault is the maker, the taker is the fee payer and only signer (slot 0), so `signSponsoredTxBase64` does not fit: use `verifyAndSignSponsoredTx({ orderIdHex, txBase64, intent: { kind: "fill", holder, taker, terms }, tables, bounds, signer })`, which rebuilds the expected open and signs slot 0. `wallet.signTransaction` on the whole transaction handles both cases.
 
 `orderIdHex` is the selected order. If the wallet, connection or selection changes during signing, discard the result. Record that you sent the transaction before submitting (see step 10).
 
@@ -265,7 +269,11 @@ Error codes and `OrderFailed` reasons are in the [Taker API reference](../refere
 - Market price snapshot: `getTokenMarketsInfo(underlyingMint)` -> `tokenMarketsInfo` returns backend `reference_price`, size rules, decimals and indicative premiums. The response does not echo the mint; map it by request ID. See [TokenMarketsInfo](../reference/taker-api.md#tokenmarketsinfo).
 - Indicative prices: `getIndicativePrices({ market, position_type })` -> `indicativePrices` event. Non-binding. The server refreshes them roughly every 30s.
 - APR inputs: use spot and indicative premium from the same `TokenMarketsInfo` response. Skip the preview when the price is missing or `is_stale: true`.
-- APR/APY helper: `computeApyFromScaledPrices({ positionType, underlyingAmount, grossPremiumPerUnit1e9, strike1e9, spotPrice1e9, secondsToExpiry })` from `@acta-markets/ts-sdk/ws` returns `{ apy, apr, termYield }`. Pass backend `best_price` as `grossPremiumPerUnit1e9`. It already includes the quote-mint fee adjustment, so do not subtract the fee again.
+- APR/APY helper: `computeApyFromScaledPrices({ underlyingAmount, grossPremiumPerUnit1e9, spotPrice1e9, secondsToExpiry })` from `@acta-markets/ts-sdk/ws` returns `{ premiumNotional, collateralNotional, termYield, apr, apy }`. `spotPrice1e9` is required: collateral is valued at spot for calls and puts. `computeApyFromAmounts({ underlyingAmount, premiumPerUnderlying, spotPrice, secondsToExpiry })` takes human units. Pass backend `best_price` as `grossPremiumPerUnit1e9`. It already includes the quote-mint fee adjustment, so do not subtract the fee again.
+- Nonces: `generateNonce()` from `@acta-markets/ts-sdk/ws` returns a fresh `bigint` nonce for signed orders.
+- Program events: `decodeActaEventsFromLogsScoped(logs, programId)` from `@acta-markets/ts-sdk` decodes only events emitted by that program.
+- Instruction builders: builders in `@acta-markets/ts-sdk/chain` that resolve a mint's token program need `tokenProgram` or `rpc`. With neither they throw.
+- Vault catalog: an authenticated session subscribed to `vaults` receives `vaultCatalogChanged` (`{ vault_pda }`) when a vault is created, re-delegated or closed. Re-list vaults with `GET /api/v1/vaults`.
 
 ## Signing requirements
 

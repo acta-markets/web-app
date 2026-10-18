@@ -187,6 +187,7 @@ Subscriptions do not survive a disconnect. Resend `Subscribe` after reconnect.
 
 - `TradeExecuted`, `StatsUpdate`, `ChainEvent`
 - `MarketCreated`, `MarketFinalized`
+- `VaultCatalogChanged`, `VaultProjectionAdvanced` (`vaults` channel; see [WebSocket conventions](ws-common.md#vaultcatalogchanged)). `VaultProjectionAdvanced` arrives for every vault; `VaultCatalogChanged` is best-effort, so re-list vaults after (re)connect too.
 
 `PositionUpdated` is maker-only and is not sent to takers. Track positions with `ChainEvent` (settled/liquidated, `chain_events` channel) and `GetPositions`.
 

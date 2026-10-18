@@ -256,7 +256,7 @@ You pick the winner by `order_id` (here maker B, the higher premium). `net_price
 }
 ```
 
-Sign `tx_base64` and return it before `signature_deadline`. The taker fills signature slot 1. Slot 0 is the keeper fee payer. Byte layout: [Sponsored transaction: raw signing](taker-quickstart.md#sponsored-transaction-raw-signing).
+Sign `tx_base64` and return it before `signature_deadline`. For an ordinary maker quote the taker fills signature slot 1 and slot 0 is the keeper fee payer. For a vault maker quote the taker is the fee payer and fills slot 0. Byte layout: [Sponsored transaction: raw signing](taker-quickstart.md#sponsored-transaction-raw-signing).
 
 ### 10) SubmitSignedSponsoredTx → OrderAccepted → OrderSubmitted → OrderConfirmed
 

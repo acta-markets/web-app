@@ -175,6 +175,7 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
 
 - `TradeExecuted`, `StatsUpdate`, `PositionUpdated`, `ChainEvent`
 - `MarketCreated`, `MarketFinalized`
+- `VaultCatalogChanged`, `VaultProjectionAdvanced` (`vaults` channel; see [WebSocket conventions](ws-common.md#vaultcatalogchanged)). `VaultProjectionAdvanced` arrives for every vault; `VaultCatalogChanged` is best-effort, so re-list vaults after (re)connect too.
 
 ## Quote flow
 

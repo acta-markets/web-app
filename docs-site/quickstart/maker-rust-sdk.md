@@ -4,18 +4,20 @@
 
 The managed client owns the connection, re-authentication, subscription replay, recovery reads, and the message receiver. `WsClient` is the raw client for tests, recorded sessions, or custom auth.
 
-Runnable examples are in [github.com/acta-markets/rust-maker-sdk](https://github.com/acta-markets/rust-maker-sdk).
+Runnable examples ship with the crate: run them with `cargo run --example <name>` from the crate source (for example `managed_quote`, `hello_auth`, or `vault_operator` with `--features vault`). API docs are on [docs.rs/acta-maker-sdk](https://docs.rs/acta-maker-sdk).
 
 ## Installation
 
 ```toml
 [dependencies]
-acta-maker-sdk = { version = "0.4.3", features = ["ws-client"] }
+acta-maker-sdk = { version = "0.5.0", features = ["ws-client"] }
 ```
 
-Vault operators use the `/vault` session described in [Managing a vault](../protocol/vault-owner.md).
+Version 0.5.0 targets the program deployed to devnet and mainnet on 2026-10-17. Vault operators use the `vault` feature and the `/vault` session described in [Vault API, SDKs and swaps](../protocol/vault-integration.md).
 
-Quote-only integrations need `ws-client`. `chain` adds Solana instruction builders. `chain-rpc` adds on-chain reads.
+Quote-only integrations need `ws-client`. `chain` adds Solana instruction builders, including `chain::vault`. `chain-rpc` adds on-chain reads. `http` adds the read-only HTTP client. `vault` adds the vault operator client and implies `ws-client` and `chain`.
+
+One key signs both the auth challenge and every quote: the `quote_signing` key in your on-chain Maker account. Acta registers it with the admin-gated, timelocked `RegisterMaker`. It may equal `maker_owner`.
 
 ## Connection
 
@@ -80,7 +82,7 @@ let quote = RfqBinding::from_broadcast(rfq)?
 quote_handle.send_in_epoch(ClientMessage::Quote(quote), recovery_epoch).await?;
 ```
 
-`QuoteExpiry` stores whole Unix seconds; build it with `QuoteExpiry::from_unix_seconds(...)` or `QuoteExpiry::after(...)`. `RfqBinding` can also pick a permitted strike from `order_options`. The [`managed_quote` example](https://github.com/acta-markets/rust-maker-sdk/blob/main/examples/managed_quote.rs) shows recovery, epoch checks and gap handling.
+`QuoteExpiry` stores whole Unix seconds; build it with `QuoteExpiry::from_unix_seconds(...)` or `QuoteExpiry::after(...)`. `RfqBinding` can also pick a permitted strike from `order_options`. The `managed_quote` example (`cargo run --example managed_quote`) shows recovery, epoch checks and gap handling.
 
 `send_in_epoch` rejects if the connection has changed. Pass the epoch whose recovery you applied, not the latest transport epoch.
 
@@ -182,7 +184,7 @@ Protocol-level errors arrive as `ServerMessage::Error` (session-level) or `Serve
 
 ## Low-level WsClient
 
-The [`hello_auth` example](https://github.com/acta-markets/rust-maker-sdk/blob/main/examples/hello_auth.rs) shows the Hello, challenge and subscription sequence by hand. You supply request IDs yourself.
+The `hello_auth` example (`cargo run --example hello_auth`) shows the Hello, challenge and subscription sequence by hand. You supply request IDs yourself.
 
 Convenience methods exist for every `ClientMessage` variant. `WsClient` does not reconnect, re-authenticate, or queue outbound messages.
 
