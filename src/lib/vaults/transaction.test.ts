@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import { address, type Instruction } from "@solana/kit";
 import type { VersionedTransaction } from "@solana/web3.js";

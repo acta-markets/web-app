@@ -347,10 +347,8 @@ export function MarketClient({ asset }: { asset: string }) {
         if (bestPrice != null && spot != null && secondsToExpiry > 0) {
           try {
             const result = computeApyFromScaledPrices({
-              positionType,
               underlyingAmount: 1,
               grossPremiumPerUnit1e9: bestPrice,
-              strike1e9: Number(s.strike),
               spotPrice1e9: Number(referencePrice),
               secondsToExpiry,
             });
@@ -372,7 +370,6 @@ export function MarketClient({ asset }: { asset: string }) {
     strikeIdx,
     referencePrice,
     spot,
-    positionType,
     type,
   ]);
 
