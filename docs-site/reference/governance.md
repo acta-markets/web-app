@@ -25,7 +25,7 @@ Cold authority operations:
 - queue pending actions
 - cancel pending actions
 
-The cold authority is also the program upgrade authority.
+The cold authority is separate from the program upgrade authority.
 
 The security model and incident response are in [Security](security.md).
 
@@ -61,7 +61,7 @@ Settlement and liquidation are permissionless. Any signer may settle an expired 
 
 | Action | Authority | Timing |
 |--------|-----------|--------|
-| Program upgrade | Cold | Its Squads approvals; not timelocked |
+| Program upgrade | Separate program-upgrade authority | Its own Squads approvals and delay |
 | Initialize global config | Cold | Immediate |
 | Rotate hot wallet | Cold | Immediate |
 | Set / rotate / clear guardian (`SetGuardian`, op 27) | Cold | Immediate |
@@ -159,4 +159,4 @@ Squads handles approvals and member rotation and stores the approval threshold a
 
 ## Program Upgrade
 
-The program upgrade authority is the cold authority. An upgrade can replace any logic, including the timelock and guardian, and is not gated by `GlobalConfig.timelock_secs` or guardian veto. Its control is the Squads approval threshold.
+Program upgrades use a separate Squads vault with its own approvals and execution delay. The program's upgrade authority authorizes deployment of the program buffer. An upgrade can replace any logic, including the timelock and guardian. `GlobalConfig.timelock_secs` and the guardian apply to Acta's queued instructions, not to program upgrades.
