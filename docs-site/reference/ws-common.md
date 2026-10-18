@@ -127,13 +127,29 @@ Issued At: {RFC3339_timestamp}
 
 The server identifies the maker from `AuthChallenge.pubkey` and looks up its signing key in the on-chain maker registry.
 
+Vault operator challenge (`/vault` endpoint): the taker challenge with `Wallet:` set to the operator, followed by a `Vault:` line. There is no final `\n` after the vault address:
+
+```
+Acta RFQ Authentication
+
+Sign this message to authenticate your wallet.
+
+Wallet: {operator_base58}
+Nonce: {hex_encoded_32_random_bytes}
+Issued At: {RFC3339_timestamp}
+
+Vault: {vault_pda_base58}
+```
+
+As a string this is the taker challenge plus `"\nVault: {vault_pda_base58}"`.
+
 ### What to sign
 
-Validate the whole challenge **before signing**. Require the exact text and blank lines above, a nonce of exactly 64 lowercase hex characters, a UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` format, and a final `\n` after it. Reject anything else. A maker challenge has no `Wallet:` line. A taker challenge must have one, matching the wallet being authenticated.
+Validate the whole challenge **before signing**. Require the exact text and blank lines above, a nonce of exactly 64 lowercase hex characters, a UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` format, and a final `\n` after it. A maker challenge has no `Wallet:` line. A taker challenge must have one, matching the wallet being authenticated. A vault challenge is a taker challenge for the operator wallet plus `\nVault: {vault_pda}` with no trailing newline, and the vault must be the one you asked to authenticate. Reject any other text.
 
 Then sign the original UTF-8 bytes: no normalization, prefix or hashing. The fixed text is the authentication domain. The same key signs orders, so signing arbitrary text from an endpoint can authorize an order.
 
-Managed SDK clients validate before signing. Raw clients use `validate_maker_auth_challenge` (Rust) or `validateAuthChallenge` (TypeScript). These check format only. Which endpoint to trust is your configuration.
+Managed SDK clients (`acta-maker-sdk` 0.5.1, `@acta-markets/ts-sdk` 0.2.1) validate before signing. Raw clients use `validate_maker_auth_challenge` (Rust) or `validateAuthChallenge` (TypeScript). These check format only. For `/vault`, use `validate_vault_auth_challenge(challenge, operator, vault)` (Rust) or `assertVaultAuthChallenge(challenge, operator, vault)` (TypeScript), which also bind the operator and vault; `validateAuthChallenge` rejects a vault challenge. Which endpoint to trust is your configuration.
 
 ### AuthChallenge (client -> server)
 
@@ -402,9 +418,38 @@ Trade lifecycle and payoff: [Protocol flow](protocol-flow.md).
 | `stats` | `StatsUpdate` | Global venue stats. |
 | `chain_events` | `ChainEvent` (position opened / settled / liquidated, market finalized) | Anyone. A taker tracks position outcomes (settlement / liquidation) here. |
 | `markets` | `MarketCreated`, `MarketFinalized` | Anyone tracking the tradable market set. |
+| `vaults` | `VaultCatalogChanged`, `VaultProjectionAdvanced` | Maker and taker sessions that follow vaults get both: `VaultProjectionAdvanced` for every vault and `VaultCatalogChanged`. `/vault` operator sessions are subscribed automatically and receive only `VaultProjectionAdvanced` for their own vault, never `VaultCatalogChanged`. |
 | `positions` | None (no public producer) | `PositionUpdated` is delivered owner-direct to the maker's session by PDA lookup, not via this channel. The channel yields nothing for takers. |
 
 `TradeExecuted` can be lost, delayed or repeated. Dedupe by `trade.id`. Do not count frames as trades.
+
+### VaultCatalogChanged
+
+Sent on the `vaults` channel after a vault is created, re-delegated or closed, and only then. It carries only the vault address. Re-list vaults (`GET /api/v1/vaults`) to pick up the change.
+
+Delivery is best-effort: if the session's outbound queue is full the frame is dropped and the server closes the connection; nothing is replayed. Re-list vaults after every connect and reconnect as well.
+
+```json
+{ "type": "VaultCatalogChanged", "data": { "vault_pda": "VaultPdaBase58" } }
+```
+
+### VaultProjectionAdvanced
+
+Sent on the `vaults` channel when the indexed vault row changed. Reload `GET /api/v1/vaults/{vault_pda}`. Maker and taker subscribers receive it for every vault; a `/vault` session receives it for its own vault only.
+
+```json
+{
+  "type": "VaultProjectionAdvanced",
+  "data": {
+    "vault_pda": "VaultPdaBase58",
+    "version": 42,
+    "slot": 312345678,
+    "transaction_index": 3,
+    "signature": "TxSignatureBase58",
+    "event_index": 0
+  }
+}
+```
 
 ## Timeout hierarchy
 

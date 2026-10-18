@@ -1,6 +1,6 @@
 # Governance
 
-Acta separates cold governance from hot operations. The cold authority controls protocol configuration and the timelock. The hot wallet runs routine market and oracle operations. The guardian can cancel queued actions and pause.
+Acta separates cold governance from hot operations. The cold authority controls protocol configuration and the timelock. The hot wallet runs routine market and oracle operations. The guardian can cancel queued actions, pause, and freeze vaults.
 
 ## Roles
 
@@ -19,7 +19,9 @@ Cold authority operations:
 - set, rotate, or clear the guardian immediately
 - set, rotate, or revoke the settlement attestor through the timelock
 - toggle pause immediately
-- correct a published settlement price with `CorrectOraclePrice` immediately
+- correct a published settlement price immediately (`CorrectOraclePrice`)
+- create vaults (`CreateVault`)
+- freeze, unfreeze and start an emergency unwind of a vault (`FreezeVault`, `UnfreezeVault`, `EmergencyStartUnwind`)
 - queue pending actions
 - cancel pending actions
 
@@ -47,8 +49,9 @@ Optional emergency key, unset by default (the default public key authorizes no o
 Guardian operations:
 - cancel any queued pending action before execution
 - engage the emergency pause (unpause is cold-only)
+- freeze a vault (`FreezeVault`; unfreeze is cold-only)
 
-The guardian cannot queue actions, change configuration, rotate keys or unpause.
+The guardian cannot queue actions, change configuration, rotate keys, unpause or unfreeze vaults.
 
 ### Permissionless exits
 
@@ -70,15 +73,20 @@ Settlement and liquidation are permissionless. Any signer may settle an expired 
 | Raise / keep timelock delay (`UpdateActionTimelock`, op 26) | Cold | Immediate |
 | Lower timelock delay (`UpdateActionTimelock`, op 26) | Cold | Timelocked by current delay |
 | Initialize / update / close premium config | Cold | Timelocked |
-| Register maker | Cold | Timelocked |
+| Register maker (stores its `quote_signing` key) | Cold | Timelocked |
+| Rotate a maker's `quote_signing` key (`UpdateMakerQuoteSigning`) | Maker owner | Immediate |
 | Create / update oracle source | Cold | Timelocked |
 | Create / finalize / close market | Hot wallet | Immediate |
 | Create / close concrete oracle | Hot wallet | Immediate |
 | Publish settlement price (`UpdateOraclePrice`, op 16) | Hot wallet (only while no attestor is set) or cold | Immediate after expiry |
 | Publish attested settlement price (`UpdateOraclePriceAttested`, op 31) | Hot wallet + attestor Ed25519 proof (2-of-2) | After expiry, attestor set |
+| Correct settlement price (`CorrectOraclePrice`, op 72) | Cold | Immediate, not timelocked. Overwrites an already published price (fails with `OraclePriceNotSet` if none is set, `OracleInvalidPrice` for a zero, out-of-range or unchanged price) and affects only markets not yet finalized. Afterwards hot or attested publication for that oracle fails with `OracleAlreadyUpdated`. |
+| Create vault (`CreateVault`, op 32) | Cold | Immediate |
+| Freeze vault (`FreezeVault`, op 49) | Cold or guardian | Immediate |
+| Unfreeze vault / start emergency unwind (`UnfreezeVault`, op 50; `EmergencyStartUnwind`, op 51) | Cold | Immediate |
 | Set / rotate settlement attestor (`SetSettlementAttestor`, op 29) | Cold | Timelocked |
 | Revoke settlement attestor (`RevokeSettlementAttestor`, op 30) | Cold | Timelocked |
-| Correct settlement price (`CorrectOraclePrice`, op 82) | Cold | Immediate; reaches only markets not yet finalized |
+| Vault manager-stake floor, capital fallback delay (`SetVaultManagerStakeMinBps`, `SetVaultCapitalFallbackDelay`) | Cold | Timelocked |
 | Withdraw protocol fees | Hot wallet | Immediate |
 | Open position | Hot wallet + taker tx signer + maker Ed25519 quote | Immediate |
 | Settle position | Permissionless | After market finalization |
@@ -107,6 +115,8 @@ Timelockable wrapped opcodes:
 | 29 | `SetSettlementAttestor` |
 | 30 | `RevokeSettlementAttestor` |
 | 26 | `UpdateActionTimelock` |
+| 70 | `SetVaultManagerStakeMinBps` |
+| 71 | `SetVaultCapitalFallbackDelay` |
 
 In production, direct calls to these operations fail with `DirectCallDisabled`. They go through queue -> execute. The exception is `UpdateActionTimelock` raising or keeping the delay, which is immediate. Lowering it is queued under the current delay.
 
@@ -133,13 +143,13 @@ sha256(
 
 `SetPause` sets the `PAUSED` bit in `GlobalConfig.flags`. Cold authority or guardian can pause immediately. Only cold authority can unpause.
 
-While paused, `OpenPosition` fails with `ProtocolPaused`. Settlement, liquidation, and other exit paths remain available.
+While paused, these fail with `ProtocolPaused`: `OpenPosition`, vault position opens (`OpenPositionForVaultAsTaker`, `OpenPositionForVaultAsMaker`, `OpenPositionBetweenVaults`), `VaultSpotRebalance` and `ClosingConvertToMain`. Settlement, liquidation, vault deposits and withdrawals, governance `RecoveryConvertToMain` and the cold-only `EmergencyConvertToMain` remain available. Vault safety modes are described in [Lifecycle and safety modes](../protocol/vault-lifecycle.md#safety-modes).
 
 ## Settlement Attestation
 
 `GlobalConfig.settlement_attestor` names an optional Ed25519 second signer for hot settlement publication. When unset, the hot wallet uses `UpdateOraclePrice`.
 
-When configured through `SetSettlementAttestor`, the hot wallet uses `UpdateOraclePriceAttested`. An Ed25519 verification instruction for the attestor's domain-separated signature immediately precedes the update in the same transaction. Direct hot publication returns `SettlementAttestationRequired` (1090).
+When configured through `SetSettlementAttestor`, the hot wallet uses `UpdateOraclePriceAttested`. An Ed25519 verification instruction for the attestor's domain-separated signature immediately precedes the update in the same transaction. Direct hot publication returns `SettlementAttestationRequired`.
 
 The cold authority retains direct publication because Squads CPI cannot produce the required Ed25519 precompile instruction. `RevokeSettlementAttestor` clears the key and restores direct hot publication. The 32-byte replay domain is retained.
 
