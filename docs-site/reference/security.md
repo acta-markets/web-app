@@ -4,7 +4,7 @@ Acta separates cold governance from hot operations, with an independent guardian
 
 | Role | Key | Controls | Form |
 |------|-----|----------|------|
-| Cold authority | `ACTA_ADMIN`, compiled into the program | Protocol config, timelock, hot and guardian rotation, pause release, settlement price correction, program upgrade | Squads 3-of-4 multisig vault |
+| Cold authority | `ACTA_ADMIN`, compiled into the program | Protocol config, timelock, hot and guardian rotation, pause release, settlement price correction | Squads 3-of-4 multisig vault |
 | Hot wallet | `GlobalConfig.hot_authority` | Markets, oracle accounts, settlement prices, `OpenPosition` co-sign, fee withdrawal | Backend online key, rotatable by cold |
 | Guardian | `GlobalConfig.guardian` | Cancel queued actions, engage pause | Optional single emergency key |
 | Settlement attestor | `GlobalConfig.settlement_attestor` | Second signature on hot settlement prices | Optional Ed25519 key, set by cold through the timelock |
@@ -13,7 +13,7 @@ The full permission matrix, timelock and pause mechanics are in [Governance](gov
 
 ## What each key can do if it leaks
 
-**One cold member key.** Nothing. Every cold action, including a program upgrade, needs 3 of the 4 Squads members. Rotate the member in Squads.
+**One cold member key.** Nothing. Every cold action needs 3 of the 4 Squads members. Rotate the member in Squads.
 
 **Hot wallet.** It can create and close markets and oracle accounts, withdraw collected protocol fees and co-sign positions. It cannot open a position on its own, because `OpenPosition` also needs the taker's transaction signature and the maker's Ed25519 quote signature. It cannot change cold configuration, rotate itself or upgrade the program.
 
@@ -69,7 +69,7 @@ Cold can overwrite a published price with `CorrectOraclePrice`. It is a direct c
 
 ## Program upgrade
 
-The program upgrade authority is the cold authority, the same Squads 3-of-4 vault. An upgrade can replace any logic, including the timelock and guardian. It is not behind the on-chain timelock or guardian veto; the 3-of-4 threshold is its control.
+The program upgrade authority is a separate Squads vault, not the cold authority. It has its own approvals and execution delay. An upgrade can replace any logic, including the timelock and guardian, so the on-chain timelock and guardian veto do not apply to it; its Squads approvals and delay are its control.
 
 ## Vaults
 
@@ -90,4 +90,4 @@ Vault governance, delegates and their limits are covered in [Roles and permissio
 
 - One global timelock delay; there are no per-action delays.
 - The program stores neither the Squads vault address nor its threshold; they live in Squads' own state.
-- Program upgrades and `CorrectOraclePrice` are not behind the on-chain timelock.
+- `CorrectOraclePrice` is not behind the on-chain timelock. Program upgrades are gated by the upgrade vault's own Squads delay, not by it.
