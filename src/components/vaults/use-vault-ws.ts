@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { flows, resolveVaultPriceUpdates } from "@acta-markets/ts-sdk/chain";
+import { DEVNET_SWAP_ROUTER, JUPITER_V6_PROGRAM, flows, resolveVaultPriceUpdates } from "@acta-markets/ts-sdk/chain";
 import { ActaWsClient, type ActaWsClientEvents, type SwapQuoteData } from "@acta-markets/ts-sdk/ws";
 import { fetchAddressesForLookupTables } from "@solana/kit";
 import { VersionedTransaction } from "@solana/web3.js";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { createWalletAuthProvider, getRfqBackendUrl } from "@/lib/rfq-client";
+import { IS_MAINNET } from "@/lib/tokens";
 import type { VaultManager } from "@/lib/vaults/operator";
 
 type VaultAuth = Parameters<ActaWsClientEvents["vaultAuthenticated"]>[0];
@@ -12,6 +13,7 @@ export type VaultSwapQuote = Parameters<ActaWsClientEvents["swapQuoteResult"]>[0
 export type VaultSwapQuoteRequest = Omit<SwapQuoteData, "request_id" | "vault_pda">;
 
 const SWAP_TIMEOUT_MS = 30_000;
+const SWAP_ROUTER = IS_MAINNET ? JUPITER_V6_PROGRAM : DEVNET_SWAP_ROUTER;
 const SWAP_COMPUTE_BOUNDS: flows.ComputeBudgetBounds = { maxUnitLimit: 600_000, maxUnitPriceMicroLamports: 10_000 };
 
 export type UseVaultWs = {
@@ -68,7 +70,7 @@ export function useVaultWs(vaultPda: string | null, enabled: boolean, onProjecti
       const prices = await resolveVaultPriceUpdates(rpc, manager);
       const tables = await fetchAddressesForLookupTables(flows.servedLookupTableKeys(quote.tx_base64), rpc);
       await flows.verifyVaultSwap(
-        { vault: manager, request: quoteRequest, quote, ...prices, minOutputFloor },
+        { vault: manager, request: quoteRequest, quote, ...prices, minOutputFloor, router: SWAP_ROUTER },
         tables,
         SWAP_COMPUTE_BOUNDS,
       );
