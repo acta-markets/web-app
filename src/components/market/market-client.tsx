@@ -1137,8 +1137,8 @@ export function MarketClient({ asset }: { asset: string }) {
                 </span>
                 <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-primary opacity-50">
                   {type === "call"
-                    ? "Your asset is swaped at your selected price."
-                    : "Your USDC is swaped at your selected price."}
+                    ? "Your asset is swapped at your selected price."
+                    : "Your USDC is swapped at your selected price."}
                 </span>
               </div>
             </div>
