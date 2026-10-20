@@ -55,7 +55,7 @@ A resumed session keeps its server-side routing and mint scope. After fresh auth
 
 ## Quoting
 
-On `RfqBroadcast`, check the [market PDA and terms](../reference/maker-api.md#quote-flow) against your Acta program. Pick a strike from `rfq.strike` or `rfq.order_options` and compute the premium. Set `now + 100s <= valid_until <= market.expiry_ts`. Build the 182-byte order preimage (Quote rules in the [Maker API reference](../reference/maker-api.md)) and hash it to `order_id`. Sign the 32-byte hash with `quote_signing` and send `Quote`:
+On `RfqBroadcast`, check the [market PDA and terms](../reference/maker-api.md#quote-flow) against your Acta program. Pick a strike from `rfq.strike` or `rfq.order_options` and compute the premium. Set `now + min_quote_validity_seconds <= valid_until <= market.expiry_ts`; read `min_quote_validity_seconds` from `GET /api/v1/venue` at startup, do not hardcode it. Build the 182-byte order preimage (Quote rules in the [Maker API reference](../reference/maker-api.md)) and hash it to `order_id`. Sign the 32-byte hash with `quote_signing` and send `Quote`:
 
 ```json
 {
@@ -72,13 +72,13 @@ On `RfqBroadcast`, check the [market PDA and terms](../reference/maker-api.md#qu
 }
 ```
 
-For an RFQ with several strikes, send one `Quote` per strike, or batch them in `BatchQuotes`. Each quote needs its own `order_id` and `nonce`. A new quote on the same `(rfq_id, strike)` replaces the previous one.
+For an RFQ with several strikes, each strike needs its own quote. Prefer `BatchQuotes` for several strikes or RFQs: one frame and one `BatchQuotesAck` instead of one message per quote. Each quote needs its own `order_id` and `nonce`. A new quote on the same `(rfq_id, strike)` replaces the previous one.
 
 Reprice with `ReplaceQuote`, which is one atomic round trip. `CancelQuote` followed by `Quote` leaves a gap in the book and costs an extra round trip.
 
 `is_taker_buy` in the order-id preimage is `0` because the taker is the option writer. `1` fails preimage validation. If your preimage builder defaults it to `true`, override it.
 
-`QuoteRejected` carries `reason`. Resending the same payload fails again.
+`QuoteRejected` carries `reason`. Resending the same payload fails again. Two reasons are not about the payload: `rate_limited` (the connection's quote bucket is empty; back off and re-sign with a fresh nonce) and `trading_paused` (the venue is paused; wait for it to resume).
 
 ## Lifecycle events
 
@@ -145,16 +145,16 @@ For a dashboard bootstrap, send `GetMmSummary` on `/maker/data` after auth or re
 
 ## Discovery
 
-Fetch static metadata on `/maker/data` at startup and again when markets or tokens change. Do not poll.
+Fetch static metadata on `/maker/data` at startup and again when the server sends `ReferenceChanged`. Do not poll.
 
 ```json
-{ "type": "GetMarketDescriptors", "data": { "request_id": "...", "active_only": true } }
+{ "type": "GetMarketDescriptors", "data": { "request_id": "..." } }
 { "type": "GetExpiries",          "data": { "request_id": "..." } }
-{ "type": "GetTokens",            "data": { "request_id": "...", "active_only": true } }
+{ "type": "GetTokens",            "data": { "request_id": "..." } }
 { "type": "GetMarketsForMaker",   "data": { "request_id": "..." } }
 ```
 
-`active_only: true` returns tradable markets (not finalized, not disabled, before the pre-expiry trading cutoff); `false` also returns settled and expired markets.
+Discovery returns tradable markets only (not finalized, not disabled, before the pre-expiry trading cutoff). HTTP serves the same data at `GET /api/v1/venue`, `/api/v1/tokens` and `/api/v1/markets`, with ETag revalidation; `active=false` adds closed and finalized markets. See [Reference data](../reference/ws-common.md#reference-data).
 
 ## Operational defaults
 
@@ -162,13 +162,14 @@ Fetch static metadata on `/maker/data` at startup and again when markets or toke
 |---|---|
 | Application Ping | Approximately every 30 seconds. Each `Pong` carries an updated `server_time_unix_ms`. |
 | Reconnect backoff | Exponential with jitter, e.g. 250 ms initial, 5 s cap, ±20%. |
-| `valid_until` margin | `rfq.expires_at + 100s` plus a little slack, capped at `market.expiry_ts`. Values below `now + 100s` or after market expiry are rejected. Longer values only widen your exposure. |
+| `valid_until` margin | `rfq.expires_at + min_quote_validity_seconds` plus a little slack, capped at `market.expiry_ts`, with `min_quote_validity_seconds` from `GET /api/v1/venue`. Values below `now + min_quote_validity_seconds` or after market expiry are rejected. Longer values only widen your exposure. |
 | Clock skew | Track `offset = server_time − local_time` from `Welcome` and `Pong`. Apply it to `valid_until`. |
 | Quote concurrency | One active quote per `(rfq_id, strike)`. Repricing via `ReplaceQuote`. |
-| Message rate | `30 msg/s` sustained, `60` burst per WebSocket connection. |
+| Quote rate | `50` quote tokens/s sustained, `100` burst per connection. `Quote`, `ReplaceQuote` and `BatchQuotes` (one token per quote) count only here; over it they are rejected with `rate_limited` and the connection stays up. |
+| Message rate | `30 msg/s` sustained, `60` burst per WebSocket connection for all other messages. Over it the server sends a `rate_limited` error (a `RequestError` when the message carried a `request_id`) and closes with `4003 rate_limited`; on `/maker` cancel-on-disconnect then removes active and retained non-winning quotes (selected/executing orders survive). |
 | Query rate | `20 query tokens/s` sustained, `40` burst per WebSocket connection. |
 | Message size | `32 KiB` inbound WS message limit. |
-| Batch quotes | Hard max `50` quote elements; cost is `max(1, quotes.length)` quote tokens. |
+| Batch quotes | Hard max `50` quote elements; cost is `max(1, quotes.length)` quote tokens. Prefer one `BatchQuotes` over many single `Quote` messages. |
 
 The server sends WebSocket protocol pings every 30 seconds and closes idle connections after 90 seconds. Your WebSocket library has to answer protocol pings.
 

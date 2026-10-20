@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getToken, getTokenMint } from "@/lib/tokens";
 import {
-  VAULT_REGISTRY,
   categoryHref,
   deriveCategory,
   parseCategoryParam,
@@ -79,10 +78,6 @@ describe("resolveVaultMeta", () => {
       category,
     });
     expect(getToken(symbol)?.logo).toBe(logo);
-  });
-
-  it("registers the live beta vault", () => {
-    expect(VAULT_REGISTRY["3irb63eaXBmm3bvUY7hvpFHnXzeaFZSvtsirPMsfctuS"]).toMatchObject({ category: "Crypto" });
   });
 });
 

@@ -1,21 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DEVNET_SWAP_ROUTER, JUPITER_V6_PROGRAM, flows, resolveVaultPriceFeeds } from "@acta-markets/ts-sdk/chain";
 import { ActaWsClient, type ActaWsClientEvents, type SwapQuoteData } from "@acta-markets/ts-sdk/ws";
+import { fetchAddressesForLookupTables } from "@solana/kit";
 import { VersionedTransaction } from "@solana/web3.js";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { createWalletAuthProvider, getRfqBackendUrl } from "@/lib/rfq-client";
+import { IS_MAINNET } from "@/lib/tokens";
+import type { VaultManager } from "@/lib/vaults/operator";
+import { pythFeedShards } from "@/lib/vaults/price-feeds";
 
 type VaultAuth = Parameters<ActaWsClientEvents["vaultAuthenticated"]>[0];
 export type VaultSwapQuote = Parameters<ActaWsClientEvents["swapQuoteResult"]>[0];
 export type VaultSwapQuoteRequest = Omit<SwapQuoteData, "request_id" | "vault_pda">;
 
 const SWAP_TIMEOUT_MS = 30_000;
+const SWAP_ROUTER = IS_MAINNET ? JUPITER_V6_PROGRAM : DEVNET_SWAP_ROUTER;
+const SWAP_COMPUTE_BOUNDS: flows.ComputeBudgetBounds = { maxUnitLimit: 600_000, maxUnitPriceMicroLamports: 10_000 };
 
 export type UseVaultWs = {
   client: ActaWsClient | null;
   auth: VaultAuth | null;
   error: Error | null;
   /** Rebalance through the backend Jupiter relay: quote, wallet-sign, submit. */
-  swap: (request: VaultSwapQuoteRequest) => Promise<VaultSwapQuote>;
+  swap: (request: VaultSwapQuoteRequest, manager: VaultManager, minOutputFloor: bigint) => Promise<VaultSwapQuote>;
 };
 
 /**
@@ -23,7 +30,7 @@ export type UseVaultWs = {
  * challenge, so it only runs while `enabled`.
  */
 export function useVaultWs(vaultPda: string | null, enabled: boolean, onProjection: () => void): UseVaultWs {
-  const { selectedAccount, signMessage, signTransaction } = useSolana();
+  const { rpc, selectedAccount, signMessage, signTransaction } = useSolana();
   const owner = selectedAccount?.address ?? null;
   const [client, setClient] = useState<ActaWsClient | null>(null);
   const [auth, setAuth] = useState<VaultAuth | null>(null);
@@ -53,12 +60,20 @@ export function useVaultWs(vaultPda: string | null, enabled: boolean, onProjecti
   }, [enabled, vaultPda, owner]);
 
   const swap = useCallback(
-    async (request: VaultSwapQuoteRequest) => {
+    async (request: VaultSwapQuoteRequest, manager: VaultManager, minOutputFloor: bigint) => {
       if (!client || !auth) throw new Error("Vault session is not authenticated");
+      const quoteRequest = { ...request, request_id: crypto.randomUUID(), vault_pda: auth.vault_pda };
       const quote = await client.request(
         "SwapQuoteResult",
-        { type: "SwapQuote", data: { ...request, request_id: crypto.randomUUID(), vault_pda: auth.vault_pda } },
+        { type: "SwapQuote", data: quoteRequest },
         { timeoutMs: SWAP_TIMEOUT_MS },
+      );
+      const priceFeeds = await resolveVaultPriceFeeds(rpc, manager, pythFeedShards());
+      const tables = await fetchAddressesForLookupTables(flows.servedLookupTableKeys(quote.tx_base64), rpc);
+      await flows.verifyVaultSwap(
+        { vault: manager, request: quoteRequest, quote, priceFeeds, minOutputFloor, router: SWAP_ROUTER },
+        tables,
+        SWAP_COMPUTE_BOUNDS,
       );
       const signed = await signTransaction(VersionedTransaction.deserialize(base64ToBytes(quote.tx_base64)));
       await client.request(
@@ -75,7 +90,7 @@ export function useVaultWs(vaultPda: string | null, enabled: boolean, onProjecti
       );
       return quote;
     },
-    [client, auth, signTransaction],
+    [client, auth, rpc, signTransaction],
   );
 
   return { client, auth, error, swap };

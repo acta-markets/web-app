@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getOracleSourceEncoder } from "@acta-markets/ts-sdk";
+import { getActaProgramId, getOracleSourceEncoder } from "@acta-markets/ts-sdk";
 import { findVaultPda, flows, pythPriceFeedAccount } from "@acta-markets/ts-sdk/chain";
 import {
   address,
@@ -59,7 +59,7 @@ function page(requests: object[]) {
 function stubRpc(supply: bigint): Rpc<SolanaRpcApiMainnet> {
   const oracle = new Uint8Array(
     getOracleSourceEncoder().encode({
-      discriminator: 0,
+      discriminator: 7,
       version: 1,
       bump: 255,
       pad0: new Uint8Array(5),
@@ -72,7 +72,7 @@ function stubRpc(supply: bigint): Rpc<SolanaRpcApiMainnet> {
     data: [Buffer.from(oracle).toString("base64"), "base64"],
     executable: false,
     lamports: 1n,
-    owner: USER,
+    owner: getActaProgramId(),
     space: BigInt(oracle.length),
   };
   const send = (value: unknown) => ({ send: async () => ({ context: { slot: 1n }, value }) });

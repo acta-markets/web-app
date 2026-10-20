@@ -1,8 +1,8 @@
-import { VaultHttpClient } from "@acta-markets/ts-sdk/http";
+import { ActaHttpClient } from "@acta-markets/ts-sdk/http";
 import type { VaultPageQuery, VaultPositionsQuery } from "@acta-markets/ts-sdk/http";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
 
-export { VaultApiError } from "@acta-markets/ts-sdk/http";
+export { ActaHttpError } from "@acta-markets/ts-sdk/http";
 export type { VaultPageQuery, VaultPositionsQuery } from "@acta-markets/ts-sdk/http";
 
 export function getApiBaseUrl(): string {
@@ -13,7 +13,8 @@ export function getApiBaseUrl(): string {
   return `${protocol}//${ws.host}`;
 }
 
-const client = () => new VaultHttpClient({ baseUrl: getApiBaseUrl() });
+let httpClient: ActaHttpClient | null = null;
+const client = () => (httpClient ??= new ActaHttpClient({ baseUrl: getApiBaseUrl() }));
 
 export const fetchVaults = (signal?: AbortSignal) => client().vaults(signal);
 export const fetchVault = (pda: string, signal?: AbortSignal) => client().vault(pda, signal);

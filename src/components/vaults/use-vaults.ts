@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { VaultApiError } from "@/lib/vaults/api";
+import { ActaHttpError } from "@/lib/vaults/api";
 import { loadUsdPrices, loadVault, loadVaultCycles, loadVaults } from "@/lib/vaults/source";
 import type { Vault, VaultCyclesPage } from "@/lib/vaults/types";
 
@@ -95,7 +95,7 @@ export function useVaultCycles(pda: string | null): Loadable<VaultCyclesPage | n
   );
   const { error } = state;
   useEffect(() => {
-    if (pda && error instanceof VaultApiError && error.code === "db_disabled") setDisabledFor(pda);
+    if (pda && error instanceof ActaHttpError && error.code === "db_disabled") setDisabledFor(pda);
   }, [error, pda]);
   return { ...state, disabled };
 }

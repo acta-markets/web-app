@@ -26,10 +26,68 @@ Unit variants may omit `data`, for example:
 | `strike` | `u64`, quote per 1 underlying unit, 1e9 scale |
 | `quantity` | `u64`, underlying atomic units |
 | `size_rule` | min_size, max_size, step in underlying atomic units, tied to underlying_mint |
+| `strike_tick` | `u64`, strike ladder spacing for an underlying, 1e9 scale |
 | Timestamps | Unix seconds |
 | `server_time_unix_ms` | Unix milliseconds |
 
 `price` and `strike` are 1e9 fixed-point per 1 underlying unit, independent of mint decimals.
+
+## Reference data
+
+WS and HTTP read tokens and markets from one server snapshot: WS `GetTokens`, `GetMarkets`, `GetMarketDescriptors`, `GetExpiries` and `Snapshot.markets`, and HTTP `/api/v1/tokens` and `/api/v1/markets` (see [HTTP API](http-api.md#reference-data)). WS discovery always answers from the active set: markets that are not finalized, not disabled and before their trading cutoff. There is no `active_only` field; the server ignores it if sent. For closed and finalized markets use `GET /api/v1/markets?active=false`.
+
+### TokenInfo
+
+One object per mint on both transports. Quote tokens omit the underlying-only fields.
+
+```typescript
+type TokenInfo = {
+  mint: string;
+  symbol: string;
+  decimals: number;
+  oracle_feed_ids?: string[];      // Pyth feed ids, hex without 0x; omitted when none is known
+  size_rule?: {                    // underlyings only; underlying atomic units
+    min_size: number;
+    max_size: number;
+    step: number;
+  };
+  strike_tick?: number;            // underlyings only; strike ladder spacing, 1e9 scale
+  quote_mints?: string[];          // underlyings only; quote mints of its active markets
+};
+```
+
+A valid `quantity` satisfies `min_size <= quantity <= max_size` and `(quantity - min_size) % step == 0`. Only tokens of active markets are listed.
+
+### MarketInfo
+
+Used by `Snapshot.markets`, `Markets` and HTTP `/api/v1/markets`. Tokens are named by mint.
+
+```typescript
+type MarketInfo = {
+  pda: string;
+  underlying: string;        // underlying mint
+  quote: string;             // quote mint
+  expiry_ts: number;
+  is_put: boolean;
+  status: "active" | "closed" | "finalized";
+  settlement_price?: number; // 1e9 scale, finalized markets only
+};
+```
+
+On WS (`Snapshot`, `Markets`) you only get `active` markets.
+
+### ReferenceChanged
+
+Pushed without a subscription to every authenticated maker (quote and `/maker/data`), taker and vault operator session when the token list or market list changes, including when a market crosses its trading cutoff or expiry. The server checks for changes every second.
+
+```json
+{
+  "type": "ReferenceChanged",
+  "data": { "tokens_etag": "\"3f2a...\"", "markets_etag": "\"9b1c...\"" }
+}
+```
+
+The ETags are the HTTP `ETag` values of `/api/v1/tokens` and of the unfiltered `/api/v1/markets?active=false`. On receipt, re-read what you cache: `GetTokens` / `GetMarketDescriptors` on WS, or the HTTP routes with `If-None-Match`. `/vault` sessions re-read the HTTP routes.
 
 ## Quantity and collateral by position type
 
@@ -127,13 +185,29 @@ Issued At: {RFC3339_timestamp}
 
 The server identifies the maker from `AuthChallenge.pubkey` and looks up its signing key in the on-chain maker registry.
 
+Vault operator challenge (`/vault` endpoint): the taker challenge with `Wallet:` set to the operator, followed by a `Vault:` line. There is no final `\n` after the vault address:
+
+```
+Acta RFQ Authentication
+
+Sign this message to authenticate your wallet.
+
+Wallet: {operator_base58}
+Nonce: {hex_encoded_32_random_bytes}
+Issued At: {RFC3339_timestamp}
+
+Vault: {vault_pda_base58}
+```
+
+As a string this is the taker challenge plus `"\nVault: {vault_pda_base58}"`.
+
 ### What to sign
 
-Validate the whole challenge **before signing**. Require the exact text and blank lines above, a nonce of exactly 64 lowercase hex characters, a UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` format, and a final `\n` after it. Reject anything else. A maker challenge has no `Wallet:` line. A taker challenge must have one, matching the wallet being authenticated.
+Validate the whole challenge **before signing**. Require the exact text and blank lines above, a nonce of exactly 64 lowercase hex characters, a UTC timestamp in `YYYY-MM-DDTHH:MM:SSZ` format, and a final `\n` after it. A maker challenge has no `Wallet:` line. A taker challenge must have one, matching the wallet being authenticated. A vault challenge is a taker challenge for the operator wallet plus `\nVault: {vault_pda}` with no trailing newline, and the vault must be the one you asked to authenticate. Reject any other text.
 
 Then sign the original UTF-8 bytes: no normalization, prefix or hashing. The fixed text is the authentication domain. The same key signs orders, so signing arbitrary text from an endpoint can authorize an order.
 
-Managed SDK clients validate before signing. Raw clients use `validate_maker_auth_challenge` (Rust) or `validateAuthChallenge` (TypeScript). These check format only. Which endpoint to trust is your configuration.
+Managed SDK clients (`acta-maker-sdk` 0.5.2, `@acta-markets/ts-sdk` 0.2.2) validate before signing. Raw clients use `validate_maker_auth_challenge` (Rust) or `validateAuthChallenge` (TypeScript). These check format only. For `/vault`, use `validate_vault_auth_challenge(challenge, operator, vault)` (Rust) or `assertVaultAuthChallenge(challenge, operator, vault)` (TypeScript), which also bind the operator and vault; `validateAuthChallenge` rejects a vault challenge. Which endpoint to trust is your configuration.
 
 ### AuthChallenge (client -> server)
 
@@ -148,13 +222,13 @@ Managed SDK clients validate before signing. Raw clients use `validate_maker_aut
 }
 ```
 
-For a maker, `pubkey` is the `maker_owner` pubkey registered on-chain. Sign with the registered quote-signing key. The server looks up `maker_owner` and verifies against that key.
+For a maker, `pubkey` is the `maker_owner` pubkey registered on-chain. Sign with the registered `quote_signing` key, the same key that signs quotes. The server looks up `maker_owner` and verifies against its `quote_signing` key.
 
 For a taker, `pubkey` is the taker's wallet pubkey (the `Wallet:` value in the challenge). The signature is verified against it.
 
 ### Auth constraints
 
-- Max auth attempts per connection: `3`. The connection closes after the third failure.
+- Max auth attempts per connection: `3`. The 4th attempt closes the connection.
 - Auth deadline after challenge issued: `15s`.
 
 ### Ping / Pong
@@ -175,6 +249,21 @@ For a taker, `pubkey` is the taker's wallet pubkey (the `Wallet:` value in the c
 ```
 
 The server sends protocol pings every 30s and closes the connection after 90s without inbound traffic. Answering protocol pings is enough. Application `Ping` is optional.
+
+### Connection close codes
+
+When the server closes a connection itself, the close frame carries one of these codes, with the name as the close reason. An `Error` or `AuthError` frame naming the cause usually comes first. Other closes (blacklist, expired session, too many parse or auth errors, shutdown) send a close frame without a code; the error frame before it says why.
+
+| Code | Reason | Cause |
+|---|---|---|
+| `4000` | `idle_timeout` | No traffic within the idle timeout |
+| `4001` | `auth_timeout` | Authentication not completed within the auth deadline |
+| `4002` | `slow_consumer` | A critical message could not be queued for you, or a socket write to you timed out |
+| `4003` | `rate_limited` | Connection or wallet message rate exceeded, or you sent faster than the server could process (inbound queue full). Quote-plane messages never trip the message rate; see the quote bucket |
+| `4004` | `session_replaced` | A newer connection authenticated as the same maker or taker session |
+| `4005` | `hello_timeout` | `Hello` not received in time |
+
+A rejected WebSocket upgrade returns an HTTP status with the same JSON body as the HTTP API, `{"error": "...", "code": "..."}`: `403 origin_not_allowed`, `429 rate_limited` (too many connections from your IP), `503 too_many_connections`, `503 server_overloaded`, `503 server_shutting_down`.
 
 ### Logout
 
@@ -232,13 +321,7 @@ The protocol charges a fee per trade, set per quote mint in basis points. The on
 }
 ```
 
-`reason` is a `snake_case` code. `message` is optional and may be omitted.
-
-Current `reason` codes:
-- `session_expired`, `already_authenticated`
-- `auth_timeout`, `too_many_auth_attempts`
-- `invalid_pubkey`, `invalid_signature`, `pubkey_mismatch`, `challenge_mismatch`
-- `maker_not_registered`
+`reason` is a `snake_case` code from the [WS error code catalog](#ws-error-codes) (rows marked `AuthError`). `message` is optional and may be omitted.
 
 ## Error format
 
@@ -270,7 +353,7 @@ Endpoint-policy violations use a typed error rather than closing the socket:
 }
 ```
 
-Endpoint values are `maker`, `maker_data`, and `taker`.
+Endpoint values are `maker`, `maker_data`, `taker`, and `vault`.
 
 ### RequestError: request-correlated errors
 
@@ -287,6 +370,26 @@ Sent when the failure belongs to a client request. `request_id` echoes the reque
 ```
 
 The inner `error` has the same `ServerError` shape as `Error.data`.
+
+Failures of `SubmitSignedSponsoredTx` and `SwapSubmit` also carry `delivery`:
+
+```json
+{
+  "type": "RequestError",
+  "data": {
+    "request_id": "uuid",
+    "error": { "type": "Generic", "data": { "code": "vault_swap_quote_expired", "message": "Vault swap quote expired" } },
+    "delivery": "not_forwarded"
+  }
+}
+```
+
+`delivery` describes this one request only:
+
+- `not_forwarded`: rejected before it reached the keeper (routing gates, validation, a pre-enqueue rejection).
+- `unknown`: it may have reached the keeper pipeline (timeouts, queue errors, Core timeout, `order_already_submitted`). Resolve it with `GetOrderStatus` (orders) or `GetSwapStatus` / `SwapSettled` (Vault swaps).
+
+It says nothing about earlier attempts with the same signed transaction. Treat an order or swap as not executed only if every attempt returned `not_forwarded`. If any attempt timed out, was lost with the connection, or returned `unknown`, resolve it by status before re-signing.
 
 Both fire `error` in the TypeScript SDK (see [TypeScript client SDK](../quickstart/web-client-ts-sdk.md)).
 
@@ -324,23 +427,102 @@ Typed variant examples:
 }
 ```
 
-### Common `generic.code` values
+Generic codes and `AuthError` reasons are listed in the [WS error code catalog](#ws-error-codes).
 
-- `parse_error`
-- `message_too_large`
-- `too_many_parse_errors`
-- `hello_required`
-- `hello_timeout`
-- `hello_already_sent`
-- `session_replaced`
-- `session_expired`
-- `already_authenticated`
-- `trading_paused`
-- `internal_error`
+A wire `u64` can exceed `Number.MAX_SAFE_INTEGER`. The TS SDK holds most WS amounts as `number`. For an oversized amount it reports `unsafe_integer` and drops the whole frame, so the matching event never fires; recover state with a read (`GetMyActiveRfqs`, `GetOrderStatus`). Inbound nonces are parsed losslessly. For full-range amounts in raw JSON, use a lossless parser and bigint. `BigInt(JSON.parse(...).amount)` is already rounded.
 
-The list grows; handle unknown codes.
+## WS error codes
 
-A wire `u64` can exceed `Number.MAX_SAFE_INTEGER`. The TS SDK holds most WS amounts as `number`. For an oversized amount it reports `unsafe_integer` and still dispatches the message. Do not sign or account with those rounded values. Inbound nonces are parsed losslessly. For full-range amounts in raw JSON, use a lossless parser and bigint. `BigInt(JSON.parse(...).amount)` is already rounded.
+The closed set of `Generic.code` values (in `Error.data` and `RequestError.data.error`) and `AuthError.reason` values. The server sends nothing outside this table. Typed `ServerError` variants (`RfqNotFound`, `Unauthenticated`, `WrongEndpoint`, …) are not codes. Keep a fallback branch for codes added later.
+
+| Code | Frames | Meaning |
+|---|---|---|
+| `parse_error` | Generic | The frame is not valid JSON or not a known message |
+| `too_many_parse_errors` | Generic | Consecutive parse errors exhausted the budget; the connection closes |
+| `hello_required` | Generic | The first message was not `Hello`; the connection closes |
+| `hello_timeout` | Generic | No `Hello` in time; followed by close `4005` |
+| `hello_already_sent` | Generic | A second `Hello` on one connection |
+| `rate_limited` | Generic | Connection or wallet rate limits close with `4003`; a per-category limit rejects only the message |
+| `server_overloaded` | Generic | The admission queue for this message class is full; retry with backoff. A full connection command queue sends it uncorrelated and closes with `4003` |
+| `server_busy` | Generic, AuthError | A bounded internal queue (auth, RFQ creation) is full; retry |
+| `internal_error` | Generic | Unexpected server failure; the message is sanitized |
+| `temporarily_unavailable` | Generic, AuthError | A dependency (database, Core, registry) is not ready; retry with backoff |
+| `clock_error` | Generic, AuthError | The server clock is before the Unix epoch |
+| `trading_paused` | Generic | Venue trading is paused; order-path messages are rejected |
+| `batch_quotes_too_large` | Generic | `BatchQuotes` exceeds `max_batch_quotes` |
+| `session_replaced` | Generic | A newer connection took over this session; do not reconnect automatically |
+| `session_expired` | Generic, AuthError | The session or resume credential expired; authenticate again |
+| `session_limit_exceeded` | AuthError | Too many concurrent sessions for this identity |
+| `session_conflict` | Generic | Core no longer binds this session to the identity |
+| `blacklisted` | Generic, AuthError | The identity is blacklisted; terminal |
+| `maker_unregistered` | Generic | The maker left the registry while connected; the connection closes |
+| `maker_not_registered` | Generic, AuthError | The pubkey is not a registered maker |
+| `auth_timeout` | AuthError | Authentication did not finish in time; followed by close `4001` |
+| `too_many_auth_attempts` | AuthError | Auth attempt budget exhausted; the connection closes |
+| `already_authenticated` | AuthError | Auth started on an authenticated connection |
+| `challenge_not_issued` | AuthError | `AuthChallenge` without a preceding `AuthRequest` |
+| `challenge_mismatch` | AuthError | The signed challenge differs from the issued one |
+| `invalid_pubkey` | Generic, AuthError | A pubkey field is not valid base58 |
+| `pubkey_mismatch` | AuthError | `AuthChallenge.pubkey` differs from the `StartAuth` pubkey |
+| `invalid_signature` | AuthError | The challenge signature does not verify |
+| `invalid_operator` | AuthError | The Vault operator is not a valid pubkey |
+| `operator_mismatch` | AuthError | The Vault challenge was signed by another operator |
+| `invalid_vault` | Generic, AuthError | `vault_pda` is not a valid address |
+| `vault_auth_not_started` | AuthError | Vault challenge answered without `StartVaultAuth` |
+| `vault_auth_required` | Generic | A Vault message on a session without Vault authority |
+| `vault_resume_not_supported` | AuthError | `ResumeAuth` on `/vault` |
+| `vault_operator_unauthorized` | AuthError | The operator holds no current grant for the Vault |
+| `vault_authorization_unavailable` | AuthError | Vault authority could not be read; retry |
+| `vault_session_invalidated` | Generic | The Vault grant changed or was revoked; the session closes |
+| `invalid_vault_subscription` | Generic | The subscription is not allowed for a Vault session |
+| `subscription_scope_too_large` | Generic | The subscription mint filter exceeds its limit |
+| `history_projection_incomplete` | Generic | A history read lacks listener metadata; retrying does not help until reconciliation |
+| `invalid_position_status` | Generic | Unknown position status filter |
+| `invalid_cursor` | Generic | Malformed pagination cursor |
+| `invalid_query_scope` | Generic | `limit` or `cursor` sent with `scope: live` |
+| `market_not_found` | Generic | The market is not in the registry |
+| `invalid_program_id` | Generic | The server program id is misconfigured |
+| `invalid_strike_notional` | Generic | Strike × quantity is zero or not representable on chain |
+| `invalid_quantity_size_rule` | Generic | The quantity is outside the size rule |
+| `missing_size_rule_for_underlying_mint` | Generic | No size rule is configured for the underlying |
+| `invalid_underlying_mint_key` | Generic | The tick configuration key is not a valid mint |
+| `missing_tick_for_underlying_mint` | Generic | No tick is configured for the underlying |
+| `ladder_strike_source_unavailable` | Generic | The strike ladder source failed |
+| `invalid_strikes` | Generic | The requested strike set is invalid |
+| `duplicate_rfq_id` | Generic | The RFQ id already exists |
+| `rfq_closed` | Generic | The RFQ is closed |
+| `market_finalized` | Generic | The market is finalized |
+| `market_disabled` | Generic | The market is disabled |
+| `market_expired` | Generic | The market expired |
+| `market_pre_expiry` | Generic | The market is in its pre-expiry window |
+| `quote_identity_mismatch` | Generic | The quote does not match its order binding |
+| `quote_refresh_required` | Generic | The quote must be refreshed; the maker got `QuoteRefreshRequested` |
+| `duplicate_quote` | Generic | Duplicate quote `order_id` |
+| `resource_limit` | Generic | A per-identity resource limit was reached |
+| `kernel_timeout` | Generic | Core did not answer in time; a submission's outcome is unknown |
+| `caps_authority_unavailable` | Generic | Quote risk authority changed; request a new quote |
+| `vault_not_tradable` | Generic | A Vault counterparty cannot take this position now |
+| `invalid_vault_counterparty` | Generic | Writer and holder must be distinct Vaults |
+| `tx_build_failed` | Generic | The sponsored transaction could not be built; the message is from a fixed list |
+| `order_already_submitted` | Generic | The order was already handed to settlement |
+| `sponsored_tx_not_ready` | Generic | The sponsored transaction is not ready yet |
+| `invalid_signed_tx` | Generic | The signed transaction does not decode or match |
+| `invalid_amount` | Generic | The swap amount is not a positive u64 string |
+| `vault_authorization_failed` | Generic | Vault authorization is no longer valid |
+| `vault_projection_unavailable` | Generic | Vault state is temporarily unavailable |
+| `vault_safety_mode` | Generic | Vault safety mode forbids the action |
+| `vault_pending_capital` | Generic | The idle capital window must be closed and unpriced |
+| `vault_trading_closed` | Generic | The Vault cycle does not permit trading |
+| `vault_mismatch` | Generic | The request Vault differs from the session Vault |
+| `vault_governance_required` | Generic | Recovery and closing swaps need governance |
+| `vault_swap_invalid_state` | Generic | Vault state does not permit this swap |
+| `vault_swap_invalid_amount` | Generic | The swap amount is invalid for the Vault |
+| `vault_swap_idempotency_conflict` | Generic | The swap id is already bound to different swap data |
+| `vault_swap_quote_expired` | Generic | The swap quote expired; request a new one |
+| `vault_swap_signed_tx_rejected` | Generic | The signed swap transaction was rejected |
+| `vault_swap_oracle_stale` | Generic | The Pyth price is too old; retry within seconds |
+| `vault_swap_route_unavailable` | Generic | No swap route right now |
+| `vault_swap_service_unavailable` | Generic | Another transient swap-service failure |
 
 ## Correlation semantics
 
@@ -349,7 +531,9 @@ Correlation is per request, via `request_id` on messages that have a defined res
 - `Subscribe` / `Unsubscribe` carry a mandatory `request_id`. The server echoes it in `SubscribeAck` / `UnsubscribeAck`, and the `subscribed` / `unsubscribed` arrays contain only the channels this call added or removed, not the full subscription list.
 - `GetSubscriptions` carries `request_id`. `Subscriptions` echoes it.
 - Query-style `Get*` operations require `request_id` and echo it in their responses.
+- `RfqRequest`, `AcceptQuote` and `SubmitSignedSponsoredTx` require `request_id` and get exactly one reply: `CommandAccepted { request_id }` or `RequestError { request_id, error }`, including for routing gates (rate limit, pause, invite gate, wrong endpoint, overload). `CommandAccepted` means the server accepted the command, never that anything landed on chain. Lifecycle pushes (`RfqCreated`, `OrderAccepted`, `OrderFailed`, …) stay keyed by `rfq_id` / `order_id` and may arrive before or after the receipt. `RfqRequest.request_id` is also the idempotency key: a repeated `request_id` returns the RFQ it created, echoed in `RfqCreated.request_id`.
 - Exception: `GetTokenMarketsInfo` can return an uncorrelated error, or no response for an empty market set. See [its failure behavior](taker-api.md#tokenmarketsinfo).
+- Exception: when the server's inbound queue for a connection is full, it sends an uncorrelated `Error { code: "server_overloaded" }` and closes the socket with `4003 rate_limited`. Every request still outstanding on that connection has an unknown outcome. Resolve submissions by status after reconnecting.
 - Indicative pricing uses `request_id` on both `IndicativePricesRequest` (server → maker) and `IndicativePricesResponse` (maker → server).
 - Broadcasts (`RfqBroadcast`, `TradeExecuted`, `StatsUpdate`, etc.) don't carry `request_id`.
 
@@ -402,9 +586,54 @@ Trade lifecycle and payoff: [Protocol flow](protocol-flow.md).
 | `stats` | `StatsUpdate` | Global venue stats. |
 | `chain_events` | `ChainEvent` (position opened / settled / liquidated, market finalized) | Anyone. A taker tracks position outcomes (settlement / liquidation) here. |
 | `markets` | `MarketCreated`, `MarketFinalized` | Anyone tracking the tradable market set. |
-| `positions` | None (no public producer) | `PositionUpdated` is delivered owner-direct to the maker's session by PDA lookup, not via this channel. The channel yields nothing for takers. |
+| `vaults` | `VaultCatalogChanged`, `VaultProjectionAdvanced` | Maker and taker sessions that follow vaults get both: `VaultProjectionAdvanced` for every vault and `VaultCatalogChanged`. `/vault` operator sessions are subscribed automatically and receive only `VaultProjectionAdvanced` for their own vault, never `VaultCatalogChanged`. |
+
+There is no `positions` channel: `PositionUpdated` and `MakerCapsUpdated` are delivered owner-direct to the maker's session, with no subscription.
+
+### Delivery criticality
+
+When your outbound queue is full, the server handles a pushed message in one of two ways:
+
+- **Critical**: the message is dropped and the connection is closed with `4002 slow_consumer`. Responses and some pushes are retried briefly first; lifecycle pushes fanned out from chain events are not. Reconnect and re-read state.
+- **Best-effort**: the message is dropped silently and the connection stays open.
+
+| Audience | Critical | Best-effort |
+|---|---|---|
+| `/maker` | `RfqBroadcast`, `QuoteReceived`, `QuoteAcknowledged`, `QuoteRefreshRequested`, `OrderAccepted`, `SponsoredTxToSign`, `OrderSubmitted`, `OrderConfirmed`, `OrderFailed`, `MarketCreated`, `MarketFinalized`, `VaultCatalogChanged`, `VaultProjectionAdvanced` | `TradeExecuted`, `ChainEvent`, `StatsUpdate`, `RfqSkipped`, `IndicativePricesRequest` |
+| `/taker` | everything except `StatsUpdate` | `StatsUpdate` |
+| `/maker/data`, `/vault` | everything | — |
+
+Messages addressed to your session alone (responses, your own lifecycle, `PositionUpdated`, `MakerCapsUpdated`) always follow the critical rule.
 
 `TradeExecuted` can be lost, delayed or repeated. Dedupe by `trade.id`. Do not count frames as trades.
+
+### VaultCatalogChanged
+
+Sent on the `vaults` channel after a vault is created, re-delegated or closed, and only then. It carries only the vault address. Re-list vaults (`GET /api/v1/vaults`) to pick up the change.
+
+It is critical on `/maker` and `/taker` (see [Delivery criticality](#delivery-criticality)): if your outbound queue is full the frame is dropped and the server closes the connection, so a loss always shows up as a disconnect. It is not replayed, so re-list vaults after every connect and reconnect as well.
+
+```json
+{ "type": "VaultCatalogChanged", "data": { "vault_pda": "VaultPdaBase58" } }
+```
+
+### VaultProjectionAdvanced
+
+Sent on the `vaults` channel when the indexed vault row changed. Reload `GET /api/v1/vaults/{vault_pda}`. Maker and taker subscribers receive it for every vault; a `/vault` session receives it for its own vault only.
+
+```json
+{
+  "type": "VaultProjectionAdvanced",
+  "data": {
+    "vault_pda": "VaultPdaBase58",
+    "version": 42,
+    "slot": 312345678,
+    "transaction_index": 3,
+    "signature": "TxSignatureBase58",
+    "event_index": 0
+  }
+}
+```
 
 ## Timeout hierarchy
 
