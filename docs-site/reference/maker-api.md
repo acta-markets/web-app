@@ -174,13 +174,43 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
 
 ### Server -> Maker (owner-direct, no subscription)
 
-- `PositionUpdated`, `MakerCapsUpdated`
+- `PositionUpdated`, `MakerCapsUpdated`, `TradeExecuted`
 
 ### Server -> Maker (broadcast if subscribed)
 
-- `TradeExecuted`, `StatsUpdate`, `ChainEvent`
+- `StatsUpdate`, `ChainEvent`
 - `MarketCreated`, `MarketFinalized`
 - `VaultCatalogChanged`, `VaultProjectionAdvanced` (`vaults` channel; see [WebSocket conventions](ws-common.md#vaultcatalogchanged)). `VaultProjectionAdvanced` arrives for every vault; `VaultCatalogChanged` is not replayed, so re-list vaults after (re)connect too.
+
+### Delivery by endpoint
+
+Pushes reach a session in one of three ways: a channel the session subscribed
+to (`Subscribe` is accepted on `/maker` and `/vault`, not on `/maker/data`),
+the session that sent the quote, or the maker owner's `/maker` session
+whatever it subscribed to. Query responses (`MyQuotes`, `MakerPositions`,
+`MmSummary`, ...) return on the connection that asked.
+
+| Message | `/maker` | `/maker/data` | `/vault` |
+|---|---|---|---|
+| `RfqBroadcast` | `rfqs` channel, within the mint scope | no | sessions with `sign_maker_quotes`, no subscription |
+| `RfqSkipped` | `rfqs` channel, makers the caps prefilter skipped | no | sessions with `sign_maker_quotes` the prefilter skipped |
+| `IndicativePricesRequest` | `rfqs` channel | no | no |
+| `QuoteAcknowledged`, `QuoteRejected`, `QuoteBestStatus`, `QuoteOutbid`, `QuoteSelected`, `QuoteRefreshRequested`, `QuoteExpired`, `QuoteCancelled` | the session that sent the quote | no | the session that sent the quote |
+| `QuoteFilled` | the session that sent the winning quote | no | the session that sent the winning quote |
+| `RfqClosed`, `RfqAvailableAgain` | every session that quoted the RFQ | no | every session that quoted the RFQ, and the taker session |
+| `OrderAccepted`, `SponsoredTxToSign`, `OrderSubmitted`, `OrderConfirmed`, `OrderFailed` | never: these go to the taker | no | only as the taker of its own RFQ |
+| `TradeExecuted` | owner's session, no subscription | no | no |
+| `PositionUpdated`, `MakerCapsUpdated` | owner's session, no subscription | no | no |
+| `ReferenceChanged` | every session | every session | every session |
+| `MarketCreated`, `MarketFinalized` | `markets` channel | no | no |
+| `StatsUpdate` / `ChainEvent` | `stats` / `chain_events` channel | no | no |
+| `VaultCatalogChanged` | `vaults` channel | no | no |
+| `VaultProjectionAdvanced` | `vaults` channel | no | `vaults` channel, own vault only |
+
+A maker learns of its fill from `QuoteFilled` (and `TradeExecuted`), never from
+`OrderConfirmed`. `PositionUpdated` and `MakerCapsUpdated` reach only the
+owner's `/maker` session; a client that reads on `/maker/data` alone recovers
+them with `GetMakerPositions`, `GetMyCaps` or `GetMmSummary`.
 
 ## Quote flow
 
@@ -451,6 +481,9 @@ Keyed by `(rfq_id, strike)`, not `order_id`. With several strikes per RFQ, keep 
   "data": {
     "rfq_id": "uuid",
     "order_id": "0x...64chars",
+    "market_pda": "MarketPdaBase58",
+    "expiry_ts": 1710489600,
+    "position_type": "covered_call",
     "taker": "TakerPubkeyBase58",
     "price": 50000000,
     "quantity": 1000000000,
@@ -462,10 +495,10 @@ Keyed by `(rfq_id, strike)`, not `order_id`. With several strikes per RFQ, keep 
 }
 ```
 
-`QuoteFilled` carries fill details for the winning maker. `RfqClosed` is the terminal RFQ event.
+`QuoteFilled` carries fill details for the winning maker. `RfqClosed` is the terminal RFQ event. `market_pda`, `expiry_ts` (market expiry, Unix seconds; `null` if the server no longer knows the market, so resolve it from `market_pda`) and `position_type` identify the market without the RFQ, so a fill can be attributed after a restart; the market's mint decimals come from `GetMarketDescriptors`. `quantity` is underlying atoms and `price` is 1e9-scaled per underlying token, so the gross premium (before protocol fees) in quote atoms is `floor(price * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))`, the contract's rounding (Rust SDK `total_premium_quote_atoms`, TS SDK `totalPremiumQuoteAtoms`).
 
 On a fill:
-- the winning maker receives `QuoteFilled`, then `RfqClosed`
+- the winning maker receives `RfqClosed`, then `QuoteFilled`; accept fill details after the RFQ has closed
 - the taker receives `OrderConfirmed`, then `RfqClosed`
 - drop RFQ state only on `RfqClosed`
 
@@ -842,6 +875,8 @@ List of all distinct market expiry timestamps (Unix seconds).
 Each mint once (see [`TokenInfo`](ws-common.md#tokeninfo)). Underlyings carry `size_rule`, `strike_tick` and `quote_mints`.
 
 ### MarketDescriptorInfo (from `MarketDescriptors`)
+
+Token decimals live here and nowhere in `RfqBroadcast`: `RfqBroadcast.quantity`, `QuoteFilled.quantity` and `size_rule` are underlying atoms. Cache `underlying_decimals` / `quote_decimals` by `market.market_pda` (the Rust SDK's `MarketDecimals` does this from `MarketDescriptors`).
 
 ```typescript
 type MarketDescriptor = {

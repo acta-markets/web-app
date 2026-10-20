@@ -115,12 +115,9 @@ export function VaultPerformanceCard({
         )}
       </div>
 
-      <p className="mt-3 font-mono text-xs leading-[1.5] text-content-secondary">
-        {series === "return"
-          ? "Compounded return of completed cycles, after fees. Within a range, the return earned inside it."
-          : `Vault equity in ${symbol} at each cycle boundary, including deposits and withdrawals.`}
-        {truncated ? " Showing the latest 200 cycles." : ""}
-      </p>
+      {truncated ? (
+        <p className="mt-3 font-mono text-xs leading-[1.5] text-content-secondary">Showing the latest 200 cycles.</p>
+      ) : null}
     </AppCard>
   );
 }

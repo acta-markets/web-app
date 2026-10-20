@@ -18,6 +18,7 @@ const client = () => (httpClient ??= new ActaHttpClient({ baseUrl: getApiBaseUrl
 
 export const fetchVaults = (signal?: AbortSignal) => client().vaults(signal);
 export const fetchVault = (pda: string, signal?: AbortSignal) => client().vault(pda, signal);
+export const fetchVaultExposure = (pda: string, signal?: AbortSignal) => client().vaultExposure(pda, signal);
 export const fetchVaultPositions = (pda: string, query?: VaultPositionsQuery, signal?: AbortSignal) =>
   client().vaultPositions(pda, query, signal);
 export const fetchVaultCycles = (pda: string, query?: VaultPageQuery, signal?: AbortSignal) =>

@@ -1,15 +1,6 @@
 {
-  "about": "Dev-only fixture vaults, served when NEXT_PUBLIC_VAULTS_SAMPLE=1 in development. Each entry holds the UI metadata, the vault and its cycles in the HTTP API shapes (amounts are base-unit strings, newest cycle first) and the wallet position. Timestamps were written against `anchor` and are shifted to the current time when loaded. `pricesUsd` holds a USD price per deposit asset, used for TVL in dollars.",
+  "about": "Dev-only fixture vaults, served when NEXT_PUBLIC_VAULTS_SAMPLE=1 in development. Each entry holds the UI metadata, the vault, its cycles and exposure in the HTTP API shapes (amounts are base-unit strings, newest cycle first) and the wallet position with its vault history (newest first). Timestamps were written against `anchor` and are shifted to the current time when loaded.",
   "anchor": 1791806400,
-  "pricesUsd": {
-    "jitoSOL": 143.81,
-    "NVDAx": 227.87,
-    "USDC": 1,
-    "HYPE": 85.35,
-    "ZEC": 1284.94,
-    "SPYx": 782.63,
-    "SPCX": 165.01
-  },
   "vaults": [
     {
       "key": "jitosol",
@@ -56,6 +47,10 @@
         "last_hwm_reset_ts": "0",
         "last_settlement_ts": "0",
         "cap_limit": "0",
+        "capacity": {
+          "cap_limit": "0",
+          "remaining": null
+        },
         "capital_fallback_delay_secs": "43200",
         "deposit_window_set_ts": null,
         "main_balance": null,
@@ -76,13 +71,57 @@
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
+        "created_at": "1784311200",
+        "generation_started_at": "1784484000",
+        "tvl_usd_1e9": "101796870746659",
+        "price_time": "1791806380",
+        "premium": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "cycle": {
+              "received": "0",
+              "paid": "0"
+            },
+            "generation": {
+              "received": "8912400000",
+              "paid": "0"
+            }
+          }
+        ],
+        "fees": {
+          "management_fee_assessed": "0",
+          "performance_fee_assessed": "0",
+          "realized_fee_value": "0"
+        },
+        "depositors_in_generation": 412,
         "performance": {
-          "status": "annualized",
-          "annualized_return_pct": 9.999621651577993,
-          "cycles_completed": 12,
-          "last_cycle_return_pct": 0.3068,
-          "cumulative_return_pct": 2.2944337351223476,
-          "track_record_secs": "7236000"
+          "capital_generation": "0",
+          "computed_at": "1791806400",
+          "covered": true,
+          "returns": {
+            "7d": {
+              "return_pct": 0.3068,
+              "from_time": "1791115200",
+              "to_time": "1791720000"
+            },
+            "30d": {
+              "return_pct": 0.866801,
+              "from_time": "1788696000",
+              "to_time": "1791720000"
+            },
+            "90d": null,
+            "all": {
+              "return_pct": 2.294433,
+              "from_time": "1784484000",
+              "to_time": "1791720000"
+            }
+          },
+          "apy_30d": 11.071765,
+          "apy_90d": null,
+          "max_drawdown_pct": 0.268,
+          "worst_cycle_return_pct": -0.268,
+          "losing_cycles": 2,
+          "cycles_completed": 12
         }
       },
       "cycles": [
@@ -284,7 +323,14 @@
         "mainTokenBalance": "25000000000",
         "nativeLamports": null,
         "depositRequest": null,
-        "withdrawRequest": null
+        "withdrawRequest": null,
+        "history": []
+      },
+      "exposure": {
+        "vault_pda": "BBYt9VSPf118Kt2kGhgyH9rapBqiNoQhHvWqtXvdiKAc",
+        "as_of": "1791806396",
+        "positions": [],
+        "totals": []
       }
     },
     {
@@ -331,6 +377,10 @@
         "last_hwm_reset_ts": "0",
         "last_settlement_ts": "0",
         "cap_limit": "0",
+        "capacity": {
+          "cap_limit": "0",
+          "remaining": null
+        },
         "capital_fallback_delay_secs": "43200",
         "deposit_window_set_ts": null,
         "main_balance": null,
@@ -351,13 +401,57 @@
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
+        "created_at": "1785348000",
+        "generation_started_at": "1785520800",
+        "tvl_usd_1e9": "183025469044861",
+        "price_time": "1791806380",
+        "premium": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "cycle": {
+              "received": "1288500000",
+              "paid": "0"
+            },
+            "generation": {
+              "received": "11904200000",
+              "paid": "0"
+            }
+          }
+        ],
+        "fees": {
+          "management_fee_assessed": "0",
+          "performance_fee_assessed": "0",
+          "realized_fee_value": "0"
+        },
+        "depositors_in_generation": 96,
         "performance": {
-          "status": "annualized",
-          "annualized_return_pct": 27.445809661692753,
-          "cycles_completed": 10,
-          "last_cycle_return_pct": 1.0963,
-          "cumulative_return_pct": 5.244781435350876,
-          "track_record_secs": "6026400"
+          "capital_generation": "0",
+          "computed_at": "1791806400",
+          "covered": true,
+          "returns": {
+            "7d": {
+              "return_pct": 1.0963,
+              "from_time": "1790942400",
+              "to_time": "1791547200"
+            },
+            "30d": {
+              "return_pct": 1.214196,
+              "from_time": "1789128000",
+              "to_time": "1791547200"
+            },
+            "90d": null,
+            "all": {
+              "return_pct": 5.244781,
+              "from_time": "1785520800",
+              "to_time": "1791547200"
+            }
+          },
+          "apy_30d": 15.816575,
+          "apy_90d": null,
+          "max_drawdown_pct": 1.4822,
+          "worst_cycle_return_pct": -1.4822,
+          "losing_cycles": 2,
+          "cycles_completed": 10
         }
       },
       "cycles": [
@@ -539,11 +633,74 @@
         }
       ],
       "position": {
-        "shareBalance": "0",
+        "shareBalance": "90000000",
         "mainTokenBalance": "250000000",
         "nativeLamports": null,
         "depositRequest": null,
-        "withdrawRequest": null
+        "withdrawRequest": null,
+        "history": [
+          {
+            "vault": "8oDdcWSv5QtSfEE51K7guQL4uy3xbmisoqrjawqmY3Vm",
+            "action": "deposit_processed",
+            "amount": "93584009",
+            "second_amount": "0",
+            "shares": "90000000",
+            "boundary_price": "1039822332",
+            "event_time": "1789214400",
+            "transaction_signature": "nvda301111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ]
+      },
+      "exposure": {
+        "vault_pda": "8oDdcWSv5QtSfEE51K7guQL4uy3xbmisoqrjawqmY3Vm",
+        "as_of": "1791806396",
+        "positions": [
+          {
+            "position": "NvdaCa11Wr1ter1111111111111111111111111111",
+            "market": "1111111111111111111111111111ret1rW11aCadvN",
+            "position_type": "covered_call",
+            "role": "writer",
+            "status": "funded",
+            "strike": "240000000000",
+            "quantity": "15000000000",
+            "expiry": "1792130400",
+            "underlying_mint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 8,
+            "quote_decimals": 6,
+            "spot": "227870000000",
+            "spot_time": "1791806396",
+            "distance_pct": 5.323211,
+            "itm": false,
+            "intrinsic": "0"
+          },
+          {
+            "position": "NvdaCa11Wr1ter2222222222222222222222222222",
+            "market": "2222222222222222222222222222ret1rW11aCadvN",
+            "position_type": "covered_call",
+            "role": "writer",
+            "status": "funded",
+            "strike": "220000000000",
+            "quantity": "6000000000",
+            "expiry": "1792130400",
+            "underlying_mint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 8,
+            "quote_decimals": 6,
+            "spot": "227870000000",
+            "spot_time": "1791806396",
+            "distance_pct": -3.453724,
+            "itm": true,
+            "intrinsic": "-472200000"
+          }
+        ],
+        "totals": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "notional_at_strike": "49200000000",
+            "outstanding_intrinsic": "-472200000"
+          }
+        ]
       }
     },
     {
@@ -591,6 +748,10 @@
         "last_hwm_reset_ts": "0",
         "last_settlement_ts": "0",
         "cap_limit": "2158855472043",
+        "capacity": {
+          "cap_limit": "2158855472043",
+          "remaining": "20000000000"
+        },
         "capital_fallback_delay_secs": "43200",
         "deposit_window_set_ts": null,
         "main_balance": null,
@@ -611,13 +772,64 @@
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
+        "created_at": "1784224800",
+        "generation_started_at": "1784397600",
+        "tvl_usd_1e9": "2108855472043000",
+        "price_time": "1791806380",
+        "premium": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "cycle": {
+              "received": "2842000000",
+              "paid": "310500000"
+            },
+            "generation": {
+              "received": "30115600000",
+              "paid": "2984100000"
+            }
+          }
+        ],
+        "fees": {
+          "management_fee_assessed": "0",
+          "performance_fee_assessed": "0",
+          "realized_fee_value": "0"
+        },
+        "depositors_in_generation": 1310,
         "performance": {
-          "status": "annualized",
-          "annualized_return_pct": 6.85896499567921,
-          "cycles_completed": 12,
-          "last_cycle_return_pct": 0.147,
-          "cumulative_return_pct": 1.5738036120222842,
-          "track_record_secs": "7236000"
+          "capital_generation": "0",
+          "computed_at": "1791806400",
+          "covered": true,
+          "returns": {
+            "7d": {
+              "return_pct": 0.147,
+              "from_time": "1791028800",
+              "to_time": "1791633600"
+            },
+            "30d": {
+              "return_pct": 0.785547,
+              "from_time": "1789214400",
+              "to_time": "1791633600"
+            },
+            "90d": null,
+            "all": {
+              "return_pct": 1.573803,
+              "from_time": "1784397600",
+              "to_time": "1791633600"
+            }
+          },
+          "apy_30d": 9.988038,
+          "apy_90d": null,
+          "max_drawdown_pct": 0.581024,
+          "worst_cycle_return_pct": -0.5072,
+          "losing_cycles": 2,
+          "cycles_completed": 12
+        },
+        "metadata": {
+          "name": "USDC",
+          "curator": "Velar",
+          "strategy": "Sells weekly SOL puts, cash secured",
+          "website": "https://velar.example",
+          "twitter": "velar_fi"
         }
       },
       "cycles": [
@@ -831,14 +1043,116 @@
         }
       ],
       "position": {
-        "shareBalance": "0",
+        "shareBalance": "950000000",
         "mainTokenBalance": "1250000000",
         "nativeLamports": null,
         "depositRequest": {
           "amount": "500000000",
           "createdAt": 1791734400
         },
-        "withdrawRequest": null
+        "withdrawRequest": null,
+        "history": [
+          {
+            "vault": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
+            "action": "withdraw_processed",
+            "amount": "151173168",
+            "second_amount": "0",
+            "shares": "150000000",
+            "boundary_price": "1007821123",
+            "event_time": "1790078400",
+            "transaction_signature": "usdc201111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "vault": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
+            "action": "deposit_processed",
+            "amount": "502207474",
+            "second_amount": "0",
+            "shares": "500000000",
+            "boundary_price": "1004414948",
+            "event_time": "1788350400",
+            "transaction_signature": "usdc401111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "vault": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
+            "action": "deposit_processed",
+            "amount": "603041400",
+            "second_amount": "0",
+            "shares": "600000000",
+            "boundary_price": "1005069000",
+            "event_time": "1785758400",
+            "transaction_signature": "usdc701111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ]
+      },
+      "exposure": {
+        "vault_pda": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
+        "as_of": "1791806396",
+        "positions": [
+          {
+            "position": "So1Put5o1d111111111111111111111111111111111",
+            "market": "111111111111111111111111111111111d1o5tuP1oS",
+            "position_type": "cash_secured_put",
+            "role": "writer",
+            "status": "funded",
+            "strike": "160000000000",
+            "quantity": "4000000000000",
+            "expiry": "1792216800",
+            "underlying_mint": "So11111111111111111111111111111111111111112",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": "172400000000",
+            "spot_time": "1791806396",
+            "distance_pct": 7.192575,
+            "itm": false,
+            "intrinsic": "0"
+          },
+          {
+            "position": "So1Put5o1d222222222222222222222222222222222",
+            "market": "222222222222222222222222222222222d1o5tuP1oS",
+            "position_type": "cash_secured_put",
+            "role": "writer",
+            "status": "funded",
+            "strike": "180000000000",
+            "quantity": "2500000000000",
+            "expiry": "1792216800",
+            "underlying_mint": "So11111111111111111111111111111111111111112",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": "172400000000",
+            "spot_time": "1791806396",
+            "distance_pct": -4.408353,
+            "itm": true,
+            "intrinsic": "-19000000000"
+          },
+          {
+            "position": "So1PutB0ught3333333333333333333333333333333",
+            "market": "3333333333333333333333333333333thgu0BtuP1oS",
+            "position_type": "cash_secured_put",
+            "role": "holder",
+            "status": "open",
+            "strike": "150000000000",
+            "quantity": "1500000000000",
+            "expiry": "1792216800",
+            "underlying_mint": "So11111111111111111111111111111111111111112",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": "172400000000",
+            "spot_time": "1791806396",
+            "distance_pct": 12.993039,
+            "itm": false,
+            "intrinsic": "0"
+          }
+        ],
+        "totals": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "notional_at_strike": "1315000000000",
+            "outstanding_intrinsic": "-19000000000"
+          }
+        ]
       }
     },
     {
@@ -885,6 +1199,10 @@
         "last_hwm_reset_ts": "0",
         "last_settlement_ts": "0",
         "cap_limit": "0",
+        "capacity": {
+          "cap_limit": "0",
+          "remaining": null
+        },
         "capital_fallback_delay_secs": "43200",
         "deposit_window_set_ts": null,
         "main_balance": null,
@@ -905,13 +1223,57 @@
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
+        "created_at": "1784570400",
+        "generation_started_at": "1784743200",
+        "tvl_usd_1e9": "2529104052535327",
+        "price_time": "1791806380",
+        "premium": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "cycle": {
+              "received": "41022000000",
+              "paid": null
+            },
+            "generation": {
+              "received": "402310000000",
+              "paid": null
+            }
+          }
+        ],
+        "fees": {
+          "management_fee_assessed": "0",
+          "performance_fee_assessed": "0",
+          "realized_fee_value": "0"
+        },
+        "depositors_in_generation": 2204,
         "performance": {
-          "status": "annualized",
-          "annualized_return_pct": 18.962307389935177,
-          "cycles_completed": 11,
-          "last_cycle_return_pct": 0.9158,
-          "cumulative_return_pct": 3.9872797045959585,
-          "track_record_secs": "6631200"
+          "capital_generation": "0",
+          "computed_at": "1791806400",
+          "covered": true,
+          "returns": {
+            "7d": {
+              "return_pct": 0.9158,
+              "from_time": "1790769600",
+              "to_time": "1791374400"
+            },
+            "30d": {
+              "return_pct": 3.390427,
+              "from_time": "1788955200",
+              "to_time": "1791374400"
+            },
+            "90d": null,
+            "all": {
+              "return_pct": 3.987279,
+              "from_time": "1784743200",
+              "to_time": "1791374400"
+            }
+          },
+          "apy_30d": 50.029734,
+          "apy_90d": null,
+          "max_drawdown_pct": 2.1647,
+          "worst_cycle_return_pct": -2.1647,
+          "losing_cycles": 2,
+          "cycles_completed": 11
         }
       },
       "cycles": [
@@ -1113,7 +1475,59 @@
         "mainTokenBalance": "40000000000",
         "nativeLamports": null,
         "depositRequest": null,
-        "withdrawRequest": null
+        "withdrawRequest": null,
+        "history": []
+      },
+      "exposure": {
+        "vault_pda": "HcD4rgK6J34wtyQ6NiJXSE8ByTvfy4eVS4kUcCuZQmhn",
+        "as_of": "1791806396",
+        "positions": [
+          {
+            "position": "HypeCa11Wr1ter111111111111111111111111111111",
+            "market": "111111111111111111111111111111ret1rW11aCepyH",
+            "position_type": "covered_call",
+            "role": "writer",
+            "status": "funded",
+            "strike": "90000000000",
+            "quantity": "120000000000000",
+            "expiry": "1791957600",
+            "underlying_mint": "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": "85350000000",
+            "spot_time": "1791806396",
+            "distance_pct": 5.448155,
+            "itm": false,
+            "intrinsic": "0"
+          },
+          {
+            "position": "HypeCa11Wr1ter222222222222222222222222222222",
+            "market": "222222222222222222222222222222ret1rW11aCepyH",
+            "position_type": "covered_call",
+            "role": "writer",
+            "status": "funded",
+            "strike": "82000000000",
+            "quantity": "60000000000000",
+            "expiry": "1791957600",
+            "underlying_mint": "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": null,
+            "spot_time": null,
+            "distance_pct": null,
+            "itm": null,
+            "intrinsic": null
+          }
+        ],
+        "totals": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "notional_at_strike": "15720000000000",
+            "outstanding_intrinsic": null
+          }
+        ]
       }
     },
     {
@@ -1160,6 +1574,10 @@
         "last_hwm_reset_ts": "0",
         "last_settlement_ts": "0",
         "cap_limit": "0",
+        "capacity": {
+          "cap_limit": "0",
+          "remaining": null
+        },
         "capital_fallback_delay_secs": "43200",
         "deposit_window_set_ts": null,
         "main_balance": null,
@@ -1180,13 +1598,29 @@
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
+        "created_at": "1785434400",
+        "generation_started_at": null,
+        "tvl_usd_1e9": "9301497479698865",
+        "price_time": "1791806380",
+        "premium": null,
+        "fees": null,
+        "depositors_in_generation": null,
         "performance": {
-          "status": "annualized",
-          "annualized_return_pct": 27.736826150144317,
-          "cycles_completed": 10,
-          "last_cycle_return_pct": 1.1296,
-          "cumulative_return_pct": 5.300393490335797,
-          "track_record_secs": "6026400"
+          "capital_generation": "0",
+          "computed_at": "1791806400",
+          "covered": false,
+          "returns": {
+            "7d": null,
+            "30d": null,
+            "90d": null,
+            "all": null
+          },
+          "apy_30d": null,
+          "apy_90d": null,
+          "max_drawdown_pct": null,
+          "worst_cycle_return_pct": null,
+          "losing_cycles": null,
+          "cycles_completed": null
         }
       },
       "cycles": [
@@ -1356,7 +1790,14 @@
         "mainTokenBalance": "1200000000",
         "nativeLamports": null,
         "depositRequest": null,
-        "withdrawRequest": null
+        "withdrawRequest": null,
+        "history": []
+      },
+      "exposure": {
+        "vault_pda": "3DBzpSMK2X4b7WmreYy2ut2JNrCQ4yZUnmuq5UHSPuaX",
+        "as_of": "1791806396",
+        "positions": [],
+        "totals": []
       }
     },
     {
@@ -1403,6 +1844,10 @@
         "last_hwm_reset_ts": "0",
         "last_settlement_ts": "0",
         "cap_limit": "0",
+        "capacity": {
+          "cap_limit": "0",
+          "remaining": null
+        },
         "capital_fallback_delay_secs": "43200",
         "deposit_window_set_ts": null,
         "main_balance": null,
@@ -1423,13 +1868,57 @@
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
+        "created_at": "1784224800",
+        "generation_started_at": "1784397600",
+        "tvl_usd_1e9": "1339031029430593",
+        "price_time": "1791806380",
+        "premium": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "cycle": {
+              "received": "1140900000",
+              "paid": "0"
+            },
+            "generation": {
+              "received": "13008800000",
+              "paid": "0"
+            }
+          }
+        ],
+        "fees": {
+          "management_fee_assessed": "0",
+          "performance_fee_assessed": "0",
+          "realized_fee_value": "0"
+        },
+        "depositors_in_generation": 158,
         "performance": {
-          "status": "annualized",
-          "annualized_return_pct": 6.676069235110122,
-          "cycles_completed": 12,
-          "last_cycle_return_pct": 0.0911,
-          "cumulative_return_pct": 1.5318378039465008,
-          "track_record_secs": "7236000"
+          "capital_generation": "0",
+          "computed_at": "1791806400",
+          "covered": true,
+          "returns": {
+            "7d": {
+              "return_pct": 0.0911,
+              "from_time": "1791028800",
+              "to_time": "1791633600"
+            },
+            "30d": {
+              "return_pct": 0.741728,
+              "from_time": "1789214400",
+              "to_time": "1791633600"
+            },
+            "90d": null,
+            "all": {
+              "return_pct": 1.531837,
+              "from_time": "1784397600",
+              "to_time": "1791633600"
+            }
+          },
+          "apy_30d": 9.407637,
+          "apy_90d": null,
+          "max_drawdown_pct": 0.5393,
+          "worst_cycle_return_pct": -0.5393,
+          "losing_cycles": 1,
+          "cycles_completed": 12
         }
       },
       "cycles": [
@@ -1647,7 +2136,40 @@
         "mainTokenBalance": "300000000",
         "nativeLamports": null,
         "depositRequest": null,
-        "withdrawRequest": null
+        "withdrawRequest": null,
+        "history": []
+      },
+      "exposure": {
+        "vault_pda": "Cqk7VamfWvUDzwRttsHi6qy7Dm8ApQndyRcGqLWQiWk4",
+        "as_of": "1791806396",
+        "positions": [
+          {
+            "position": "SpyxCa11Wr1ter11111111111111111111111111111",
+            "market": "11111111111111111111111111111ret1rW11aCxypS",
+            "position_type": "covered_call",
+            "role": "writer",
+            "status": "funded",
+            "strike": "800000000000",
+            "quantity": "20000000000",
+            "expiry": "1792216800",
+            "underlying_mint": "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 8,
+            "quote_decimals": 6,
+            "spot": "782630000000",
+            "spot_time": "1791806396",
+            "distance_pct": 2.21944,
+            "itm": false,
+            "intrinsic": "0"
+          }
+        ],
+        "totals": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "notional_at_strike": "160000000000",
+            "outstanding_intrinsic": "0"
+          }
+        ]
       }
     },
     {
@@ -1694,6 +2216,10 @@
         "last_hwm_reset_ts": "0",
         "last_settlement_ts": "0",
         "cap_limit": "0",
+        "capacity": {
+          "cap_limit": "0",
+          "remaining": null
+        },
         "capital_fallback_delay_secs": "43200",
         "deposit_window_set_ts": null,
         "main_balance": null,
@@ -1714,13 +2240,57 @@
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
+        "created_at": "1785520800",
+        "generation_started_at": "1785693600",
+        "tvl_usd_1e9": "839448151832380",
+        "price_time": "1791806380",
+        "premium": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "cycle": {
+              "received": "0",
+              "paid": "0"
+            },
+            "generation": {
+              "received": "1720400000",
+              "paid": "0"
+            }
+          }
+        ],
+        "fees": {
+          "management_fee_assessed": "0",
+          "performance_fee_assessed": "0",
+          "realized_fee_value": "0"
+        },
+        "depositors_in_generation": 41,
         "performance": {
-          "status": "annualized",
-          "annualized_return_pct": 34.99847739702971,
-          "cycles_completed": 10,
-          "last_cycle_return_pct": 0.7812,
-          "cumulative_return_pct": 6.688065201213211,
-          "track_record_secs": "6026400"
+          "capital_generation": "0",
+          "computed_at": "1791806400",
+          "covered": true,
+          "returns": {
+            "7d": {
+              "return_pct": 0.7812,
+              "from_time": "1791115200",
+              "to_time": "1791720000"
+            },
+            "30d": {
+              "return_pct": 2.805881,
+              "from_time": "1788696000",
+              "to_time": "1791720000"
+            },
+            "90d": null,
+            "all": {
+              "return_pct": 6.688065,
+              "from_time": "1785693600",
+              "to_time": "1791720000"
+            }
+          },
+          "apy_30d": 40.029164,
+          "apy_90d": null,
+          "max_drawdown_pct": 1.0119,
+          "worst_cycle_return_pct": -1.0119,
+          "losing_cycles": 1,
+          "cycles_completed": 10
         }
       },
       "cycles": [
@@ -1890,7 +2460,14 @@
         "mainTokenBalance": "15000000",
         "nativeLamports": null,
         "depositRequest": null,
-        "withdrawRequest": null
+        "withdrawRequest": null,
+        "history": []
+      },
+      "exposure": {
+        "vault_pda": "4mAkhhMBtkkw3r2ML4sVfuMQD95u8zP4gkwP32RJpDcW",
+        "as_of": "1791806396",
+        "positions": [],
+        "totals": []
       }
     }
   ]

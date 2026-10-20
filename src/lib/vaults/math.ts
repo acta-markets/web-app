@@ -1,5 +1,3 @@
-import type { Vault } from "./types";
-
 export const PRICE_SCALE = 1_000_000_000n;
 
 export function parseUnits(value: string, decimals: number): bigint | null {
@@ -26,11 +24,4 @@ export function sharesToMain(shares: bigint, sharePrice: bigint): bigint {
 export function mainToShares(amount: bigint, sharePrice: bigint): bigint {
   if (sharePrice === 0n) return 0n;
   return (amount * PRICE_SCALE) / sharePrice;
-}
-
-export function depositCapacity(vault: Vault): bigint | null {
-  const cap = BigInt(vault.cap_limit);
-  if (cap === 0n) return null;
-  const used = BigInt(vault.equity) + BigInt(vault.pending_deposit_amount);
-  return used >= cap ? 0n : cap - used;
 }

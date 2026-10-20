@@ -55,7 +55,9 @@ A resumed session keeps its server-side routing and mint scope. After fresh auth
 
 ## Quoting
 
-On `RfqBroadcast`, check the [market PDA and terms](../reference/maker-api.md#quote-flow) against your Acta program. Pick a strike from `rfq.strike` or `rfq.order_options` and compute the premium. Set `now + min_quote_validity_seconds <= valid_until <= market.expiry_ts`; read `min_quote_validity_seconds` from `GET /api/v1/venue` at startup, do not hardcode it. Build the 182-byte order preimage (Quote rules in the [Maker API reference](../reference/maker-api.md)) and hash it to `order_id`. Sign the 32-byte hash with `quote_signing` and send `Quote`:
+Units: `rfq.quantity` (and `size_rule`, `QuoteFilled.quantity`) is in underlying atoms; `strike` and `price` are 1e9-scaled per underlying token, independent of decimals. Decimals are not in `RfqBroadcast`: read `underlying_decimals` and `quote_decimals` from `GetMarketDescriptors` and cache them by `market.market_pda`. The gross premium (before protocol fees) in quote atoms is `floor(price * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))`, the contract's rounding.
+
+On `RfqBroadcast`, check the [market PDA and terms](../reference/maker-api.md#quote-flow) against your Acta program. Pick a strike from `rfq.strike` or `rfq.order_options` and compute the premium. Set `now + min_quote_validity_seconds <= valid_until <= market.expiry_ts`; read `min_quote_validity_seconds` from `GET /api/v1/venue` at startup, do not hardcode it, and keep `valid_until − settlement_buffer_seconds` after now. Build the 182-byte order preimage (Quote rules in the [Maker API reference](../reference/maker-api.md)) and hash it to `order_id`. Sign the 32-byte hash with `quote_signing` and send `Quote`:
 
 ```json
 {
@@ -82,7 +84,7 @@ Reprice with `ReplaceQuote`, which is one atomic round trip. `CancelQuote` follo
 
 ## Lifecycle events
 
-Lifecycle events are keyed by `order_id`. `RfqClosed` is the terminal RFQ event. `QuoteFilled` carries fill details and is followed by `RfqClosed`.
+Lifecycle events are keyed by `order_id`. `RfqClosed` is the terminal RFQ event. `QuoteFilled` carries fill details and arrives after `RfqClosed`.
 
 | Event | Description |
 |---|---|
