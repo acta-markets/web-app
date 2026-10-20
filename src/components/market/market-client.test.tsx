@@ -2,12 +2,13 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TokenMarketsInfoData } from "@/lib/rfq-client";
 import { getTokenMint } from "@/lib/tokens";
+import { Connection } from "@solana/web3.js";
 import { MarketClient } from "./market-client";
 
-const mocks = vi.hoisted(() => ({ context: {} as Record<string, unknown>, refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), modal: vi.fn() }));
+const mocks = vi.hoisted(() => ({ context: {} as Record<string, unknown>, account: null as { address: string } | null, refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), modal: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useSearchParams: () => new URLSearchParams("type=call") }));
-vi.mock("@/components/rfq/rfq-provider", () => ({ useRfqContext: () => mocks.context }));
-vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ selectedAccount: null }) }));
+vi.mock("@/components/rfq/rfq-provider", () => ({ RFQ_TTL_SECONDS: 30, useRfqContext: () => mocks.context }));
+vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ selectedAccount: mocks.account }) }));
 vi.mock("@/components/wallet/wallet-sidebar", () => ({ useWalletSidebar: () => ({ openSidebar: vi.fn() }) }));
 vi.mock("./rfq-flow-modal", () => ({ RfqFlowModal: (props: unknown) => { mocks.modal(props); return null; } }));
 const now = 1_800_000_000;
@@ -26,11 +27,12 @@ function setSnapshot(data: TokenMarketsInfoData) {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.account = null;
   vi.spyOn(Date, "now").mockReturnValue(now * 1000);
   mocks.context = {
-    markets: [], marketDescriptors: [], tokenCaps: [], currentQuote: null, error: null,
+    markets: [], marketDescriptors: [], tokenCaps: [], bestQuote: null, error: null,
     isConnected: true, isAuthenticated: false, connectionState: "connected", referralStatus: "unknown",
-    getTokenMarketsInfo: mocks.refresh, clearTransientState: vi.fn(), submitRfq: vi.fn(),
+    getTokenMarketsInfo: mocks.refresh, cancelRfq: vi.fn(), submitRfq: vi.fn(),
   };
   setSnapshot(snapshot());
 });
@@ -92,6 +94,37 @@ describe("market APR from backend prices", () => {
     mocks.context.tokenMarketsInfo = null;
     page.rerender(<MarketClient asset="SOL" />);
     act(() => vi.advanceTimersByTime(30_000));
+    expect(mocks.refresh).toHaveBeenCalledTimes(2);
+  });
+  it("cancels the RFQ when no quote arrives within the RFQ TTL", () => {
+    vi.useFakeTimers();
+    mocks.context = {
+      ...mocks.context, isAuthenticated: true, connectionState: "authenticated",
+      marketDescriptors: [{ market: { market_pda: "market" }, underlying: { size_rule: { min_size: 1e8, max_size: 1e10, step: 1e8 } } }],
+    };
+    mocks.account = { address: "11111111111111111111111111111111" };
+    vi.spyOn(Connection.prototype, "getBalance").mockResolvedValue(10e9);
+    render(<MarketClient asset="SOL" />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    expect(mocks.context.submitRfq).toHaveBeenCalledOnce();
+    act(() => vi.advanceTimersByTime(29_000));
+    expect(mocks.context.cancelRfq).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(mocks.context.cancelRfq).toHaveBeenCalledOnce();
+  });
+  it("pauses the snapshot refresh while the tab is hidden and refreshes when it is shown", () => {
+    vi.useFakeTimers();
+    let hidden = false;
+    vi.spyOn(document, "hidden", "get").mockImplementation(() => hidden);
+    render(<MarketClient asset="SOL" />);
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    hidden = true;
+    act(() => { document.dispatchEvent(new Event("visibilitychange")); });
+    act(() => vi.advanceTimersByTime(90_000));
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    hidden = false;
+    act(() => { document.dispatchEvent(new Event("visibilitychange")); });
     expect(mocks.refresh).toHaveBeenCalledTimes(2);
   });
 });

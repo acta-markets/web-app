@@ -10,7 +10,7 @@ SDK event callbacks use the wire message names in lowerCamelCase. TypeScript typ
 npm install @acta-markets/ts-sdk
 ```
 
-This guide covers version 0.2.1, which targets the program deployed to devnet and mainnet on 2026-10-17. Its instruction opcodes and program error codes differ from the program 0.1.6 was built against, so upgrade both together. The package README has a "Migrating from 0.1.6" table. Refer to opcodes and errors by name through the generated constants exported from `@acta-markets/ts-sdk` (`*_DISCRIMINATOR` for instruction opcodes, `ACTA_CONTRACT_ERROR__*` for program errors), not by number.
+This guide covers version 0.2.2, which targets the program deployed to devnet and mainnet on 2026-10-17. Its instruction opcodes and program error codes differ from the program 0.1.6 was built against, so upgrade both together. The package README has a "Migrating from 0.1.6" table. Refer to opcodes and errors by name through the generated constants exported from `@acta-markets/ts-sdk` (`*_DISCRIMINATOR` for instruction opcodes, `ACTA_CONTRACT_ERROR__*` for program errors), not by number.
 
 `ActaWsClient` validates the challenge before calling the auth provider. Raw clients can call `validateAuthChallenge` (`assertVaultAuthChallenge` for a `/vault` session).
 
@@ -35,7 +35,7 @@ const authProvider = new WalletAuthProvider({
 
 Other providers: `KeypairAuthProvider` (Node/CI/bots), `CustomAuthProvider` (remote signer).
 
-Frontend wallets (Phantom, Privy): WS auth needs `signMessage` (ed25519 over the UTF-8 challenge). Without it, use `CustomAuthProvider` with a backend signer. For the sponsored tx, `signSponsoredTxBase64(...)` signs after the byte comparison in step 8 and does not need `@solana/web3.js`. `wallet.signTransaction(...)` gives the wallet's own preview.
+Frontend wallets (Phantom, Privy): WS auth needs `signMessage` (ed25519 over the UTF-8 challenge). Without it, use `CustomAuthProvider` with a backend signer. For the sponsored tx, `verifyAndSignTakerFill(...)` checks it against the accepted quote (step 8), then signs with `signMessage` (no `@solana/web3.js`) or with the wallet's `signTransaction` for its own preview.
 
 ### 2. Connect
 
@@ -84,7 +84,7 @@ Store sessions per wallet and environment. Resume needs no wallet popup. Fresh a
 ### 4. Subscribe to live updates
 
 ```typescript
-// Takers track position outcomes via chain events; `positions`/`positionUpdated`
+// Takers track position outcomes via chain events; `positionUpdated`
 // is a maker-only push and never fires for a taker.
 ws.on("authenticated", () => ws.subscribe(["chain_events"]));
 
@@ -124,17 +124,18 @@ ws.on("quoteReceived", (quote) => {
   console.log("Quote:", display, "from", quote.maker);
 });
 
-ws.createRfq({
+const requestId = crypto.randomUUID(); // idempotency key; generated when omitted
+await ws.createRfq({
   market: marketPdaBase58,
   position_type: "covered_call",
   strike: 136_000_000_000,
   quantity: 5_000_000_000, // 5 SOL in lamports
   timeoutSeconds: 30,
-  clientRequestId: crypto.randomUUID(), // optional idempotency key, scoped per taker
+  requestId,
 });
 ```
 
-Repeating a `createRfq` with the same `clientRequestId` returns the same `rfq_id` while the RFQ is active. TTL is server-defined.
+`createRfq` resolves with `requestId` on the server's `CommandAccepted` and rejects with `ActaWsRequestError` on the matching `RequestError`, a timeout or a disconnect. `RfqCreated` echoes `request_id` and may arrive before or after that receipt. Repeating a `createRfq` with the same `requestId` returns the same `rfq_id` while the RFQ is active. TTL is server-defined.
 
 ### 7. Cancel RFQ
 
@@ -145,40 +146,68 @@ ws.cancelRfq(rfqId);
 
 ### 8. Accept quote and sign
 
-`signSponsoredTxBase64` requires `expectedMessageBytes`, the message you build from the selected order and approved transaction parameters, with ALT references resolved against table contents you trust. The SDK compares every byte (instructions, account flags, fee payer, blockhash, ALT references) before calling the wallet. Do not copy the expected bytes from the received transaction. A matching `orderIdHex` is not enough. Your application supplies `approvedMessageForOrder(id)`.
+`verifyAndSignTakerFill` rebuilds the fill from the accepted quote and the RFQ's terms and calls the wallet only on a match: program and chain, market PDA, the order id recomputed from the quote, quantity and taker (it must equal `quote.order_id`), the maker's Ed25519 signature over it right before `OpenPosition`, `OpenPosition` with the quoted strike, quantity, price, validity and nonce, the ATA creates (and, for a covered call on wSOL, a wrap of at most the collateral), a relayer fee payer in slot 0 that is not the taker, no other signers or instructions, and a compute budget within `bounds`. A mismatch throws `VaultIntentError` and nothing is signed. ALT references resolve from `tables`.
 
 ```typescript
-import { signSponsoredTxBase64 } from "@acta-markets/ts-sdk/ws";
+import { address } from "@solana/kit";
+import { ActaWsRequestError, verifyAndSignTakerFill } from "@acta-markets/ts-sdk/ws";
 
 let connectionEpoch = 0;
 ws.on("stateChange", () => { connectionEpoch++; });
 
-ws.on("sponsoredTxToSign", async (id, txBase64, signatureDeadline) => {
+// acceptedQuote: the QuoteReceivedMessage you accepted; descriptor: the cached
+// MarketDescriptorInfo of the RFQ's market; rfqRequest: what you passed to createRfq.
+ws.on("sponsoredTxToSign", async (id, txBase64, signatureDeadline, lastValidBlockHeight) => {
   if (id !== orderIdHex || !ws.isAuthenticated()) return;
   const epoch = connectionEpoch;
   const walletMatches = () => wallet.publicKey?.toBase58() === walletPublicKeyBase58;
   const expired = () => Date.now() / 1000 >= signatureDeadline;
   if (!walletMatches() || expired()) return;
+  let signedTxBase64: string;
   try {
-    const signedTxBase64 = await signSponsoredTxBase64({
-      txBase64, taker: wallet,
-      expectedMessageBytes: await approvedMessageForOrder(id),
+    signedTxBase64 = await verifyAndSignTakerFill({
+      txBase64,
+      quote: acceptedQuote,
+      rfq: {
+        market: descriptor.market,
+        position_type: rfqRequest.position_type,
+        quantity: rfqRequest.quantity,
+      },
+      taker: address(walletPublicKeyBase58),
+      tables: {},
+      bounds: { maxUnitLimit: 400_000, maxUnitPriceMicroLamports: 100_000 },
+      signer: wallet,
     });
-    if (epoch !== connectionEpoch || id !== orderIdHex || !walletMatches() || expired()) return;
-    await ws.submitSignedSponsoredTx({ orderIdHex: id, txBase64: signedTxBase64 });
   } catch (error) {
-    console.error(id, error);
+    console.error(id, error); // do not submit; cancel the RFQ or pick another quote
+    return;
+  }
+  if (epoch !== connectionEpoch || id !== orderIdHex || !walletMatches() || expired()) return;
+  try {
+    await ws.submitSignedSponsoredTx({ orderIdHex: id, txBase64: signedTxBase64 });
+  } catch (err) {
+    if (err instanceof ActaWsRequestError && err.delivery === "not_forwarded") {
+      // This attempt was not sent: retry, or choose another quote if no earlier attempt was unknown.
+    } else {
+      ws.getOrderStatus(id); // may have been sent: resolve before anything else
+    }
   }
 });
 
-ws.acceptQuote(rfqId, makerPubkey, orderIdHex);
+try {
+  await ws.acceptQuote(rfqId, makerPubkey, orderIdHex);
+} catch (err) {
+  if (err instanceof ActaWsRequestError) console.error(err.kind, err.error);
+}
 ```
 
-`signSponsoredTxBase64` fills signature slot 1, the taker's slot for an ordinary maker quote (slot 0 is the keeper fee payer). When a vault is the maker, the taker is the fee payer and only signer (slot 0), so `signSponsoredTxBase64` does not fit: use `verifyAndSignSponsoredTx({ orderIdHex, txBase64, intent: { kind: "fill", holder, taker, terms }, tables, bounds, signer })`, which rebuilds the expected open and signs slot 0. `wallet.signTransaction` on the whole transaction handles both cases.
+`acceptQuote` resolves on `CommandAccepted` and rejects with `ActaWsRequestError` on its `RequestError`, a timeout or a disconnect. `SponsoredTxToSign` may arrive before or after the receipt. A rejected `submitSignedSponsoredTx` carries `err.delivery`: `not_forwarded` means this attempt was not sent, and if every attempt for the order got it, retrying or choosing another quote is safe. `unknown`, or no `delivery` (timeout, disconnect), means it may have been sent: query `GetOrderStatus` before signing or submitting anything else for that RFQ. `lastValidBlockHeight` is the block height the transaction's blockhash is valid through.
+
+`verifyAndSignTakerFill` fills signature slot 1, the taker's slot for an ordinary maker quote (slot 0 is the keeper fee payer). When a vault is the maker, the taker is the fee payer and only signer: pass `makerVault: await fetchMakerVault(rpc, quote.maker)` (from `@acta-markets/ts-sdk/chain`, `null` for a non-vault maker) and the same call verifies the vault fill against that on-chain account and signs slot 0.
 
 `orderIdHex` is the selected order. If the wallet, connection or selection changes during signing, discard the result. Record that you sent the transaction before submitting (see step 10).
 
-Browser wallets: for the wallet's own preview or simulation, deserialize with `@solana/web3.js` and call `wallet.signTransaction(tx)`. Only this path needs `@solana/web3.js`. The SDK does not depend on it.
+Browser wallets: for the wallet's own preview or simulation, pass `signer: { signTransaction: async (wire) => (await wallet.signTransaction(VersionedTransaction.deserialize(wire))).serialize() }`. The SDK verifies the transaction before the wallet sees it and verifies what the wallet returns again (reordered account keys pass; added or changed instructions do not). Never call `wallet.signTransaction` on a served transaction directly. Only this path needs `@solana/web3.js`. The SDK does not depend on it.
 
 ### 9. Track order status
 
@@ -236,6 +265,8 @@ const ws = new ActaWsClient({
 });
 
 ws.on("disconnected", (code, reason) => {});
+// code: a server close code (ServerCloseCode, 4000–4005; see ws-common.md) or the
+// client's own drop (ClientCloseCode): 4900 "pong_timeout", 4901 "auth_error".
 ws.on("versionMismatch", (msg) => {
   // Auto-reconnect stops on VersionMismatch until explicit reconnect
 });
@@ -277,7 +308,7 @@ Error codes and `OrderFailed` reasons are in the [Taker API reference](../refere
 
 ## Signing requirements
 
-- Sponsored transactions are v0 `VersionedTransaction`. `wallet.signTransaction` needs a wallet with versioned transaction support. `signSponsoredTxBase64` signs raw message bytes.
+- Sponsored transactions are v0 `VersionedTransaction`. A `signTransaction` signer needs a wallet with versioned transaction support. A `signMessage` signer signs raw message bytes.
 - WS auth needs arbitrary-byte signing. Without it, use a server-side signer via `CustomAuthProvider`.
 
 ## Endpoints

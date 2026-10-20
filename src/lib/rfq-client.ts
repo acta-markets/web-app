@@ -1,10 +1,13 @@
 export { ActaClient } from "@acta-markets/ts-sdk";
 export {
   ActaWsClient,
+  ActaWsRequestError,
   WalletAuthProvider,
+  verifyAndSignTakerFill,
   type WalletLike,
   type ConnectionState,
   type ActaWsClientOptions,
+  type TakerFillRfq,
 } from "@acta-markets/ts-sdk/ws";
 
 export type {
@@ -12,6 +15,7 @@ export type {
   MarketDescriptorInfo,
   PositionInfo,
   QuoteReceivedMessage,
+  MyActiveRfqsMessage,
   IndicativePricesMessage,
   TokenCapInfo,
   TokenCapsMessage,
@@ -45,7 +49,7 @@ export type {
   ReferralCodeClaimedData,
 } from "@acta-markets/ts-sdk/ws";
 
-import { ActaWsClient, WalletAuthProvider } from "@acta-markets/ts-sdk/ws";
+import { ActaWsClient, ActaWsRequestError, WalletAuthProvider } from "@acta-markets/ts-sdk/ws";
 
 const RFQ_WS_URL = process.env.NEXT_PUBLIC_RFQ_WS_URL || "wss://beta-api.acta.markets";
 
@@ -70,6 +74,14 @@ export function createRfqClient(options?: CreateClientOptions): ActaWsClient {
     autoReconnect: true,
     debug: options?.debug ?? false,
   });
+}
+
+export function wsErrorMessage(err: unknown): string {
+  if (err instanceof ActaWsRequestError) {
+    if (!err.error) return `Request ${err.kind.replaceAll("_", " ")}`;
+    return err.error.type === "Generic" ? err.error.data.message : err.error.type;
+  }
+  return err instanceof Error ? err.message : String(err);
 }
 
 export function getRfqBackendUrl(): string {

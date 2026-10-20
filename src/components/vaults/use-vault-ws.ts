@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEVNET_SWAP_ROUTER, JUPITER_V6_PROGRAM, flows, resolveVaultPriceUpdates } from "@acta-markets/ts-sdk/chain";
+import { DEVNET_SWAP_ROUTER, JUPITER_V6_PROGRAM, flows, resolveVaultPriceFeeds } from "@acta-markets/ts-sdk/chain";
 import { ActaWsClient, type ActaWsClientEvents, type SwapQuoteData } from "@acta-markets/ts-sdk/ws";
 import { fetchAddressesForLookupTables } from "@solana/kit";
 import { VersionedTransaction } from "@solana/web3.js";
@@ -7,6 +7,7 @@ import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { createWalletAuthProvider, getRfqBackendUrl } from "@/lib/rfq-client";
 import { IS_MAINNET } from "@/lib/tokens";
 import type { VaultManager } from "@/lib/vaults/operator";
+import { pythFeedShards } from "@/lib/vaults/price-feeds";
 
 type VaultAuth = Parameters<ActaWsClientEvents["vaultAuthenticated"]>[0];
 export type VaultSwapQuote = Parameters<ActaWsClientEvents["swapQuoteResult"]>[0];
@@ -67,10 +68,10 @@ export function useVaultWs(vaultPda: string | null, enabled: boolean, onProjecti
         { type: "SwapQuote", data: quoteRequest },
         { timeoutMs: SWAP_TIMEOUT_MS },
       );
-      const prices = await resolveVaultPriceUpdates(rpc, manager);
+      const priceFeeds = await resolveVaultPriceFeeds(rpc, manager, pythFeedShards());
       const tables = await fetchAddressesForLookupTables(flows.servedLookupTableKeys(quote.tx_base64), rpc);
       await flows.verifyVaultSwap(
-        { vault: manager, request: quoteRequest, quote, ...prices, minOutputFloor, router: SWAP_ROUTER },
+        { vault: manager, request: quoteRequest, quote, priceFeeds, minOutputFloor, router: SWAP_ROUTER },
         tables,
         SWAP_COMPUTE_BOUNDS,
       );

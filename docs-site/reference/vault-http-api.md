@@ -15,7 +15,7 @@ Basis-point fields are JSON numbers. 100 basis points is 1%. Percent-return fiel
 - `GET /vaults` returns `{ "vaults": Vault[] }`.
 - `GET /vaults/{pda}` returns one `Vault` object.
 
-The list has no query filters or pagination. Filter on the client.
+The list has no pagination. Optional query `delegate=<pubkey>` returns only vaults that key can operate as delegate: it is the `primary_delegate` and holds an unexpired delegate grant. A value that is not a base58 pubkey returns `400` `invalid_delegate`. Apply other filters on the client.
 
 Closed vaults are left out of the list. Detail for a closed or unknown vault returns `404`. History routes still serve closed vaults.
 
@@ -172,7 +172,7 @@ Errors use `{ "error": "Human-readable message", "code": "error_code" }`.
 
 | HTTP status | Codes | Handling |
 | --- | --- | --- |
-| 400 | `invalid_cursor`, `invalid_limit`, `invalid_wallet`, `invalid_request` | Correct the input. |
+| 400 | `invalid_cursor`, `invalid_limit`, `invalid_wallet`, `invalid_delegate`, `invalid_request` | Correct the input. |
 | 404 | `not_found` | Check the address and route. Closed vaults no longer have list/detail entries. |
 | 503 | `db_disabled` | Database access is not configured for this route. |
 | 503 | `db_busy`, `unavailable`, `caps_projection_unavailable`, `chain_replay_unavailable`, `position_history_unavailable` | Retry later. Keep showing the last result with its timestamp. |

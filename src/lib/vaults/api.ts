@@ -13,7 +13,8 @@ export function getApiBaseUrl(): string {
   return `${protocol}//${ws.host}`;
 }
 
-const client = () => new ActaHttpClient({ baseUrl: getApiBaseUrl() });
+let httpClient: ActaHttpClient | null = null;
+const client = () => (httpClient ??= new ActaHttpClient({ baseUrl: getApiBaseUrl() }));
 
 export const fetchVaults = (signal?: AbortSignal) => client().vaults(signal);
 export const fetchVault = (pda: string, signal?: AbortSignal) => client().vault(pda, signal);

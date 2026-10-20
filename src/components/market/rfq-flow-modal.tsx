@@ -44,10 +44,9 @@ interface RfqFlowModalProps {
   preview: RfqOrderPreview | null;
   walletAddress: string | null;
   backendUrl: string;
-  /** Optional quote to lock modal to exact market-page preview */
-  initialQuote?: QuoteReceivedMessage | null;
   /** Sign transaction function from wallet */
   signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
+  rpc: Parameters<typeof useRfqOrder>[0]["rpc"];
 }
 
 export function RfqFlowModal({
@@ -57,24 +56,26 @@ export function RfqFlowModal({
   preview,
   walletAddress,
   backendUrl,
-  initialQuote,
   signTransaction,
+  rpc,
 }: RfqFlowModalProps) {
   const {
-    currentQuote,
+    bestQuote,
     isAuthenticated,
     error: rfqError,
     acceptQuote,
     submitSignedTx,
+    cancelRfq,
     getClient,
+    rfqTerms,
   } = useRfqContext();
 
   const [quoteStep, setStep] = useState<"idle" | "requesting_quote" | "quote_received" | "failed">("idle");
   const [error, setError] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteReceivedMessage | null>(null);
   const [recoveredOpen, setRecoveredOpen] = useState(false);
-  const { flow, accept, reset, checkStatus, txSignature, restored } = useRfqOrder({
-    getClient, acceptQuote, submitSignedTx, signTransaction,
+  const { flow, accept, accepting, abandon, canAbandon, reset, checkStatus, txSignature, restored } = useRfqOrder({
+    getClient, acceptQuote, submitSignedTx, signTransaction, rpc,
     scope: { walletAddress, backendUrl },
   });
   const step: FlowStep = flow.type === "idle" ? quoteStep
@@ -94,44 +95,28 @@ export function RfqFlowModal({
 
   useEffect(() => {
     if (open && preview && !isRestoredOrder) {
-      setStep(initialQuote ? "quote_received" : "requesting_quote");
+      setStep("requesting_quote");
       setError(null);
-      setQuote(initialQuote ?? null);
+      setQuote(null);
       reset();
     }
-  }, [open, requestNonce, initialQuote, preview, isRestoredOrder, reset]);
+  }, [open, requestNonce, preview, isRestoredOrder, reset]);
 
   useEffect(() => {
-    if (
-      preview && currentQuote &&
-      step === "requesting_quote" &&
-      Number(currentQuote.strike) === preview.strike
-    ) {
-      setQuote(currentQuote);
+    if (!preview || accepting || flow.type !== "idle" || (quoteStep !== "requesting_quote" && quoteStep !== "quote_received")) return;
+    if (bestQuote && Number(bestQuote.strike) === preview.strike) {
+      setQuote(bestQuote);
       setStep("quote_received");
+    } else {
+      setStep("requesting_quote");
     }
-  }, [currentQuote, preview, step]);
+  }, [bestQuote, preview, accepting, flow.type, quoteStep]);
 
   useEffect(() => {
     if (!rfqError || flow.type !== "idle" || step === "idle") {
       return;
     }
-
-    const message = rfqError.message;
-    const lower = message.toLowerCase();
-    const isRecoverableQuoteError =
-      lower.includes("quote_not_found") ||
-      lower.includes("quote_expired") ||
-      lower.includes("quote_refresh_required");
-
-    if (isRecoverableQuoteError) {
-      setQuote(null);
-      setError("Quote expired. Close this modal and click Deposit again to request a fresh quote.");
-      setStep("failed");
-      return;
-    }
-
-    setError(message);
+    setError(rfqError.message);
     setStep("failed");
   }, [rfqError, step, flow.type]);
 
@@ -155,12 +140,13 @@ export function RfqFlowModal({
     return () => { client.off("rfqClosed", onClosed); };
   }, [getClient, flow.type, quote]);
 
-  const handleAcceptQuote = () => { if (quote) void accept(quote); };
+  const handleAcceptQuote = () => { if (quote) void accept(quote, rfqTerms(quote.rfq_id)); };
 
   const handleClose = () => {
     if (flow.type !== "idle" && flow.type !== "confirmed" && flow.type !== "failed") {
       return;
     }
+    if (flow.type !== "confirmed") cancelRfq();
     reset();
     setRecoveredOpen(false);
     onClose();
@@ -339,7 +325,10 @@ export function RfqFlowModal({
                 : step === "pending" ? "Your order is still pending. Waiting for execution confirmation."
                 : "The order outcome is not yet known. Check its status before placing another order."}
             </p>
-            <AppButton className="mt-3" onClick={checkStatus}>Check order status</AppButton>
+            <div className="mt-3 flex gap-2">
+              <AppButton onClick={checkStatus}>Check order status</AppButton>
+              {canAbandon && <AppButton variant="secondary" onClick={abandon}>Cancel order</AppButton>}
+            </div>
           </div>
         )}
 
@@ -350,17 +339,22 @@ export function RfqFlowModal({
               <AppButton variant="secondary" className="flex-1" onClick={handleClose}>
                 Cancel
               </AppButton>
-              <AppButton className="flex-1" onClick={handleAcceptQuote}>
+              <AppButton className="flex-1" onClick={handleAcceptQuote} disabled={accepting}>
                 Accept Quote
               </AppButton>
             </>
           )}
 
           {(step === "accepting_quote" || step === "signing" || step === "submitting") && (
-            <AppButton className="w-full" disabled>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {processingLabel}
-            </AppButton>
+            <>
+              {canAbandon && (
+                <AppButton variant="secondary" className="flex-1" onClick={abandon}>Cancel order</AppButton>
+              )}
+              <AppButton className="flex-1" disabled>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {processingLabel}
+              </AppButton>
+            </>
           )}
 
           {(step === "confirmed" || step === "failed") && (

@@ -14,8 +14,8 @@ import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getTokenMint, getToken } from "@/lib/tokens";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { getCapFilledPct } from "@/lib/token-caps";
-import { useRfqContext } from "@/components/rfq/rfq-provider";
-import { getRfqBackendUrl, type QuoteReceivedMessage } from "@/lib/rfq-client";
+import { RFQ_TTL_SECONDS, useRfqContext } from "@/components/rfq/rfq-provider";
+import { getRfqBackendUrl } from "@/lib/rfq-client";
 import {
   computeApyFromScaledPrices,
   quoteAmountToQuantity,
@@ -80,7 +80,6 @@ const RPC_ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
   (process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet"
     ? "https://api.mainnet-beta.solana.com"
     : "https://api.devnet.solana.com");
-const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 let _conn: Connection | null = null;
 function getConnection() {
@@ -109,15 +108,10 @@ function useTokenBalance(walletAddress: string | undefined, tokenSymbol: string)
           return;
         }
         if (!mint) { if (!cancelled) setBalance(null); return; }
-        const accounts = await conn.getTokenAccountsByOwner(owner, {
-          mint: new PublicKey(mint),
-          programId: TOKEN_PROGRAM_ID,
-        });
+        const accounts = await conn.getParsedTokenAccountsByOwner(owner, { mint: new PublicKey(mint) });
         let total = 0;
         for (const { account } of accounts.value) {
-          const data = account.data;
-          const raw = data.readBigUInt64LE(64);
-          total += Number(raw) / 10 ** decimals;
+          total += Number(account.data.parsed.info.tokenAmount.uiAmountString);
         }
         if (!cancelled) setBalance(total);
       } catch {
@@ -165,7 +159,6 @@ export function MarketClient({ asset }: { asset: string }) {
   const [rfqModalOpen, setRfqModalOpen] = useState(false);
   const [rfqRequestNonce, setRfqRequestNonce] = useState(0);
   const [isRequestingQuote, setIsRequestingQuote] = useState(false);
-  const [modalInitialQuote, setModalInitialQuote] = useState<QuoteReceivedMessage | null>(null);
   const [orderPreview, setOrderPreview] = useState<RfqOrderPreview | null>(null);
   const [indicativeRequestedKey, setIndicativeRequestedKey] = useState<string | null>(null);
 
@@ -173,10 +166,10 @@ export function MarketClient({ asset }: { asset: string }) {
     markets: rfqMarkets,
     tokenCaps,
     marketDescriptors,
-    currentQuote,
+    bestQuote,
     error: rfqError,
     submitRfq,
-    clearTransientState,
+    cancelRfq,
     tokenMarketsInfo: tokenMarketsSnapshot,
     getTokenMarketsInfo,
     isConnected: rfqConnected,
@@ -290,9 +283,16 @@ export function MarketClient({ asset }: { asset: string }) {
     if (!wsReady || !market) return;
     const underlyingMint = (getTokenMint(market.asset) ?? "").trim();
     if (!underlyingMint) return;
-    getTokenMarketsInfo(underlyingMint);
-    const id = window.setInterval(() => getTokenMarketsInfo(underlyingMint), 30_000);
-    return () => window.clearInterval(id);
+    const refresh = () => {
+      if (!document.hidden) getTokenMarketsInfo(underlyingMint);
+    };
+    refresh();
+    const id = window.setInterval(refresh, 30_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [wsReady, market, getTokenMarketsInfo]);
 
   useEffect(() => {
@@ -306,7 +306,7 @@ export function MarketClient({ asset }: { asset: string }) {
     }
   }, [currentIndicativeKey]);
 
-  const { selectedAccount, signTransaction: solanaSignTransaction } = useSolana();
+  const { rpc, selectedAccount, signTransaction: solanaSignTransaction } = useSolana();
   const { openSidebar } = useWalletSidebar();
 
   const walletAddress = selectedAccount?.address;
@@ -552,20 +552,20 @@ export function MarketClient({ asset }: { asset: string }) {
       setIsRequestingQuote(false);
       return;
     }
-    if (!currentQuote) return;
-    setModalInitialQuote(currentQuote);
+    if (!bestQuote) return;
     setIsRequestingQuote(false);
     setRfqRequestNonce((n) => n + 1);
     setRfqModalOpen(true);
-  }, [isRequestingQuote, rfqModalOpen, rfqError, currentQuote]);
+  }, [isRequestingQuote, rfqModalOpen, rfqError, bestQuote]);
 
   useEffect(() => {
     if (!isRequestingQuote || rfqModalOpen) return;
     const timeoutId = window.setTimeout(() => {
       setIsRequestingQuote(false);
-    }, 15000);
+      cancelRfq();
+    }, RFQ_TTL_SECONDS * 1000);
     return () => window.clearTimeout(timeoutId);
-  }, [isRequestingQuote, rfqModalOpen]);
+  }, [isRequestingQuote, rfqModalOpen, cancelRfq]);
 
   const handleDepositClick = useCallback(() => {
     if (isRequestingQuote) return;
@@ -612,8 +612,6 @@ export function MarketClient({ asset }: { asset: string }) {
       setDeposit(formatInputValue(alignedDeposit, depositInputDecimals));
     }
 
-    clearTransientState();
-    setModalInitialQuote(null);
     setOrderPreview({
       asset: market?.asset ?? asset,
       positionType,
@@ -628,7 +626,7 @@ export function MarketClient({ asset }: { asset: string }) {
       positionType,
       strike: selectedStrikeLamports,
       quantity: alignedQuantity,
-      timeoutSeconds: 30,
+      timeoutSeconds: RFQ_TTL_SECONDS,
     });
     setIsRequestingQuote(true);
   }, [
@@ -640,7 +638,6 @@ export function MarketClient({ asset }: { asset: string }) {
     hasSelectedPrice,
     rfqConnected,
     rfqAuthenticated,
-    clearTransientState,
     submitRfq,
     selectedStrikeLamports,
     quantityLamportsFromInput,
@@ -659,13 +656,12 @@ export function MarketClient({ asset }: { asset: string }) {
     onClose={() => {
       setRfqModalOpen(false);
       setIsRequestingQuote(false);
-      setModalInitialQuote(null);
     }}
     requestNonce={rfqRequestNonce}
-    initialQuote={modalInitialQuote}
     walletAddress={walletAddress ?? null}
     backendUrl={rfqBackendUrl}
     signTransaction={walletAddress ? solanaSignTransaction : undefined}
+    rpc={rpc}
   />;
 
   if (!market) {

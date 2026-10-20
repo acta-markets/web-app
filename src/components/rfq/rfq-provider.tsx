@@ -11,6 +11,8 @@ import {
   type PositionInfo,
   type QuoteReceivedMessage,
   type IndicativePricesMessage,
+  ActaWsRequestError,
+  wsErrorMessage,
   type TokenCapInfo,
   type EarnAssetSummary,
   type ActaWsClientError,
@@ -19,6 +21,7 @@ import {
   type MyReferralInfoData,
   type InviteErrorReason,
   type ClaimErrorReason,
+  type TakerFillRfq,
 } from "@/lib/rfq-client";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { AppModal } from "@/components/app-ui/app-modal";
@@ -43,8 +46,8 @@ interface RfqContextValue {
   marketDescriptors: MarketDescriptorInfo[];
   /** User's positions (requires auth) */
   positions: PositionInfo[];
-  /** Current/latest quote received */
-  currentQuote: QuoteReceivedMessage | null;
+  /** Best live quote for our open RFQ */
+  bestQuote: QuoteReceivedMessage | null;
   /** Indicative prices */
   indicativePrices: IndicativePricesMessage | null;
   /** Returns cached indicatives for specific market + position type */
@@ -80,8 +83,10 @@ interface RfqContextValue {
   acceptQuote: (rfqId: string, maker: string, orderIdHex: string) => Promise<void>;
   /** Submit signed transaction */
   submitSignedTx: (orderIdHex: string, txBase64: string) => Promise<void>;
-  /** Clear transient RFQ UI state (quote/error) */
-  clearTransientState: () => void;
+  /** Cancel our open RFQ and clear its quotes and error */
+  cancelRfq: () => void;
+  /** Market, type and quantity of our open RFQ, which a maker-quote fill is verified against */
+  rfqTerms: (rfqId: string) => TakerFillRfq | null;
   /** Get the underlying client */
   getClient: () => ActaWsClient | null;
   /** Referral gate status — "unknown" before we know, "required" when invite gate blocks trading, "redeemed" otherwise. */
@@ -145,15 +150,21 @@ interface RfqProviderProps {
 }
 
 const RFQ_SESSION_KEY = "acta_rfq_ws_session";
+export const RFQ_TTL_SECONDS = 30;
 
 function isAuthFailureError(err: ActaWsClientError): boolean {
   return err.type === "Unauthenticated" || err.type === "Unauthorized" ||
-    ((err.type === "generic" || err.type === "Generic") && (
-      err.data.code === "unauthenticated" ||
+    (err.type === "client_generic" && (
       err.data.message.toLowerCase().includes("user rejected") ||
       err.data.message.toLowerCase().includes("auth timeout")
     ));
 }
+
+function errorText(err: ActaWsClientError): string {
+  return err.type === "client_generic" || err.type === "Generic" ? err.data.message : err.type;
+}
+
+const quotePrice = (quote: QuoteReceivedMessage) => Number(quote.net_price ?? quote.price);
 
 function isMissingMarketDescriptorError(message: string): boolean {
   const lower = message.toLowerCase();
@@ -213,12 +224,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [earnSummary, setEarnSummary] = useState<EarnAssetSummary[] | null>(null);
   const [marketDescriptors, setMarketDescriptors] = useState<MarketDescriptorInfo[]>([]);
   const [positions, setPositions] = useState<PositionInfo[]>([]);
-  const pendingRfqRef = useRef<
-    | { type: "requested"; clientRequestId: string; strike: number }
-    | { type: "created"; rfqId: string; strike: number }
-    | null
-  >(null);
-  const [currentQuote, setCurrentQuote] = useState<QuoteReceivedMessage | null>(null);
+  const pendingRfqRef = useRef<{ requestId: string; strike: number; rfqId: string | null; rfq: TakerFillRfq } | null>(null);
+  const abandonedRequestsRef = useRef(new Set<string>());
+  const quotesRef = useRef(new Map<string, QuoteReceivedMessage>());
+  const quoteExpiryTimerRef = useRef<number | null>(null);
+  const serverClockOffsetMsRef = useRef(0);
+  const [bestQuote, setBestQuote] = useState<QuoteReceivedMessage | null>(null);
   const [indicativePrices, setIndicativePrices] = useState<IndicativePricesMessage | null>(null);
   const [indicativePricesByKey, setIndicativePricesByKey] = useState<Record<string, IndicativePricesMessage>>({});
   const [tokenMarketsInfo, setTokenMarketsInfo] = useState<RfqContextValue["tokenMarketsInfo"]>(null);
@@ -229,9 +240,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const authWarmupTimerRef = useRef<number | null>(null);
   const [authWarmupDone, setAuthWarmupDone] = useState(false);
   const prefetchedIndicativeKeysRef = useRef<Set<string>>(new Set());
-  const lastWsMessageAtRef = useRef<number>(Date.now());
-  const [wsHealth, setWsHealth] = useState<"healthy" | "quiet" | "recovering">("healthy");
-  const [wsSilentSeconds, setWsSilentSeconds] = useState(0);
   const [showAuthSignModal, setShowAuthSignModal] = useState(false);
   const [dismissedAuthSignModal, setDismissedAuthSignModal] = useState(false);
   const [referralStatus, setReferralStatus] = useState<ReferralStatus>("unknown");
@@ -249,6 +257,33 @@ export function RfqProvider({ children }: RfqProviderProps) {
     (market: string, positionType: "covered_call" | "cash_secured_put") => `${market}:${positionType}`,
     []
   );
+
+  const refreshBestQuote = useCallback(() => {
+    if (quoteExpiryTimerRef.current != null) window.clearTimeout(quoteExpiryTimerRef.current);
+    quoteExpiryTimerRef.current = null;
+    const now = (Date.now() + serverClockOffsetMsRef.current) / 1000;
+    let best: QuoteReceivedMessage | null = null;
+    let nextExpiry = Infinity;
+    for (const [key, quote] of quotesRef.current) {
+      const validUntil = Number(quote.valid_until);
+      if (validUntil <= now) {
+        quotesRef.current.delete(key);
+        continue;
+      }
+      nextExpiry = Math.min(nextExpiry, validUntil);
+      if (!best || quotePrice(quote) > quotePrice(best)) best = quote;
+    }
+    setBestQuote(best);
+    if (Number.isFinite(nextExpiry)) {
+      quoteExpiryTimerRef.current = window.setTimeout(refreshBestQuote, Math.min((nextExpiry - now) * 1000, 2 ** 31 - 1));
+    }
+  }, []);
+
+  const dropRfq = useCallback(() => {
+    pendingRfqRef.current = null;
+    quotesRef.current.clear();
+    refreshBestQuote();
+  }, [refreshBestQuote]);
 
   const fetchPortfolioPrereqs = useCallback(() => {
     const client = clientRef.current;
@@ -270,13 +305,14 @@ export function RfqProvider({ children }: RfqProviderProps) {
       setConnectionState("connecting");
     });
 
+    client.on("welcome", (welcome) => {
+      serverClockOffsetMsRef.current = Number(welcome.server_time_unix_ms) - Date.now();
+    });
+
     client.on("connected", () => {
       console.log("[RfqProvider] Connected (anonymous)");
       setConnectionState("connected");
       setError(null);
-      lastWsMessageAtRef.current = Date.now();
-      setWsHealth("healthy");
-      setWsSilentSeconds(0);
       client.getEarnSummary();
     });
 
@@ -292,13 +328,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
     client.on("authenticated", (sessionId, expiresAt) => {
       console.log("[RfqProvider] Authenticated, session:", sessionId);
       setConnectionState("authenticated");
-      lastWsMessageAtRef.current = Date.now();
-      setWsHealth("healthy");
-      setWsSilentSeconds(0);
       if (walletAddressRef.current) {
         persistSession(walletAddressRef.current, sessionId, expiresAt);
       }
-      client.getEarnSummary();
       client.getMarketDescriptors();
       client.getTokenCaps({ include_markets: false });
       client.getMyReferralInfo();
@@ -310,16 +342,15 @@ export function RfqProvider({ children }: RfqProviderProps) {
       prefetchedIndicativeKeysRef.current.clear();
       tokenMarketsRequest.current = null;
       setTokenMarketsInfo(null);
-      pendingRfqRef.current = null;
-      setCurrentQuote(null);
+      abandonedRequestsRef.current.clear();
+      dropRfq();
       pendingReferralReqsRef.current.clear();
-      setWsHealth("recovering");
     });
 
     client.on("error", (serverErr) => {
       console.error("[RfqProvider] Error:", serverErr);
 
-      if ((serverErr.type === "generic" || serverErr.type === "Generic") && serverErr.data.code === "session_replaced") {
+      if (serverErr.type === "Generic" && serverErr.data.code === "session_replaced") {
         console.warn("[RfqProvider] Session replaced by newer connection, disconnecting.");
         client.disconnect();
         return;
@@ -333,8 +364,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       if (isAuthFailureError(serverErr)) {
         resetToAnonymous(client);
       }
-      const message = (serverErr.type === "generic" || serverErr.type === "Generic") ? serverErr.data.message : serverErr.type;
-      setError(new Error(message));
+      setError(new Error(errorText(serverErr)));
     });
 
     client.on("requireInvite", () => {
@@ -381,11 +411,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       }
     });
 
-    client.on("message", () => {
-      lastWsMessageAtRef.current = Date.now();
-      setWsHealth("healthy");
-      setWsSilentSeconds(0);
-    });
     client.on("tokenCaps", (data) => setTokenCaps(data.tokens));
 
     client.on("earnSummary", (data) => {
@@ -448,20 +473,31 @@ export function RfqProvider({ children }: RfqProviderProps) {
     });
 
     client.on("rfqCreated", (msg) => {
-      const pending = pendingRfqRef.current;
-      if (pending?.type === "requested" && msg.client_request_id === pending.clientRequestId) {
-        pendingRfqRef.current = { type: "created", rfqId: msg.rfq_id, strike: pending.strike };
+      if (msg.request_id && abandonedRequestsRef.current.delete(msg.request_id)) {
+        client.cancelRfq(msg.rfq_id);
+        return;
       }
+      const pending = pendingRfqRef.current;
+      if (pending && msg.request_id === pending.requestId) pending.rfqId = msg.rfq_id;
     });
     client.on("quoteReceived", (quote) => {
       const pending = pendingRfqRef.current;
-      if (pending?.type === "created" && quote.rfq_id === pending.rfqId && quote.strike === pending.strike) setCurrentQuote(quote);
+      if (!pending?.rfqId || quote.rfq_id !== pending.rfqId || Number(quote.strike) !== pending.strike) return;
+      quotesRef.current.set(quote.maker, quote);
+      refreshBestQuote();
+    });
+    client.on("quotesUpdate", (update) => {
+      const pending = pendingRfqRef.current;
+      if (!pending?.rfqId || update.rfq_id !== pending.rfqId) return;
+      quotesRef.current.clear();
+      for (const quote of update.quotes) {
+        if (Number(quote.strike) === pending.strike) quotesRef.current.set(quote.maker, quote);
+      }
+      refreshBestQuote();
     });
     client.on("rfqClosed", (msg) => {
       const pending = pendingRfqRef.current;
-      if (pending?.type !== "created" || msg.rfq_id !== pending.rfqId) return;
-      pendingRfqRef.current = null;
-      setCurrentQuote(null);
+      if (pending?.rfqId && msg.rfq_id === pending.rfqId) dropRfq();
     });
 
     client.on("orderSubmitted", (orderId, sig) => {
@@ -480,33 +516,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
       console.log("[RfqProvider] Cleaning up...");
       client.disconnect();
       clientRef.current = null;
+      if (quoteExpiryTimerRef.current != null) window.clearTimeout(quoteExpiryTimerRef.current);
     };
-  }, [getIndicativeKey]);
-
-
-  useEffect(() => {
-    if (connectionState === "disconnected" || connectionState === "error") return;
-
-    const intervalId = window.setInterval(() => {
-      const client = clientRef.current;
-      if (!client) return;
-
-      const now = Date.now();
-      const silentForMs = now - lastWsMessageAtRef.current;
-      setWsSilentSeconds(Math.max(0, Math.floor(silentForMs / 1000)));
-
-      if (silentForMs > 75_000) {
-        setWsHealth("recovering");
-      } else if (silentForMs > 35_000) {
-        setWsHealth("quiet");
-      } else {
-        setWsHealth("healthy");
-      }
-
-    }, 10_000);
-
-    return () => window.clearInterval(intervalId);
-  }, [connectionState]);
+  }, [getIndicativeKey, refreshBestQuote, dropRfq]);
 
   const authenticate = useCallback(
     async (walletAddress: string, signMessage: (msg: Uint8Array) => Promise<Uint8Array>) => {
@@ -561,8 +573,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         if (isAuthFailureError(serverErr)) {
           resetToAnonymous(client);
         }
-        const message = (serverErr?.type === "generic" || serverErr?.type === "Generic") ? serverErr.data.message : String(err);
-        setError(new Error(message));
+        setError(new Error(serverErr?.type ? errorText(serverErr) : String(err)));
         throw err;
       }
     },
@@ -640,13 +651,13 @@ export function RfqProvider({ children }: RfqProviderProps) {
     setReferralError(null);
     pendingReferralReqsRef.current.clear();
     setPositions([]);
-    pendingRfqRef.current = null;
-    setCurrentQuote(null);
+    abandonedRequestsRef.current.clear();
+    dropRfq();
     setError(null);
 
     const client = clientRef.current;
     if (client) resetToAnonymous(client);
-  }, [walletConnected]);
+  }, [walletConnected, dropRfq]);
 
   useEffect(() => {
     if (connectionState !== "authenticating") {
@@ -707,6 +718,17 @@ export function RfqProvider({ children }: RfqProviderProps) {
     [indicativePricesByKey, getIndicativeKey]
   );
 
+  const cancelRfq = useCallback(() => {
+    const pending = pendingRfqRef.current;
+    if (pending) {
+      const client = clientRef.current;
+      if (!pending.rfqId) abandonedRequestsRef.current.add(pending.requestId);
+      else if (client?.isAuthenticated()) client.cancelRfq(pending.rfqId);
+    }
+    dropRfq();
+    setError(null);
+  }, [dropRfq]);
+
   const submitRfq = useCallback(
     (params: {
       market: string;
@@ -726,11 +748,11 @@ export function RfqProvider({ children }: RfqProviderProps) {
         position_type: params.positionType,
         strike: params.strike,
         quantity: params.quantity,
-        timeoutSeconds: params.timeoutSeconds ?? 30,
+        timeoutSeconds: params.timeoutSeconds ?? RFQ_TTL_SECONDS,
       };
       console.log("[RfqProvider] Submitting RFQ:", rfqRequest);
-      const hasDescriptor = marketDescriptors.some((d) => d.market?.market_pda === params.market);
-      if (!hasDescriptor) {
+      const descriptor = marketDescriptors.find((d) => d.market?.market_pda === params.market);
+      if (!descriptor) {
         console.warn("[RfqProvider] Missing descriptor for market before RFQ; refreshing descriptors", {
           market: params.market,
         });
@@ -738,23 +760,31 @@ export function RfqProvider({ children }: RfqProviderProps) {
         setError(new Error("Market metadata is still loading. Please retry in a moment."));
         return;
       }
-      const clientRequestId = crypto.randomUUID();
-      pendingRfqRef.current = { type: "requested", clientRequestId, strike: params.strike };
-      setCurrentQuote(null);
-      void client.createRfq({ ...rfqRequest, clientRequestId }).catch((err) => {
+      cancelRfq();
+      const requestId = crypto.randomUUID();
+      pendingRfqRef.current = {
+        requestId,
+        strike: params.strike,
+        rfqId: null,
+        rfq: { market: descriptor.market, position_type: params.positionType, quantity: params.quantity },
+      };
+      void client.createRfq({ ...rfqRequest, requestId }).catch((err) => {
         const pending = pendingRfqRef.current;
-        if (pending?.type !== "requested" || pending.clientRequestId !== clientRequestId) return;
-        pendingRfqRef.current = null;
-        const message = err instanceof Error ? err.message : String(err);
+        if (pending?.requestId !== requestId) return;
+        const timedOut = err instanceof ActaWsRequestError && err.kind === "timeout";
+        if (timedOut && pending.rfqId) return;
+        if (timedOut) cancelRfq();
+        else dropRfq();
+        const message = wsErrorMessage(err);
         if (isMissingMarketDescriptorError(message)) {
           client.getMarketDescriptors();
           setError(new Error("Market metadata refreshed. Please retry quote request."));
           return;
         }
-        setError(err instanceof Error ? err : new Error(message));
+        setError(new Error(message));
       });
     },
-    [marketDescriptors]
+    [marketDescriptors, cancelRfq, dropRfq]
   );
 
   const acceptQuote = useCallback(async (rfqId: string, maker: string, orderIdHex: string) => {
@@ -769,12 +799,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
     if (!client) throw new Error("RFQ connection is unavailable");
     if (!client.isAuthenticated()) throw new Error("RFQ connection is not authenticated");
     await client.submitSignedSponsoredTx({ orderIdHex, txBase64 });
-  }, []);
-
-  const clearTransientState = useCallback(() => {
-    pendingRfqRef.current = null;
-    setCurrentQuote(null);
-    setError(null);
   }, []);
 
   const redeemInvite = useCallback((rawCode: string) => {
@@ -835,6 +859,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
   }, [disconnectWallet]);
 
   const getClient = useCallback(() => clientRef.current, []);
+  const rfqTerms = useCallback((rfqId: string) => {
+    const pending = pendingRfqRef.current;
+    return pending?.rfqId === rfqId ? pending.rfq : null;
+  }, []);
 
   const value: RfqContextValue = {
     connectionState,
@@ -845,7 +873,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     earnSummary,
     marketDescriptors,
     positions,
-    currentQuote,
+    bestQuote,
     indicativePrices,
     getIndicativePricesCached,
     tokenMarketsInfo,
@@ -859,8 +887,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
     submitRfq,
     acceptQuote,
     submitSignedTx,
-    clearTransientState,
+    cancelRfq,
     getClient,
+    rfqTerms,
     referralStatus,
     referralInfo,
     referralError,
@@ -876,9 +905,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       {children}
       {showDebugBadge ? (
         <div className="fixed bottom-3 right-3 z-[120] rounded-lg border border-white/20 bg-black/80 px-3 py-2 text-[11px] font-semibold text-white shadow-lg backdrop-blur">
-          <div>WS {wsHealth.toUpperCase()}</div>
           <div className="text-white/70">state: {connectionState}</div>
-          <div className="text-white/70">silent: {wsSilentSeconds}s</div>
         </div>
       ) : null}
       <AppModal

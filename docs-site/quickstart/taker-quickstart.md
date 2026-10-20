@@ -73,14 +73,14 @@ A valid session returns `AuthSuccess`. An invalid, expired or revoked one return
 `GetMarketDescriptors` returns `size_rule`, decimals, oracle PDAs and symbols, which you need to validate quantity and render prices.
 
 ```json
-{ "type": "GetMarketDescriptors", "data": { "request_id": "<uuid>", "active_only": true } }
-{ "type": "GetTokens",            "data": { "request_id": "<uuid>", "active_only": true } }
+{ "type": "GetMarketDescriptors", "data": { "request_id": "<uuid>" } }
+{ "type": "GetTokens",            "data": { "request_id": "<uuid>" } }
 { "type": "GetExpiries",          "data": { "request_id": "<uuid>" } }
 ```
 
-Query requests need `request_id`, and responses echo it. Cache descriptors and refresh on `MarketCreated` / `MarketFinalized`.
+Query requests need `request_id`, and responses echo it. Discovery returns tradable markets only. Cache descriptors and re-read them when an authenticated session receives `ReferenceChanged`, which also fires when a market passes its trading cutoff. Before auth, or without WS, read `GET /api/v1/tokens` and `GET /api/v1/markets` with `If-None-Match` (see [HTTP API](../reference/http-api.md#reference-data)).
 
-`size_rule = { min_size, max_size, step }` is in underlying atomic units, keyed by underlying mint. A valid `quantity` satisfies `min_size <= quantity <= max_size` and `(quantity - min_size) % step == 0`. If a market's underlying mint has no rule, `RfqRequest` and the whole `GetMarketDescriptors` request fail with `missing_size_rule_for_underlying_mint`.
+`size_rule = { min_size, max_size, step }` is in underlying atomic units, keyed by underlying mint. A valid `quantity` satisfies `min_size <= quantity <= max_size` and `(quantity - min_size) % step == 0`. If a market's underlying mint has no rule, `RfqRequest` fails with `missing_size_rule_for_underlying_mint`, and so do `GetMarketDescriptors` and `GetTokens` as a whole. `GetTokens` returns the same rule on each underlying token.
 
 ## The RFQ flow
 
@@ -98,17 +98,17 @@ RfqRequest -> RfqCreated -> QuoteReceived (0..N) -> AcceptQuote
 {
   "type": "RfqRequest",
   "data": {
+    "request_id": "<uuid>",
     "market": "<market PDA, base58>",
     "position_type": "covered_call",
     "strike": 136000000000,
     "quantity": 5000000000,
-    "timeout_seconds": 30,
-    "client_request_id": "<optional uuid>"
+    "timeout_seconds": 30
   }
 }
 ```
 
-`position_type` is `covered_call` or `cash_secured_put`. `client_request_id` is an optional idempotency key. Repeating it while the RFQ is active returns the same `rfq_id`. The server replies with `RfqCreated { rfq_id, rfq_version, expires_at, created_at, order_options }` and broadcasts the RFQ to makers.
+`position_type` is `covered_call` or `cash_secured_put`. `request_id` is required and is also the idempotency key. Repeating it while the RFQ is active returns the same `rfq_id`. The server answers with `CommandAccepted { request_id }` or `RequestError { request_id, error }`. On success it also sends `RfqCreated { rfq_id, rfq_version, request_id, expires_at, created_at, order_options }`, before or after the receipt, and broadcasts the RFQ to makers.
 
 ### 2. Collect quotes
 
@@ -143,6 +143,7 @@ Name the winning quote by `order_id`:
 {
   "type": "AcceptQuote",
   "data": {
+    "request_id": "<uuid>",
     "rfq_id": "<uuid>",
     "maker": "<maker owner pubkey, base58>",
     "order_id": "0x<64 hex>"
@@ -158,12 +159,13 @@ The server locks the quote and builds a transaction to sign:
   "data": {
     "order_id": "0x<64 hex>",
     "tx_base64": "<base64 v0 VersionedTransaction>",
+    "last_valid_block_height": 312456789,
     "signature_deadline": 1710000040
   }
 }
 ```
 
-`tx_base64` is a v0 `VersionedTransaction`. The keeper is the fee payer and co-signer. The taker signs as the collateral authority. Steps in any language:
+`last_valid_block_height` is the block height the transaction's blockhash is valid through. `tx_base64` is a v0 `VersionedTransaction`. The keeper is the fee payer and co-signer. The taker signs as the collateral authority. Steps in any language:
 
 1. base64-decode `tx_base64` to bytes.
 2. Deserialize as a v0 `VersionedTransaction`.
@@ -174,9 +176,11 @@ The server locks the quote and builds a transaction to sign:
 ```json
 {
   "type": "SubmitSignedSponsoredTx",
-  "data": { "order_id": "0x<64 hex>", "tx_base64": "<signed, base64>" }
+  "data": { "request_id": "<uuid>", "order_id": "0x<64 hex>", "tx_base64": "<signed, base64>" }
 }
 ```
+
+`AcceptQuote` and `SubmitSignedSponsoredTx` are answered with `CommandAccepted` or `RequestError` carrying the same `request_id`. A failed submission also carries `delivery` for that request: `not_forwarded` (this request was not sent) or `unknown` (it may have been). Treat the order as not executed only if every submission returned `not_forwarded`; otherwise check `GetOrderStatus` first.
 
 The wallet has to sign versioned (v0) transactions. Legacy-only wallets do not work. Headless takers can sign the raw message bytes with the keypair, as shown below. WS auth also needs arbitrary-byte signing.
 
@@ -210,11 +214,9 @@ The maker's signature is not a signer slot. It is an Ed25519-program verify inst
 Library shortcuts:
 - Rust (`solana-sdk`): deserialize with `bincode`, sign `tx.message.serialize()` with the taker `Keypair`, set `tx.signatures[i]` for your slot. Or work on the raw bytes as above.
 - Python (`solders`): `tx = VersionedTransaction.from_bytes(raw)`, sign `bytes(tx.message)`, assign into `tx.signatures[i]`, re-serialize.
-- TypeScript, ordinary maker quote: `signSponsoredTxBase64({ txBase64, taker, expectedMessageBytes })` from `@acta-markets/ts-sdk/ws` (no `@solana/web3.js`). It fills slot 1 only.
-- TypeScript, vault maker quote: `verifyAndSignSponsoredTx({ orderIdHex, txBase64, intent: { kind: "fill", holder, taker, terms }, tables, bounds, signer })` from `@acta-markets/ts-sdk/ws`. It rebuilds the expected open from the intent and fills slot 0.
-- A wallet's `signTransaction` on the whole transaction finds the right slot in both cases.
+- TypeScript: `verifyAndSignTakerFill({ txBase64, quote, rfq, taker, tables, bounds, signer })` from `@acta-markets/ts-sdk/ws` (no `@solana/web3.js`). It fills slot 1 for an ordinary quote and slot 0 for a vault maker quote (pass `makerVault` from `fetchMakerVault(rpc, quote.maker)`).
 
-`signSponsoredTxBase64` checks the transaction against an expected message you build yourself from the accepted order, configured program and accounts, approved blockhash, instructions and resolved ALT references. Do not copy the expected message from the received transaction.
+It rebuilds the expected transaction from the accepted quote and RFQ terms and refuse to sign on any mismatch: program and market PDA, the order id recomputed from the quote (it must equal `order_id`), the maker's Ed25519 check over it right before `open_position`, `open_position` accounts and arguments, the fee payer, no extra signers or instructions, and a compute budget within `bounds`. The blockhash and the relayer's fee payer address come from the server and need no local copy. Pass the wallet's `signTransaction` as the helper's `signer` instead of calling it on the served transaction directly.
 
 ### 4. Track the order
 
@@ -247,7 +249,7 @@ On a signature timeout or tx-build failure, only the winning quote is discarded.
 { "type": "CancelRfq", "data": { "rfq_id": "<uuid>", "request_id": "<uuid>" } }
 ```
 
-The server responds with `RfqClosed { reason: "taker_cancelled" }`.
+Success has no `CommandAccepted`: the RFQ, active or awaiting your signature, closes with `RfqClosed { reason: "taker_cancelled" }`. Cancelling an RFQ of yours that is already closed gets no reply. A failure is a `RequestError` with the same `request_id`: `RfqNotFound`, or `Generic` `order_already_submitted` once your signed transaction is queued (resolve it with `GetOrderStatus`).
 
 ## Position lifecycle
 
@@ -260,7 +262,7 @@ Position collateral stays in escrow until settlement after market finalization. 
 | `settled` | Market finalized after expiry; assets distributed by ITM/OTM outcome. |
 | `liquidated` | An unfunded ITM position was closed by a permissionless liquidator, who fronts the settlement to the taker. |
 
-Track outcomes with the `chain_events` channel (`ChainEvent(position_settled)`, `ChainEvent(position_liquidated)`) and `GetPositions`. `PositionUpdated` and the `positions` channel are maker-only. Settlement and payoffs are in [Options and settlement](../reference/protocol-flow.md).
+Track outcomes with the `chain_events` channel (`ChainEvent(position_settled)`, `ChainEvent(position_liquidated)`) and `GetPositions`. `PositionUpdated` is a maker-only owner-direct push. Settlement and payoffs are in [Options and settlement](../reference/protocol-flow.md).
 
 ## Reconnection and recovery
 

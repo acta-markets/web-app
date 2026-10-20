@@ -103,7 +103,7 @@ Session lifetime:
 }
 ```
 
-`reason` is a `snake_case` code. `message` is optional.
+`reason` is a code from the [WS error code catalog](ws-common.md#ws-error-codes). `message` is optional.
 
 ### Subscribe
 
@@ -140,14 +140,15 @@ Subscriptions do not survive a disconnect. Resend `Subscribe` after reconnect.
         "underlying": "UnderlyingMintBase58",
         "quote": "QuoteMintBase58",
         "expiry_ts": 1710600000,
-        "is_put": false
+        "is_put": false,
+        "status": "active"
       }
     ]
   }
 }
 ```
 
-`Snapshot.markets` uses the compact `MarketInfo` shape (`pda`, `underlying`, `quote`, `expiry_ts`, `is_put`), not the `MarketDescriptor` used in `RfqCreated.order_options` and discovery responses. `GetMarketDescriptors` returns the full descriptor with `chain_id`, `program_id`, `collateral_mint`, `settlement_mint`, etc.
+`Snapshot.markets` lists active markets in the compact [`MarketInfo`](ws-common.md#marketinfo) shape (`pda`, `underlying`, `quote`, `expiry_ts`, `is_put`, `status`), not the `MarketDescriptor` used in `RfqCreated.order_options` and discovery responses. `GetMarketDescriptors` returns the full descriptor with `chain_id`, `program_id`, `collateral_mint`, `settlement_mint`, etc.
 
 ## Message index
 
@@ -187,15 +188,16 @@ Subscriptions do not survive a disconnect. Resend `Subscribe` after reconnect.
 
 - `TradeExecuted`, `StatsUpdate`, `ChainEvent`
 - `MarketCreated`, `MarketFinalized`
-- `VaultCatalogChanged`, `VaultProjectionAdvanced` (`vaults` channel; see [WebSocket conventions](ws-common.md#vaultcatalogchanged)). `VaultProjectionAdvanced` arrives for every vault; `VaultCatalogChanged` is best-effort, so re-list vaults after (re)connect too.
+- `VaultCatalogChanged`, `VaultProjectionAdvanced` (`vaults` channel; see [WebSocket conventions](ws-common.md#vaultcatalogchanged)). `VaultProjectionAdvanced` arrives for every vault; `VaultCatalogChanged` is not replayed, so re-list vaults after (re)connect too.
 
 `PositionUpdated` is maker-only and is not sent to takers. Track positions with `ChainEvent` (settled/liquidated, `chain_events` channel) and `GetPositions`.
 
-`GetPositions.price` is the maker-signed gross price from the `OpenPosition`
-epoch. The server does not derive it from the on-chain net premium. A row
-without it fails the read with `gross_price_proof` missing. The read also fails
-if finalized audit coverage does not reach the slot where the position was
-seen, or if a later audit gap retracts it.
+`GetPositions.price` is the gross price the maker signed, taken from the
+on-chain event that opened the position. The server does not derive it from
+the net premium. If the server has not verified that event for a position, or
+later finds a gap in its verified chain history up to it, the whole read fails
+with a `RequestError` (`Generic` code `temporarily_unavailable`). Retry with
+backoff.
 
 ## RFQ flow
 
@@ -205,17 +207,25 @@ seen, or if a later audit gap retracts it.
 {
   "type": "RfqRequest",
   "data": {
+    "request_id": "uuid",
     "market": "MarketPdaBase58",
     "position_type": "cash_secured_put",
     "strike": 136000000000,
     "quantity": 20000000,
-    "timeout_seconds": 30,
-    "client_request_id": "optional-uuid"
+    "timeout_seconds": 30
   }
 }
 ```
 
-`client_request_id` is optional and used for idempotent RFQ creation.
+`request_id` is required. It correlates the reply and is the idempotency key: repeating it returns the RFQ it created. The reply is exactly one `CommandAccepted { request_id }` or `RequestError { request_id, error }`. See [correlation semantics](ws-common.md#correlation-semantics).
+
+### CommandAccepted (server -> client)
+
+```json
+{ "type": "CommandAccepted", "data": { "request_id": "uuid" } }
+```
+
+The server accepted `RfqRequest`, `AcceptQuote` or `SubmitSignedSponsoredTx`. It does not mean the order executed; follow the lifecycle pushes for that.
 
 ### RfqCreated (server -> taker)
 
@@ -225,7 +235,7 @@ seen, or if a later audit gap retracts it.
   "data": {
     "rfq_id": "uuid",
     "rfq_version": 1,
-    "client_request_id": "optional-uuid",
+    "request_id": "uuid",
     "expires_at": 1710000030,
     "created_at": 1710000000,
     "order_options": [{ "strike": 136000000000 }]
@@ -288,6 +298,7 @@ Sent to the RFQ owner whenever its executable quote set changes. An empty
 {
   "type": "AcceptQuote",
   "data": {
+    "request_id": "uuid",
     "rfq_id": "uuid",
     "maker": "MakerOwnerPubkeyBase58",
     "order_id": "0x...64chars"
@@ -307,7 +318,7 @@ Sent to the RFQ owner whenever its executable quote set changes. An empty
 }
 ```
 
-Cancels an active RFQ. `request_id` is required on the wire. The server responds with `RfqClosed` and `reason: "taker_cancelled"`.
+Cancels an RFQ. `request_id` is required on the wire. Success has no `CommandAccepted`: the RFQ, active or awaiting your signature, closes with `RfqClosed { reason: "taker_cancelled" }`. Cancelling an RFQ of yours that is already closed gets no reply. A failure is a `RequestError` with the same `request_id`: `RfqNotFound`, or `Generic` `order_already_submitted` once your signed transaction is queued (resolve it with `GetOrderStatus`).
 
 ### SponsoredTxToSign (server -> taker)
 
@@ -317,10 +328,13 @@ Cancels an active RFQ. `request_id` is required on the wire. The server responds
   "data": {
     "order_id": "0x...64chars",
     "tx_base64": "...",
+    "last_valid_block_height": 312456789,
     "signature_deadline": 1710000040
   }
 }
 ```
+
+`last_valid_block_height` is the block height the transaction's blockhash is valid through; after it the transaction can no longer land. `signature_deadline` is Unix seconds.
 
 ### SubmitSignedSponsoredTx (taker -> server)
 
@@ -328,11 +342,14 @@ Cancels an active RFQ. `request_id` is required on the wire. The server responds
 {
   "type": "SubmitSignedSponsoredTx",
   "data": {
+    "request_id": "uuid",
     "order_id": "0x...64chars",
     "tx_base64": "..."
   }
 }
 ```
+
+A failure is a `RequestError` with per-request `delivery` (`not_forwarded` or `unknown`). Unless every submission you made for the order returned `not_forwarded`, resolve it with `GetOrderStatus` before signing anything new. See [RequestError](ws-common.md#requesterror-request-correlated-errors).
 
 ### OrderAccepted (server -> taker)
 
@@ -455,9 +472,9 @@ Discovery requests:
 
 ```json
 { "type": "GetMarkets", "data": { "request_id": "uuid" } }
-{ "type": "GetMarketDescriptors", "data": { "request_id": "uuid", "active_only": true } }
+{ "type": "GetMarketDescriptors", "data": { "request_id": "uuid" } }
 { "type": "GetExpiries", "data": { "request_id": "uuid" } }
-{ "type": "GetTokens", "data": { "request_id": "uuid", "active_only": true } }
+{ "type": "GetTokens", "data": { "request_id": "uuid" } }
 { "type": "GetPositions", "data": { "request_id": "uuid" } }
 { "type": "GetMyActiveRfqs", "data": { "request_id": "uuid" } }
 { "type": "GetOrderStatus", "data": { "request_id": "uuid", "order_id": "0x...64chars" } }
@@ -479,14 +496,14 @@ Query-style responses echo the same `request_id`:
 - `EarnSummary`
 - `TokenMarketsInfo`
 
-`active_only`:
-- defaults to `true` for `GetMarketDescriptors` and `GetTokens`
-- `true` returns tradable markets: not finalized, not disabled, and before the pre-expiry trading cutoff; `false` returns all markets/tokens
-- `GetExpiries` has no `active_only` field and returns the tradable set
+`GetMarkets`, `GetMarketDescriptors`, `GetExpiries` and `GetTokens` answer from the server's [reference snapshot](ws-common.md#reference-data) and return tradable markets only: not finalized, not disabled, and before the pre-expiry trading cutoff. There is no `active_only` field. For closed and finalized markets use [`GET /api/v1/markets?active=false`](http-api.md#get-apiv1markets). Re-read on [`ReferenceChanged`](ws-common.md#referencechanged).
 
-### Market size rules
+### Discovery strict policy
 
-`GetMarketDescriptors` and `GetTokens` require a size rule for every underlying mint. If any market lacks one, the whole request fails with `missing_size_rule_for_underlying_mint`.
+Partial discovery is not supported:
+
+- Every underlying of an active market needs a size rule. If one is missing, `GetMarketDescriptors` and `GetTokens` fail as a whole with `missing_size_rule_for_underlying_mint`.
+- `GetMarketDescriptors` also fails as a whole (`MarketMetadataIncomplete`) when an active market has no oracle PDA.
 
 ### MarketDescriptors payload
 
@@ -530,28 +547,11 @@ For cash-secured puts, `size_rule` still applies to the underlying quantity, not
 
 ### Tokens payload
 
-`Tokens` returns:
-
-```typescript
-type TokenInfo = {
-  mint: string;
-  decimals: number;
-  size_rule: {
-    min_size: number;
-    max_size: number;
-    step: number;
-  };
-  symbol: string;
-};
-
-type Tokens = {
-  request_id: string;
-  underlyings: TokenInfo[];
-  quotes_by_underlying: Record<string, TokenInfo[]>;
-};
+```jsonc
+{ "type": "Tokens", "data": { "request_id": "uuid", "tokens": [ /* TokenInfo */ ] } }
 ```
 
-`size_rule` and `symbol` are present on every token. In `quotes_by_underlying`, each quote token carries its parent underlying's rule.
+`tokens` lists each mint once (see [`TokenInfo`](ws-common.md#tokeninfo)). Underlyings carry `size_rule`, `strike_tick` and `quote_mints`; quote tokens do not. HTTP [`GET /api/v1/tokens`](http-api.md#get-apiv1tokens) serves the same objects.
 
 ### Positions payload
 
@@ -1002,15 +1002,7 @@ Common typed `ServerError` variants (PascalCase on the wire):
 - `Invite` (data is `InviteErrorReason` string, e.g. `"invalid_code"`)
 - `Claim` (data is `ClaimErrorReason` string, e.g. `"code_taken"`)
 
-Common `Generic` variant `code` values in taker flows:
-- `missing_size_rule_for_underlying_mint`: no configured size rule for RFQ market underlying mint
-- `invalid_quantity_size_rule`: RFQ `quantity` violates `min/max/step` constraint
-- `trading_paused`: backend or on-chain pause blocks new trading actions
-- `session_expired`: `ResumeAuth` with invalid/expired/revoked session
-- `already_authenticated`: `ResumeAuth` on an already authenticated connection
-- `hello_required`, `hello_timeout`, `hello_already_sent`
-- `parse_error`, `too_many_parse_errors`, `message_too_large`
-- `internal_error`
+`Generic` codes are listed, with their frames, in the [WS error code catalog](ws-common.md#ws-error-codes).
 
 ### RateLimitReason (in typed `RateLimit` error)
 
@@ -1018,4 +1010,5 @@ Common `Generic` variant `code` values in taker flows:
 |-------|---------|
 | `too_many_active_rfqs_total` | Platform-wide RFQ limit reached |
 | `too_many_active_rfqs_per_taker` | Per-taker RFQ limit reached |
+| `too_many_failed_orders_per_rfq` | `AcceptQuote` refused: too many unresolved failed orders on this RFQ. Create a new RFQ |
 | `too_many_sessions_per_user` | Too many concurrent sessions |
