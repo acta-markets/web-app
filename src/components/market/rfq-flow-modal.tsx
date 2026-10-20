@@ -152,6 +152,19 @@ export function RfqFlowModal({
     onClose();
   };
 
+  const solscanLink = txSignature && (
+    <div className="mt-2 text-sm text-content-secondary">
+      <a
+        href={`https://solscan.io/tx/${txSignature}${IS_MAINNET ? "" : "?cluster=devnet"}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-accent-primary underline"
+      >
+        View on Solscan
+      </a>
+    </div>
+  );
+
   const formatUsdc = (value: number) => {
     return `${value.toLocaleString("en-US", {
       minimumFractionDigits: 2,
@@ -290,18 +303,7 @@ export function RfqFlowModal({
                 Position opened successfully.
               </div>
             )}
-            {txSignature && (
-              <div className="mt-2 text-sm text-content-secondary">
-                <a
-                  href={`https://solscan.io/tx/${txSignature}${IS_MAINNET ? "" : "?cluster=devnet"}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent-primary underline"
-                >
-                  View on Solscan
-                </a>
-              </div>
-            )}
+            {solscanLink}
           </div>
         )}
 
@@ -322,9 +324,10 @@ export function RfqFlowModal({
           <div className={panelClass}>
             <p className="font-mono text-sm text-content-secondary">
               {step === "recovering" ? "Connection lost. Your order will be checked after reconnect."
-                : step === "pending" ? "Your order is still pending. Waiting for execution confirmation."
+                : step === "pending" ? (txSignature ? "Transaction sent. Waiting for on-chain confirmation." : "Order submitted. Waiting for on-chain confirmation.")
                 : "The order outcome is not yet known. Check its status before placing another order."}
             </p>
+            {step === "pending" && solscanLink}
             <div className="mt-3 flex gap-2">
               <AppButton onClick={checkStatus}>Check order status</AppButton>
               {canAbandon && <AppButton variant="secondary" onClick={abandon}>Cancel order</AppButton>}

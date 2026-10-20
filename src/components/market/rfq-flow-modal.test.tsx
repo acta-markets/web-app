@@ -103,6 +103,16 @@ describe("RFQ order modal", () => {
     expect(screen.queryByText("Submitting to blockchain...")).toBeNull();
   });
 
+  it("links the sent transaction while confirmation is pending", async () => {
+    const h = setup();
+    await h.send();
+    expect(screen.getByText("Order submitted. Waiting for on-chain confirmation.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "View on Solscan" })).toBeNull();
+    h.emit("orderSubmitted", "order", "sig123", 2);
+    expect(screen.getByText("Transaction sent. Waiting for on-chain confirmation.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "View on Solscan" }).getAttribute("href")).toContain("/tx/sig123");
+  });
+
   it("lets an order waiting on AcceptQuote be cancelled and closed", async () => {
     const h = setup();
     h.accept.mockImplementation(() => new Promise(() => {}));
