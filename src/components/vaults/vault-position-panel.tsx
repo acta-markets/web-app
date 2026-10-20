@@ -1,15 +1,17 @@
+import { flows } from "@acta-markets/ts-sdk/chain";
 import { AppButton } from "@/components/app-ui/app-button";
 import type { VaultDepositorState } from "@/lib/vaults/depositor";
-import { formatCountdown, formatDate, formatTokenAmount } from "@/lib/vaults/format";
+import { formatCountdown, formatDate, formatPercent, formatTokenAmount } from "@/lib/vaults/format";
 import { sharesToMain } from "@/lib/vaults/math";
 import {
   cancelBlockMessage,
   depositSelfProcessView,
+  entryReturnPct,
   withdrawSelfProcessView,
   type SelfProcessView,
 } from "@/lib/vaults/presentation";
-import { cancelDepositBlock, cancelWithdrawBlock, refundDepositBlock, type VaultActionBlock } from "@/lib/vaults/rules";
 import type { Vault } from "@/lib/vaults/types";
+import { useDepositorPerformance } from "./use-depositor-performance";
 
 export type PositionAction = "cancel_deposit" | "cancel_withdraw" | "refund_deposit" | "process_deposit" | "process_withdraw";
 
@@ -31,7 +33,7 @@ function RequestRow({
   divider: boolean;
   title: string;
   createdAt: bigint;
-  cancelBlock: VaultActionBlock | null;
+  cancelBlock: flows.VaultActionBlock | null;
   onCancel: () => void;
   extra?: { label: string; onClick: () => void } | null;
   selfProcess: SelfProcessView;
@@ -82,6 +84,7 @@ export function VaultPositionPanel({
   vault,
   symbol,
   state,
+  wallet,
   error,
   nowSecs,
   actionsEnabled,
@@ -92,6 +95,7 @@ export function VaultPositionPanel({
   vault: Vault;
   symbol: string;
   state: VaultDepositorState | null;
+  wallet: string | null;
   error: Error | null;
   nowSecs: number;
   actionsEnabled: boolean;
@@ -101,25 +105,34 @@ export function VaultPositionPanel({
 }) {
   const decimals = vault.main_decimals;
   const disabled = !actionsEnabled || busy;
+  // escrowed withdrawal shares are still the wallet's until processed
+  const shares = state ? state.shareBalance + (state.withdrawRequest?.shares ?? 0n) : 0n;
+  const performance = useDepositorPerformance(vault, wallet, shares);
+  const entryReturn = performance ? entryReturnPct(performance, shares) : null;
 
   let body: React.ReactNode;
   if (state) {
-    const empty = state.shareBalance === 0n && !state.depositRequest && !state.withdrawRequest;
-    const value = sharesToMain(state.shareBalance, BigInt(vault.share_price));
+    const empty = shares === 0n && !state.depositRequest;
+    const value = performance?.value ?? sharesToMain(shares, BigInt(vault.share_price));
     body = empty ? (
       <p className="mt-2 font-mono text-sm text-content-primary">No position yet</p>
     ) : (
       <>
-        {state.shareBalance > 0n ? (
+        {shares > 0n ? (
           <>
             <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <span className="font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">
                 {formatTokenAmount(value, decimals)} {symbol}
               </span>
               <span className="font-mono text-sm tabular-nums text-content-secondary">
-                {formatTokenAmount(state.shareBalance, decimals)} shares
+                {formatTokenAmount(shares, decimals)} shares
               </span>
             </div>
+            {entryReturn !== null ? (
+              <p className="mt-1 font-mono text-sm tabular-nums text-content-secondary">
+                Since entry <span className="text-content-primary">{formatPercent(entryReturn, { signed: true })}</span>
+              </p>
+            ) : null}
             <p className="mt-1 font-mono text-xs leading-[1.4] text-content-secondary">
               At the last share price. A withdrawal pays the price set when it is processed.
             </p>
@@ -127,12 +140,12 @@ export function VaultPositionPanel({
         ) : null}
         {state.depositRequest ? (
           <RequestRow
-            divider={state.shareBalance > 0n}
+            divider={shares > 0n}
             title={`Pending deposit: ${formatTokenAmount(state.depositRequest.amount, decimals)} ${symbol}`}
             createdAt={state.depositRequest.createdAt}
-            cancelBlock={cancelDepositBlock(vault, nowSecs)}
+            cancelBlock={flows.cancelDepositBlock(vault, nowSecs)}
             onCancel={() => onAction("cancel_deposit")}
-            extra={refundDepositBlock(vault) === null ? { label: "Refund", onClick: () => onAction("refund_deposit") } : null}
+            extra={flows.refundDepositBlock(vault) === null ? { label: "Refund", onClick: () => onAction("refund_deposit") } : null}
             selfProcess={depositSelfProcessView(vault, state.depositRequest.createdAt, nowSecs)}
             onSelfProcess={() => onAction("process_deposit")}
             nowSecs={nowSecs}
@@ -141,10 +154,10 @@ export function VaultPositionPanel({
         ) : null}
         {state.withdrawRequest ? (
           <RequestRow
-            divider={state.shareBalance > 0n || state.depositRequest !== null}
+            divider={shares > 0n || state.depositRequest !== null}
             title={`Pending withdrawal: ${formatTokenAmount(state.withdrawRequest.shares, decimals)} shares`}
             createdAt={state.withdrawRequest.createdAt}
-            cancelBlock={cancelWithdrawBlock(vault, nowSecs)}
+            cancelBlock={flows.cancelWithdrawBlock(vault, nowSecs)}
             onCancel={() => onAction("cancel_withdraw")}
             selfProcess={withdrawSelfProcessView(vault, state.withdrawRequest.createdAt, nowSecs)}
             onSelfProcess={() => onAction("process_withdraw")}

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { AppCard } from "@/components/app-ui/app-card";
 import { getTokenSymbolByMint } from "@/lib/tokens";
 import { formatBps, formatDuration, formatTokenAmount, shortAddress, solscanUrl } from "@/lib/vaults/format";
-import { depositCapacity } from "@/lib/vaults/math";
 import { VAULTS_SAMPLE_MODE } from "@/lib/vaults/sample";
 import type { Vault } from "@/lib/vaults/types";
 
@@ -32,12 +31,12 @@ function Address({ value, kind }: { value: string; kind: "account" | "token" }) 
 }
 
 function Capacity({ vault, symbol }: { vault: Vault; symbol: string }) {
-  const cap = BigInt(vault.cap_limit);
-  if (cap === 0n) return <>No cap</>;
+  const { cap_limit, remaining } = vault.capacity;
+  if (remaining === null) return <>No cap</>;
+  const cap = BigInt(cap_limit);
   const decimals = vault.main_decimals;
   const used = BigInt(vault.equity) + BigInt(vault.pending_deposit_amount);
   const usedPct = Math.min(100, Number((used * 10_000n) / cap) / 100);
-  const left = depositCapacity(vault) ?? 0n;
   return (
     <div className="flex flex-col items-end gap-1.5">
       <span className="tabular-nums">
@@ -47,7 +46,7 @@ function Capacity({ vault, symbol }: { vault: Vault; symbol: string }) {
         <div className="h-full bg-accent-primary" style={{ width: `${usedPct}%` }} />
       </div>
       <span className="text-xs tabular-nums text-content-secondary">
-        {formatTokenAmount(left, decimals, { compact: true })} {symbol} left
+        {formatTokenAmount(BigInt(remaining), decimals, { compact: true })} {symbol} left
       </span>
     </div>
   );
@@ -91,21 +90,19 @@ export function VaultTerms({ vault, symbol }: { vault: Vault; symbol: string }) 
       <AppCard className="flex flex-col p-4">
         <h2 className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">Risks</h2>
         <ul className="mt-3 list-disc space-y-2 pl-5 font-mono text-sm leading-[1.5] text-content-primary marker:text-accent-secondary">
-          <li>The manager can make bad trades. You carry the losses.</li>
-          <li>Selling calls caps your upside: gains above the strike go to the buyer.</li>
-          <li>Selling puts can leave the vault buying an asset for more than it is worth.</li>
+          <li>Losing trades lose your money.</li>
+          <li>Sold calls cap your upside at the strike.</li>
+          <li>Sold puts can buy the asset above its price.</li>
           <li>Bought options can expire worthless.</li>
-          <li>Fees are paid in new shares, so your slice of the vault shrinks.</li>
         </ul>
 
         <h2 className="mt-6 font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">
           How requests work
         </h2>
         <ul className="mt-3 list-disc space-y-2 pl-5 font-mono text-sm leading-[1.5] text-content-primary marker:text-accent-secondary">
-          <li>You submit a request. The vault completes it at the end of the cycle, at the share price it calculates then.</li>
-          <li>Until a deposit completes, your funds are held aside and earn nothing.</li>
-          <li>Expiry is when trading ends, not when you are paid.</li>
-          <li>You can cancel a pending request until the cycle reaches expiry or the vault starts pricing.</li>
+          <li>Deposits and withdrawals settle at the end of the cycle, at its share price.</li>
+          <li>A pending deposit earns nothing.</li>
+          <li>You can cancel a request until the cycle expires or the vault starts pricing.</li>
         </ul>
 
         <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-5 font-mono text-sm">

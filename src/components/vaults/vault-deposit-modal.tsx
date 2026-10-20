@@ -1,5 +1,6 @@
 "use client";
 
+import { flows } from "@acta-markets/ts-sdk/chain";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { AppAmountInput } from "@/components/app-ui/app-amount-input";
@@ -12,7 +13,7 @@ import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
 import { isNativeVault, type VaultDepositorState } from "@/lib/vaults/depositor";
 import { formatSharePrice, formatTokenAmount, solscanUrl } from "@/lib/vaults/format";
-import { depositCapacity, formatUnits, mainToShares, parseUnits, sharesToMain } from "@/lib/vaults/math";
+import { formatUnits, mainToShares, parseUnits, sharesToMain } from "@/lib/vaults/math";
 import {
   LAST_SHARES_COPY,
   REQUEST_EXISTS_COPY,
@@ -24,8 +25,7 @@ import {
   type VaultModalTab,
 } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
-import { requestDepositBlock, requestWithdrawBlock } from "@/lib/vaults/rules";
-import { VAULTS_SAMPLE_MODE, peekSampleData } from "@/lib/vaults/sample";
+import { SAMPLE_WALLET, VAULTS_SAMPLE_MODE, peekSampleData } from "@/lib/vaults/sample";
 import { describeVaultTxError } from "@/lib/vaults/tx-errors";
 import type { Vault } from "@/lib/vaults/types";
 import { useVaultDepositor, type VaultDepositorActions } from "./use-vault-depositor";
@@ -136,7 +136,7 @@ export function VaultDepositModal({
   const status = vaultStatus(vault, nowSecs);
   const pending = tx.kind === "pending";
 
-  const capacity = depositCapacity(vault);
+  const capacity = vault.capacity.remaining === null ? null : BigInt(vault.capacity.remaining);
   // native vaults wrap SOL on deposit, so plain SOL counts, less what fees and rent need
   const walletAvailable = useMemo(() => {
     if (!position) return 0n;
@@ -186,7 +186,7 @@ export function VaultDepositModal({
   // cannot open a vault that is closed to the request. Fixture vaults have no
   // wallet and no actions, so they run the same checks and stop at a disabled button.
   const depositCta = (): Cta => {
-    const block = requestDepositBlock(vault, nowSecs);
+    const block = flows.requestDepositBlock(vault, nowSecs);
     if (block) return { label: "Request deposit", disabled: true, notice: depositBlockMessage(block, vault) };
     if (!VAULTS_SAMPLE_MODE) {
       if (!walletAddress) return { label: "Connect wallet", onClick: openSidebar };
@@ -204,7 +204,7 @@ export function VaultDepositModal({
   };
 
   const withdrawCta = (): Cta => {
-    const block = requestWithdrawBlock(vault, nowSecs);
+    const block = flows.requestWithdrawBlock(vault, nowSecs);
     if (block) return { label: "Request withdrawal", disabled: true, notice: withdrawBlockMessage(block, vault) };
     if (!VAULTS_SAMPLE_MODE && !walletAddress) return { label: "Connect wallet", onClick: openSidebar };
     if (pending) return { label: "Submitting…", disabled: true };
@@ -250,6 +250,7 @@ export function VaultDepositModal({
           vault={vault}
           symbol={symbol}
           state={position}
+          wallet={VAULTS_SAMPLE_MODE ? SAMPLE_WALLET : walletAddress}
           error={VAULTS_SAMPLE_MODE ? null : live.error}
           nowSecs={nowSecs}
           actionsEnabled={actions !== null}
@@ -267,8 +268,8 @@ export function VaultDepositModal({
             <div className="font-mono text-base font-medium text-content-primary">{successCopy(requested.action, vault)}</div>
             <p className="mt-2 font-mono text-sm leading-[1.5] text-content-secondary">
               {requested.action === "deposit"
-                ? "Your deposit is pending and earns nothing until the vault completes it at the end of the cycle. It then converts to shares at the share price calculated at that point."
-                : `Your withdrawal is pending. When the vault completes it at the end of the cycle, your shares are paid out in ${symbol} at the share price calculated then.`}
+                ? "Pending until the cycle ends. It earns nothing until then and converts to shares at that cycle's price."
+                : `Pending until the cycle ends, then paid out in ${symbol} at that cycle's price.`}
             </p>
             <a
               href={solscanUrl("tx", requested.signature)}

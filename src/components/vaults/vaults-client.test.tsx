@@ -2,26 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { getTokenMint } from "@/lib/tokens";
-import { makeVault, parseSampleData } from "@/lib/vaults/sample";
+import { makePerformance, makeVault, parseSampleData } from "@/lib/vaults/sample";
 import sampleFile from "@/lib/vaults/sample-data.json";
 import type { Vault } from "@/lib/vaults/types";
 
 const NOW = 1_800_000_000;
 const SAMPLE = parseSampleData(sampleFile, NOW);
 
-// not in the sample set: a vault that only takes withdrawals now, with the best APR on paper
+// not in the sample set: a vault that only takes withdrawals now, with the best APY on paper
 const CLOSING = makeVault({
   vault_pda: "Wind1ngDown111111111111111111111111111111111",
   main_mint: getTokenMint("USDC")!,
   safety: "closing",
-  performance: {
-    status: "annualized",
-    annualized_return_pct: 40,
-    cycles_completed: 9,
-    last_cycle_return_pct: 1,
-    cumulative_return_pct: 5,
-    track_record_secs: "5000000",
-  },
+  performance: makePerformance({ apy_30d: 60 }),
 });
 
 const state = vi.hoisted(() => ({
@@ -31,17 +24,10 @@ const state = vi.hoisted(() => ({
     loading: false,
     refresh: () => {},
   },
-  prices: {
-    data: null as Record<string, number> | null,
-    error: null as Error | null,
-    loading: false,
-    refresh: () => {},
-  },
 }));
 
 vi.mock("./use-vaults", () => ({
   useVaults: () => state.vaults,
-  useUsdPrices: () => state.prices,
   useNowSecs: () => NOW,
 }));
 
@@ -68,7 +54,6 @@ const card = (name: string) => within(screen.getByRole("article", { name }));
 
 beforeEach(() => {
   state.vaults = { data: SAMPLE.vaults, error: null, loading: false, refresh: vi.fn() };
-  state.prices = { data: { ...SAMPLE.pricesUsd }, error: null, loading: false, refresh: vi.fn() };
   window.history.replaceState(null, "", "/earn");
 });
 
@@ -77,10 +62,10 @@ afterEach(() => {
 });
 
 describe("VaultsClient", () => {
-  it("lists the highest proven APR first and vaults winding down last", () => {
+  it("lists the highest proven APY first and vaults winding down last", () => {
     state.vaults = { ...state.vaults, data: [CLOSING, ...SAMPLE.vaults] };
     render(<VaultsClient initialCategory="all" />);
-    expect(cardNames()).toEqual(["SPCX", "ZEC", "NVDAx", "HYPE", "jitoSOL", "USDC", "SPYx", "USDC vault"]);
+    expect(cardNames()).toEqual(["HYPE", "SPCX", "jitoSOL", "NVDAx", "USDC", "SPYx", "ZEC", "USDC vault"]);
   });
 
   it("filters by section and keeps the URL shareable", async () => {
@@ -106,7 +91,7 @@ describe("VaultsClient", () => {
     expect(screen.getByText("Nothing in Stocks yet.")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Show all vaults" }));
-    expect(cardNames()).toEqual(["ZEC", "HYPE", "jitoSOL", "USDC"]);
+    expect(cardNames()).toEqual(["HYPE", "jitoSOL", "USDC", "ZEC"]);
   });
 
   it("sorts by TVL or name, and keeps the order inside a section", async () => {
@@ -125,23 +110,15 @@ describe("VaultsClient", () => {
     expect(cardNames()).toEqual(["NVDAx", "SPCX", "SPYx"]);
   });
 
-  it("shows TVL in dollars, and in the asset itself when it has no price", () => {
-    const { ZEC: _unpriced, ...prices } = SAMPLE.pricesUsd;
-    state.prices = { ...state.prices, data: prices };
+  it("shows the backend's dollar TVL, and the asset itself without one", () => {
+    state.vaults = {
+      ...state.vaults,
+      data: SAMPLE.vaults.map((v) => (v.vault_pda === SAMPLE.keys.zec ? { ...v, tvl_usd_1e9: null } : v)),
+    };
     render(<VaultsClient initialCategory="all" />);
     expect(card("jitoSOL").getByText("$102K")).toBeTruthy();
     expect(card("USDC").getByText("$2.11M")).toBeTruthy();
     expect(card("ZEC").getByText("7,238 ZEC")).toBeTruthy();
-  });
-
-  it("holds TVL until prices answer, and shows asset amounts if they never do", () => {
-    state.prices = { ...state.prices, data: null };
-    const { rerender } = render(<VaultsClient initialCategory="all" />);
-    expect(card("jitoSOL").queryByText(/TVL/)).toBeNull();
-
-    state.prices = { ...state.prices, data: null, error: new Error("down") };
-    rerender(<VaultsClient initialCategory="all" />);
-    expect(card("jitoSOL").getByText("707.85 jitoSOL")).toBeTruthy();
   });
 
   it("opens deposits on Deposit, and a closing vault on Withdraw", async () => {

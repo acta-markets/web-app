@@ -1,6 +1,8 @@
 import { AppButton, AppButtonLink } from "@/components/app-ui/app-button";
 import { cn } from "@/lib/cn";
-import { primaryVaultAction, vaultApr, type VaultModalTab } from "@/lib/vaults/presentation";
+import { shortAddress } from "@/lib/vaults/format";
+import { CuratorLogo } from "./curator-logo";
+import { formatVaultTvl, primaryVaultAction, vaultApr, type VaultModalTab } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
 import type { Vault } from "@/lib/vaults/types";
 import { AprLabel } from "./vault-apr";
@@ -23,18 +25,15 @@ function CardBand() {
   );
 }
 
-/** Deposit asset (the logo), name, TVL, APR, curator, Deposit and Details. Everything else lives on the vault page. */
+/** Deposit asset (the logo), name, TVL, APY, curator, Deposit and Details. Everything else lives on the vault page. */
 export function VaultCard({
   vault,
   meta,
-  tvl,
   nowSecs,
   onOpen,
 }: {
   vault: Vault;
   meta: ResolvedVaultMeta;
-  /** formatted TVL, null while prices load */
-  tvl: string | null;
   nowSecs: number;
   onOpen: (pda: string, tab: VaultModalTab) => void;
 }) {
@@ -58,13 +57,9 @@ export function VaultCard({
           >
             {meta.name}
           </h3>
-          {tvl === null ? (
-            <div className="h-[17px] w-24 animate-pulse rounded bg-action-primary" />
-          ) : (
-            <p className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
-              TVL <span className="tabular-nums text-content-primary">{tvl}</span>
-            </p>
-          )}
+          <p className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
+            TVL <span className="tabular-nums text-content-primary">{formatVaultTvl(vault, meta.assetSymbol)}</span>
+          </p>
         </div>
       </div>
 
@@ -84,11 +79,15 @@ export function VaultCard({
         <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center">
           <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Curator</span>
           <span
-            className="w-full truncate font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary"
-            title={meta.curatorIsAddress ? `Vault governance ${vault.governance}` : `Curated by ${meta.curator}`}
+            className="flex w-full items-center justify-center gap-1.5 font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary"
+            title={`Vault governance ${vault.governance}`}
           >
-            {meta.curator}
+            {meta.logoUrl ? <CuratorLogo src={meta.logoUrl} size={16} /> : null}
+            <span className="truncate">{meta.curator}</span>
           </span>
+          {!meta.curatorIsAddress && (
+            <span className="font-mono text-xs leading-[1.2] text-content-secondary">{shortAddress(vault.governance)}</span>
+          )}
         </div>
       </div>
 

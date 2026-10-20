@@ -27,6 +27,42 @@ describe("resolveVaultMeta", () => {
     });
   });
 
+  it("prefers the backend's metadata and keeps the governance address when it names no curator", () => {
+    const vault = { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE };
+    const fixture = { "pda-1": { name: "SOL desk", curator: "Acta", description: "Weekly calls" } };
+    expect(resolveVaultMeta({ ...vault, metadata: { name: "SOL income", curator: "Desk" } }, fixture)).toMatchObject({
+      name: "SOL income",
+      curator: "Desk",
+      curatorIsAddress: false,
+      description: "Weekly calls",
+      registered: true,
+    });
+    expect(resolveVaultMeta({ ...vault, metadata: { name: "SOL income" } }, {})).toMatchObject({
+      name: "SOL income",
+      curator: "9amK…SbUf",
+      curatorIsAddress: true,
+      registered: true,
+    });
+  });
+
+  it("passes curator links only when they are https URLs and a bare handle", () => {
+    const vault = { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE };
+    const good = resolveVaultMeta({ ...vault, metadata: {
+      name: "SOL income", strategy: "Weekly calls", website: "https://acta.markets",
+      twitter: "acta_markets", logo_url: "https://acta.markets/logo.png",
+    } }, {});
+    expect(good).toMatchObject({
+      strategy: "Weekly calls", website: "https://acta.markets",
+      twitter: "acta_markets", logoUrl: "https://acta.markets/logo.png",
+    });
+    const bad = resolveVaultMeta({ ...vault, metadata: {
+      name: "SOL income", website: "javascript:alert(1)", twitter: "@acta", logo_url: "http://acta.markets/logo.png",
+    } }, {});
+    expect(bad.website).toBeUndefined();
+    expect(bad.twitter).toBeUndefined();
+    expect(bad.logoUrl).toBeUndefined();
+  });
+
   it("falls back to the asset and the governance address without inventing a curator", () => {
     const meta = resolveVaultMeta({ vault_pda: "pda-2", main_mint: SOL_MINT, governance: GOVERNANCE }, {});
     expect(meta).toMatchObject({

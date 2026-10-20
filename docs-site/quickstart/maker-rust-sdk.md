@@ -10,10 +10,10 @@ Runnable examples ship with the crate: run them with `cargo run --example <name>
 
 ```toml
 [dependencies]
-acta-maker-sdk = { version = "0.5.2", features = ["ws-client"] }
+acta-maker-sdk = { version = "0.5.3", features = ["ws-client"] }
 ```
 
-Version 0.5.2 targets the program deployed to devnet and mainnet on 2026-10-17. Upgrading from 0.5.0/0.5.1: `ManagedWsConfig::new` takes the maker owner, `QuoteBuilder` requires `maker_owner` and `min_valid_until`, and `MakerQuoteClient` quotes through `quote_in_epoch` / `replace_in_epoch` / `batch_quotes_in_epoch` (see the crate's `CHANGELOG.md`). Vault operators use the `vault` feature and the `/vault` session described in [Vault API, SDKs and swaps](../protocol/vault-integration.md).
+Version 0.5.3 targets the program deployed to devnet and mainnet on 2026-10-17. Upgrading from 0.5.0/0.5.1: `ManagedWsConfig::new` takes the maker owner, `QuoteBuilder` requires `maker_owner` and `min_valid_until`, and `MakerQuoteClient` quotes through `quote_in_epoch` / `replace_in_epoch` / `batch_quotes_in_epoch` (see the crate's `CHANGELOG.md`). Vault operators use the `vault` feature and the `/vault` session described in [Vault API, SDKs and swaps](../protocol/vault-integration.md).
 
 Quote-only integrations need `ws-client`. `chain` adds Solana instruction builders, including `chain::vault`. `chain-rpc` adds on-chain reads. `http` adds the read-only HTTP client. `vault` adds the vault operator client and implies `ws-client` and `chain`.
 
@@ -86,6 +86,10 @@ let quote = RfqBinding::from_broadcast(rfq)?
 quote_client.quote_in_epoch(quote, recovery_epoch).await?;
 ```
 
+With the `http` feature, `.venue(&venue)` replaces `.min_valid_until(...)`: given the `Venue` from `HttpClient::new(DEVNET_API)?.venue().await?`, it sets the floor to `now + min_quote_validity_seconds` at the current clock and refuses a `valid_until` whose `valid_until − settlement_buffer_seconds` is not after now (`QuoteBuildError::ValidUntilWithinSettlementBuffer`). Fetch the venue at startup; the builder reads the clock when `.venue` is called. `DEVNET_API`, `DEVNET_WS`, `MAINNET_API` and `MAINNET_WS` are the public origins.
+
+Units: `RfqBroadcast.quantity` and `QuoteFilled.quantity` are underlying atoms; `Price` and `Strike` are 1e9-scaled per underlying token, independent of decimals. Mint decimals come only from `GetMarketDescriptors` on `/maker/data` (`underlying_decimals`, `quote_decimals` per `market_pda`); `MarketDecimals::observe(&message)` caches them and `get(market_pda)` returns them. `total_premium_quote_atoms(price, quantity, underlying_decimals, quote_decimals)` is the fill's gross premium (before protocol fees) in quote atoms with the contract's rounding; `Price::as_decimal()`, `Strike::as_decimal()` and `Quantity::to_units(decimals)` are for display.
+
 `QuoteExpiry` stores whole Unix seconds; build it with `QuoteExpiry::from_unix_seconds(...)` or `QuoteExpiry::after(...)`. `RfqBinding` can also pick a permitted strike from `order_options`. The `managed_quote` example (`cargo run --example managed_quote --features ws-client,http`) shows recovery, epoch checks and gap handling.
 
 `quote_in_epoch`, `replace_in_epoch` and `batch_quotes_in_epoch` (and their `try_` forms) return `NotReady` if the connection has changed. Pass the epoch whose recovery you applied, not the latest transport epoch.
@@ -107,7 +111,7 @@ Lifecycle events arrive on the managed receiver with a connection epoch and sequ
 | `QuoteBestStatus` / `QuoteOutbid` | Current book position. |
 | `QuoteRefreshRequested` | Settlement-buffer cutoff approaching. Resubmit with `valid_until ≥ min_valid_until`. |
 | `QuoteSelected` | Quote locked; awaiting the taker signature. |
-| `QuoteFilled` | Position opened on-chain. Carries `position_pda` and `tx_signature`. |
+| `QuoteFilled` | Position opened on-chain. Carries `market_pda`, `expiry_ts`, `position_type`, `position_pda` and `tx_signature`, so it can be attributed without the RFQ. |
 | `QuoteCancelled` | Removes only the listed `order_ids`. An empty list removes nothing. Not an ACK for a cancel command. |
 | `QuoteExpired` | Emitted only when `quote_expired` was opted into via `Hello`. |
 | `RfqAvailableAgain` | Settlement reverted; re-quote with a fresh `order_id`. |

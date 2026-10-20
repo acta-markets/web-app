@@ -1,12 +1,15 @@
-import { formatDate, formatPercent, formatTokenAmount, NONE } from "./format";
-import {
-  processIdleWithdrawalBlock,
-  requestDepositBlock,
-  selfProcessDepositBlock,
-  selfProcessWithdrawBlock,
-  type VaultActionBlock,
-} from "./rules";
-import type { Vault, VaultPerformance, VaultPhase, VaultSafety } from "./types";
+import { flows } from "@acta-markets/ts-sdk/chain";
+import type { DepositorPerformance } from "@acta-markets/ts-sdk/http";
+import { getToken, getTokenSymbolByMint } from "@/lib/tokens";
+import { formatDate, formatPercent, formatTokenAmount, formatUsd, NONE, shortAddress } from "./format";
+import type {
+  Vault,
+  VaultExposure,
+  VaultPerformance,
+  VaultPhase,
+  VaultPremiumFlow,
+  VaultSafety,
+} from "./types";
 
 export type AprSource = { label: "Staking" | "Premium"; pct: number };
 
@@ -22,29 +25,33 @@ const PREMIUM_NOTE = "Premium is what the vault earns selling options, after fee
 const STAKING_NOTE = "Staking is the deposit asset's own yield, which the vault's share price does not include.";
 
 /**
- * The one APR every surface shows. Premium is the backend's annualized return,
- * which needs 30 days of history; younger vaults read "New", and a vault whose
- * performance has not loaded reads as empty. A staked deposit asset adds its
- * own yield, so the headline is always the sum of its parts.
+ * The one APY every surface shows: the backend's 30-day APY plus any staking
+ * yield of the deposit asset. A vault without 30 days of history reads "New";
+ * one whose history the backend cannot cover reads as empty.
  */
-export function vaultApr(performance: VaultPerformance, stakingAprPct = 0): AprView {
+export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0): AprView {
   const staking: AprSource[] = stakingAprPct > 0 ? [{ label: "Staking", pct: stakingAprPct }] : [];
-  switch (performance.status) {
-    case "annualized": {
-      const premium = performance.annualized_return_pct;
-      return {
-        value: formatPercent(stakingAprPct + premium),
-        muted: false,
-        sources: [...staking, { label: "Premium", pct: premium }],
-        note: staking.length ? `${STAKING_NOTE} ${PREMIUM_NOTE}` : PREMIUM_NOTE,
-      };
-    }
-    case "short_track_record":
-    case "no_track_record":
-      return { value: "New", muted: true, sources: staking, note: "Premium shows after 30 days of history." };
-    default:
-      return { value: NONE, muted: true, sources: [], note: "Not available yet." };
+  const premium = performance?.apy_30d ?? null;
+  if (premium !== null) {
+    return {
+      value: formatPercent(stakingAprPct + premium),
+      muted: false,
+      sources: [...staking, { label: "Premium", pct: premium }],
+      note: staking.length ? `${STAKING_NOTE} ${PREMIUM_NOTE}` : PREMIUM_NOTE,
+    };
   }
+  const all = performance?.returns.all ?? null;
+  const young =
+    performance?.covered === true && (all === null || Number(performance.computed_at) - Number(all.from_time) < APY_WINDOW_SECS);
+  if (!young) return { value: NONE, muted: true, sources: [], note: "Not available." };
+  return { value: "New", muted: true, sources: staking, note: "Premium shows after 30 days of history." };
+}
+
+/** Return of the current capital generation, net of fees. */
+export function vaultReturn(performance: VaultPerformance | null): { value: string; since: number | null } {
+  const all = performance?.returns.all ?? null;
+  if (all === null) return { value: NONE, since: null };
+  return { value: formatPercent(all.return_pct, { signed: true }), since: Number(all.from_time) };
 }
 
 const WIND_DOWN: ReadonlySet<VaultSafety> = new Set<VaultSafety>(["closing", "withdraw_only", "emergency_unwind"]);
@@ -53,71 +60,150 @@ export function isWindingDown(vault: Pick<Vault, "safety">): boolean {
   return WIND_DOWN.has(vault.safety);
 }
 
-const STATUS_RANK: Record<string, number> = {
-  annualized: 0,
-  short_track_record: 1,
-  no_track_record: 2,
-  unavailable: 3,
-};
-
-/** What the grid sorts on: the vault, its display name and staking yield, and its TVL in dollars. */
+/** What the grid sorts on: the vault, its display name and staking yield. */
 export type VaultSortEntry = {
   vault: Vault;
   meta: { name: string; stakingAprPct: number };
-  /** null when the deposit asset has no price */
-  tvlUsd: number | null;
 };
 
-export type VaultSort = "apr" | "tvl" | "name";
+export type VaultSort = "apy" | "tvl" | "name";
 
 function byName(a: VaultSortEntry, b: VaultSortEntry): number {
   return a.meta.name.localeCompare(b.meta.name, "en", { sensitivity: "base", numeric: true });
 }
 
-// the APR people see, staking included, so the order matches the cards
-function yieldOf({ vault, meta }: VaultSortEntry): number {
+// 0: a 30-day APY, 1: a shorter track record, 2: nothing to rank on
+function yieldRank({ vault }: VaultSortEntry): [number, number] {
   const performance = vault.performance;
-  if (performance.status === "annualized") return performance.annualized_return_pct + meta.stakingAprPct;
-  if (performance.status === "short_track_record") return performance.cumulative_return_pct;
-  return 0;
+  if (performance?.apy_30d != null) return [0, performance.apy_30d];
+  if (performance?.returns.all != null) return [1, performance.returns.all.return_pct];
+  return [2, 0];
 }
 
 /**
- * Highest proven yield first, as the integration notes ask: annualized, then
- * short track records by cumulative return, then new vaults. Vaults winding
- * down go last whatever their history.
+ * Highest proven yield first: 30-day APY (staking included, so the order
+ * matches the cards), then younger vaults by return so far, then the rest.
+ * Vaults winding down go last whatever their history.
  */
 export function compareVaultsByYield(a: VaultSortEntry, b: VaultSortEntry): number {
   const windDown = Number(isWindingDown(a.vault)) - Number(isWindingDown(b.vault));
   if (windDown !== 0) return windDown;
-  const rank = (STATUS_RANK[a.vault.performance.status] ?? 4) - (STATUS_RANK[b.vault.performance.status] ?? 4);
-  if (rank !== 0) return rank;
-  return yieldOf(b) - yieldOf(a) || byName(a, b);
+  const [rankA, yieldA] = yieldRank(a);
+  const [rankB, yieldB] = yieldRank(b);
+  if (rankA !== rankB) return rankA - rankB;
+  const staking = rankA === 0 ? b.meta.stakingAprPct - a.meta.stakingAprPct : 0;
+  return yieldB - yieldA + staking || byName(a, b);
 }
 
-/** Largest TVL first. Vaults whose asset has no price cannot be compared, so they follow by name. */
+/** Largest dollar TVL first. Vaults without a USD value cannot be compared, so they follow by name. */
 export function compareVaultsByTvl(a: VaultSortEntry, b: VaultSortEntry): number {
-  if (a.tvlUsd === null || b.tvlUsd === null) {
-    return Number(a.tvlUsd === null) - Number(b.tvlUsd === null) || byName(a, b);
-  }
-  return b.tvlUsd - a.tvlUsd || byName(a, b);
+  const usdA = vaultTvlUsd(a.vault);
+  const usdB = vaultTvlUsd(b.vault);
+  if (usdA === null || usdB === null) return Number(usdA === null) - Number(usdB === null) || byName(a, b);
+  return usdB - usdA || byName(a, b);
 }
 
 type VaultCompare = (a: VaultSortEntry, b: VaultSortEntry) => number;
 
 export const VAULT_SORTS: readonly { value: VaultSort; label: string; compare: VaultCompare }[] = [
-  { value: "apr", label: "APR", compare: compareVaultsByYield },
+  { value: "apy", label: "APY", compare: compareVaultsByYield },
   { value: "tvl", label: "TVL", compare: compareVaultsByTvl },
   { value: "name", label: "Name", compare: byName },
 ];
 
-/** Vault equity in dollars at its last valuation, or null when the deposit asset has no price. */
-export function vaultTvlUsd(
-  vault: Pick<Vault, "equity" | "main_decimals">,
-  priceUsd: number | undefined,
-): number | null {
-  if (priceUsd === undefined) return null;
-  return (Number(vault.equity) / 10 ** vault.main_decimals) * priceUsd;
+/** The backend's indicative dollar TVL, or null without a fresh price. */
+export function vaultTvlUsd(vault: Pick<Vault, "tvl_usd_1e9">): number | null {
+  return vault.tvl_usd_1e9 === null ? null : Number(vault.tvl_usd_1e9) / 1e9;
+}
+
+const PHASE_LABEL: Record<VaultPhase, string> = {
+  idle: "Between cycles",
+  active: "Trading",
+  settling: "Settling",
+  processing_capital: "Processing requests",
+};
+
+const SAFETY_LABEL: Partial<Record<VaultSafety, string>> = {
+  frozen: "Paused",
+  closing: "Closing",
+  withdraw_only: "Withdraw only",
+  emergency_unwind: "Unwinding",
+};
+
+export function cyclePhaseLabel(vault: Pick<Vault, "phase" | "safety">): string {
+  return SAFETY_LABEL[vault.safety] ?? PHASE_LABEL[vault.phase];
+}
+
+/** Symbol and decimals of a vault leg or a known token; null when neither knows the mint. */
+export function mintUnits(vault: Pick<Vault, "main_mint" | "main_decimals" | "second_mint" | "second_decimals">, mint: string) {
+  const symbol = getTokenSymbolByMint(mint);
+  if (mint === vault.main_mint) return { symbol: symbol ?? shortAddress(mint), decimals: vault.main_decimals };
+  if (mint === vault.second_mint) return { symbol: symbol ?? shortAddress(mint), decimals: vault.second_decimals };
+  const token = symbol ? getToken(symbol) : undefined;
+  return symbol && token ? { symbol, decimals: token.decimals } : null;
+}
+
+/** "2,842 USDC", plus what holder legs paid when the backend could price it. */
+export function formatPremium(flow: VaultPremiumFlow, units: { symbol: string; decimals: number }): string {
+  const received = `${formatTokenAmount(BigInt(flow.received), units.decimals, { compact: true })} ${units.symbol}`;
+  if (flow.paid === null || BigInt(flow.paid) === 0n) return received;
+  return `${received} · paid ${formatTokenAmount(BigInt(flow.paid), units.decimals, { compact: true })}`;
+}
+
+export type ExposureRow = {
+  position: string;
+  type: "Call" | "Put";
+  role: "Sold" | "Bought";
+  strike: string;
+  distance: string;
+  itm: boolean | null;
+};
+
+const STRIKE_DECIMALS = 9;
+const APY_WINDOW_SECS = 30 * 86_400;
+
+export function exposureRows(exposure: VaultExposure): ExposureRow[] {
+  return exposure.positions.map((p) => ({
+    position: p.position,
+    type: p.position_type === "covered_call" ? "Call" : "Put",
+    role: p.role === "writer" ? "Sold" : "Bought",
+    strike: formatTokenAmount(BigInt(p.strike), STRIKE_DECIMALS, {
+      maxFractionDigits: BigInt(p.strike) < 10n ** BigInt(STRIKE_DECIMALS) ? STRIKE_DECIMALS : 2,
+    }),
+    distance:
+      p.distance_pct === null ? NONE : `${formatPercent(Math.abs(p.distance_pct), { digits: 1 })} ${p.itm ? "ITM" : "OTM"}`,
+    itm: p.itm,
+  }));
+}
+
+/** Net intrinsic value at spot per quote mint; a mint drops out while any of its legs lacks a spot. */
+export function exposureTotals(exposure: VaultExposure): { quoteMint: string; value: string }[] {
+  return exposure.totals.flatMap((total) => {
+    const decimals = exposure.positions.find((p) => p.quote_mint === total.quote_mint)?.quote_decimals ?? null;
+    if (total.outstanding_intrinsic === null || decimals === null) return [];
+    const symbol = getTokenSymbolByMint(total.quote_mint) ?? shortAddress(total.quote_mint);
+    const amount = BigInt(total.outstanding_intrinsic);
+    const sign = amount > 0n ? "+" : "";
+    return [{ quoteMint: total.quote_mint, value: `${sign}${formatTokenAmount(amount, decimals, { compact: true })} ${symbol}` }];
+  });
+}
+
+/** Return since entry weighted by lot shares; null unless priced lots hold exactly `shares`. */
+export function entryReturnPct(performance: DepositorPerformance, shares: bigint): number | null {
+  let priced = 0n;
+  let weighted = 0;
+  for (const lot of performance.lots) {
+    if (lot.returnSinceEntryPct === null) return null;
+    priced += lot.shares;
+    weighted += Number(lot.shares) * lot.returnSinceEntryPct;
+  }
+  return priced > 0n && priced === shares ? weighted / Number(priced) : null;
+}
+
+/** Dollars when the backend has a fresh price, else the deposit asset. */
+export function formatVaultTvl(vault: Pick<Vault, "equity" | "main_decimals" | "tvl_usd_1e9">, symbol: string): string {
+  const usd = vaultTvlUsd(vault);
+  return usd === null ? `${formatVaultEquity(vault)} ${symbol}` : formatUsd(usd);
 }
 
 /** Vault equity in the deposit asset, short enough for a tile: whole units from a thousand, two decimals from one. */
@@ -143,7 +229,7 @@ export function vaultStatus(vault: Vault, nowSecs: number): VaultStatusView {
     case "emergency_unwind":
       return { label: "Unwinding", tone: "warning" };
   }
-  const block = requestDepositBlock(vault, nowSecs);
+  const block = flows.requestDepositBlock(vault, nowSecs);
   if (block === null) {
     return vault.phase === "active"
       ? { label: "Accepting deposits", tone: "open", detail: `Cycle ends ${formatDate(Number(vault.active_expiry))}` }
@@ -160,7 +246,7 @@ export type VaultModalTab = "deposit" | "withdraw";
 
 /** Vaults that will never take deposits again open straight on Withdraw. */
 export function primaryVaultAction(vault: Vault, nowSecs: number): { label: "Deposit" | "Manage"; tab: VaultModalTab } {
-  return requestDepositBlock(vault, nowSecs) === "safety"
+  return flows.requestDepositBlock(vault, nowSecs) === "safety"
     ? { label: "Manage", tab: "withdraw" }
     : { label: "Deposit", tab: "deposit" };
 }
@@ -175,7 +261,7 @@ function phaseMessage(phase: VaultPhase, subject: "Deposits" | "Withdrawal reque
   return `${subject} are not open right now.`;
 }
 
-export function depositBlockMessage(block: VaultActionBlock, vault: BlockContext): string {
+export function depositBlockMessage(block: flows.VaultActionBlock, vault: BlockContext): string {
   switch (block) {
     case "safety":
       switch (vault.safety) {
@@ -203,7 +289,7 @@ export function depositBlockMessage(block: VaultActionBlock, vault: BlockContext
   }
 }
 
-export function withdrawBlockMessage(block: VaultActionBlock, vault: BlockContext): string {
+export function withdrawBlockMessage(block: flows.VaultActionBlock, vault: BlockContext): string {
   switch (block) {
     case "safety":
       return "This vault is unwinding its positions. Withdrawals open once the unwind completes.";
@@ -218,7 +304,7 @@ export function withdrawBlockMessage(block: VaultActionBlock, vault: BlockContex
   }
 }
 
-export function cancelBlockMessage(block: VaultActionBlock): string {
+export function cancelBlockMessage(block: flows.VaultActionBlock): string {
   switch (block) {
     case "safety":
       return "Cancelling is not available while the vault is in this mode.";
@@ -251,7 +337,7 @@ function publicProcessingAt(vault: Vault, createdAt: bigint): number {
 }
 
 export function depositSelfProcessView(vault: Vault, createdAt: bigint, nowSecs: number): SelfProcessView {
-  const block = selfProcessDepositBlock(vault, createdAt, nowSecs);
+  const block = flows.selfProcessDepositBlock(vault, createdAt, nowSecs);
   if (block === null) {
     // outside normal mode, processing a deposit returns it instead of minting shares
     return { kind: "available", label: vault.safety === "normal" ? "Process my deposit" : "Refund my deposit" };
@@ -262,12 +348,12 @@ export function depositSelfProcessView(vault: Vault, createdAt: bigint, nowSecs:
 }
 
 export function withdrawSelfProcessView(vault: Vault, createdAt: bigint, nowSecs: number): SelfProcessView {
-  const block = selfProcessWithdrawBlock(vault, createdAt, nowSecs);
+  const block = flows.selfProcessWithdrawBlock(vault, createdAt, nowSecs);
   if (block === null) return { kind: "available", label: "Process my withdrawal" };
   if (block === "authority") return { kind: "waiting", availableAt: publicProcessingAt(vault, createdAt) };
   if (block === "unpriced") {
     // an aged withdrawal may value idle capital itself, then withdraw, in one transaction
-    const idle = processIdleWithdrawalBlock(vault, createdAt, nowSecs);
+    const idle = flows.processIdleWithdrawalBlock(vault, createdAt, nowSecs);
     if (idle === null) return { kind: "available", label: "Process my withdrawal" };
     if (idle === "authority") {
       return { kind: "waiting", availableAt: Number(createdAt) + Number(vault.capital_fallback_delay_secs) };

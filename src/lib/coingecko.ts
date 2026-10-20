@@ -1,4 +1,4 @@
-/** CoinGecko coin ids by token symbol, upper case. Shared by the price history and USD price routes. */
+/** CoinGecko coin ids by token symbol, upper case, for the price history route. */
 export const COINGECKO_IDS: Readonly<Record<string, string>> = {
   SOL: "solana",
   WSOL: "solana",

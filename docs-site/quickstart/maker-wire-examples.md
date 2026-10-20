@@ -189,26 +189,7 @@ At example time `1710000000`, this quote has 140 seconds of on-chain validity an
 }
 ```
 
-### 8) QuoteFilled
-
-```json
-{
-  "type": "QuoteFilled",
-  "data": {
-    "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
-    "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
-    "taker": "TakerPubkeyBase58",
-    "price": 50000000,
-    "quantity": 1000000000,
-    "strike": 160000000000,
-    "position_pda": "PositionPdaBase58",
-    "tx_signature": "5eyk...base58sig",
-    "filled_at": 1710000042
-  }
-}
-```
-
-### 9) RfqClosed
+### 8) RfqClosed
 
 ```json
 {
@@ -222,7 +203,29 @@ At example time `1710000000`, this quote has 140 seconds of on-chain validity an
 }
 ```
 
-The winning maker gets `QuoteFilled`, then `RfqClosed`.
+### 9) QuoteFilled
+
+```json
+{
+  "type": "QuoteFilled",
+  "data": {
+    "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
+    "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+    "market_pda": "MarketPdaBase58",
+    "expiry_ts": 1710489600,
+    "position_type": "covered_call",
+    "taker": "TakerPubkeyBase58",
+    "price": 50000000,
+    "quantity": 1000000000,
+    "strike": 160000000000,
+    "position_pda": "PositionPdaBase58",
+    "tx_signature": "5eyk...base58sig",
+    "filled_at": 1710000042
+  }
+}
+```
+
+The winning maker gets `RfqClosed`, then `QuoteFilled`; `expiry_ts` is `null` when the server no longer knows the market.
 
 ## Additional scenarios
 
