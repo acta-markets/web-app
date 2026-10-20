@@ -29,11 +29,7 @@ export type VaultMeta = {
   stakingAprPct?: number;
 };
 
-export const VAULT_REGISTRY: Readonly<Record<string, VaultMeta>> = {
-  // TODO(tim): confirm the display name. Curator follows LANDING_VAULTS, where Acta
-  // runs the SOL vault; governance is 9amKA1ezPyPoYik7N1QCBE4N3d9mm2fQfmFfLNbSSbUf.
-  "3irb63eaXBmm3bvUY7hvpFHnXzeaFZSvtsirPMsfctuS": { name: "SOL vault", curator: "Acta", category: "Crypto" },
-};
+export const VAULT_REGISTRY: Readonly<Record<string, VaultMeta>> = {};
 
 const STABLES = new Set(["USDC", "USDT", "PYUSD", "USDS", "USDG", "FDUSD", "DAI", "EURC", "USDE", "USDH"]);
 // Tokenized equities: NVDAx style (xStocks) or xNVDA style. Case-sensitive, so XRP stays out.
