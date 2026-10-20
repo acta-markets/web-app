@@ -12,6 +12,8 @@ const errorResponse = {
   },
 };
 
+const notModifiedResponse = { description: "Not modified since the ETag sent in If-None-Match" };
+
 export function getOpenApiDocument(context: DeploymentContext) {
   return {
     openapi: "3.1.0",
@@ -81,22 +83,94 @@ export function getOpenApiDocument(context: DeploymentContext) {
           },
         },
       },
+      "/api/v1/venue": {
+        get: {
+          operationId: "getVenue",
+          summary: "Get venue parameters",
+          responses: {
+            "200": {
+              description: "Venue parameters",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Venue" },
+                },
+              },
+            },
+            "304": notModifiedResponse,
+            "500": errorResponse,
+          },
+        },
+      },
+      "/api/v1/tokens": {
+        get: {
+          operationId: "listTokens",
+          summary: "List tokens of active markets",
+          responses: {
+            "200": {
+              description: "Tokens",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["tokens"],
+                    properties: {
+                      tokens: {
+                        type: "array",
+                        items: { $ref: "#/components/schemas/Token" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "304": notModifiedResponse,
+            "503": errorResponse,
+          },
+        },
+      },
       "/api/v1/markets": {
         get: {
           operationId: "listMarkets",
-          summary: "List currently tradable markets",
+          summary: "List markets",
           parameters: [
             {
               name: "underlying",
               in: "query",
               required: false,
-              description: "Filter by underlying symbol",
+              description: "Filter by underlying mint",
               schema: { type: "string" },
+            },
+            {
+              name: "quote",
+              in: "query",
+              required: false,
+              description: "Filter by quote mint",
+              schema: { type: "string" },
+            },
+            {
+              name: "expiry",
+              in: "query",
+              required: false,
+              description: "Filter by expiry, Unix seconds",
+              schema: { type: "integer", format: "int64" },
+            },
+            {
+              name: "is_put",
+              in: "query",
+              required: false,
+              schema: { type: "boolean" },
+            },
+            {
+              name: "active",
+              in: "query",
+              required: false,
+              description: "Defaults to active markets only; false returns every market the server holds in memory",
+              schema: { type: "boolean" },
             },
           ],
           responses: {
             "200": {
-              description: "Tradable markets",
+              description: "Markets",
               content: {
                 "application/json": {
                   schema: {
@@ -112,28 +186,8 @@ export function getOpenApiDocument(context: DeploymentContext) {
                 },
               },
             },
+            "304": notModifiedResponse,
             "500": errorResponse,
-            "503": errorResponse,
-          },
-        },
-      },
-      "/api/v1/markets/{pda}": {
-        get: {
-          operationId: "getMarket",
-          summary: "Get one market",
-          parameters: [{ $ref: "#/components/parameters/Pda" }],
-          responses: {
-            "200": {
-              description: "Market",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/Market" },
-                },
-              },
-            },
-            "400": errorResponse,
-            "404": errorResponse,
-            "503": errorResponse,
           },
         },
       },
@@ -222,32 +276,71 @@ export function getOpenApiDocument(context: DeploymentContext) {
             code: { type: "string" },
           },
         },
-        Market: {
+        Venue: {
           type: "object",
           required: [
-            "pda",
-            "underlying_mint",
-            "quote_mint",
-            "expiry_ts",
-            "is_put",
-            "is_finalized",
+            "program_id",
+            "min_quote_validity_seconds",
+            "settlement_buffer_seconds",
+            "quote_refresh_lead_seconds",
+            "min_rfq_timeout_seconds",
+            "max_rfq_timeout_seconds",
+            "signature_timeout_seconds",
+            "max_quotes_per_rfq",
+            "max_active_rfqs_per_taker",
+            "pre_expiry_cutoff_seconds",
           ],
           properties: {
+            program_id: { type: "string" },
+            min_quote_validity_seconds: { type: "integer" },
+            settlement_buffer_seconds: { type: "integer" },
+            quote_refresh_lead_seconds: { type: "integer" },
+            min_rfq_timeout_seconds: { type: "integer" },
+            max_rfq_timeout_seconds: { type: "integer" },
+            signature_timeout_seconds: { type: "integer" },
+            max_quotes_per_rfq: { anyOf: [{ type: "integer" }, { type: "null" }] },
+            max_active_rfqs_per_taker: { anyOf: [{ type: "integer" }, { type: "null" }] },
+            pre_expiry_cutoff_seconds: { type: "integer" },
+          },
+          additionalProperties: true,
+        },
+        Token: {
+          type: "object",
+          required: ["mint", "symbol", "decimals"],
+          properties: {
+            mint: { type: "string" },
+            symbol: { type: "string" },
+            decimals: { type: "integer" },
+            oracle_feed_ids: { type: "array", items: { type: "string" } },
+            size_rule: {
+              type: "object",
+              required: ["min_size", "max_size", "step"],
+              properties: {
+                min_size: { type: "integer", format: "int64" },
+                max_size: { type: "integer", format: "int64" },
+                step: { type: "integer", format: "int64" },
+              },
+            },
+            strike_tick: { type: "integer", format: "int64" },
+            quote_mints: { type: "array", items: { type: "string" } },
+          },
+          additionalProperties: true,
+        },
+        Market: {
+          type: "object",
+          required: ["pda", "underlying", "quote", "expiry_ts", "is_put", "status"],
+          properties: {
             pda: { type: "string" },
-            underlying_mint: { type: "string" },
-            quote_mint: { type: "string" },
+            underlying: { type: "string", description: "Underlying mint" },
+            quote: { type: "string", description: "Quote mint" },
             expiry_ts: { type: "integer", format: "int64" },
             is_put: { type: "boolean" },
-            is_finalized: { type: "boolean" },
+            status: { type: "string", enum: ["active", "closed", "finalized"] },
             settlement_price: {
-              anyOf: [
-                { type: "integer", format: "int64" },
-                { type: "null" },
-              ],
+              type: "integer",
+              format: "int64",
               description: "Settlement price at 1e9 scale",
             },
-            underlying_symbol: { type: "string" },
-            quote_symbol: { type: "string" },
           },
           additionalProperties: true,
         },

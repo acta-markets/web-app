@@ -23,5 +23,5 @@ A vault pools deposits into shares and trades on the same venue: it can write op
 Trading runs over WebSocket. HTTP returns indexed market, position and vault data.
 
 - [WebSocket conventions](reference/ws-common.md): messages, units and signing.
-- [HTTP API](reference/http-api.md): markets, makers and statistics.
+- [HTTP API](reference/http-api.md): venue limits, tokens, markets, makers and statistics.
 - [Vault HTTP API](reference/vault-http-api.md): vaults, cycles and depositor history.

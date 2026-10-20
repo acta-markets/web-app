@@ -13,7 +13,7 @@ What the vault UI reads, from where, and how often. Code lives in `src/lib/vault
 | Vault cycles and positions | HTTP `/vaults/{pda}/cycles`, `/positions` (paginated) | Detail-page tabs |
 | Deposit, withdraw, cancel, refund, self-process | Chain transactions built in `depositor.ts` | Only the wallet can sign these |
 
-There is no public vault WebSocket; depositor data comes from the HTTP routes below. The WS is for RFQ; vaults change on cycle boundaries (hours/days), so polling is enough.
+Depositor data comes from the HTTP routes below; vaults change on cycle boundaries (hours/days), so polling is enough. Since SDK 0.2.0 the WS `vaults` channel also sends `VaultCatalogChanged` (`{ vault_pda }`, client event `vaultCatalogChanged`) when a vault is created, re-delegated or closed. The app does not subscribe to it: the list pages have no WS connection, and the 30 s poll picks the change up.
 
 After the user sends a tx, re-read RPC state (`fetchVaultDepositorState`) and call `refresh()` on the HTTP hooks. The HTTP projection lags the chain by a few seconds; RPC does not.
 
@@ -59,7 +59,7 @@ The limit is per IP (IPv6 grouped by /64), and users behind one NAT share it. Ke
 | 400 | `invalid_limit`, `invalid_cursor`, `invalid_wallet` | Client bug | Don't retry |
 | 404 | `not_found` | Unknown vault | Show "not found" |
 
-`VaultApiError.retryable` is true for 429 and for 503 except `db_disabled`. On retryable errors, keep the last data on screen and retry with backoff (e.g. 2 s, 4 s, 8 s, capped at the normal poll interval). Don't clear the UI.
+`ActaHttpError.retryable` is true for 429 and for 503 except `db_disabled`. On retryable errors, keep the last data on screen and retry with backoff (e.g. 2 s, 4 s, 8 s, capped at the normal poll interval). Don't clear the UI.
 
 ### Polling budget
 

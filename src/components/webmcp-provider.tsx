@@ -66,16 +66,16 @@ function createTools(href: string): WebMcpTool[] {
       name: "acta.list_markets",
       title: "List Acta markets",
       description:
-        "Fetch currently tradable markets from Acta's public read-only HTTP API. Optionally filter by an underlying token symbol.",
+        "Fetch currently tradable markets from Acta's public read-only HTTP API. Optionally filter by an underlying token mint; /api/v1/tokens maps mints to symbols.",
       inputSchema: {
         type: "object",
         properties: {
           underlying: {
             type: "string",
-            minLength: 1,
-            maxLength: 16,
-            pattern: "^[A-Za-z0-9._-]+$",
-            description: "Optional token symbol such as SOL or BTC.",
+            minLength: 32,
+            maxLength: 44,
+            pattern: "^[1-9A-HJ-NP-Za-km-z]+$",
+            description: "Optional underlying token mint address, base58.",
           },
         },
         additionalProperties: false,
@@ -86,12 +86,12 @@ function createTools(href: string): WebMcpTool[] {
       },
       execute: async (input) => {
         const underlying = typeof input.underlying === "string" ? input.underlying.trim() : "";
-        if (underlying && !/^[A-Za-z0-9._-]{1,16}$/.test(underlying)) {
-          throw new Error("underlying must be a token symbol of 1 to 16 safe characters");
+        if (underlying && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(underlying)) {
+          throw new Error("underlying must be a base58 token mint address");
         }
 
         const url = new URL("/api/v1/markets", context.apiOrigin);
-        if (underlying) url.searchParams.set("underlying", underlying.toUpperCase());
+        if (underlying) url.searchParams.set("underlying", underlying);
 
         const response = await fetch(url, {
           method: "GET",

@@ -12,11 +12,13 @@
 
 All WebSocket endpoints use the same [message envelopes and encodings](ws-common.md).
 
+The devnet program build differs from mainnet in two vault paths: swaps go through a mock router instead of Jupiter, and vault Pyth checks accept older and less aligned prices. See [Devnet differences](../protocol/vault-integration.md#devnet-differences). Everything else differs only externally: mints, oracles and environment config.
+
 ## Maker registration
 
 A maker has an owner wallet for on-chain transactions and a key for signing quotes. Both roles can use the same key.
 
-The protocol administrator registers both public keys through `RegisterMaker`, which creates the maker PDA.
+The protocol administrator registers both public keys through the timelocked `RegisterMaker`, which creates the maker PDA. The same `quote_signing` key signs the auth challenge and every quote. The maker owner can rotate it with `UpdateMakerQuoteSigning`.
 
 Before quoting, deposit the quote token into the maker account with `DepositPremium`. The owner signs and supplies a token account for the market's quote mint.
 

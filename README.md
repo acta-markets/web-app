@@ -11,18 +11,23 @@ npm run dev
 
 ## RFQ integration
 
-The app uses the published `@acta-markets/ts-sdk` 0.1.6-vaults.2, pinned in `package.json`
+The app uses the published `@acta-markets/ts-sdk` 0.2.2, pinned in `package.json`
 and `package-lock.json`. A separate SDK checkout or build is not required.
 WebSocket integration imports `@acta-markets/ts-sdk/ws`.
 
 `NEXT_PUBLIC_RFQ_WS_URL` selects the
 backend, and `NEXT_PUBLIC_SOLANA_NETWORK` selects the matching token addresses.
 Market prices and indicative premiums come from that backend.
+`NEXT_PUBLIC_PYTH_FEED_SHARDS` (comma-separated, default `0`) lists the Pyth
+push-oracle shards that backend posts vault feeds to; it must match the tx-service
+`pyth_feed_shards` of that network, or vault swaps fail verification.
 
 The SDK checks auth challenge format before opening the wallet. The app supplies
 the selected wallet's signing callback without logging or rewriting the message.
-Sponsored transactions still use the wallet's transaction preview; this path
-trusts backend construction and does not independently rebuild transaction intent.
+Maker-quote fills are signed only through `verifyAndSignTakerFill`: the served
+transaction is rebuilt from the accepted quote and RFQ terms before the wallet
+sees it (a vault maker is recognised from its on-chain account, read when the
+quote is accepted), and the wallet's result must be that transaction.
 
 Resume credentials require a future expiry in Unix seconds. Missing or expired
 stored credentials start fresh authentication; reconnect recovery preserves the
@@ -53,5 +58,5 @@ See `ENV_SETUP.md` to set `MONGODB_URI` / `MONGODB_DB` and `NEXT_PUBLIC_PRIVY_AP
   - `Button`, `Card`, `Badge`, `Container`, `Input`
 - **Page sections**: `src/components/sections/`
   - `Navbar`, `Hero`, `Marquee`, `Architecture`, `Solution`, `Whitelist`, `Team`, `Footer`
-- **Global styles + legacy effects**: `src/app/globals.css`
-- **Legacy snapshots**: `legacy/oldindex.html` (original) and `legacy/index.html` (whitelist version)
+- **Global styles**: `src/app/globals.css`
+- **Vaults**: data layer in `src/lib/vaults/`, hooks in `src/components/vaults/` (see `docs/vaults-integration.md`)

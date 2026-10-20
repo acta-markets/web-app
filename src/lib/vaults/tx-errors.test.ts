@@ -1,3 +1,7 @@
+import {
+  ACTA_CONTRACT_ERROR__VAULT_REQUEST_EXISTS,
+  ACTA_CONTRACT_ERROR__VAULT_SHARE_AMOUNT_TOO_SMALL,
+} from "@acta-markets/ts-sdk";
 import { describe, expect, it } from "vitest";
 import { contractErrorCode, describeVaultTxError } from "./tx-errors";
 import { TransactionFailedError } from "./transaction";
@@ -21,7 +25,9 @@ describe("describeVaultTxError", () => {
 
   it("maps known contract errors from simulation", () => {
     const view = describeVaultTxError(
-      new Error("simulation failed: Program log: Instruction: RequestDeposit\nProgram X failed: custom program error: 0x467"),
+      new Error(
+        `simulation failed: Program log: Instruction: RequestDeposit\nProgram X failed: custom program error: 0x${ACTA_CONTRACT_ERROR__VAULT_REQUEST_EXISTS.toString(16)}`,
+      ),
     );
     expect(view).toEqual({
       tone: "error",
@@ -40,7 +46,12 @@ describe("describeVaultTxError", () => {
 
   it("keeps the signature when a sent transaction fails or expires", () => {
     expect(
-      describeVaultTxError(new TransactionFailedError("sig1", 'transaction failed: {"InstructionError":[0,{"Custom":1142}]}')),
+      describeVaultTxError(
+        new TransactionFailedError(
+          "sig1",
+          `transaction failed: {"InstructionError":[0,{"Custom":${ACTA_CONTRACT_ERROR__VAULT_SHARE_AMOUNT_TOO_SMALL}}]}`,
+        ),
+      ),
     ).toEqual({ tone: "error", message: "This amount is too small to convert into shares.", signature: "sig1" });
     expect(describeVaultTxError(new TransactionFailedError("sig2", "transaction expired"))).toMatchObject({
       tone: "error",
