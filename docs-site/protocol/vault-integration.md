@@ -163,7 +163,7 @@ Do not sign a served transaction blind. The SDKs' checked helpers rebuild the ex
 
 The swap intent names the router, which must be the one the target program build pins. A swap whose `minimum_out_amount` is below your output floor (`min_output_floor` in Rust, `minOutputFloor` in TypeScript) is rejected even if it fits the quote's slippage. Compute the floor from your own oracle price, not from the server's quote.
 
-| | Rust (`acta-maker-sdk` 0.5.2, feature `vault`) | TypeScript (`@acta-markets/ts-sdk` 0.2.2) |
+| | Rust (`acta-maker-sdk` 0.5.3, feature `vault`) | TypeScript (`@acta-markets/ts-sdk` 0.2.3) |
 | --- | --- | --- |
 | Position open | `VaultOperatorClient::verify_and_sign_sponsored_tx` | `verifyAndSignSponsoredTx` from `/ws` |
 | Swap | `VaultOperatorClient::verify_and_sign_swap` | `verifyAndSignSwap` from `/ws` |

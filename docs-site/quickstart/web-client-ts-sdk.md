@@ -10,7 +10,7 @@ SDK event callbacks use the wire message names in lowerCamelCase. TypeScript typ
 npm install @acta-markets/ts-sdk
 ```
 
-This guide covers version 0.2.2, which targets the program deployed to devnet and mainnet on 2026-10-17. Its instruction opcodes and program error codes differ from the program 0.1.6 was built against, so upgrade both together. The package README has a "Migrating from 0.1.6" table. Refer to opcodes and errors by name through the generated constants exported from `@acta-markets/ts-sdk` (`*_DISCRIMINATOR` for instruction opcodes, `ACTA_CONTRACT_ERROR__*` for program errors), not by number.
+This guide covers version 0.2.3, which targets the program deployed to devnet and mainnet on 2026-10-17. Its instruction opcodes and program error codes differ from the program 0.1.6 was built against, so upgrade both together. The package README has a "Migrating from 0.1.6" table. Refer to opcodes and errors by name through the generated constants exported from `@acta-markets/ts-sdk` (`*_DISCRIMINATOR` for instruction opcodes, `ACTA_CONTRACT_ERROR__*` for program errors), not by number.
 
 `ActaWsClient` validates the challenge before calling the auth provider. Raw clients can call `validateAuthChallenge` (`assertVaultAuthChallenge` for a `/vault` session).
 
