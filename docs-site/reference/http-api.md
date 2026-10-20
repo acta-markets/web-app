@@ -23,15 +23,18 @@ https://beta-api.acta.markets
 { "error": "Human-readable message", "code": "error_code" }
 ```
 
-Common codes:
-- `invalid_id` (400)
+Codes (HTTP status):
+- `invalid_request`, `invalid_cursor`, `invalid_limit`, `invalid_delegate`, `invalid_wallet` (400)
 - `not_found` (404)
-- `db_disabled` (503)
-- `data_validation_error` (500)
-- `schema_error` (500)
-- `db_error` (500)
+- `rate_limited` (429): per-IP rate limit; retry with backoff
+- `db_disabled` (503): server runs without a database; permanent, do not retry
+- `db_busy` (503): database pool exhausted or query timed out; retry with backoff
+- `server_busy` (503): global in-flight limit reached; retry with backoff
+- `unavailable`, `caps_projection_unavailable`, `chain_replay_unavailable`, `position_history_unavailable` (503): the backing projection is not established yet; retry with backoff
+- `token_metadata_incomplete`, `missing_size_rule_for_underlying_mint` (503): `/tokens` while an active market lacks decimals or a size rule
+- `history_projection_incomplete`, `caps_projection_incomplete`, `data_validation_error`, `schema_error`, `db_error`, `invalid_program_id`, `encode_failed`, `invalid_stats` (500)
 
-Temporary unavailability may return HTTP `503`.
+WebSocket codes are a separate set; see the [WS error code catalog](ws-common.md#ws-error-codes).
 
 ## Health
 
@@ -51,42 +54,134 @@ Returns process liveness.
 
 Prometheus metrics endpoint.
 
-## Markets
+## Reference data
 
-### GET `/api/v1/markets`
+`/venue`, `/tokens` and `/markets` come from one in-memory snapshot. The same snapshot answers WS discovery (`GetTokens`, `GetMarkets`, `GetMarketDescriptors`, `GetExpiries`, `Snapshot.markets`), so HTTP and WS always agree. These routes need no database and share the light per-IP rate limit (30 req/s, burst 60).
 
-List markets.
+The snapshot is rebuilt when the market registry changes, when a market reaches its trading cutoff or expiry, and at least every 30 s. When the token or market list changes, every authenticated maker, taker and vault operator WS session gets [`ReferenceChanged`](ws-common.md#referencechanged) with the new ETags.
 
-Query:
-- `underlying` (optional symbol string)
+### Caching
 
-Returns tradable markets only: not finalized, not disabled, and before the effective trading cutoff. `underlying` filters by symbol. There is no `active=false` mode. Use `/api/v1/markets/{pda}` for a specific market.
+Every response carries a strong `ETag` and a `Cache-Control` header:
 
-Response:
+| Route | `Cache-Control` |
+|---|---|
+| `/venue`, `/tokens` | `public, max-age=60` |
+| `/markets` | `public, max-age=5` |
+
+Send the last `ETag` in `If-None-Match`. If nothing changed you get `304 Not Modified` with no body and the same headers. `If-None-Match` accepts a comma-separated list, `*` and the `W/` prefix. Polling this way is cheap, but `ReferenceChanged` tells you when to re-read.
+
+`ReferenceChanged.tokens_etag` is the `/tokens` ETag. `ReferenceChanged.markets_etag` is the ETag of the unfiltered `GET /api/v1/markets?active=false` body, so compare it only with that request, not with the default list or a filtered one.
+
+### GET `/api/v1/venue`
+
+The program id and the limits the server validates against. `null` means no limit. Values come from server configuration and change only on restart.
 
 ```json
 {
-  "markets": [
+  "program_id": "ProgramIdBase58",
+  "min_quote_validity_seconds": 100,
+  "settlement_buffer_seconds": 90,
+  "quote_refresh_lead_seconds": 10,
+  "min_rfq_timeout_seconds": 5,
+  "max_rfq_timeout_seconds": 120,
+  "signature_timeout_seconds": 30,
+  "max_quotes_per_rfq": 50,
+  "max_active_rfqs_per_taker": 50,
+  "pre_expiry_cutoff_seconds": 10800
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `min_quote_validity_seconds` | Minimum `valid_until - now` on a quote; at least `settlement_buffer_seconds + quote_refresh_lead_seconds`. Use this value, not the sum |
+| `settlement_buffer_seconds` | A quote stops being acceptable at `valid_until - settlement_buffer_seconds` |
+| `quote_refresh_lead_seconds` | How long before that cutoff the server sends `QuoteRefreshRequested` |
+| `min_rfq_timeout_seconds` / `max_rfq_timeout_seconds` | Allowed range for `RfqRequest.timeout_seconds` |
+| `signature_timeout_seconds` | Time a taker has to return a signed sponsored transaction |
+| `max_quotes_per_rfq` | Quotes kept per RFQ, or `null` |
+| `max_active_rfqs_per_taker` | Open RFQs per taker at once, or `null` |
+| `pre_expiry_cutoff_seconds` | Default no-trade window before market expiry; a market can override it |
+
+The example shows server defaults. Deployments can differ, so read the live endpoint. A misconfigured program id returns `500` `invalid_program_id`.
+
+### GET `/api/v1/tokens`
+
+Each token of the active markets, once, sorted by mint. Markets name tokens by mint, so join on `mint` for symbol and decimals.
+
+```json
+{
+  "tokens": [
     {
-      "pda": "MarketPdaBase58",
-      "underlying_mint": "UnderlyingMintBase58",
-      "quote_mint": "QuoteMintBase58",
-      "expiry_ts": 1710600000,
-      "is_put": false,
-      "is_finalized": false,
-      "settlement_price": null,
-      "underlying_symbol": "SOL",
-      "quote_symbol": "USDC"
+      "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "symbol": "USDC",
+      "decimals": 6,
+      "oracle_feed_ids": ["eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a"]
+    },
+    {
+      "mint": "So11111111111111111111111111111111111111112",
+      "symbol": "SOL",
+      "decimals": 9,
+      "oracle_feed_ids": ["ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d"],
+      "size_rule": { "min_size": 100000000, "max_size": 1000000000000, "step": 10000000 },
+      "strike_tick": 500000000,
+      "quote_mints": ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"]
     }
   ]
 }
 ```
 
-HTTP `MarketDto` has no `underlying_feed_id_hex` / `quote_feed_id_hex`.
+This is the same [`TokenInfo`](ws-common.md#tokeninfo) as on WS. Only underlyings have `size_rule`, `strike_tick` and `quote_mints`. `oracle_feed_ids` is omitted when no feed is known.
 
-### GET `/api/v1/markets/{pda}`
+`503` when token metadata is inconsistent (for example one mint with two decimal values) or an underlying has no size rule (`missing_size_rule_for_underlying_mint`, same as WS). The body is the usual error object; retry later.
 
-Get a single market DTO.
+### GET `/api/v1/markets`
+
+Query parameters, all optional:
+
+| Parameter | Type | Meaning |
+|---|---|---|
+| `underlying` | mint (base58) | Underlying mint |
+| `quote` | mint (base58) | Quote mint |
+| `expiry` | u64 | Exact `expiry_ts`, Unix seconds |
+| `is_put` | bool | `true` for puts, `false` for calls |
+| `active` | bool | Default `true`: tradable markets only. `false`: every market the server holds in memory |
+
+`underlying` and `quote` take mints, not symbols. Results are sorted by `expiry_ts`, then PDA.
+
+```json
+{
+  "markets": [
+    {
+      "pda": "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+      "underlying": "So11111111111111111111111111111111111111112",
+      "quote": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "expiry_ts": 1767225600,
+      "is_put": true,
+      "status": "finalized",
+      "settlement_price": 150000000000
+    },
+    {
+      "pda": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+      "underlying": "So11111111111111111111111111111111111111112",
+      "quote": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "expiry_ts": 4102444800,
+      "is_put": false,
+      "status": "active"
+    }
+  ]
+}
+```
+
+| `status` | Meaning |
+|---|---|
+| `active` | Tradable: not finalized, not disabled, before the trading cutoff |
+| `closed` | Disabled, past its trading cutoff, or expired and not yet finalized |
+| `finalized` | Settlement price published; `settlement_price` is set (1e9 scale) |
+
+`active=false` is not full history. The server only holds markets finalized since it last started, so older ones are missing. Use your own records or the chain for those.
+
+There is no single-market route (`GET /api/v1/markets/{pda}` was removed). Filter the list, or send `GetMarketDescriptors` on WS for the full descriptor (oracle PDAs, decimals, collateral and settlement mints).
 
 ## Makers
 
@@ -115,7 +210,7 @@ Get a single maker DTO.
 
 The [Vault HTTP API](vault-http-api.md) covers `/api/v1/vaults`, vault detail, cycles, positions and depositor state/history. They serve indexed data. Current share ownership is in Solana token accounts.
 
-`/maker` quote sessions and taker WebSocket sessions subscribed to the `vaults` channel receive [`VaultCatalogChanged`](ws-common.md#vaultcatalogchanged) when a vault is created, re-delegated or closed, and [`VaultProjectionAdvanced`](ws-common.md#vaultprojectionadvanced) when any vault row changes. Re-read `/api/v1/vaults` or the vault detail on them instead of polling. `VaultCatalogChanged` is best-effort (dropped on a full queue, not replayed), so also re-list after every (re)connect.
+`/maker` quote sessions and taker WebSocket sessions subscribed to the `vaults` channel receive [`VaultCatalogChanged`](ws-common.md#vaultcatalogchanged) when a vault is created, re-delegated or closed, and [`VaultProjectionAdvanced`](ws-common.md#vaultprojectionadvanced) when any vault row changes. Re-read `/api/v1/vaults` or the vault detail on them instead of polling. Neither is replayed, so also re-list after every (re)connect.
 
 ## Participant history
 

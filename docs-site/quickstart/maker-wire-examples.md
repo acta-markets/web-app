@@ -65,7 +65,7 @@ The server verifies the signature against the registered `quote_signing` key.
 {
   "type": "AuthSuccess",
   "data": {
-    "session_id": "sess-123",
+    "session_id": "3a5c7e9b-1d2f-4e60-8a4c-6b8d0f2a4c71",
     "expires_at": 1710086400,
     "maker_pda": "MakerPdaBase58"
   }
@@ -87,7 +87,8 @@ The server verifies the signature against the registered `quote_signing` key.
         "underlying": "UnderlyingMintBase58",
         "quote": "QuoteMintBase58",
         "expiry_ts": 1710600000,
-        "is_put": false
+        "is_put": false,
+        "status": "active"
       }
     ]
   }
@@ -246,16 +247,16 @@ If the quote remains active instead of being selected, refresh fires at `1710000
 Send recovery reads on `/maker/data`:
 
 ```json
-{ "type": "GetMyQuotes", "data": { "request_id": "a1b2c3d4-0001", "scope": "live" } }
-{ "type": "GetMakerPositions", "data": { "request_id": "a1b2c3d4-0002" } }
-{ "type": "GetMyTrades", "data": { "request_id": "a1b2c3d4-0003" } }
-{ "type": "GetMmSummary", "data": { "request_id": "a1b2c3d4-0005" } }
+{ "type": "GetMyQuotes", "data": { "request_id": "a1b2c3d4-0000-4000-8000-000000000001", "scope": "live" } }
+{ "type": "GetMakerPositions", "data": { "request_id": "a1b2c3d4-0000-4000-8000-000000000002" } }
+{ "type": "GetMyTrades", "data": { "request_id": "a1b2c3d4-0000-4000-8000-000000000003" } }
+{ "type": "GetMmSummary", "data": { "request_id": "a1b2c3d4-0000-4000-8000-000000000005" } }
 ```
 
 `GetSubscriptions` reports `/maker` subscriptions, so send it on the quote connection:
 
 ```json
-{ "type": "GetSubscriptions", "data": { "request_id": "a1b2c3d4-0004" } }
+{ "type": "GetSubscriptions", "data": { "request_id": "a1b2c3d4-0000-4000-8000-000000000004" } }
 ```
 
 `GetMyQuotes { scope: "live" }` returns the full, unpaged owner set, including retained and selected quotes. `scope: "history"` returns history, `200` rows by default and `1000` at most. If the ACK for an order was lost, query `GetOrderStatus`. A missing live row does not tell you the order is gone.
@@ -268,7 +269,7 @@ Send recovery reads on `/maker/data`:
 {
   "type": "GetMyTrades",
   "data": {
-    "request_id": "a1b2c3d4-0005",
+    "request_id": "a1b2c3d4-0000-4000-8000-000000000006",
     "limit": 50
   }
 }
@@ -280,10 +281,10 @@ Response:
 {
   "type": "MyTrades",
   "data": {
-    "request_id": "a1b2c3d4-0005",
+    "request_id": "a1b2c3d4-0000-4000-8000-000000000006",
     "trades": [
       {
-        "id": "trade-uuid-1",
+        "id": "7c2e9a41-6b3d-4f58-9e1a-0d4b6f8a2c35",
         "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
         "market_pda": "MarketPdaBase58",
         "underlying_mint": "UnderlyingMintBase58",
@@ -313,10 +314,10 @@ Next page (keyset pagination):
 {
   "type": "GetMyTrades",
   "data": {
-    "request_id": "a1b2c3d4-0006",
+    "request_id": "a1b2c3d4-0000-4000-8000-000000000007",
     "limit": 50,
     "cursor": 1710000042,
-    "cursor_id": "trade-uuid-1"
+    "cursor_id": "7c2e9a41-6b3d-4f58-9e1a-0d4b6f8a2c35"
   }
 }
 ```
