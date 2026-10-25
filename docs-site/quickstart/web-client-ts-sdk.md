@@ -10,7 +10,9 @@ SDK event callbacks use the wire message names in lowerCamelCase. TypeScript typ
 npm install @acta-markets/ts-sdk
 ```
 
-This guide covers version 0.2.3, which targets the program deployed to devnet and mainnet on 2026-10-17. Its instruction opcodes and program error codes differ from the program 0.1.6 was built against, so upgrade both together. The package README has a "Migrating from 0.1.6" table. Refer to opcodes and errors by name through the generated constants exported from `@acta-markets/ts-sdk` (`*_DISCRIMINATOR` for instruction opcodes, `ACTA_CONTRACT_ERROR__*` for program errors), not by number.
+This guide covers version 0.2.4. Its instruction opcodes and program error codes differ from the program 0.1.6 was built against, so upgrade both together. The package README has a "Migrating from 0.1.6" table. Refer to opcodes and errors by name through the generated constants exported from `@acta-markets/ts-sdk` (`*_DISCRIMINATOR` for instruction opcodes, `ACTA_CONTRACT_ERROR__*` for program errors), not by number.
+
+Vault payout fields changed in 0.2.0: deposits take `refundTo` / `sharesTo`, withdrawals take `sharesBackTo`, and `liquidateVaultPosition(liquidator, { owner, paidTo }, position)` takes the payout in its second argument. Replace `refundDestination` / `shareDestination` and the old fourth argument; the current SDK rejects these obsolete inputs.
 
 `ActaWsClient` validates the challenge before calling the auth provider. Raw clients can call `validateAuthChallenge` (`assertVaultAuthChallenge` for a `/vault` session).
 
@@ -299,12 +301,12 @@ Error codes and `OrderFailed` reasons are in the [Taker API reference](../refere
 - Earn summary: `getEarnSummary()` -> `earnSummary` event. APR ranges and capacity per asset for landing pages.
 - Market price snapshot: `getTokenMarketsInfo(underlyingMint)` -> `tokenMarketsInfo` returns backend `reference_price`, size rules, decimals and indicative premiums. The response does not echo the mint; map it by request ID. See [TokenMarketsInfo](../reference/taker-api.md#tokenmarketsinfo).
 - Indicative prices: `getIndicativePrices({ market, position_type })` -> `indicativePrices` event. Non-binding. The server refreshes them roughly every 30s.
-- APR inputs: use spot and indicative premium from the same `TokenMarketsInfo` response. Skip the preview when the price is missing or `is_stale: true`.
+- APR inputs: use spot and indicative premium from the same `TokenMarketsInfo` response. Skip the preview when the price is missing or `is_stale: true`. Refresh while the view is active; the Acta web app uses 30 seconds. Clear cached metadata after a failed refresh or disconnect. Pyth credentials belong on the backend.
 - APR/APY helper: `computeApyFromScaledPrices({ underlyingAmount, grossPremiumPerUnit1e9, spotPrice1e9, secondsToExpiry })` from `@acta-markets/ts-sdk/ws` returns `{ premiumNotional, collateralNotional, termYield, apr, apy }`. `spotPrice1e9` is required: collateral is valued at spot for calls and puts. `computeApyFromAmounts({ underlyingAmount, premiumPerUnderlying, spotPrice, secondsToExpiry })` takes human units. Pass backend `best_price` as `grossPremiumPerUnit1e9`. It already includes the quote-mint fee adjustment, so do not subtract the fee again.
 - Nonces: `generateNonce()` from `@acta-markets/ts-sdk/ws` returns a fresh `bigint` nonce for signed orders.
 - Program events: `decodeActaEventsFromLogsScoped(logs, programId)` from `@acta-markets/ts-sdk` decodes only events emitted by that program.
 - Instruction builders: builders in `@acta-markets/ts-sdk/chain` that resolve a mint's token program need `tokenProgram` or `rpc`. With neither they throw.
-- Vault catalog: an authenticated session subscribed to `vaults` receives `vaultCatalogChanged` (`{ vault_pda }`) when a vault is created, re-delegated or closed. Re-list vaults with `GET /api/v1/vaults`.
+- Vault catalog: an authenticated session subscribed to `vaults` receives `vaultCatalogChanged` (`{ vault_pda }`) when a vault is created, re-delegated or closed, and `vaultProjectionAdvanced` when vault state changes. Neither is replayed. Re-list with `GET /api/v1/vaults` or reload `/api/v1/vaults/{pda}` on these events and after every `authenticated`.
 
 ## Signing requirements
 

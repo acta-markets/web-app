@@ -12,9 +12,11 @@ Manager stake is held apart from depositor shares. The manager cannot remove sta
 
 ## NAV and equity checkpoint
 
-NAV (net asset value) is the accounted equity in main-asset units. At a boundary the contract adds main custody to second custody, converted into main-asset units with on-chain Pyth prices. All positions must be closed and funding settled first.
+NAV (net asset value) is the accounted equity in main-asset units. At a boundary the contract adds main custody to second custody, converted with the legs’ registered price routes. All positions must be closed, funding settled and staged assets returned to a leg first.
 
-The instruction takes Pyth price-update accounts. The contract checks their oracle sources, feed IDs, freshness and price-quality limits.
+The instruction takes a `priceSection`: each route followed by the accounts its pricing bricks read. The contract checks their identity, freshness and price-quality limits. A route can combine a Pyth price with an asset rate or maturity discount. See [Price routes and freshness](vault-integration.md#price-routes-and-freshness).
+
+An open `staging` slot is an intermediate token balance, not a new equity checkpoint. The last booked equity and share price do not value it afresh. A term token’s route valuation is also not a promise of the amount a swap will receive.
 
 Equity is in main-token atomic units. Share price and the high-water mark are `u128` values at a fixed scale of `1_000_000_000`. In JavaScript, keep them as decimal strings or `BigInt`.
 

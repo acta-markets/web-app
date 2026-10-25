@@ -197,7 +197,7 @@ on-chain event that opened the position. The server does not derive it from
 the net premium. If the server has not verified that event for a position, or
 later finds a gap in its verified chain history up to it, the whole read fails
 with a `RequestError` (`Generic` code `temporarily_unavailable`). Retry with
-backoff.
+backoff. This clears once the server has reconciled the chain history.
 
 ## RFQ flow
 

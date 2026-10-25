@@ -18,6 +18,7 @@ Cold authority operations:
 - rotate the hot wallet immediately
 - set, rotate, or clear the guardian immediately
 - set, rotate, or revoke the settlement attestor through the timelock
+- set or close vault price routes and enable or disable swap venues through the timelock
 - toggle pause immediately
 - correct a published settlement price immediately (`CorrectOraclePrice`)
 - create vaults (`CreateVault`)
@@ -87,6 +88,8 @@ Settlement and liquidation are permissionless. Any signer may settle an expired 
 | Set / rotate settlement attestor (`SetSettlementAttestor`, op 29) | Cold | Timelocked |
 | Revoke settlement attestor (`RevokeSettlementAttestor`, op 30) | Cold | Timelocked |
 | Vault manager-stake floor, capital fallback delay (`SetVaultManagerStakeMinBps`, `SetVaultCapitalFallbackDelay`) | Cold | Timelocked |
+| Vault price route per mint (`SetPriceRoute`, op 73; `ClosePriceRoute`, op 74), shared by every vault holding that mint | Cold | Timelocked |
+| Vault swap venues and allowed instruction selectors (`SetSwapVenue`, op 75) | Cold | Timelocked |
 | Withdraw protocol fees | Hot wallet | Immediate |
 | Open position | Hot wallet + taker tx signer + maker Ed25519 quote | Immediate |
 | Settle position | Permissionless | After market finalization |
@@ -117,6 +120,9 @@ Timelockable wrapped opcodes:
 | 26 | `UpdateActionTimelock` |
 | 70 | `SetVaultManagerStakeMinBps` |
 | 71 | `SetVaultCapitalFallbackDelay` |
+| 73 | `SetPriceRoute` |
+| 74 | `ClosePriceRoute` |
+| 75 | `SetSwapVenue` |
 
 In production, direct calls to these operations fail with `DirectCallDisabled`. They go through queue -> execute. The exception is `UpdateActionTimelock` raising or keeping the delay, which is immediate. Lowering it is queued under the current delay.
 
@@ -126,16 +132,7 @@ In production, direct calls to these operations fail with `DirectCallDisabled`. 
 
 `ExecutePendingAction` data is `[25, wrapped_opcode, ...wrapped_args]` and accounts are `[executor, pending_action_pda, proposed_by, ...wrapped_accounts]`.
 
-The commitment binds:
-
-```
-sha256(
-  "acta:pend.v2"
-  || wrapped_opcode
-  || ordered wrapped account keys
-  || full wrapped instruction data
-)
-```
+The commitment hashes the wrapped opcode, account count, ordered account keys, data length and full instruction data. For data up to 128 bytes, `acta:pend.v2` uses zero-padded slots for 16 account keys and 128 data bytes. For 129–1024 bytes, `acta:pend.v3` uses the keys and data without padding. Both use a one-byte account count and a little-endian `u16` data length, and allow at most 16 accounts. Use the SDK's `buildGenericPendingPreimage` to build the exact preimage.
 
 `QueuePendingAction` and `ExecutePendingAction` Codama builders expose only the wrapped `opcode`. Generic timelock payloads require SDK flow helpers or the full wire layout above.
 

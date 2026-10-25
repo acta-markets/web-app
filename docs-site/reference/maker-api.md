@@ -72,12 +72,16 @@ Protocol constraints:
     "server_version": "0.1.0",
     "min_supported_version": "1.0.0",
     "enabled_features": [],
-    "server_time_unix_ms": 1710000000000
+    "server_time_unix_ms": 1710000000000,
+    "min_quote_validity_seconds": 100,
+    "settlement_buffer_seconds": 90
   }
 }
 ```
 
 `server_time_unix_ms` is required. Use it for clock skew estimation (see [WS common conventions](ws-common.md)).
+
+`min_quote_validity_seconds` and `settlement_buffer_seconds` are the venue quote window, the same values as `GET /api/v1/venue`: `valid_until` must be at least `now + min_quote_validity_seconds`, and a quote stays executable only while `valid_until - settlement_buffer_seconds > now`. The Rust `QuoteBuilder::welcome(&welcome)` applies both.
 
 If the client's `protocol_version` is incompatible, the server sends `VersionMismatch` instead of `Welcome` and closes the connection.
 
@@ -176,6 +180,14 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
 
 - `PositionUpdated`, `MakerCapsUpdated`, `TradeExecuted`
 
+Delivered to the owner's quote session and ready `/maker/data` sessions. Data
+sessions become eligible after a successful `GetMmSummary` response; authentication
+alone does not enable pushes. No subscription is needed. Up to four authenticated
+data sessions per owner are allowed; the fifth receives `AuthError` with
+`reason = "session_limit_exceeded"`. Disconnect or logout releases its slot.
+A full data queue closes only that session (`4002 slow_consumer`). Reconcile on
+restart/reconnect: these pushes are not replayed.
+
 ### Server -> Maker (broadcast if subscribed)
 
 - `StatsUpdate`, `ChainEvent`
@@ -186,8 +198,8 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
 
 Pushes reach a session in one of three ways: a channel the session subscribed
 to (`Subscribe` is accepted on `/maker` and `/vault`, not on `/maker/data`),
-the session that sent the quote, or the maker owner's `/maker` session
-whatever it subscribed to. Query responses (`MyQuotes`, `MakerPositions`,
+the session that sent the quote, or the maker owner's `/maker` and ready
+`/maker/data` sessions regardless of subscriptions. Query responses (`MyQuotes`, `MakerPositions`,
 `MmSummary`, ...) return on the connection that asked.
 
 | Message | `/maker` | `/maker/data` | `/vault` |
@@ -199,9 +211,9 @@ whatever it subscribed to. Query responses (`MyQuotes`, `MakerPositions`,
 | `QuoteFilled` | the session that sent the winning quote | no | the session that sent the winning quote |
 | `RfqClosed`, `RfqAvailableAgain` | every session that quoted the RFQ | no | every session that quoted the RFQ, and the taker session |
 | `OrderAccepted`, `SponsoredTxToSign`, `OrderSubmitted`, `OrderConfirmed`, `OrderFailed` | never: these go to the taker | no | only as the taker of its own RFQ |
-| `TradeExecuted` | owner's session, no subscription | no | no |
-| `PositionUpdated`, `MakerCapsUpdated` | owner's session, no subscription | no | no |
-| `ReferenceChanged` | every session | every session | every session |
+| `TradeExecuted` | owner's session, no subscription | owner's ready sessions, no subscription | no |
+| `PositionUpdated`, `MakerCapsUpdated` | owner's session, no subscription | owner's ready sessions, no subscription | no |
+| `ReferenceChanged` | every session | every ready session | every session |
 | `MarketCreated`, `MarketFinalized` | `markets` channel | no | no |
 | `StatsUpdate` / `ChainEvent` | `stats` / `chain_events` channel | no | no |
 | `VaultCatalogChanged` | `vaults` channel | no | no |
@@ -286,7 +298,7 @@ Sent instead of `RfqBroadcast` when cap limits pre-filter the maker. `reason` is
 ```
 
 Rules:
-- `valid_until` >= `now + 100` seconds, otherwise `quote_expiry_too_short`
+- `valid_until` >= `now + min_quote_validity_seconds` from `GET /api/v1/venue` (currently 100 seconds), otherwise `quote_expiry_too_short`
 - `valid_until` <= the market's `expiry_ts`, otherwise `market_expired`
 - The server applies a settlement buffer (`settlement_buffer_seconds` from `GET /api/v1/venue`, currently 90): the quote is tradable until `valid_until` minus that buffer. Set `valid_until` to at least `rfq.expires_at + min_quote_validity_seconds` (currently 100) so it stays tradable for the whole auction.
 - `order_id = sha256(preimage182)`
@@ -1404,7 +1416,7 @@ All variants require `signature` (tx signature, base58), `instruction_index` (in
 
 ## Delivery and recovery
 
-When your outbound queue is full, a critical message is dropped and the server closes the connection (`4002 slow_consumer`), so its loss always shows up as a disconnect. Best-effort broadcasts are dropped silently. For `/maker` the critical set is `RfqBroadcast`, the quote and order lifecycle, `QuoteRefreshRequested`, `MarketCreated`, `MarketFinalized`, `VaultCatalogChanged`, `VaultProjectionAdvanced`, and every message addressed to your session alone (responses, `PositionUpdated`, `MakerCapsUpdated`). `TradeExecuted`, `ChainEvent`, `StatsUpdate`, `RfqSkipped` and `IndicativePricesRequest` are best-effort. The full table is in [WebSocket conventions](ws-common.md#delivery-criticality).
+When your outbound queue is full, a critical message is dropped and the server closes the connection (`4002 slow_consumer`), so its loss always shows up as a disconnect. Best-effort broadcasts are dropped silently. For `/maker` the critical set is `RfqBroadcast`, the quote and order lifecycle, `QuoteRefreshRequested`, `MarketCreated`, `MarketFinalized`, `VaultCatalogChanged`, `VaultProjectionAdvanced`, and every message addressed to your session alone (responses, `PositionUpdated`, `MakerCapsUpdated`). `ChainEvent`, `StatsUpdate`, `RfqSkipped` and `IndicativePricesRequest` broadcasts are best-effort. Owner-direct `TradeExecuted` uses addressed delivery and closes the affected session on queue overflow. The full table is in [WebSocket conventions](ws-common.md#delivery-criticality).
 
 On every (re)connect read `GetActiveRfqs` and complete `GetMyQuotes { scope: Live }` on `/maker`, and `GetMmSummary` on `/maker/data`. The managed Rust SDK sends exactly these reads per endpoint before `Ready`; querying `GetOrderStatus` for orders you still consider unresolved is up to you. They mix Core live state and DB projections, so they are not one atomic snapshot. `ActiveRfqs` supplies each RFQ's taker and market PDA for the quote preimage.
 

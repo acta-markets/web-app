@@ -165,11 +165,11 @@ The server locks the quote and builds a transaction to sign:
 }
 ```
 
-`last_valid_block_height` is the block height the transaction's blockhash is valid through. `tx_base64` is a v0 `VersionedTransaction`. The keeper is the fee payer and co-signer. The taker signs as the collateral authority. Steps in any language:
+`last_valid_block_height` is the block height the transaction's blockhash is valid through. `tx_base64` is a v0 `VersionedTransaction`. For an ordinary maker quote, the keeper is the fee payer and co-signer; the taker signs as the collateral authority. If `quote.maker` is a vault PDA, the taker is the fee payer and only signer, in slot 0. Steps in any language:
 
 1. base64-decode `tx_base64` to bytes.
 2. Deserialize as a v0 `VersionedTransaction`.
-3. Sign with the taker wallet key into the taker's signer slot. Leave the keeper's slot and account order alone. The message bytes are fixed.
+3. Sign with the taker wallet key into the taker's signer slot. Leave other signature slots and account order alone. The message bytes are fixed.
 4. Re-serialize the partially-signed transaction and base64-encode it.
 5. Submit before `signature_deadline` (Unix seconds):
 
@@ -195,7 +195,7 @@ Before signing, check the program, market, quote terms, amounts, accounts and in
 - `shortvec(sig_count)` is a compact-u16 (little-endian base128 varint) count of signatures. For a 2-signer sponsored tx it is a single byte `0x02`.
 - Each signature slot is 64 bytes, ordered to match the message's required signers.
 - Ordinary maker quote: slot 0 is the keeper (fee payer and co-signer). It is zeroed now. The keeper fills it after you submit. Slot 1 is the taker. You fill it.
-- Vault maker quote (a vault sells you the option): the taker is the fee payer and the only signer, so the taker signs slot 0 and `sig_count` is 1.
+- Vault maker quote (`maker` is a vault PDA): the taker is the fee payer and the only signer, so the taker signs slot 0 and `sig_count` is 1.
 
 Find your slot by your pubkey's position among the message's required signers rather than assuming an index.
 
@@ -216,7 +216,7 @@ Library shortcuts:
 - Python (`solders`): `tx = VersionedTransaction.from_bytes(raw)`, sign `bytes(tx.message)`, assign into `tx.signatures[i]`, re-serialize.
 - TypeScript: `verifyAndSignTakerFill({ txBase64, quote, rfq, taker, tables, bounds, signer })` from `@acta-markets/ts-sdk/ws` (no `@solana/web3.js`). It fills slot 1 for an ordinary quote and slot 0 for a vault maker quote (pass `makerVault` from `fetchMakerVault(rpc, quote.maker)`).
 
-It rebuilds the expected transaction from the accepted quote and RFQ terms and refuse to sign on any mismatch: program and market PDA, the order id recomputed from the quote (it must equal `order_id`), the maker's Ed25519 check over it right before `open_position`, `open_position` accounts and arguments, the fee payer, no extra signers or instructions, and a compute budget within `bounds`. The blockhash and the relayer's fee payer address come from the server and need no local copy. Pass the wallet's `signTransaction` as the helper's `signer` instead of calling it on the served transaction directly.
+It rebuilds the expected transaction from the accepted quote and RFQ terms and refuses to sign on any mismatch: program and market PDA, the order id recomputed from the quote (it must equal `order_id`), the maker's Ed25519 check over it right before `open_position`, `open_position` accounts and arguments, the fee payer, no extra signers or instructions, and a compute budget within `bounds`. The blockhash and the relayer's fee payer address come from the server and need no local copy. Pass the wallet's `signTransaction` as the helper's `signer` instead of calling it on the served transaction directly.
 
 ### 4. Track the order
 
@@ -234,12 +234,7 @@ Apply an update only if its `order_version` / `rfq_version` is higher than the o
 
 ### 5. Failure and retry
 
-`OrderFailed` alone is not a reason to trade again:
-
-| Reason | Retryable? |
-|---|---|
-| `blockhash_expired` | The keeper may retry, up to five attempts. Check `GetOrderStatus` and wait for `RfqAvailableAgain` or `RfqClosed` before selecting another quote. |
-| `on_chain`, `submission_rejected`, `safety_timeout`, `shutdown` | No. |
+`OrderFailed.reason` is a free-form diagnostic string, not an enum. Log and display it; do not branch on exact values. No reason authorizes another trade. The keeper retries retryable submission failures within five attempts, but a failure does not prove rollback. Reconcile with `GetOrderStatus` and wait for `RfqAvailableAgain` or `RfqClosed`. Never replay the old order.
 
 On a signature timeout or tx-build failure, only the winning quote is discarded. Still-valid losing quotes are restored and the RFQ returns to active if not expired.
 
@@ -253,7 +248,7 @@ Success has no `CommandAccepted`: the RFQ, active or awaiting your signature, cl
 
 ## Position lifecycle
 
-Position collateral stays in escrow until settlement after market finalization. Options cannot be exercised early. For an ITM position, the maker supplies the settlement asset. If the position remains unfunded, a permissionless liquidator can supply that asset and receive the collateral.
+Position collateral stays in escrow until settlement after market finalization. Options cannot be exercised early. For an ITM position, the maker supplies the settlement asset. If the position remains unfunded, a permissionless liquidator can supply that asset and receive the collateral. There is no guaranteed liquidation deadline; completion needs someone to supply the settlement asset.
 
 | Status | Meaning |
 |---|---|
@@ -296,9 +291,10 @@ No signature is needed because the authenticated session proves wallet ownership
 |---|---|
 | Application `Ping` | Optional clock sample. `Pong` carries `server_time_unix_ms`. Transport pongs keep the connection alive; default idle timeout 90s. |
 | Server WS ping | Every 30s. Raw clients answer protocol pings. |
+| Reconnect backoff | Exponential with jitter, e.g. 1s initial, 30s cap, ±20%. |
 | Clock skew | Track `offset = server_time − local_time` from `Welcome` and `Pong`. Apply it to `expires_at` and `signature_deadline`. |
 | Signature deadline | `min(now + 30s, quote effective_expiry, rfq.expires_at)`. |
-| Rate limits | Per-taker active-RFQ cap (default 10) and platform cap. `RateLimit` errors carry a reason code. |
+| Rate limits | Concurrent unfinished RFQs: 50 per taker, 50 per source IP, 1000 platform-wide (server defaults). `RateLimit` errors carry a reason code. |
 
 `valid_until` is set by the maker.
 

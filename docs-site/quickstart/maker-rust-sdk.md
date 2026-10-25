@@ -10,10 +10,10 @@ Runnable examples ship with the crate: run them with `cargo run --example <name>
 
 ```toml
 [dependencies]
-acta-maker-sdk = { version = "0.5.3", features = ["ws-client"] }
+acta-maker-sdk = { version = "0.5.4", features = ["ws-client"] }
 ```
 
-Version 0.5.3 targets the program deployed to devnet and mainnet on 2026-10-17. Upgrading from 0.5.0/0.5.1: `ManagedWsConfig::new` takes the maker owner, `QuoteBuilder` requires `maker_owner` and `min_valid_until`, and `MakerQuoteClient` quotes through `quote_in_epoch` / `replace_in_epoch` / `batch_quotes_in_epoch` (see the crate's `CHANGELOG.md`). Vault operators use the `vault` feature and the `/vault` session described in [Vault API, SDKs and swaps](../protocol/vault-integration.md).
+This guide covers version 0.5.4. Upgrading from 0.5.0/0.5.1: `ManagedWsConfig::new` takes the maker owner, `QuoteBuilder` requires `maker_owner` and `min_valid_until`, and `MakerQuoteClient` quotes through `quote_in_epoch` / `replace_in_epoch` / `batch_quotes_in_epoch` (see the crate's `CHANGELOG.md`). Vault operators use the `vault` feature and the `/vault` session described in [Vault API, SDKs and swaps](../protocol/vault-integration.md).
 
 Quote-only integrations need `ws-client`. `chain` adds Solana instruction builders, including `chain::vault`. `chain-rpc` adds on-chain reads. `http` adds the read-only HTTP client. `vault` adds the vault operator client and implies `ws-client` and `chain`.
 
@@ -111,7 +111,7 @@ Lifecycle events arrive on the managed receiver with a connection epoch and sequ
 | `QuoteBestStatus` / `QuoteOutbid` | Current book position. |
 | `QuoteRefreshRequested` | Settlement-buffer cutoff approaching. Resubmit with `valid_until ≥ min_valid_until`. |
 | `QuoteSelected` | Quote locked; awaiting the taker signature. |
-| `QuoteFilled` | Position opened on-chain. Carries `market_pda`, `expiry_ts`, `position_type`, `position_pda` and `tx_signature`, so it can be attributed without the RFQ. |
+| `QuoteFilled` | Position opened on-chain. Carries `market_pda`, `expiry_ts`, `position_type`, `position_pda` and `tx_signature`, so it can be attributed without the RFQ. `expiry_ts` is optional when the server no longer knows the market. |
 | `QuoteCancelled` | Removes only the listed `order_ids`. An empty list removes nothing. Not an ACK for a cancel command. |
 | `QuoteExpired` | Emitted only when `quote_expired` was opted into via `Hello`. |
 | `RfqAvailableAgain` | Settlement reverted; re-quote with a fresh `order_id`. |
@@ -208,7 +208,7 @@ Once it lands, restart the quote and data sessions with the new signer. The owne
 
 ## Low-level WsClient
 
-The `hello_auth` example (`cargo run --example hello_auth`) shows the Hello, challenge and subscription sequence by hand. You supply request IDs yourself.
+The `hello_auth` example (`cargo run --example hello_auth --features ws-client`) shows the Hello, challenge and subscription sequence by hand. You supply request IDs yourself.
 
 Convenience methods exist for every `ClientMessage` variant. `WsClient` does not reconnect, re-authenticate, or queue outbound messages.
 

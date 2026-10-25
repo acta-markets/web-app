@@ -20,7 +20,8 @@ The TypeScript SDK exports `chain.flows.VaultManagerPlanner` to build vault inst
 | Capital queues and next cycle | `processDeposits()`, `processWithdrawals()`, `processFinalWithdrawal()`, `finalizeCycle()` |
 | Delegate and policy | `governance.rotateDelegate()`, `governance.disableDelegate()`, `governance.proposeUpdate()`, `governance.applyUpdate()` |
 | Options and funding | `trading.openPositionAsTaker()`, `trading.openPositionAsMaker()`, `trading.fundMakerPosition()` |
-| Normal rebalance | `swaps.spotRebalance()` |
+| Normal rebalance and staging | `swaps.spotRebalance()`, `swaps.stagingSwap()` |
+| Second-leg rollover | `governance.proposeUpdate()`, `governance.applySecondLeg()` |
 
 TypeScript 0.2.0 renamed the capital and liquidation payout fields (`refundDestination` → `refundTo`, `shareDestination` → `sharesTo` / `sharesBackTo`, `liquidateVaultPosition(l, { owner, paidTo }, pos)`). Old names are silently ignored in JavaScript and the payout goes to the canonical ATA. See [Capital transactions](vault-integration.md#capital-transactions).
 
@@ -44,9 +45,19 @@ Phase, safety mode and policy all gate trading. Normal rebalance cannot touch un
 
 ## Process capital and begin another cycle
 
-The manager opens and closes the deposit window. After trading, close positions and settle funding, supply on-chain prices, compute equity and fees, then process deposit and withdrawal requests. Finalize once the queues are empty.
+The manager opens and closes the deposit window. After trading, close positions, settle funding and finish any staged swap. Supply the vault’s price section, compute equity and fees, then process deposit and withdrawal requests. Finalize once the queues are empty.
+
+Build `priceSection` with `resolveVaultPriceSection(rpc, planner, pythShard)`. It contains each leg’s registered route and the accounts its pricing bricks read. See [Price routes and freshness](vault-integration.md#price-routes-and-freshness).
 
 If the manager stalls, depositors and public processors can process requests under the fallback rules in [Request processing](vault-lifecycle.md#request-processing). [Accounting](vault-accounting.md) covers share price, fee dilution and final redemption.
+
+## Roll the second leg
+
+Term and PT vaults can replace the second mint through a timelocked `{ kind: "secondLeg", value: newMint }` governance update. Apply it with `governance.applySecondLeg(proposalPayer, newMint, priceSection?)`; `applyUpdate("secondLeg")` is not supported.
+
+The vault must be idle, normal and unpriced, with no pending capital or open staging slot. The new mint must preserve decimals and token-program kind, have no freeze authority and use a compatible price-route template. The old custody must be empty or hold only dust allowed by the contract; valuing dust requires a price section.
+
+`VaultSecondLegRolled` increments `second_leg_generation`. Reload the vault and rebuild cached leg addresses and plans after a roll. A roll does not transfer a position in the old token into the new one.
 
 ## Observe and recover
 
