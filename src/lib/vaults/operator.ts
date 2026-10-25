@@ -3,7 +3,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   flows,
-  resolveVaultPriceUpdates,
+  resolveVaultPriceSection,
 } from "@acta-markets/ts-sdk/chain";
 import type { VaultDepositRequest, VaultWithdrawRequest } from "@acta-markets/ts-sdk/http";
 import { VaultDelegatePermission, hasVaultPermission } from "@acta-markets/ts-sdk/ws";
@@ -124,13 +124,12 @@ export async function buildCapitalStepTransactions(
   const { rpc, manager, vault, signal } = ctx;
   switch (step) {
     case "close_deposits":
-      if (vault.pending_deposit_count > 0 || vault.pending_withdraw_count > 0) await resolveVaultPriceUpdates(rpc, manager);
+      if (vault.pending_deposit_count > 0 || vault.pending_withdraw_count > 0) await resolveVaultPriceSection(rpc, manager);
       return [[manager.setAcceptingDeposits(false)]];
     case "open_deposits":
       return [[manager.setAcceptingDeposits(true)]];
     case "compute_equity": {
-      const prices = await resolveVaultPriceUpdates(rpc, manager);
-      return [[manager.processEquity(prices.mainPriceUpdate, prices.secondPriceUpdate)]];
+      return [[manager.processEquity(await resolveVaultPriceSection(rpc, manager))]];
     }
     case "process_deposits": {
       const users = (await fetchAllVaultDepositRequests(vault.vault_pda, signal)).map((r) => address(r.wallet));

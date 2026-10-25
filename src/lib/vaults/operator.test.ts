@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getActaProgramId, getOracleSourceEncoder } from "@acta-markets/ts-sdk";
-import { findVaultPda, flows, pythPriceFeedAccount } from "@acta-markets/ts-sdk/chain";
+import { getActaProgramId, getPriceRouteEncoder } from "@acta-markets/ts-sdk";
+import { findVaultPda, flows, priceRouteState, pythBrick, pythPriceFeedAccount } from "@acta-markets/ts-sdk/chain";
 import {
   address,
   appendTransactionMessageInstructions,
@@ -27,6 +27,8 @@ import type { Vault } from "./types";
 
 const USER = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
 const FEED = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
+const MAIN_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const SECOND_MINT = "So11111111111111111111111111111111111111112";
 
 async function testVault(overrides: Partial<Vault> = {}): Promise<Vault> {
   return {
@@ -34,8 +36,8 @@ async function testVault(overrides: Partial<Vault> = {}): Promise<Vault> {
     vault_id: "01".repeat(32),
     governance: USER,
     primary_delegate: USER,
-    main_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    second_mint: "So11111111111111111111111111111111111111112",
+    main_mint: MAIN_MINT,
+    second_mint: SECOND_MINT,
     share_mint: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
     main_token_program: "legacy_spl",
     second_token_program: "legacy_spl",
@@ -56,28 +58,23 @@ function page(requests: object[]) {
   return new Response(JSON.stringify({ requests, next_cursor: null }), { status: 200 });
 }
 
+/** Serves the vault's main then second price route, each one Pyth brick on `FEED`. */
 function stubRpc(supply: bigint): Rpc<SolanaRpcApiMainnet> {
-  const oracle = new Uint8Array(
-    getOracleSourceEncoder().encode({
-      discriminator: 7,
-      version: 1,
-      bump: 255,
-      pad0: new Uint8Array(5),
-      mint: address(USER),
-      feeds: Uint8Array.from({ length: 128 }, (_, i) => (i >= 32 && i < 64 ? FEED[i - 32] : 0)),
-      reserved: new Array(32).fill(0),
-    }),
-  );
-  const account = {
-    data: [Buffer.from(oracle).toString("base64"), "base64"],
-    executable: false,
-    lamports: 1n,
-    owner: getActaProgramId(),
-    space: BigInt(oracle.length),
+  const account = (mint: string) => {
+    const route = new Uint8Array(
+      getPriceRouteEncoder().encode(priceRouteState({ mint: address(mint), bump: 255, maxSkewSecs: 10, bricks: [pythBrick(FEED, 60)] })),
+    );
+    return {
+      data: [Buffer.from(route).toString("base64"), "base64"],
+      executable: false,
+      lamports: 1n,
+      owner: getActaProgramId(),
+      space: BigInt(route.length),
+    };
   };
   const send = (value: unknown) => ({ send: async () => ({ context: { slot: 1n }, value }) });
   return {
-    getMultipleAccounts: (keys: unknown[]) => send(keys.map(() => account)),
+    getMultipleAccounts: (keys: unknown[]) => send(keys.map((_, i) => account(i % 2 === 0 ? MAIN_MINT : SECOND_MINT))),
     getTokenSupply: () => send({ amount: supply.toString(), decimals: 6, uiAmountString: "0" }),
   } as unknown as Rpc<SolanaRpcApiMainnet>;
 }
@@ -154,6 +151,6 @@ describe("vault operator", () => {
   it("returns SDK next steps for the dashboard", () => {
     const clock = flows.windowClock(false, 0, 1);
     const policy = { reopen: false, depositWindowMs: 1, tradingWindowMs: 1 };
-    expect(flows.nextCapitalStep({ phase: "idle", safety: "normal", equity_computed: false, accepting_deposits: false, pending_deposit_count: 0, pending_withdraw_count: 1 }, clock, policy)).toBe("compute_equity");
+    expect(flows.nextCapitalStep({ phase: "idle", safety: "normal", equity_computed: false, accepting_deposits: false, pending_deposit_count: 0, pending_withdraw_count: 1, staging: null }, clock, policy)).toBe("compute_equity");
   });
 });

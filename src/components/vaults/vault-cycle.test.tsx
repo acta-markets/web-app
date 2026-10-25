@@ -32,6 +32,16 @@ describe("VaultCurrentCycle", () => {
     expect(screen.getByText("30,115.6 USDC · paid 2,984.1")).toBeTruthy();
   });
 
+  it("shows an open staging slot between cycles", () => {
+    const vault = makeVault({
+      phase: "idle",
+      staging: { mint: USDC, from_leg: "second", amount: "1250000000", staged_at: String(NOW), generation: "3" },
+    });
+    render(<VaultCurrentCycle vault={vault} nowSecs={NOW} />);
+    expect(screen.getByText("Swap in progress")).toBeTruthy();
+    expect(screen.getByText("1,250 USDC from SOL")).toBeTruthy();
+  });
+
   it("drops empty premium, and the whole block between cycles with nothing to show", () => {
     const empty = { received: "0", paid: null };
     const idle = makeVault({ phase: "idle", second_mint: USDC, second_decimals: 6, premium: [{ quote_mint: USDC, cycle: empty, generation: empty }] });

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { getToken, getTokenMint } from "@/lib/tokens";
+import { getToken, getTokenMint, rememberReferenceTokens } from "@/lib/tokens";
+import { mintUnits } from "./presentation";
+import { makeVault } from "./sample";
 import {
   categoryHref,
   deriveCategory,
@@ -148,5 +150,17 @@ describe("category params", () => {
   it("round-trips through the href", () => {
     expect(categoryHref("all")).toBe("/earn");
     expect(categoryHref("Stables")).toBe("/earn?category=stables");
+  });
+});
+
+describe("reference tokens", () => {
+  it("names a vault whose deposit mint only the API's token list knows", () => {
+    const pt = "DSVwUv5iRHVgscHSRm1r9qE3eXw8hpuBDHdcWX9v1729";
+    rememberReferenceTokens([{ mint: pt, symbol: "PTd1", decimals: 9 }]);
+    const vault = makeVault({ main_mint: pt, main_decimals: 9, metadata: undefined });
+    const meta = resolveVaultMeta(vault, {});
+    expect(meta.assetSymbol).toBe("PTd1");
+    expect(meta.name).toBe("PTd1 vault");
+    expect(mintUnits(makeVault(), pt)).toEqual({ symbol: "PTd1", decimals: 9 });
   });
 });

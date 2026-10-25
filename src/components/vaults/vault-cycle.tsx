@@ -1,7 +1,7 @@
 import { AppCard } from "@/components/app-ui/app-card";
 import { cn } from "@/lib/cn";
 import { formatCountdown, formatDate } from "@/lib/vaults/format";
-import { cyclePhaseLabel, exposureRows, exposureTotals, formatPremium, mintUnits } from "@/lib/vaults/presentation";
+import { cyclePhaseLabel, exposureRows, exposureTotals, formatPremium, mintUnits, stagingText } from "@/lib/vaults/presentation";
 import type { Vault, VaultExposure, VaultPremium, VaultPremiumFlow } from "@/lib/vaults/types";
 
 const TITLE = "font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary";
@@ -33,7 +33,8 @@ export function VaultCurrentCycle({ vault, nowSecs }: { vault: Vault; nowSecs: n
   const cycle = premiumText(vault, premium, (p) => p.cycle);
   const total = premiumText(vault, premium, (p) => p.generation);
   const since = vault.generation_started_at;
-  if (!running && !cycle && !total) return null;
+  const staged = stagingText(vault);
+  if (!running && !cycle && !total && !staged) return null;
 
   return (
     <AppCard className="p-4">
@@ -50,6 +51,7 @@ export function VaultCurrentCycle({ vault, nowSecs }: { vault: Vault; nowSecs: n
         ) : null}
         {cycle ? <Row label="Premium this cycle">{cycle}</Row> : null}
         {total ? <Row label={since ? `Premium since ${formatDate(Number(since))}` : "Premium"}>{total}</Row> : null}
+        {staged ? <Row label="Swap in progress">{staged}</Row> : null}
       </dl>
     </AppCard>
   );

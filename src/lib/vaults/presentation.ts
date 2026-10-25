@@ -1,6 +1,6 @@
 import { flows } from "@acta-markets/ts-sdk/chain";
 import type { DepositorPerformance } from "@acta-markets/ts-sdk/http";
-import { getToken, getTokenSymbolByMint } from "@/lib/tokens";
+import { getReferenceToken, getToken, getTokenSymbolByMint } from "@/lib/tokens";
 import { formatDate, formatPercent, formatTokenAmount, formatUsd, NONE, shortAddress } from "./format";
 import type {
   Vault,
@@ -140,7 +140,20 @@ export function mintUnits(vault: Pick<Vault, "main_mint" | "main_decimals" | "se
   if (mint === vault.main_mint) return { symbol: symbol ?? shortAddress(mint), decimals: vault.main_decimals };
   if (mint === vault.second_mint) return { symbol: symbol ?? shortAddress(mint), decimals: vault.second_decimals };
   const token = symbol ? getToken(symbol) : undefined;
-  return symbol && token ? { symbol, decimals: token.decimals } : null;
+  if (symbol && token) return { symbol, decimals: token.decimals };
+  return getReferenceToken(mint) ?? null;
+}
+
+/** "1,250 USDC from SOL": an open staging slot, part of a leg parked in another mint mid-swap. */
+export function stagingText(vault: Vault): string | null {
+  const staging = vault.staging;
+  if (!staging) return null;
+  const leg = mintUnits(vault, staging.from_leg === "main" ? vault.main_mint : vault.second_mint);
+  const units = mintUnits(vault, staging.mint);
+  const held = units
+    ? `${formatTokenAmount(BigInt(staging.amount), units.decimals, { compact: true })} ${units.symbol}`
+    : shortAddress(staging.mint);
+  return leg ? `${held} from ${leg.symbol}` : held;
 }
 
 /** "2,842 USDC", plus what holder legs paid when the backend could price it. */

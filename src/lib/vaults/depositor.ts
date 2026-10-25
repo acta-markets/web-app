@@ -8,7 +8,7 @@ import {
   decodeTokenAccount,
   deriveAta,
   flows,
-  resolveVaultPriceUpdates,
+  resolveVaultPriceSection,
 } from "@acta-markets/ts-sdk/chain";
 import {
   address,
@@ -58,8 +58,7 @@ export async function buildSelfProcessWithdrawInstructions(
   const user = processor.actor.address;
   const withdraw = await processor.processWithdrawals([user]);
   if (vault.phase !== "idle" || vault.equity_computed || vault.safety === "withdraw_only") return [withdraw];
-  const prices = await resolveVaultPriceUpdates(rpc, processor);
-  const equity = await processor.processIdleWithdrawal(user, prices.mainPriceUpdate, prices.secondPriceUpdate);
+  const equity = await processor.processIdleWithdrawal(user, await resolveVaultPriceSection(rpc, processor));
   return withComputeUnitLimit([equity, withdraw], IDLE_WITHDRAWAL_COMPUTE_UNITS);
 }
 
