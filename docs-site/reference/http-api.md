@@ -210,7 +210,7 @@ Get a single maker DTO.
 
 The [Vault HTTP API](vault-http-api.md) covers `/api/v1/vaults`, vault detail, cycles, positions and depositor state/history. They serve indexed data. Current share ownership is in Solana token accounts.
 
-`/maker` quote sessions and taker WebSocket sessions subscribed to the `vaults` channel receive [`VaultCatalogChanged`](ws-common.md#vaultcatalogchanged) when a vault is created, re-delegated or closed, and [`VaultProjectionAdvanced`](ws-common.md#vaultprojectionadvanced) when any vault row changes. Re-read `/api/v1/vaults` or the vault detail on them instead of polling. Neither is replayed, so also re-list after every (re)connect.
+`/maker` quote sessions and taker WebSocket sessions subscribed to the `vaults` channel receive [`VaultCatalogChanged`](ws-common.md#vaultcatalogchanged) when a vault is created, re-delegated or closed (not when a delegate is disabled), and [`VaultProjectionAdvanced`](ws-common.md#vaultprojectionadvanced) when any vault row changes. Re-read `/api/v1/vaults` or the vault detail on them instead of polling. Neither is replayed, so also re-list after every (re)connect.
 
 ## Participant history
 

@@ -14,7 +14,7 @@ If you are the last holder and redeem every remaining share, you receive whateve
 
 ## Waiting and cancelling
 
-A request waits until the vault's trades have settled and the share price is calculated. Expiry is when trading ends, not when you are paid.
+A request waits until the vault's trades have settled and the share price is calculated. If a swap is between its two stages, the vault cannot calculate a new share price until the intermediate asset returns to a vault asset. Expiry is when trading ends, not when you are paid.
 
 You can cancel a pending request until the cycle reaches expiry or the vault starts pricing. Cancelling a withdrawal returns your shares. A completed deposit cannot be cancelled. Withdraw instead.
 

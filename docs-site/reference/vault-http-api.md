@@ -26,8 +26,11 @@ Closed vaults are left out of the list. Detail for a closed or unknown vault ret
 | `vault_pda`, `governance`, `fee_recipient`, `primary_delegate` | string | Vault and authority addresses. |
 | `vault_id` | string | 32-byte identifier encoded as 64 lowercase hex characters, without `0x`. |
 | `main_mint`, `second_mint`, `share_mint` | string | Asset and share-mint addresses. |
+| `second_leg_generation` | string | Increments when governance rolls the second mint. Reload cached leg addresses and plans. |
 | `main_decimals`, `second_decimals` | number | Token decimals. |
 | `main_token_program`, `second_token_program` | `legacy_spl` or `token_2022` | Token-program family. |
+| `staging` | object or null | Open intermediate-asset slot; fields below. `null` means no open slot. |
+| `staged_generation` | string | Open or last staging generation. The next stage uses this value plus one. |
 | `phase` | `idle`, `active`, `settling`, `processing_capital` | Trading/capital phase. |
 | `safety` | `normal`, `frozen`, `emergency_unwind`, `withdraw_only`, `closing` | Safety mode. |
 | `capabilities` | number | Strategy capability bitmask. |
@@ -52,6 +55,8 @@ Closed vaults are left out of the list. Detail for a closed or unknown vault ret
 | `generation_started_at`, `premium`, `fees`, `depositors_in_generation` | see below, or null | Generation stats from the same snapshot as `performance`. |
 | `performance` | object or null | Generation metrics below. |
 | `metadata` | object, optional | Operator-curated display fields: `name`; optional `curator`, `strategy`, `description`, `website` and `logo_url` (`https://` URLs) and `twitter` (a bare handle, no `@`). Omitted when none are set. Display only; `governance` is the authority. |
+
+`staging` contains `mint` (base58), `from_leg` (`main` or `second`), and decimal-string `amount`, `staged_at` and `generation`. `amount` is in the intermediate mint’s atoms; `staged_at` is Unix seconds. The slot must be unstaged before equity processing or cycle finalization. It is separate from `main_balance` and `second_balance`.
 
 `policy` contains the numeric fields `max_open_positions`, `max_rebalance_drift_bps` and `min_main_liquidity_bps`.
 

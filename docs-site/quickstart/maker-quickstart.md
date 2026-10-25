@@ -94,11 +94,11 @@ Lifecycle events are keyed by `order_id`. `RfqClosed` is the terminal RFQ event.
 | `QuoteOutbid` | Quote has been displaced by a better one. |
 | `QuoteRefreshRequested` | Settlement-buffer cutoff is approaching; resubmit with `valid_until ≥ min_valid_until` before the cutoff. |
 | `QuoteSelected` | Quote locked; awaiting the taker signature. |
-| `QuoteFilled` | Position opened on-chain. Carries `position_pda` and `tx_signature`. |
-| `QuoteCancelled` | Terminal. `reason` ∈ {`requested`, `risk_check`, `rfq_accepted`, `maker_disconnected`}. |
+| `QuoteFilled` | Position opened on-chain. Carries `market_pda`, `position_type`, `position_pda` and `tx_signature`, so it can be attributed without the RFQ. `expiry_ts` is optional when the server no longer knows the market. |
+| `QuoteCancelled` | Removes only the listed `order_ids`; an empty list removes nothing. `CancelQuoteAck` acknowledges the command. Reconcile after disconnect. `reason` ∈ {`requested`, `risk_check`, `rfq_accepted`, `maker_disconnected`}. |
 | `QuoteExpired` | Emitted only when `quote_expired` was enabled in `Hello`. |
 | `RfqAvailableAgain` | Settlement reverted; the auction has reopened. The maker may re-quote with a fresh `order_id`. |
-| `RfqClosed` | Terminal RFQ event. Drop per-RFQ state. |
+| `RfqClosed` | Closes the auction. Keep unresolved execution obligations tracked separately. |
 
 ## On-chain responsibilities
 
@@ -143,7 +143,7 @@ After reauthentication, read state on `/maker/data` and subscribe on `/maker`:
 
 `GetMyQuotes { scope: "live" }` returns the full unpaged owner set, including retained, selected, and executing quotes. `scope: "history"` returns paginated rows from the database. If the ACK for an order was lost, check `GetOrderStatus`. An empty live response does not tell you the order is gone. `GetMyTrades` pages with `cursor` and `cursor_id` and takes a `market` filter. Details are in the [Maker API reference](../reference/maker-api.md).
 
-For a dashboard bootstrap, send `GetMmSummary` on `/maker/data` after auth or reconnect. Do not poll it.
+For a dashboard bootstrap, send `GetMmSummary` on `/maker/data` after auth or reconnect. Use manual refresh or drift recovery for later snapshots. If many workers reconnect together, add a small random delay before expensive recovery reads. Do not poll it.
 
 ## Discovery
 

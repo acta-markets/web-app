@@ -207,7 +207,7 @@ Validate the whole challenge **before signing**. Require the exact text and blan
 
 Then sign the original UTF-8 bytes: no normalization, prefix or hashing. The fixed text is the authentication domain. The same key signs orders, so signing arbitrary text from an endpoint can authorize an order.
 
-Managed SDK clients (`acta-maker-sdk` 0.5.3, `@acta-markets/ts-sdk` 0.2.3) validate before signing. Raw clients use `validate_maker_auth_challenge` (Rust) or `validateAuthChallenge` (TypeScript). These check format only. For `/vault`, use `validate_vault_auth_challenge(challenge, operator, vault)` (Rust) or `assertVaultAuthChallenge(challenge, operator, vault)` (TypeScript), which also bind the operator and vault; `validateAuthChallenge` rejects a vault challenge. Which endpoint to trust is your configuration.
+Managed SDK clients (`acta-maker-sdk` 0.5.4, `@acta-markets/ts-sdk` 0.2.4) validate before signing. Raw clients use `validate_maker_auth_challenge` (Rust) or `validateAuthChallenge` (TypeScript). These check format only. For `/vault`, use `validate_vault_auth_challenge(challenge, operator, vault)` (Rust) or `assertVaultAuthChallenge(challenge, operator, vault)` (TypeScript), which also bind the operator and vault; `validateAuthChallenge` rejects a vault challenge. Which endpoint to trust is your configuration.
 
 ### AuthChallenge (client -> server)
 
@@ -609,7 +609,7 @@ Messages addressed to your session alone (responses, your own lifecycle, `Positi
 
 ### VaultCatalogChanged
 
-Sent on the `vaults` channel after a vault is created, re-delegated or closed, and only then. It carries only the vault address. Re-list vaults (`GET /api/v1/vaults`) to pick up the change.
+Sent on the `vaults` channel to maker and taker sessions after a vault is created, re-delegated (`RotateVaultDelegate`) or closed. Disabling a delegate (`DisableVaultDelegate`) does not send it. `/vault` operator sessions do not receive it. It carries only the vault address. Re-list vaults (`GET /api/v1/vaults`) to pick up the change.
 
 It is critical on `/maker` and `/taker` (see [Delivery criticality](#delivery-criticality)): if your outbound queue is full the frame is dropped and the server closes the connection, so a loss always shows up as a disconnect. It is not replayed, so re-list vaults after every connect and reconnect as well.
 
@@ -619,7 +619,9 @@ It is critical on `/maker` and `/taker` (see [Delivery criticality](#delivery-cr
 
 ### VaultProjectionAdvanced
 
-Sent on the `vaults` channel when the indexed vault row changed. Reload `GET /api/v1/vaults/{vault_pda}`. Maker and taker subscribers receive it for every vault; a `/vault` session receives it for its own vault only.
+Sent on the `vaults` channel after a committed on-chain event advances the vault projection. Reload `GET /api/v1/vaults/{vault_pda}`. `/maker` quote sessions and taker subscribers receive it for every vault; a `/vault` session receives it for its own vault only.
+
+`version` increases with each projected vault event. Reload on a version gap or reconnect. Delivery follows the same drop-and-disconnect rule as `VaultCatalogChanged`.
 
 ```json
 {
@@ -630,10 +632,12 @@ Sent on the `vaults` channel when the indexed vault row changed. Reload `GET /ap
     "slot": 312345678,
     "transaction_index": 3,
     "signature": "TxSignatureBase58",
-    "event_index": 0
+    "event_index": 1
   }
 }
 ```
+
+`slot`, `transaction_index`, `signature` and `event_index` identify the event that produced `version`.
 
 ## Timeout hierarchy
 
