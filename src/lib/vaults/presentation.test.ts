@@ -289,6 +289,7 @@ describe("block copy", () => {
     "pending",
     "supply",
     "authority",
+    "staged",
   ];
   const contexts: Vault[] = [
     makeVault(),
@@ -348,6 +349,12 @@ describe("self-processing", () => {
     const idle = makeVault({ pending_withdraw_count: 1, capital_fallback_delay_secs: String(delay) });
     expect(withdrawSelfProcessView(idle, createdAt, NOW)).toEqual({ kind: "waiting", availableAt: NOW - 3_600 + delay });
     expect(withdrawSelfProcessView(idle, createdAt, NOW + delay)).toEqual({ kind: "available", label: "Process my withdrawal" });
+  });
+
+  it("does not offer idle valuation while a staging slot is open", () => {
+    const staging = { mint: USDC, from_leg: "second" as const, amount: "5", staged_at: String(NOW), generation: "1" };
+    const idle = makeVault({ pending_withdraw_count: 1, capital_fallback_delay_secs: String(delay), staging });
+    expect(withdrawSelfProcessView(idle, createdAt, NOW + delay)).toEqual({ kind: "hidden" });
   });
 
   it("counts processing-capital requests from expiry", () => {

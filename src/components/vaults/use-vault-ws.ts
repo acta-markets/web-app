@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEVNET_SWAP_ROUTER, JUPITER_V6_PROGRAM, flows, resolveVaultPriceFeeds } from "@acta-markets/ts-sdk/chain";
+import { fetchPriceRoute, fetchVault } from "@acta-markets/ts-sdk";
+import { fetchVaultPriceRoutes, findPriceRoutePda, flows } from "@acta-markets/ts-sdk/chain";
 import { ActaWsClient, type ActaWsClientEvents, type SwapQuoteData } from "@acta-markets/ts-sdk/ws";
 import { fetchAddressesForLookupTables } from "@solana/kit";
 import { VersionedTransaction } from "@solana/web3.js";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { createWalletAuthProvider, getRfqBackendUrl } from "@/lib/rfq-client";
-import { IS_MAINNET } from "@/lib/tokens";
 import type { VaultManager } from "@/lib/vaults/operator";
 import { pythFeedShards } from "@/lib/vaults/price-feeds";
 
@@ -14,7 +14,6 @@ export type VaultSwapQuote = Parameters<ActaWsClientEvents["swapQuoteResult"]>[0
 export type VaultSwapQuoteRequest = Omit<SwapQuoteData, "request_id" | "vault_pda">;
 
 const SWAP_TIMEOUT_MS = 30_000;
-const SWAP_ROUTER = IS_MAINNET ? JUPITER_V6_PROGRAM : DEVNET_SWAP_ROUTER;
 const SWAP_COMPUTE_BOUNDS: flows.ComputeBudgetBounds = { maxUnitLimit: 600_000, maxUnitPriceMicroLamports: 10_000 };
 
 export type UseVaultWs = {
@@ -68,10 +67,25 @@ export function useVaultWs(vaultPda: string | null, enabled: boolean, onProjecti
         { type: "SwapQuote", data: quoteRequest },
         { timeoutMs: SWAP_TIMEOUT_MS },
       );
-      const priceFeeds = await resolveVaultPriceFeeds(rpc, manager, pythFeedShards());
-      const tables = await fetchAddressesForLookupTables(flows.servedLookupTableKeys(quote.tx_base64), rpc);
+      const [{ main, second }, { data: vault }, tables] = await Promise.all([
+        fetchVaultPriceRoutes(rpc, manager),
+        fetchVault(rpc, manager.addresses.vault),
+        fetchAddressesForLookupTables(flows.servedLookupTableKeys(quote.tx_base64), rpc),
+      ]);
+      // Only unstaging the open slot is accepted; staging into a new mint is left to the operator's own tooling.
+      const staging =
+        quote.staging === "unstage"
+          ? [(await fetchPriceRoute(rpc, await findPriceRoutePda({ mint: vault.stagedMint, programId: manager.programAddress }))).data]
+          : [];
       await flows.verifyVaultSwap(
-        { vault: manager, request: quoteRequest, quote, priceFeeds, minOutputFloor, router: SWAP_ROUTER },
+        {
+          vault: manager,
+          request: quoteRequest,
+          quote,
+          priceRoutes: { main, second, staging, shards: pythFeedShards() },
+          minOutputFloor,
+          staging: vault,
+        },
         tables,
         SWAP_COMPUTE_BOUNDS,
       );

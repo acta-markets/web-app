@@ -220,6 +220,17 @@ export function normalizeTokenSymbol(symbol: string): string {
   return symbol;
 }
 
+/** Mints the static list misses (e.g. PT terms), from the API's `/tokens`. */
+const referenceTokens = new Map<string, { symbol: string; decimals: number }>();
+
+export function rememberReferenceTokens(tokens: Iterable<{ mint: string; symbol: string; decimals: number }>) {
+  for (const { mint, symbol, decimals } of tokens) referenceTokens.set(mint, { symbol, decimals });
+}
+
+export function getReferenceToken(mint: string): { symbol: string; decimals: number } | undefined {
+  return referenceTokens.get(mint.trim());
+}
+
 export function getTokenSymbolByMint(mint: string): string | undefined {
   const normalizedMint = mint.trim();
   if (!normalizedMint) return undefined;
@@ -235,6 +246,6 @@ export function getTokenSymbolByMint(mint: string): string | undefined {
     }
   }
 
-  return undefined;
+  return referenceTokens.get(normalizedMint)?.symbol;
 }
 

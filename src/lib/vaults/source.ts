@@ -1,4 +1,5 @@
-import { fetchVault, fetchVaultCycles, fetchVaultDepositorHistory, fetchVaultExposure, fetchVaults } from "./api";
+import { rememberReferenceTokens } from "@/lib/tokens";
+import { fetchTokens, fetchVault, fetchVaultCycles, fetchVaultDepositorHistory, fetchVaultExposure, fetchVaults } from "./api";
 import { loadSampleData, VAULTS_SAMPLE_MODE } from "./sample";
 import type { Vault, VaultCyclesPage, VaultDepositorEvent, VaultExposure } from "./types";
 
@@ -21,13 +22,31 @@ function withSampleLatency<T>(value: T, signal?: AbortSignal): Promise<T> {
   });
 }
 
-export function loadVaults(signal?: AbortSignal): Promise<Vault[]> {
-  if (!VAULTS_SAMPLE_MODE) return fetchVaults(signal);
+let referenceTokens: Promise<void> | null = null;
+
+/** Names for vault mints the static token list misses; a failed read only costs the names. */
+function loadReferenceTokens(): Promise<void> {
+  referenceTokens ??= fetchTokens()
+    .then((tokens) => rememberReferenceTokens(tokens.values()))
+    .catch(() => {
+      referenceTokens = null;
+    });
+  return referenceTokens;
+}
+
+export async function loadVaults(signal?: AbortSignal): Promise<Vault[]> {
+  if (!VAULTS_SAMPLE_MODE) {
+    const [vaults] = await Promise.all([fetchVaults(signal), loadReferenceTokens()]);
+    return vaults;
+  }
   return loadSampleData().then((data) => withSampleLatency(data.vaults, signal));
 }
 
-export function loadVault(pda: string, signal?: AbortSignal): Promise<Vault | null> {
-  if (!VAULTS_SAMPLE_MODE) return fetchVault(pda, signal);
+export async function loadVault(pda: string, signal?: AbortSignal): Promise<Vault | null> {
+  if (!VAULTS_SAMPLE_MODE) {
+    const [vault] = await Promise.all([fetchVault(pda, signal), loadReferenceTokens()]);
+    return vault;
+  }
   return loadSampleData().then((data) => withSampleLatency(data.vaults.find((v) => v.vault_pda === pda) ?? null, signal));
 }
 
