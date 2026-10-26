@@ -30,8 +30,8 @@ Replace placeholder addresses, signatures, IDs and timestamps before use. Reques
     "min_supported_version": "1.0.0",
     "enabled_features": [],
     "server_time_unix_ms": 1710000000000,
-    "min_quote_validity_seconds": 100,
-    "settlement_buffer_seconds": 90
+    "min_quote_validity_seconds": 60,
+    "settlement_buffer_seconds": 50
   }
 }
 ```
