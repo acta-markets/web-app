@@ -658,30 +658,30 @@ rfq.signature_deadline
 - `rfq.expires_at` is the auction deadline: makers quote and the taker accepts until then. An order already enqueued stays open until it executes or fails.
 - `quote.valid_until` is the expiry the maker signs into the order. The program rejects settlement after it.
 
-Set `valid_until` later than `expires_at` to leave time to build, sign and confirm the transaction. The settlement buffer defaults to 90 seconds. Core does not enforce the relationship between the two.
+Set `valid_until` later than `expires_at` to leave time to build, sign and confirm the transaction. The settlement buffer defaults to 50 seconds. Core does not enforce the relationship between the two.
 
 ### Recommended `valid_until` range
 
 ```
-min:  now + min_signature_expiry_seconds          (default 100s)
+min:  now + min_signature_expiry_seconds          (default 60s)
 max:  rfq.expires_at + settlement_buffer_seconds  (recommended upper bound)
 hard max: market.expiry_ts
 ```
 
 Values above the recommended max are accepted up to `market.expiry_ts`. Later values return `QuoteRejected.reason = "market_expired"`.
 
-Example: RFQ with `expires_at = now + 60s`, settlement buffer 90s:
+Example: RFQ with `expires_at = now + 60s`, settlement buffer 50s:
 
 ```
-valid_until range: [now + 100s, now + 150s]
+valid_until range: [now + 60s, now + 110s]
 effective_expiry:  [now + 10s,  now + 60s]
 ```
 
 ### Invariants
 
-- `quote.valid_until >= now + min_signature_expiry_seconds` (default 100s; server rejects shorter expiries)
+- `quote.valid_until >= now + min_signature_expiry_seconds` (default 60s; server rejects shorter expiries)
 - `quote.valid_until <= market.expiry_ts` (hard server-side bound)
-- `effective_expiry = quote.valid_until - settlement_buffer` (default 90s)
+- `effective_expiry = quote.valid_until - settlement_buffer` (default 50s)
 - `rfq.expires_at < market.expiry_ts` (recommended client-side validation)
 - `signature_deadline <= min(effective_expiry, rfq.expires_at)`
 

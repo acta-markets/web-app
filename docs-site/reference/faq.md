@@ -22,7 +22,7 @@ Common `QuoteRejected.reason` values:
 |---|---|
 | `invalid_strike` | The strike is not in the RFQ's `order_options` set. |
 | `order_id_mismatch` | The submitted `order_id` does not equal `SHA-256(preimage182)`. See [Troubleshooting](#troubleshooting). |
-| `quote_expiry_too_short` | `valid_until < now + min_quote_validity_seconds` (`GET /api/v1/venue`, currently 100). |
+| `quote_expiry_too_short` | `valid_until < now + min_quote_validity_seconds` (`GET /api/v1/venue`, currently 60). |
 | `cap_exceeded` | A position-count, notional or balance cap was breached. See [Capacity limits](caps.md). |
 | `rfq_not_active` | The RFQ expired or filled before the quote arrived. |
 
@@ -32,7 +32,7 @@ The server checks RFQs against the maker's caps before broadcast. If one fails, 
 
 ### What is the appropriate value for `valid_until`?
 
-Floor: `now + min_quote_validity_seconds` (from `Welcome` or `GET /api/v1/venue`, currently 100). Lower values get `quote_expiry_too_short`. Ceiling: the market's `expiry_ts`. Later values get `market_expired`. The last `settlement_buffer_seconds` (currently 90) are the settlement buffer, so the trading cutoff is `valid_until` minus that buffer. `rfq.expires_at + min_quote_validity_seconds` covers the auction plus the settlement buffer and refresh lead. Add a few seconds for clock skew and stay at or below market expiry. Longer windows keep stale quotes live without helping fills, since the taker cannot accept after `rfq.expires_at`. Get the server clock offset from `Welcome.server_time_unix_ms` and `Pong.server_time_unix_ms`.
+Floor: `now + min_quote_validity_seconds` (from `Welcome` or `GET /api/v1/venue`, currently 60). Lower values get `quote_expiry_too_short`. Ceiling: the market's `expiry_ts`. Later values get `market_expired`. The last `settlement_buffer_seconds` (currently 50) are the settlement buffer, so the trading cutoff is `valid_until` minus that buffer. `rfq.expires_at + min_quote_validity_seconds` covers the auction plus the settlement buffer and refresh lead. Add a few seconds for clock skew and stay at or below market expiry. Longer windows keep stale quotes live without helping fills, since the taker cannot accept after `rfq.expires_at`. Get the server clock offset from `Welcome.server_time_unix_ms` and `Pong.server_time_unix_ms`.
 
 ## Troubleshooting
 
