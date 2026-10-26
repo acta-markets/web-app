@@ -5,19 +5,9 @@
  * Use NEXT_PUBLIC_SOLANA_NETWORK env variable to switch networks.
  */
 
-export type Network = "mainnet" | "devnet";
+import { IS_MAINNET, type Network } from "./network";
+export { getNetwork, IS_MAINNET, type Network } from "./network";
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
-
-export function getNetwork(): Network {
-  const env = process.env.NEXT_PUBLIC_SOLANA_NETWORK?.trim().toLowerCase();
-  if (env === "devnet") return "devnet";
-  if (env === "mainnet" || env === "mainnet-beta") return "mainnet";
-
-  return process.env.NODE_ENV === "production" ? "mainnet" : "devnet";
-}
-
-export const IS_MAINNET = getNetwork() === "mainnet";
-
 
 export interface TokenConfig {
   symbol: string;

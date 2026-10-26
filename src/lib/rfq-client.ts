@@ -51,7 +51,7 @@ export type {
 
 import { ActaWsClient, ActaWsRequestError, WalletAuthProvider } from "@acta-markets/ts-sdk/ws";
 
-const RFQ_WS_URL = process.env.NEXT_PUBLIC_RFQ_WS_URL || "wss://beta-api.acta.markets";
+import { getDefaultRfqWsUrl } from "./network";
 
 export interface CreateClientOptions {
   url?: string;
@@ -85,7 +85,7 @@ export function wsErrorMessage(err: unknown): string {
 }
 
 export function getRfqBackendUrl(): string {
-  return normalizeWsUrl(RFQ_WS_URL);
+  return normalizeWsUrl(process.env.NEXT_PUBLIC_RFQ_WS_URL || getDefaultRfqWsUrl());
 }
 
 export interface WalletAdapter {

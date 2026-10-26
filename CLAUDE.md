@@ -53,9 +53,9 @@ MONGODB_URI="<connection_string>"
 MONGODB_DB="acta"
 NEXT_PUBLIC_PRIVY_APP_ID="<privy_app_id>"
 NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
-NEXT_PUBLIC_RFQ_WS_URL="wss://beta-api.acta.markets"  # RFQ infrastructure WebSocket (mainnet)
-NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "devnet" - controls token mints
-NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied through /api/rpc
+NEXT_PUBLIC_RFQ_WS_URL="wss://beta-api.acta.markets"  # Optional override; defaults to devnet-api on devnet, beta-api on mainnet
+NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "devnet" (default), "mainnet" or "mainnet-beta"; controls mints, RPC, wallet, explorer and backend defaults
+NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Optional browser-accessible RPC endpoint; called directly
 # NEXT_PUBLIC_API_URL="https://beta-api.acta.markets"  # Optional: vault HTTP API; defaults to the RFQ WebSocket host
 # NEXT_PUBLIC_VAULTS_SAMPLE="1"  # Dev only: sample vaults on /earn; ignored by production builds
 ```

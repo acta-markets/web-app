@@ -172,6 +172,7 @@ describe("RFQ request ownership", () => {
     h.submit();
     await act(async () => {});
     expect(h.result.current.error?.message).toBe("Market expired");
+    expect(h.result.current.error?.cause).toBeInstanceOf(ActaWsRequestError);
   });
   it("propagates asynchronous trading errors through the context", async () => {
     const h = setup(); vi.spyOn(h.client, "isAuthenticated").mockReturnValue(true);

@@ -1,5 +1,7 @@
 "use client";
 
+import { collateralShortfallMessage, requiredCollateralAtoms, rfqRequestErrorMessage, RFQ_NO_QUOTES, RFQ_REQUEST_FAILED, type CollateralToken } from "@/lib/rfq-collateral";
+import { getRpcEndpoint } from "@/lib/network";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -11,7 +13,9 @@ import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { AppPill } from "@/components/app-ui/app-pill";
 import { RfqFlowModal, type RfqOrderPreview } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
-import { getTokenMint, getToken } from "@/lib/tokens";
+import { getTokenMint } from "@/lib/tokens";
+import { address } from "@solana/kit";
+import { deriveAta } from "@acta-markets/ts-sdk/chain";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { getCapFilledPct } from "@/lib/token-caps";
 import { RFQ_TTL_SECONDS, useRfqContext } from "@/components/rfq/rfq-provider";
@@ -76,55 +80,54 @@ function formatInputValue(value: number, maxDecimals: number): string {
   return value.toFixed(maxDecimals).replace(/\.?0+$/, "");
 }
 
-const RPC_ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-  (process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet"
-    ? "https://api.mainnet-beta.solana.com"
-    : "https://api.devnet.solana.com");
-
 let _conn: Connection | null = null;
 function getConnection() {
-  if (!_conn) _conn = new Connection(RPC_ENDPOINT, "confirmed");
+  if (!_conn) _conn = new Connection(getRpcEndpoint(), "confirmed");
   return _conn;
 }
 
-function useTokenBalance(walletAddress: string | undefined, tokenSymbol: string) {
-  const [balance, setBalance] = useState<number | null>(null);
+function useTokenBalance(walletAddress: string | undefined, mint: string | undefined, wrapsNative: boolean) {
+  const [snapshot, setSnapshot] = useState<{ wallet: string; mint: string; wrapsNative: boolean; atoms: bigint } | null>(null);
 
   useEffect(() => {
-    if (!walletAddress) { setBalance(null); return; }
-
+    if (!walletAddress || !mint) return;
     let cancelled = false;
     const conn = getConnection();
-    const token = getToken(tokenSymbol);
-    const mint = getTokenMint(tokenSymbol);
-    const decimals = token?.decimals ?? 9;
+    const wallet = walletAddress;
+    const tokenMint = mint;
 
     async function fetch() {
       try {
-        const owner = new PublicKey(walletAddress!);
-        if (tokenSymbol.toUpperCase() === "SOL" || tokenSymbol.toUpperCase() === "WSOL") {
-          const lamports = await conn.getBalance(owner);
-          if (!cancelled) setBalance(lamports / 10 ** decimals);
-          return;
+        const owner = new PublicKey(wallet);
+        const [accounts, native] = await Promise.all([
+          conn.getParsedTokenAccountsByOwner(owner, { mint: new PublicKey(tokenMint) }),
+          wrapsNative ? conn.getBalance(owner) : Promise.resolve(0),
+        ]);
+        let atoms = 0n;
+        let frozen = false;
+        for (const { pubkey, account } of accounts.value) {
+          const ata = await deriveAta({ owner: address(wallet), mint: address(tokenMint), tokenProgram: address(account.owner.toBase58()) });
+          if (pubkey.toBase58() !== ata) continue;
+          const info = account.data.parsed.info;
+          frozen = info.state === "frozen";
+          atoms = BigInt(info.tokenAmount.amount);
+          break;
         }
-        if (!mint) { if (!cancelled) setBalance(null); return; }
-        const accounts = await conn.getParsedTokenAccountsByOwner(owner, { mint: new PublicKey(mint) });
-        let total = 0;
-        for (const { account } of accounts.value) {
-          total += Number(account.data.parsed.info.tokenAmount.uiAmountString);
-        }
-        if (!cancelled) setBalance(total);
+        // Match tx-service's canonical-ATA funds check and native wrap reserve.
+        if (wrapsNative) atoms = atoms + BigInt(native) - 1_200_000n;
+        if (frozen || atoms < 0n) atoms = 0n;
+        if (!cancelled) setSnapshot({ wallet, mint: tokenMint, wrapsNative, atoms });
       } catch {
-        if (!cancelled) setBalance(null);
+        if (!cancelled) setSnapshot(null);
       }
     }
 
     fetch();
     const id = setInterval(fetch, 30_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [walletAddress, tokenSymbol]);
+  }, [walletAddress, mint, wrapsNative]);
 
-  return balance;
+  return snapshot && snapshot.wallet === walletAddress && snapshot.mint === mint && snapshot.wrapsNative === wrapsNative ? snapshot.atoms : null;
 }
 
 export function MarketClient({ asset }: { asset: string }) {
@@ -159,6 +162,8 @@ export function MarketClient({ asset }: { asset: string }) {
   const [rfqModalOpen, setRfqModalOpen] = useState(false);
   const [rfqRequestNonce, setRfqRequestNonce] = useState(0);
   const [isRequestingQuote, setIsRequestingQuote] = useState(false);
+  const [requestMessage, setRequestMessage] = useState<string | null>(null);
+  const requestCollateralRef = useRef<CollateralToken>({ symbol: "SOL", decimals: 9 });
   const [orderPreview, setOrderPreview] = useState<RfqOrderPreview | null>(null);
   const [indicativeRequestedKey, setIndicativeRequestedKey] = useState<string | null>(null);
 
@@ -311,8 +316,6 @@ export function MarketClient({ asset }: { asset: string }) {
 
   const walletAddress = selectedAccount?.address;
   const rfqBackendUrl = getRfqBackendUrl();
-  const depositToken = type === "call" ? market?.asset ?? asset : "USDC";
-  const walletBalance = useTokenBalance(walletAddress, depositToken);
 
   //   // eslint-disable-next-line react-hooks/exhaustive-deps
 
@@ -416,6 +419,18 @@ export function MarketClient({ asset }: { asset: string }) {
     ? Number(tokenMarketsInfo.underlying_decimals)
     : (rfqMarketDescriptor?.underlying_decimals ?? 9);
   const wireSizeRule = tokenMarketsInfo?.size_rule ?? rfqMarketDescriptor?.size_rule ?? null;
+  const quoteDecimals = Number(tokenMarketsInfo?.quote_decimals ?? rfqMarketDescriptor?.quote_decimals ?? 6);
+  const depositToken = type === "call" ? market?.asset ?? asset
+    : tokenMarketsInfo?.quote_symbol ?? rfqMarketDescriptor?.quote_symbol ?? "USDC";
+  const collateralDecimals = type === "call" ? underlyingDecimals : quoteDecimals;
+  const collateralMint = type === "call" ? getTokenMint(market?.asset ?? asset)
+    : rfqMarketDescriptor?.market.quote_mint ?? getTokenMint(depositToken);
+  const walletBalanceAtoms = useTokenBalance(walletAddress, collateralMint, type === "call" && collateralMint === getTokenMint("SOL"));
+  const walletBalance = walletBalanceAtoms == null ? null : Number(walletBalanceAtoms) / 10 ** collateralDecimals;
+
+  useEffect(() => {
+    setRequestMessage(null);
+  }, [walletAddress, rfqMarketPda, selectedStrikeLamports, deposit]);
 
   const depositRule = useMemo(() => {
     if (!wireSizeRule) return null;
@@ -483,6 +498,15 @@ export function MarketClient({ asset }: { asset: string }) {
     wireSizeRule != null &&
     quantityLamportsFromInput >= wireSizeRule.min_size &&
     quantityLamportsFromInput <= wireSizeRule.max_size;
+  const alignedQuantity = depositOk ? alignQuantityToRule(quantityLamportsFromInput!, wireSizeRule!) : null;
+  const requiredCollateral = alignedQuantity == null ? null : requiredCollateralAtoms(
+    positionType, BigInt(alignedQuantity),
+    [BigInt(selectedStrikeLamports), ...(currentIndicativePrices?.strikes ?? []).map(s => BigInt(s.strike))],
+    underlyingDecimals, quoteDecimals,
+  );
+  const collateralShortfall = walletAddress && walletBalanceAtoms != null && requiredCollateral != null
+    ? collateralShortfallMessage(requiredCollateral, walletBalanceAtoms, { symbol: depositToken, decimals: collateralDecimals })
+    : null;
   const notionalUsd =
     type === "call" ? (depositOk ? depositNum * (spot ?? 0) : 0) : depositOk ? depositNum : 0;
   const selectedApr = selectedPriceOption?.apr != null ? selectedPriceOption.apr * 100 : null;
@@ -549,6 +573,7 @@ export function MarketClient({ asset }: { asset: string }) {
   useEffect(() => {
     if (!isRequestingQuote || rfqModalOpen) return;
     if (rfqError) {
+      setRequestMessage(rfqRequestErrorMessage(rfqError, requestCollateralRef.current));
       setIsRequestingQuote(false);
       return;
     }
@@ -562,6 +587,7 @@ export function MarketClient({ asset }: { asset: string }) {
     if (!isRequestingQuote || rfqModalOpen) return;
     const timeoutId = window.setTimeout(() => {
       setIsRequestingQuote(false);
+      setRequestMessage(RFQ_NO_QUOTES);
       cancelRfq();
     }, RFQ_TTL_SECONDS * 1000);
     return () => window.clearTimeout(timeoutId);
@@ -575,6 +601,7 @@ export function MarketClient({ asset }: { asset: string }) {
       return;
     }
 
+    if (collateralShortfall) return;
     if (!depositOk) {
       console.warn("[MarketClient] Deposit blocked: invalid or empty deposit amount");
       return;
@@ -595,6 +622,7 @@ export function MarketClient({ asset }: { asset: string }) {
     if (!rfqAuthenticated) blockedReasons.push("wallet is not authenticated with RFQ");
 
     if (blockedReasons.length > 0) {
+      setRequestMessage(RFQ_REQUEST_FAILED);
       console.warn("[MarketClient] Deposit blocked:", blockedReasons.join("; "), {
         marketPda,
         rfqConnected,
@@ -612,6 +640,8 @@ export function MarketClient({ asset }: { asset: string }) {
       setDeposit(formatInputValue(alignedDeposit, depositInputDecimals));
     }
 
+    setRequestMessage(null);
+    requestCollateralRef.current = { symbol: depositToken, decimals: collateralDecimals };
     setOrderPreview({
       asset: market?.asset ?? asset,
       positionType,
@@ -635,6 +665,7 @@ export function MarketClient({ asset }: { asset: string }) {
     openReferralGate,
     rfqMarketPda,
     depositOk,
+    collateralShortfall, depositToken, collateralDecimals,
     hasSelectedPrice,
     rfqConnected,
     rfqAuthenticated,
@@ -1141,6 +1172,9 @@ export function MarketClient({ asset }: { asset: string }) {
           </div>
 
           {                    }
+          {(collateralShortfall || requestMessage) && (
+            <p role="alert" className="font-mono text-sm text-error">{requestMessage || collateralShortfall}</p>
+          )}
           {!walletAddress ? (
             <AppButton
               size="lg"
@@ -1157,6 +1191,7 @@ export function MarketClient({ asset }: { asset: string }) {
               disabled={
                 !isReferralGated && (
                   !depositOk ||
+                  !!collateralShortfall ||
                   !hasSelectedPrice ||
                   isRequestingQuote ||
                   shouldShowIndicativeLoading
