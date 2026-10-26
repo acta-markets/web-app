@@ -364,7 +364,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       if (isAuthFailureError(serverErr)) {
         resetToAnonymous(client);
       }
-      setError(new Error(errorText(serverErr)));
+      setError(new Error(errorText(serverErr), { cause: serverErr }));
     });
 
     client.on("requireInvite", () => {
@@ -739,7 +739,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     }) => {
       const client = clientRef.current;
       if (!client) {
-        console.error("[RfqProvider] submitRfq: no client");
+        setError(new Error("RFQ connection is unavailable"));
         return;
       }
 
@@ -781,7 +781,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
           setError(new Error("Market metadata refreshed. Please retry quote request."));
           return;
         }
-        setError(new Error(message));
+        setError(new Error(message, { cause: err }));
       });
     },
     [marketDescriptors, cancelRfq, dropRfq]

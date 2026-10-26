@@ -7,6 +7,7 @@ import { AppTable, AppTd, AppTh } from "@/components/app-ui/app-table";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { getTokenBrand } from "@/lib/token-brand";
 import { getTokenLogoSrc } from "@/lib/token-assets";
+import { getRpcEndpoint } from "@/lib/network";
 import { TOKENS, getNetwork, normalizeTokenSymbol } from "@/lib/tokens";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
@@ -164,9 +165,7 @@ export function PortfolioClient() {
     if (unresolvedMarketPdas.length === 0) return;
 
     let cancelled = false;
-    const rpcEndpoint =
-      process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-      (currentNetwork === "mainnet" ? "https://api.mainnet-beta.solana.com" : "https://api.devnet.solana.com");
+    const rpcEndpoint = getRpcEndpoint();
 
     const resolveMissingMarkets = async () => {
       try {
