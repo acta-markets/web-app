@@ -13,11 +13,10 @@ import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { AppPill } from "@/components/app-ui/app-pill";
 import { RfqFlowModal, type RfqOrderPreview } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
-import { getTokenMint } from "@/lib/tokens";
+import { getTokenMint, normalizeTokenSymbol } from "@/lib/tokens";
 import { address } from "@solana/kit";
 import { deriveAta } from "@acta-markets/ts-sdk/chain";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { getCapFilledPct } from "@/lib/token-caps";
 import { RFQ_TTL_SECONDS, useRfqContext } from "@/components/rfq/rfq-provider";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
 import {
@@ -27,10 +26,9 @@ import {
   sizeRuleInQuoteTerms,
 } from "@acta-markets/ts-sdk/ws";
 import {
-  MARKETS,
-  getMarket,
   type MarketType,
   formatPct,
+  summaryCapFilledPct,
   formatStrikePrice,
   formatUsdSmart
 } from "@/lib/markets";
@@ -138,22 +136,7 @@ export function MarketClient({ asset }: { asset: string }) {
   const marketParam = searchParams.get("market");
   const type: MarketType = typeParam === "csp" ? "csp" : "call";
 
-  const market = useMemo(() => getMarket(asset, type), [asset, type]);
   const [assetOpen, setAssetOpen] = useState(false);
-  const assetOptions = useMemo(() => {
-    const uniq = new Map<string, string>();
-    for (const m of MARKETS) uniq.set(m.asset.toUpperCase(), m.asset);
-    const preferred = ["JLP", "JITOSOL", "ZBTC", "ETH", "PUMP", "BONK"];
-    const items = Array.from(uniq.values());
-    items.sort((a, b) => {
-      const ia = preferred.indexOf(a.toUpperCase());
-      const ib = preferred.indexOf(b.toUpperCase());
-      if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
-      return a.localeCompare(b);
-    });
-    return items;
-  }, []);
-
   const [strikeIdx, setStrikeIdx] = useState(0);
   const [priceIdx, setPriceIdx] = useState(0);
   const [deposit, setDeposit] = useState("");
@@ -169,7 +152,9 @@ export function MarketClient({ asset }: { asset: string }) {
 
   const {
     markets: rfqMarkets,
-    tokenCaps,
+    earnSummary,
+    getEarnSummary,
+    authenticate,
     marketDescriptors,
     bestQuote,
     error: rfqError,
@@ -183,7 +168,15 @@ export function MarketClient({ asset }: { asset: string }) {
     referralStatus,
     openReferralGate,
   } = useRfqContext();
-  const tokenMarketsInfo = tokenMarketsSnapshot && tokenMarketsSnapshot.underlyingMint === getTokenMint(market?.asset ?? asset)
+  const symbol = normalizeTokenSymbol(asset);
+  const underlyingMint = earnSummary?.find(row =>
+    normalizeTokenSymbol(row.underlying_symbol).toUpperCase() === symbol.toUpperCase())?.underlying_mint ?? getTokenMint(symbol);
+  const market = useMemo(() => underlyingMint ? { asset: symbol, type, mint: underlyingMint } : undefined,
+    [symbol, type, underlyingMint]);
+  const assetOptions = useMemo(() => Array.from(new Set(
+    (earnSummary ?? []).map(summary => normalizeTokenSymbol(summary.underlying_symbol)),
+  )).sort((a, b) => a.localeCompare(b)), [earnSummary]);
+  const tokenMarketsInfo = tokenMarketsSnapshot && tokenMarketsSnapshot.underlyingMint === (market?.mint ?? getTokenMint(asset))
     ? tokenMarketsSnapshot.data : null;
   const isReferralGated = referralStatus === "required";
 
@@ -199,7 +192,7 @@ export function MarketClient({ asset }: { asset: string }) {
     }
 
     if (rfqMarkets.length === 0) return [];
-    const underlyingMint = (getTokenMint(market.asset) ?? "").trim();
+    const underlyingMint = (market.mint ?? "").trim();
 
     const normalizeIsPut = (value: unknown): boolean | null => {
       if (typeof value === "boolean") return value;
@@ -286,7 +279,7 @@ export function MarketClient({ asset }: { asset: string }) {
   const wsReady = connectionState === "connected" || connectionState === "authenticated";
   useEffect(() => {
     if (!wsReady || !market) return;
-    const underlyingMint = (getTokenMint(market.asset) ?? "").trim();
+    const underlyingMint = (market.mint ?? "").trim();
     if (!underlyingMint) return;
     const refresh = () => {
       if (!document.hidden) getTokenMarketsInfo(underlyingMint);
@@ -311,7 +304,7 @@ export function MarketClient({ asset }: { asset: string }) {
     }
   }, [currentIndicativeKey]);
 
-  const { rpc, selectedAccount, signTransaction: solanaSignTransaction } = useSolana();
+  const { rpc, selectedAccount, signMessage, signTransaction: solanaSignTransaction } = useSolana();
   const { openSidebar } = useWalletSidebar();
 
   const walletAddress = selectedAccount?.address;
@@ -423,7 +416,7 @@ export function MarketClient({ asset }: { asset: string }) {
   const depositToken = type === "call" ? market?.asset ?? asset
     : tokenMarketsInfo?.quote_symbol ?? rfqMarketDescriptor?.quote_symbol ?? "USDC";
   const collateralDecimals = type === "call" ? underlyingDecimals : quoteDecimals;
-  const collateralMint = type === "call" ? getTokenMint(market?.asset ?? asset)
+  const collateralMint = type === "call" ? (market?.mint ?? getTokenMint(asset))
     : rfqMarketDescriptor?.market.quote_mint ?? getTokenMint(depositToken);
   const walletBalanceAtoms = useTokenBalance(walletAddress, collateralMint, type === "call" && collateralMint === getTokenMint("SOL"));
   const walletBalance = walletBalanceAtoms == null ? null : Number(walletBalanceAtoms) / 10 ** collateralDecimals;
@@ -518,44 +511,47 @@ export function MarketClient({ asset }: { asset: string }) {
     ? bestPricePerUnit *
       (type === "call" ? depositNum : (quantityLamportsFromInput ?? 0) / 10 ** underlyingDecimals)
     : 0;
-  const isRfqAuthPending =
-    !!walletAddress &&
-    depositOk &&
-    !!rfqMarketPda &&
-    (connectionState === "authenticating" || connectionState === "connecting" || !rfqAuthenticated);
-  const requiresLiveQuote =
-    depositOk &&
-    hasSelectedPrice &&
-    !!rfqMarketPda &&
-    rfqConnected &&
-    rfqAuthenticated &&
-    !shouldShowIndicativeLoading &&
-    selectedApr != null &&
-    !isRfqAuthPending;
+  const [signingIn, setSigningIn] = useState(false);
+  const isRfqAuthPending = signingIn || connectionState === "authenticating" || connectionState === "connecting";
+  const needsSignIn = !rfqConnected || !rfqAuthenticated;
 
-  const ctaLabel = !walletAddress
-    ? "Connect"
-    : isReferralGated
-      ? "Redeem invite to trade"
-      : !hasSelectedPrice
-        ? "Choose price"
-        : !depositOk
-          ? (sizeRuleViolationMessage ?? "Choose size")
-          : shouldShowIndicativeLoading
-            ? "Loading prices..."
-            : selectedApr == null
-              ? "Prices unavailable"
-            : isRfqAuthPending
-              ? "Connecting..."
-              : isRequestingQuote
-                ? "Getting quote..."
-                : "Deposit";
+  const handleSignIn = async () => {
+    if (!walletAddress || isRfqAuthPending) return;
+    setSigningIn(true);
+    setRequestMessage("Sign the message in your wallet to trade.");
+    try {
+      await authenticate(walletAddress, signMessage);
+      setRequestMessage(null);
+    } catch {
+      setRequestMessage("Sign-in was not completed. Click Sign in to try again.");
+    } finally {
+      setSigningIn(false);
+    }
+  };
 
-  const capFilledFallback = clampNumber(market?.capFilledPct ?? 0, 0, 100);
-  const currentUnderlyingMint = (getTokenMint(market?.asset ?? asset) ?? "").trim();
-  const currentTokenCap = tokenCaps.find((cap) => cap.underlying_mint === currentUnderlyingMint);
-  const liveCapFilledPct = getCapFilledPct(currentTokenCap);
-  const capFilledPct = liveCapFilledPct ?? capFilledFallback;
+  const ctaLabel = !walletAddress ? "Connect"
+    : isRfqAuthPending ? "Connecting..."
+    : needsSignIn ? "Sign in"
+    : isReferralGated ? "Redeem invite to trade"
+    : !hasSelectedPrice ? "Choose price"
+    : !depositOk ? (sizeRuleViolationMessage ?? "Choose size")
+    : shouldShowIndicativeLoading ? "Loading prices..."
+    : selectedApr == null ? "Prices unavailable"
+    : isRequestingQuote ? "Getting quote..." : "Deposit";
+
+  const capSummary = earnSummary?.find(summary =>
+    summary.underlying_mint === market?.mint
+    && summary.position_type === positionType);
+  const capFilledPct = summaryCapFilledPct(capSummary);
+
+  useEffect(() => {
+    if (!wsReady) return;
+    const refresh = () => { if (!document.hidden) getEarnSummary(); };
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+  }, [wsReady, getEarnSummary]);
 
   const sizeRuleMax = depositRule?.max ?? (type === "call" ? 10 : 5000);
   const sizeRuleMin = depositRule?.min ?? 0;
@@ -695,7 +691,7 @@ export function MarketClient({ asset }: { asset: string }) {
     rpc={rpc}
   />;
 
-  if (!market) {
+  if (!market && earnSummary !== null) {
     return (
       <>
         <div className="space-y-6">
@@ -709,7 +705,7 @@ export function MarketClient({ asset }: { asset: string }) {
     );
   }
 
-  if (!isLiveMarketReady) {
+  if (!market || !isLiveMarketReady) {
     return (
       <div>
         <header className="mx-auto w-full max-w-[850px] space-y-6 pb-20 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pb-10 max-md:pt-16">
@@ -774,9 +770,9 @@ export function MarketClient({ asset }: { asset: string }) {
 
   return (
     <div>
-      {            }
+
       <header className="mx-auto w-full max-w-[850px] space-y-6 pb-20 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pb-10 max-md:pt-16">
-        {                }
+
         <div className="flex items-center gap-0.5 font-mono text-base leading-[1.2] tracking-[-0.32px]">
           <Link href="/trade" className="text-content-secondary hover:text-content-primary">
             Trade
@@ -786,7 +782,7 @@ export function MarketClient({ asset }: { asset: string }) {
         </div>
 
         <div className="flex items-start justify-between gap-4">
-          {                                    }
+
           <div className="flex w-[298px] min-w-0 flex-col gap-4 max-md:w-auto">
             <div className="flex items-center gap-5">
               <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary">
@@ -805,7 +801,6 @@ export function MarketClient({ asset }: { asset: string }) {
             </p>
           </div>
 
-          {                                }
           <AppCard className="hidden shrink-0 items-center gap-3 px-4 py-2.5 md:flex">
             <div className="flex flex-col items-center gap-1.5 text-center">
               <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
@@ -822,12 +817,12 @@ export function MarketClient({ asset }: { asset: string }) {
               </span>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
-                  {formatPct(capFilledPct)}
+                  {capFilledPct == null ? "—" : formatPct(capFilledPct)}
                 </span>
                 <div className="h-2.5 w-14 overflow-hidden bg-accent-primary/20">
                   <div
                     className="h-full bg-accent-primary"
-                    style={{ width: `${capFilledPct}%` }}
+                    style={{ width: `${capFilledPct ?? 0}%` }}
                   />
                 </div>
               </div>
@@ -835,7 +830,6 @@ export function MarketClient({ asset }: { asset: string }) {
           </AppCard>
         </div>
 
-        {                     }
         <AppCard className="flex items-center justify-center gap-3 px-4 py-4 md:hidden">
           <div className="flex flex-1 flex-col items-center gap-1.5">
             <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
@@ -852,12 +846,12 @@ export function MarketClient({ asset }: { asset: string }) {
             </span>
             <div className="flex items-center gap-2">
               <span className="font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
-                {formatPct(capFilledPct)}
+                {capFilledPct == null ? "—" : formatPct(capFilledPct)}
               </span>
               <div className="h-2.5 w-14 overflow-hidden bg-accent-primary/20">
                 <div
                   className="h-full bg-accent-primary"
-                  style={{ width: `${capFilledPct}%` }}
+                  style={{ width: `${capFilledPct ?? 0}%` }}
                 />
               </div>
             </div>
@@ -865,14 +859,10 @@ export function MarketClient({ asset }: { asset: string }) {
         </AppCard>
       </header>
 
-      {                  }
       <div className="mx-auto flex w-full max-w-[850px] gap-5 pb-16 max-xl:px-[71px] max-lg:px-6 max-md:flex-col max-md:px-3">
-        {                                                }
-        {                                                                         }
 
-        {                       }
         <div className="min-w-0 flex-1 space-y-5">
-          {            }
+
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <h3 className="shrink-0 font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary max-md:text-xl">
@@ -908,7 +898,6 @@ export function MarketClient({ asset }: { asset: string }) {
               </div>
             </div>
 
-            {                     }
             <AppCard className="p-4 max-md:p-3">
               <p className="font-mono text-base leading-[1.2] tracking-[-0.32px] text-content-secondary">
                 {type === "call" ? "Choose the price you\u2019re happy to sell" : "Choose the price you\u2019re happy to buy"}{" "}
@@ -960,9 +949,8 @@ export function MarketClient({ asset }: { asset: string }) {
               ) : null}
             </AppCard>
 
-            {                 }
             <AppCard className="p-4 max-md:p-3">
-              {                  }
+
               <div className="flex">
                 <button
                   type="button"
@@ -998,20 +986,18 @@ export function MarketClient({ asset }: { asset: string }) {
                 </button>
               </div>
 
-              {                          }
               <div className="mt-4 flex flex-col gap-3">
-                {           }
+
                 <div
                   className="flex cursor-text flex-col gap-2 overflow-clip border border-[rgba(240,240,240,0.1)] bg-action-primary p-4"
                   onClick={() => depositInputRef.current?.focus()}
                 >
-                  {             }
+
                   <div className="flex items-center justify-between font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
                     <span>Deposit</span>
                     <span>~${depositOk ? Math.round(notionalUsd).toLocaleString("en-US") : "0"}</span>
                   </div>
 
-                  {                   }
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="h-6 w-6 overflow-hidden rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary">
@@ -1035,7 +1021,6 @@ export function MarketClient({ asset }: { asset: string }) {
                     />
                   </div>
 
-                  {                        }
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-primary">
                       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="shrink-0 text-content-primary">
@@ -1062,7 +1047,6 @@ export function MarketClient({ asset }: { asset: string }) {
                   </div>
                 </div>
 
-                {                                }
                 {depositRule ? (
                   <div
                     className={`font-mono text-xs leading-[1.2] tracking-[-0.24px] ${
@@ -1083,7 +1067,6 @@ export function MarketClient({ asset }: { asset: string }) {
                   </div>
                 ) : null}
 
-                {              }
                 <div className="flex items-center gap-4 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
                   <div className="flex items-center gap-1.5">
                     <span className="text-content-secondary">APR</span>
@@ -1104,10 +1087,8 @@ export function MarketClient({ asset }: { asset: string }) {
             </AppCard>
           </div>
 
-          {             }
           <div className="h-px w-full bg-bg-border" />
 
-          {                 }
           <div className="flex flex-col gap-3">
             <h3 className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary max-md:text-xl">
               Now
@@ -1127,7 +1108,6 @@ export function MarketClient({ asset }: { asset: string }) {
             </div>
           </div>
 
-          {                     }
           <div className="flex flex-col gap-3">
             <h3 className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary max-md:text-xl">
               On {formatDate(expiryDate)}
@@ -1171,7 +1151,6 @@ export function MarketClient({ asset }: { asset: string }) {
             </div>
           </div>
 
-          {                    }
           {(collateralShortfall || requestMessage) && (
             <p role="alert" className="font-mono text-sm text-error">{requestMessage || collateralShortfall}</p>
           )}
@@ -1189,15 +1168,15 @@ export function MarketClient({ asset }: { asset: string }) {
               size="lg"
               className="w-full font-mono"
               disabled={
-                !isReferralGated && (
+                isRfqAuthPending || (!needsSignIn && !isReferralGated && (
                   !depositOk ||
                   !!collateralShortfall ||
                   !hasSelectedPrice ||
                   isRequestingQuote ||
                   shouldShowIndicativeLoading
-                )
+                ))
               }
-              onClick={handleDepositClick}
+              onClick={needsSignIn ? handleSignIn : handleDepositClick}
             >
               {ctaLabel}
               <img src="/chevron-right-duo-dark.svg" alt="" className="h-6 w-6" />
@@ -1205,9 +1184,6 @@ export function MarketClient({ asset }: { asset: string }) {
           )}
         </div>
 
-        {                           }
-        {
-             }
       </div>
 
       {rfqModal}

@@ -17,7 +17,7 @@ vi.mock("@/lib/rfq-client", async (importOriginal) => ({
 }));
 vi.mock("@solana/web3.js", () => ({ VersionedTransaction: { deserialize: vi.fn(() => ({})) } }));
 beforeEach(() => localStorage.clear());
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 const quote = {
   rfq_id: "rfq", order_id: "order", maker: "maker", strike: 1_000_000_000,
@@ -42,7 +42,7 @@ function setup() {
   const sign = vi.fn().mockResolvedValue({ serialize: () => new Uint8Array([1]) });
   const cancel = vi.fn();
   context.read.mockReturnValue({
-    bestQuote: quote, isAuthenticated: true, error: null,
+    bestQuote: quote, quoteSecondsRemaining: (q: QuoteReceivedMessage) => Math.max(0, Math.ceil(Number(q.valid_until) - Date.now() / 1000)), isAuthenticated: true, error: null,
     getClient: () => client, acceptQuote: accept, submitSignedTx: submit, cancelRfq: cancel,
     rfqTerms: () => ({ position_type: "covered_call", quantity: 1_000_000_000 }) as TakerFillRfq,
   });
@@ -80,6 +80,14 @@ describe("RFQ order modal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(h.cancel).toHaveBeenCalledOnce();
     expect(h.props.onClose).toHaveBeenCalledOnce();
+  });
+
+  it("removes a withdrawn quote before its expiry", () => {
+    const h = setup();
+    context.read.mockReturnValue({ ...context.read(), bestQuote: null });
+    h.rerender(<RfqFlowModal {...h.props} />);
+    expect(screen.queryByRole("button", { name: "Accept Quote" })).toBeNull();
+    expect(screen.getByText("Getting quote from market makers")).toBeTruthy();
   });
 
   it("keeps the accepted quote displayed while its maker is looked up", async () => {
@@ -164,4 +172,27 @@ describe("RFQ order modal", () => {
     await screen.findByText("Order Confirmed!");
     expect(h.submit).toHaveBeenCalledOnce();
   });
+});
+
+
+it("counts down the server-adjusted validity, disables expiry, and refreshes for a new quote", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-27T10:00:00Z"));
+  const h = setup();
+  const remaining = (q: QuoteReceivedMessage) => Math.max(0, Math.ceil(Number(q.valid_until) - (Date.now() / 1000 + 5)));
+  const expiring = { ...quote, valid_until: Date.now() / 1000 + 8 };
+  context.read.mockReturnValue({ ...context.read(), bestQuote: expiring, quoteSecondsRemaining: remaining });
+  h.rerender(<RfqFlowModal {...h.props} />);
+  expect(screen.getByRole("timer").textContent).toBe("Quote expires in 3s");
+  act(() => vi.advanceTimersByTime(3000));
+  context.read.mockReturnValue({ ...context.read(), bestQuote: null });
+  h.rerender(<RfqFlowModal {...h.props} />);
+  expect(screen.getByRole("timer").textContent).toBe("Quote expired. Request a fresh quote.");
+  expect((screen.getByRole("button", { name: "Accept Quote" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Accept Quote" }));
+  expect(h.accept).not.toHaveBeenCalled();
+  context.read.mockReturnValue({ ...context.read(), bestQuote: { ...expiring, valid_until: Date.now() / 1000 + 15 } });
+  h.rerender(<RfqFlowModal {...h.props} />);
+  expect(screen.getByRole("timer").textContent).toBe("Quote expires in 10s");
+  expect((screen.getByRole("button", { name: "Accept Quote" }) as HTMLButtonElement).disabled).toBe(false);
 });

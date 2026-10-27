@@ -61,6 +61,7 @@ export function RfqFlowModal({
 }: RfqFlowModalProps) {
   const {
     bestQuote,
+    quoteSecondsRemaining,
     isAuthenticated,
     error: rfqError,
     acceptQuote,
@@ -73,6 +74,7 @@ export function RfqFlowModal({
   const [quoteStep, setStep] = useState<"idle" | "requesting_quote" | "quote_received" | "failed">("idle");
   const [error, setError] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteReceivedMessage | null>(null);
+  const [, tick] = useState(0);
   const [recoveredOpen, setRecoveredOpen] = useState(false);
   const { flow, accept, accepting, abandon, canAbandon, reset, checkStatus, txSignature, restored } = useRfqOrder({
     getClient, acceptQuote, submitSignedTx, signTransaction, rpc,
@@ -107,10 +109,13 @@ export function RfqFlowModal({
     if (bestQuote && Number(bestQuote.strike) === preview.strike) {
       setQuote(bestQuote);
       setStep("quote_received");
+    } else if (!bestQuote && quote && quoteSecondsRemaining(quote) === 0) {
+      setStep("quote_received");
     } else {
+      setQuote(null);
       setStep("requesting_quote");
     }
-  }, [bestQuote, preview, accepting, flow.type, quoteStep]);
+  }, [bestQuote, preview, accepting, flow.type, quoteStep, quote, quoteSecondsRemaining]);
 
   useEffect(() => {
     if (!rfqError || flow.type !== "idle" || step === "idle") {
@@ -140,7 +145,16 @@ export function RfqFlowModal({
     return () => { client.off("rfqClosed", onClosed); };
   }, [getClient, flow.type, quote]);
 
-  const handleAcceptQuote = () => { if (quote) void accept(quote, rfqTerms(quote.rfq_id)); };
+  useEffect(() => {
+    if (!modalOpen || flow.type !== "idle" || accepting || !quote) return;
+    const timer = window.setInterval(() => tick(value => value + 1), 250);
+    return () => window.clearInterval(timer);
+  }, [modalOpen, flow.type, accepting, quote]);
+
+  const secondsRemaining = quote ? quoteSecondsRemaining(quote) : 0;
+  const handleAcceptQuote = () => {
+    if (quote && quoteSecondsRemaining(quote) > 0) void accept(quote, rfqTerms(quote.rfq_id));
+  };
 
   const handleClose = () => {
     if (flow.type !== "idle" && flow.type !== "confirmed" && flow.type !== "failed") {
@@ -203,7 +217,7 @@ export function RfqFlowModal({
   return (
     <AppModal open={modalOpen} onClose={handleClose} title="Submit Order" showHowItWorks={false}>
       <div className="space-y-4">
-        {                   }
+
         {isRestoredOrder ? (
           <div className={panelClass}>
             <div className="font-mono text-sm font-medium text-content-secondary">Recovered order</div>
@@ -247,7 +261,6 @@ export function RfqFlowModal({
           </div>
         </div> : null}
 
-        {              }
         <div className="flex items-center gap-2 font-mono text-sm">
           {(step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting") ? (
             <Loader2 className="h-4 w-4 animate-spin text-accent-primary" />
@@ -261,7 +274,6 @@ export function RfqFlowModal({
           <span className="text-content-secondary">{progressText}</span>
         </div>
 
-        {                              }
         {step === "requesting_quote" && (
           <div className={panelClass}>
             <div className="flex items-center gap-2 font-mono text-sm font-semibold text-accent-primary">
@@ -274,10 +286,12 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {                   }
         {!isRestoredOrder && quote && step === "quote_received" && (
           <div className={panelClass}>
             <div className="font-mono text-sm font-semibold text-accent-primary">Quote Received</div>
+            <p role="timer" className="mt-1 font-mono text-sm text-content-secondary">
+              {secondsRemaining > 0 ? `Quote expires in ${secondsRemaining}s` : "Quote expired. Request a fresh quote."}
+            </p>
             <div className="mt-3 space-y-2 font-mono">
               <div className="flex justify-between">
                 <span className="text-content-secondary">Total premium</span>
@@ -293,7 +307,6 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {                   }
         {step === "confirmed" && (
           <div className={`${panelClass} text-center`}>
             <CheckCircle2 className="mx-auto h-12 w-12 text-additional-green-primary" />
@@ -307,7 +320,6 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {                 }
         {step === "failed" && flowError && (
           <div className={panelClass}>
             <div className="flex items-start gap-3">
@@ -335,14 +347,13 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {                    }
         <div className="flex gap-2">
           {step === "quote_received" && (
             <>
               <AppButton variant="secondary" className="flex-1" onClick={handleClose}>
                 Cancel
               </AppButton>
-              <AppButton className="flex-1" onClick={handleAcceptQuote} disabled={accepting}>
+              <AppButton className="flex-1" onClick={handleAcceptQuote} disabled={accepting || secondsRemaining === 0}>
                 Accept Quote
               </AppButton>
             </>

@@ -19,6 +19,7 @@ import {
   REQUEST_EXISTS_COPY,
   depositBlockMessage,
   isLastSharesWithdrawal,
+  isUnlimitedCapacity,
   vaultApr,
   vaultStatus,
   withdrawBlockMessage,
@@ -136,7 +137,7 @@ export function VaultDepositModal({
   const status = vaultStatus(vault, nowSecs);
   const pending = tx.kind === "pending";
 
-  const capacity = vault.capacity.remaining === null ? null : BigInt(vault.capacity.remaining);
+  const capacity = isUnlimitedCapacity(vault.capacity) ? null : BigInt(vault.capacity.remaining!);
   // native vaults wrap SOL on deposit, so plain SOL counts, less what fees and rent need
   const walletAvailable = useMemo(() => {
     if (!position) return 0n;
@@ -213,9 +214,8 @@ export function VaultDepositModal({
     if (position.shareBalance === 0n) return { label: "No shares to withdraw", disabled: true };
     if (amount === null || amount === 0n) return { label: "Enter an amount", disabled: true };
     if (amount > position.shareBalance) return { label: "Not enough shares", disabled: true };
-    if (isLastSharesWithdrawal(vault, amount)) return { label: "Request withdrawal", disabled: true, notice: LAST_SHARES_COPY };
     if (!actions) return { label: "Request withdrawal", disabled: true };
-    return { label: "Request withdrawal", onClick: () => void run("withdraw", () => actions.requestWithdraw(amount)) };
+    return { label: "Request withdrawal", notice: isLastSharesWithdrawal(vault, amount) ? LAST_SHARES_COPY : undefined, onClick: () => void run("withdraw", () => actions.requestWithdraw(amount)) };
   };
 
   const cta = tab === "deposit" ? depositCta() : withdrawCta();
@@ -269,7 +269,7 @@ export function VaultDepositModal({
             <p className="mt-2 font-mono text-sm leading-[1.5] text-content-secondary">
               {requested.action === "deposit"
                 ? "Pending until the cycle ends. It earns nothing until then and converts to shares at that cycle's price."
-                : `Pending until the cycle ends, then paid out in ${symbol} at that cycle's price.`}
+                : "Pending until it can be processed. Final redemptions can pay out both vault assets."}
             </p>
             <a
               href={solscanUrl("tx", requested.signature)}

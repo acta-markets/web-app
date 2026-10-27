@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppModal } from "@/components/app-ui/app-modal";
-import { type MarketType, formatPct } from "@/lib/markets";
+import { type MarketType, formatPct, summaryCapFilledPct } from "@/lib/markets";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { normalizeTokenSymbol } from "@/lib/tokens";
@@ -17,7 +17,7 @@ type EarnRow = {
   type: MarketType;
   minAprPct: number | null;
   maxAprPct: number | null;
-  capFilledPct: number;
+  capFilledPct: number | null;
   nearestMarketPda: string;
 };
 
@@ -32,7 +32,7 @@ function summaryToRow(s: EarnAssetSummary): EarnRow {
     type,
     minAprPct: s.min_apr != null ? s.min_apr * 100 : null,
     maxAprPct: s.max_apr != null ? s.max_apr * 100 : null,
-    capFilledPct: Math.max(0, Math.min(100, (s.cap_filled_pct ?? 0) * 100)),
+    capFilledPct: summaryCapFilledPct(s),
     nearestMarketPda: s.nearest_market_pda,
   };
 }
@@ -47,7 +47,11 @@ export function TradeClient() {
     connectionState !== "disconnected" && connectionState !== "error" && connectionState !== "connecting";
   useEffect(() => {
     if (!wsReady) return;
-    getEarnSummary();
+    const refresh = () => { if (!document.hidden) getEarnSummary(); };
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
   }, [wsReady, getEarnSummary]);
   const [sort, setSort] = useState<{ key: "minAprPct" | "maxAprPct"; dir: "asc" | "desc" } | null>(null);
 
@@ -198,12 +202,12 @@ export function TradeClient() {
                       </span>
                       <div className="flex w-[93px] items-center gap-2">
                         <span className="shrink-0 text-center text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
-                          {formatPct(m.capFilledPct)}
+                          {m.capFilledPct == null ? "—" : formatPct(m.capFilledPct)}
                         </span>
                         <div className="flex h-2.5 min-h-px min-w-px flex-1 items-start bg-accent-primary/20">
                           <div
                             className="h-full min-h-px min-w-px bg-accent-primary"
-                            style={{ width: `${Math.min(100, m.capFilledPct)}%` }}
+                            style={{ width: `${m.capFilledPct ?? 0}%` }}
                           />
                         </div>
                       </div>
@@ -274,7 +278,7 @@ export function TradeClient() {
                   <div className="w-[120px] text-sm font-medium leading-[1.2] tracking-[-0.28px] text-content-primary">{typeShort(m.type)}</div>
                   <div className="w-[120px] text-sm font-medium leading-[1.2] tracking-[-0.28px] text-content-primary">{m.minAprPct != null ? formatPct(m.minAprPct) : "—"}</div>
                   <div className="w-[120px] text-sm font-medium leading-[1.2] tracking-[-0.28px] text-content-primary">{m.maxAprPct != null ? formatPct(m.maxAprPct) : "—"}</div>
-                  <div className="w-[120px] text-sm font-medium leading-[1.2] tracking-[-0.28px] text-content-primary">{formatPct(m.capFilledPct)}</div>
+                  <div className="w-[120px] text-sm font-medium leading-[1.2] tracking-[-0.28px] text-content-primary">{m.capFilledPct == null ? "—" : formatPct(m.capFilledPct)}</div>
                   <div className="w-5 text-center text-content-secondary">»</div>
                 </div>
               );

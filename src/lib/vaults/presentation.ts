@@ -1,6 +1,6 @@
 import { flows } from "@acta-markets/ts-sdk/chain";
 import type { DepositorPerformance } from "@acta-markets/ts-sdk/http";
-import { getReferenceToken, getToken, getTokenSymbolByMint } from "@/lib/tokens";
+import { getReferenceToken, getToken, getTokenSymbolByMint, tokenDisplayName } from "@/lib/tokens";
 import { formatDate, formatPercent, formatTokenAmount, formatUsd, NONE, shortAddress } from "./format";
 import type {
   Vault,
@@ -137,8 +137,8 @@ export function cyclePhaseLabel(vault: Pick<Vault, "phase" | "safety">): string 
 /** Symbol and decimals of a vault leg or a known token; null when neither knows the mint. */
 export function mintUnits(vault: Pick<Vault, "main_mint" | "main_decimals" | "second_mint" | "second_decimals">, mint: string) {
   const symbol = getTokenSymbolByMint(mint);
-  if (mint === vault.main_mint) return { symbol: symbol ?? shortAddress(mint), decimals: vault.main_decimals };
-  if (mint === vault.second_mint) return { symbol: symbol ?? shortAddress(mint), decimals: vault.second_decimals };
+  if (mint === vault.main_mint) return { symbol: symbol ?? tokenDisplayName(mint), decimals: vault.main_decimals };
+  if (mint === vault.second_mint) return { symbol: symbol ?? tokenDisplayName(mint), decimals: vault.second_decimals };
   const token = symbol ? getToken(symbol) : undefined;
   if (symbol && token) return { symbol, decimals: token.decimals };
   return getReferenceToken(mint) ?? null;
@@ -194,7 +194,7 @@ export function exposureTotals(exposure: VaultExposure): { quoteMint: string; va
   return exposure.totals.flatMap((total) => {
     const decimals = exposure.positions.find((p) => p.quote_mint === total.quote_mint)?.quote_decimals ?? null;
     if (total.outstanding_intrinsic === null || decimals === null) return [];
-    const symbol = getTokenSymbolByMint(total.quote_mint) ?? shortAddress(total.quote_mint);
+    const symbol = tokenDisplayName(total.quote_mint);
     const amount = BigInt(total.outstanding_intrinsic);
     const sign = amount > 0n ? "+" : "";
     return [{ quoteMint: total.quote_mint, value: `${sign}${formatTokenAmount(amount, decimals, { compact: true })} ${symbol}` }];
@@ -336,7 +336,7 @@ export const REQUEST_EXISTS_COPY = {
 } as const;
 
 export const LAST_SHARES_COPY =
-  "This would redeem every remaining share in the vault. Final withdrawals are not available in the app yet.";
+  "This requests every remaining share. The final withdrawal pays out both vault assets and may need to wait for pending deposits to be processed.";
 
 export type SelfProcessView =
   | { kind: "available"; label: string }
@@ -361,6 +361,9 @@ export function depositSelfProcessView(vault: Vault, createdAt: bigint, nowSecs:
 }
 
 export function withdrawSelfProcessView(vault: Vault, createdAt: bigint, nowSecs: number): SelfProcessView {
+  const finalRequest = vault.pending_withdraw_count === 1 && isLastSharesWithdrawal(vault, BigInt(vault.pending_withdraw_shares));
+  const pricedVault = vault.phase === "idle" && !vault.equity_computed ? { ...vault, equity_computed: true } : vault;
+  if (finalRequest && flows.processFinalWithdrawalBlock(pricedVault)) return { kind: "hidden" };
   const block = flows.selfProcessWithdrawBlock(vault, createdAt, nowSecs);
   if (block === null) return { kind: "available", label: "Process my withdrawal" };
   if (block === "authority") return { kind: "waiting", availableAt: publicProcessingAt(vault, createdAt) };
@@ -375,8 +378,12 @@ export function withdrawSelfProcessView(vault: Vault, createdAt: bigint, nowSecs
   return { kind: "hidden" };
 }
 
-/** Redeeming the whole supply needs the final-withdrawal path, which the app does not build yet. */
+/** The contract reads the live mint supply for the final withdrawal. */
 export function isLastSharesWithdrawal(vault: Pick<Vault, "live_share_supply" | "total_shares">, shares: bigint): boolean {
   if (shares <= 0n) return false;
   return shares >= BigInt(vault.live_share_supply ?? vault.total_shares);
+}
+
+export function isUnlimitedCapacity(capacity: Vault["capacity"]): boolean {
+  return capacity.remaining === null || BigInt(capacity.cap_limit) === 18_446_744_073_709_551_615n;
 }

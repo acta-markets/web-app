@@ -48,6 +48,7 @@ interface RfqContextValue {
   positions: PositionInfo[];
   /** Best live quote for our open RFQ */
   bestQuote: QuoteReceivedMessage | null;
+  quoteSecondsRemaining: (quote: QuoteReceivedMessage) => number;
   /** Indicative prices */
   indicativePrices: IndicativePricesMessage | null;
   /** Returns cached indicatives for specific market + position type */
@@ -174,13 +175,6 @@ function isMissingMarketDescriptorError(message: string): boolean {
   );
 }
 
-function resetToAnonymous(client: ActaWsClient) {
-  client.disconnect();
-  window.setTimeout(() => {
-    client.connectAnonymous();
-  }, 250);
-}
-
 function loadStoredSessionId(walletAddress: string): string | null {
   if (typeof window === "undefined") return null;
   try {
@@ -236,7 +230,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const tokenMarketsRequest = useRef<{ requestId: string; underlyingMint: string } | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const pendingRfqAuthWalletRef = useRef<string | null>(null);
-  const authInFlightRef = useRef(false);
+  const authInFlightRef = useRef<{ wallet: string; promise: Promise<void>; controller: AbortController } | null>(null);
+  const authWalletRef = useRef<string | null>(null);
   const authWarmupTimerRef = useRef<number | null>(null);
   const [authWarmupDone, setAuthWarmupDone] = useState(false);
   const prefetchedIndicativeKeysRef = useRef<Set<string>>(new Set());
@@ -257,6 +252,20 @@ export function RfqProvider({ children }: RfqProviderProps) {
     (market: string, positionType: "covered_call" | "cash_secured_put") => `${market}:${positionType}`,
     []
   );
+
+  const anonymousReconnectTimer = useRef<number | null>(null);
+  const resetToAnonymous = useCallback((client: ActaWsClient) => {
+    if (anonymousReconnectTimer.current !== null) window.clearTimeout(anonymousReconnectTimer.current);
+    client.disconnect();
+    setConnectionState("disconnected");
+    anonymousReconnectTimer.current = window.setTimeout(() => {
+      anonymousReconnectTimer.current = null;
+      client.connectAnonymous();
+    }, 250);
+  }, []);
+
+  const quoteSecondsRemaining = useCallback((quote: QuoteReceivedMessage) =>
+    Math.max(0, Math.ceil(Number(quote.valid_until) - (Date.now() + serverClockOffsetMsRef.current) / 1000)), []);
 
   const refreshBestQuote = useCallback(() => {
     if (quoteExpiryTimerRef.current != null) window.clearTimeout(quoteExpiryTimerRef.current);
@@ -291,9 +300,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     client.getPositions();
   }, []);
 
-  useEffect(() => {
-    walletAddressRef.current = selectedAccount?.address ?? null;
-  }, [selectedAccount?.address]);
+  walletAddressRef.current = selectedAccount?.address ?? null;
 
   useEffect(() => {
     console.log("[RfqProvider] Initializing...");
@@ -326,6 +333,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
     });
 
     client.on("authenticated", (sessionId, expiresAt) => {
+      if (!walletAddressRef.current || authWalletRef.current !== walletAddressRef.current) {
+        resetToAnonymous(client);
+        return;
+      }
       console.log("[RfqProvider] Authenticated, session:", sessionId);
       setConnectionState("authenticated");
       if (walletAddressRef.current) {
@@ -514,76 +525,112 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
     return () => {
       console.log("[RfqProvider] Cleaning up...");
+      clientRef.current = null;
+      authInFlightRef.current?.controller.abort();
+      authInFlightRef.current = null;
       client.disconnect();
+      if (anonymousReconnectTimer.current !== null) window.clearTimeout(anonymousReconnectTimer.current);
       clientRef.current = null;
       if (quoteExpiryTimerRef.current != null) window.clearTimeout(quoteExpiryTimerRef.current);
     };
-  }, [getIndicativeKey, refreshBestQuote, dropRfq]);
+  }, [getIndicativeKey, refreshBestQuote, dropRfq, resetToAnonymous]);
 
   const authenticate = useCallback(
-    async (walletAddress: string, signMessage: (msg: Uint8Array) => Promise<Uint8Array>) => {
-      const client = clientRef.current;
-      if (!client) {
-        console.error("[RfqProvider] Client not initialized");
-        return;
+    (walletAddress: string, signMessage: (msg: Uint8Array) => Promise<Uint8Array>) => {
+      const previous = authInFlightRef.current;
+      if (previous?.wallet === walletAddress) return previous.promise;
+      if (previous) {
+        previous.controller.abort();
+        if (clientRef.current) resetToAnonymous(clientRef.current);
       }
-
-      const authProvider = createWalletAuthProvider({
-        address: walletAddress,
-        signMessage,
-      });
-
-      const maybeSessionId = loadStoredSessionId(walletAddress);
-      console.log("[RfqProvider] Authenticating wallet:", walletAddress, {
-        resumeSession: !!maybeSessionId,
-      });
-      setConnectionState("authenticating");
-
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const timeoutId = window.setTimeout(() => {
-            client.off("authenticated", onAuthenticated);
-            client.off("error", onError);
-            reject(new Error("RFQ auth timeout"));
-          }, 20000);
-
-          const cleanup = () => {
-            window.clearTimeout(timeoutId);
-            client.off("authenticated", onAuthenticated);
-            client.off("error", onError);
-          };
-
-          const onAuthenticated = () => {
-            cleanup();
-            resolve();
-          };
-
-          const onError = (serverErr: ActaWsClientError) => {
-            cleanup();
-            reject(serverErr);
-          };
-
-          client.on("authenticated", onAuthenticated);
-          client.on("error", onError);
-          client.connectAndAuthenticate(authProvider, maybeSessionId ? { sessionId: maybeSessionId } : undefined);
-        });
-      } catch (err) {
-        console.error("[RfqProvider] Authentication failed:", err);
-        const serverErr = err as ActaWsClientError;
-        if (isAuthFailureError(serverErr)) {
-          resetToAnonymous(client);
+      pendingRfqAuthWalletRef.current = null;
+      if (anonymousReconnectTimer.current !== null) {
+        window.clearTimeout(anonymousReconnectTimer.current);
+        anonymousReconnectTimer.current = null;
+      }
+      const controller = new AbortController();
+      const attempt = Promise.resolve().then(async () => {
+        if (controller.signal.aborted || walletAddressRef.current !== walletAddress) throw new Error("Wallet changed during sign-in");
+        authWalletRef.current = walletAddress;
+        const client = clientRef.current;
+        if (!client) {
+          throw new Error("RFQ connection is unavailable");
         }
-        setError(new Error(serverErr?.type ? errorText(serverErr) : String(err)));
-        throw err;
-      }
+
+        const authProvider = createWalletAuthProvider({
+          address: walletAddress,
+          signMessage,
+        });
+
+        const maybeSessionId = loadStoredSessionId(walletAddress);
+        console.log("[RfqProvider] Authenticating wallet:", walletAddress, {
+          resumeSession: !!maybeSessionId,
+        });
+        setConnectionState("authenticating");
+
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const timeoutId = window.setTimeout(() => {
+              cleanup();
+              reject(new Error("RFQ auth timeout"));
+            }, 20000);
+
+            const cleanup = () => {
+              window.clearTimeout(timeoutId);
+              client.off("authenticated", onAuthenticated);
+              client.off("error", onError);
+              controller.signal.removeEventListener("abort", onAbort);
+            };
+
+            const onAbort = () => {
+              cleanup();
+              reject(new Error("Wallet changed during sign-in"));
+            };
+            const onAuthenticated = () => {
+              cleanup();
+              if (walletAddressRef.current !== walletAddress) reject(new Error("Wallet changed during sign-in"));
+              else resolve();
+            };
+
+            const onError = (serverErr: ActaWsClientError) => {
+              cleanup();
+              reject(serverErr);
+            };
+
+            controller.signal.addEventListener("abort", onAbort, { once: true });
+            client.on("authenticated", onAuthenticated);
+            client.on("error", onError);
+            client.connectAndAuthenticate(authProvider, maybeSessionId ? { sessionId: maybeSessionId } : undefined);
+          });
+        } catch (err) {
+          console.error("[RfqProvider] Authentication failed:", err);
+          const serverErr = err as ActaWsClientError;
+          if (clientRef.current === client && authInFlightRef.current?.controller === controller) {
+            resetToAnonymous(client);
+            setError(new Error(serverErr?.type ? errorText(serverErr) : String(err)));
+          }
+          throw err;
+        }
+      }).finally(() => {
+        if (authInFlightRef.current?.controller === controller) authInFlightRef.current = null;
+      });
+      authInFlightRef.current = { wallet: walletAddress, promise: attempt, controller };
+      return attempt;
     },
-    []
+    [resetToAnonymous]
   );
 
   const walletAddress = selectedAccount?.address;
   const rfqConnected = connectionState !== "disconnected" && connectionState !== "error";
 
   useEffect(() => {
+    const attempt = authInFlightRef.current;
+    if ((attempt && attempt.wallet !== walletAddress) || (authWalletRef.current && authWalletRef.current !== walletAddress)) {
+      authInFlightRef.current = null;
+      attempt?.controller.abort();
+      authWalletRef.current = null;
+      if (clientRef.current) resetToAnonymous(clientRef.current);
+    }
     if (!walletConnected || !walletAddress || !selectedAccount) {
       pendingRfqAuthWalletRef.current = null;
       setAuthWarmupDone(false);
@@ -611,7 +658,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         authWarmupTimerRef.current = null;
       }
     };
-  }, [walletConnected, walletAddress, selectedAccount]);
+  }, [walletConnected, walletAddress, selectedAccount, resetToAnonymous]);
 
   useEffect(() => {
     if (!walletConnected || !walletAddress || !rfqConnected || authInFlightRef.current || !authWarmupDone) {
@@ -621,18 +668,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
       return;
     }
 
-    authInFlightRef.current = true;
-    void authenticate(walletAddress, signMessage)
-      .then(() => {
-        pendingRfqAuthWalletRef.current = null;
-      })
-      .catch((err) => {
-        console.error("[RfqProvider] RFQ auth after wallet connect failed:", err);
-        pendingRfqAuthWalletRef.current = null;
-      })
-      .finally(() => {
-        authInFlightRef.current = false;
-      });
+    void authenticate(walletAddress, signMessage).catch((err) => {
+      console.error("[RfqProvider] RFQ auth after wallet connect failed:", err);
+    });
   }, [walletConnected, walletAddress, rfqConnected, authWarmupDone, authenticate, signMessage]);
 
   useEffect(() => {
@@ -657,7 +695,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
     const client = clientRef.current;
     if (client) resetToAnonymous(client);
-  }, [walletConnected, dropRfq]);
+  }, [walletConnected, dropRfq, resetToAnonymous]);
 
   useEffect(() => {
     if (connectionState !== "authenticating") {
@@ -867,13 +905,14 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const value: RfqContextValue = {
     connectionState,
     isConnected: connectionState !== "disconnected" && connectionState !== "error",
-    isAuthenticated: connectionState === "authenticated",
+    isAuthenticated: connectionState === "authenticated" && authWalletRef.current === selectedAccount?.address,
     markets,
     tokenCaps,
     earnSummary,
     marketDescriptors,
     positions,
     bestQuote,
+    quoteSecondsRemaining,
     indicativePrices,
     getIndicativePricesCached,
     tokenMarketsInfo,

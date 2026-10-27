@@ -34,6 +34,7 @@ export type SendWalletTransactionArgs = {
   instructions: Instruction[];
   signTransaction: (transaction: VersionedTransaction) => Promise<VersionedTransaction>;
   abortSignal?: AbortSignal;
+  assertBinding?: () => void;
 };
 
 export async function sendWalletTransaction(args: SendWalletTransactionArgs): Promise<Signature> {
@@ -51,11 +52,13 @@ export type SendWalletTransactionsArgs = {
   transactions: Instruction[][];
   signAllTransactions: (transactions: VersionedTransaction[]) => Promise<VersionedTransaction[]>;
   abortSignal?: AbortSignal;
+  assertBinding?: () => void;
 };
 
 export async function sendWalletTransactions(args: SendWalletTransactionsArgs): Promise<Signature[]> {
   const { rpc, abortSignal } = args;
   if (args.transactions.length === 0) return [];
+  args.assertBinding?.();
   const { value: blockhash } = await rpc.getLatestBlockhash({ commitment: "confirmed" }).send({ abortSignal });
   const compiled = args.transactions.map((instructions) =>
     compileTransaction(
@@ -79,11 +82,22 @@ export async function sendWalletTransactions(args: SendWalletTransactionsArgs): 
       if (value.err) throw new Error(`simulation failed: ${(value.logs ?? []).join("\n")}`);
     }),
   );
-  const signed = await args.signAllTransactions(
-    compiled.map((transaction) => VersionedTransaction.deserialize(new Uint8Array(getTransactionEncoder().encode(transaction)))),
-  );
+  const unsigned = compiled.map(transaction =>
+    VersionedTransaction.deserialize(new Uint8Array(getTransactionEncoder().encode(transaction))));
+  const messages = unsigned.map(transaction => transaction.message.serialize().slice());
+  args.assertBinding?.();
+  const signed = await args.signAllTransactions(unsigned);
+  args.assertBinding?.();
+  if (signed.length !== messages.length) throw new Error("Wallet returned an unexpected transaction count");
+  signed.forEach((transaction, index) => {
+    const actual = transaction.message.serialize();
+    if (actual.length !== messages[index].length || actual.some((byte, i) => byte !== messages[index][i])) {
+      throw new Error("Wallet changed the simulated transaction");
+    }
+  });
   const signatures: Signature[] = [];
   for (const transaction of signed) {
+    args.assertBinding?.();
     const wire = getBase64EncodedWireTransaction(getTransactionDecoder().decode(transaction.serialize()));
     signatures.push(
       await rpc.sendTransaction(wire, { encoding: "base64", preflightCommitment: "confirmed" }).send({ abortSignal }),

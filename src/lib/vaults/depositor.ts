@@ -56,8 +56,16 @@ export async function buildSelfProcessWithdrawInstructions(
   vault: Vault,
 ): Promise<Instruction[]> {
   const user = processor.actor.address;
-  const withdraw = await processor.processWithdrawals([user]);
-  if (vault.phase !== "idle" || vault.equity_computed || vault.safety === "withdraw_only") return [withdraw];
+  const needsEquity = vault.phase === "idle" && !vault.equity_computed && vault.safety !== "withdraw_only";
+  const pricedVault = needsEquity ? { ...vault, equity_computed: true } : vault;
+  const finalBlock = flows.processFinalWithdrawalBlock(pricedVault);
+  const finalRequest = vault.pending_withdraw_count === 1
+    && BigInt(vault.pending_withdraw_shares) === BigInt(vault.live_share_supply ?? vault.total_shares);
+  if (finalRequest && finalBlock) throw new Error(`Final withdrawal is not available: ${finalBlock}`);
+  const withdraw = finalBlock === null
+    ? await processor.processFinalWithdrawal(user)
+    : await processor.processWithdrawals([user]);
+  if (!needsEquity) return [withdraw];
   const equity = await processor.processIdleWithdrawal(user, await resolveVaultPriceSection(rpc, processor));
   return withComputeUnitLimit([equity, withdraw], IDLE_WITHDRAWAL_COMPUTE_UNITS);
 }
