@@ -1,4 +1,4 @@
-import { getTokenSymbolByMint } from "@/lib/tokens";
+import { getTokenSymbolByMint, tokenDisplayName } from "@/lib/tokens";
 import { shortAddress } from "./format";
 import { VAULTS_SAMPLE_MODE, peekSampleData } from "./sample";
 import type { Vault } from "./types";
@@ -57,7 +57,7 @@ export type ResolvedVaultMeta = {
   curatorIsAddress: boolean;
   category: VaultCategory;
   assetSymbol: string;
-  /** false when the deposit mint is unknown and assetSymbol is a short address */
+  /** false when the deposit mint is unknown and assetSymbol is a labelled mint address */
   assetKnown: boolean;
   registered: boolean;
   strategy?: string;
@@ -70,19 +70,21 @@ export type ResolvedVaultMeta = {
 };
 
 export function resolveVaultMeta(
-  vault: Pick<Vault, "vault_pda" | "main_mint" | "governance" | "metadata">,
+  vault: Pick<Vault, "vault_pda" | "main_mint" | "governance" | "metadata"> & Partial<Pick<Vault, "second_mint">>,
   registry: Readonly<Record<string, VaultMeta>> = activeRegistry(),
 ): ResolvedVaultMeta {
   const meta = registry[vault.vault_pda];
   const served = vault.metadata;
   const curator = served?.curator ?? meta?.curator;
   const knownSymbol = meta?.assetSymbol ?? getTokenSymbolByMint(vault.main_mint);
+  const legs = [knownSymbol ?? tokenDisplayName(vault.main_mint)];
+  if (vault.second_mint && vault.second_mint !== vault.main_mint) legs.push(tokenDisplayName(vault.second_mint));
   return {
-    name: served?.name ?? meta?.name ?? (knownSymbol ? `${knownSymbol} vault` : `Vault ${shortAddress(vault.vault_pda)}`),
+    name: served?.name ?? meta?.name ?? `${legs.join(" / ")} vault · ${shortAddress(vault.vault_pda)}`,
     curator: curator ?? shortAddress(vault.governance),
     curatorIsAddress: curator === undefined,
     category: meta?.category ?? deriveCategory(knownSymbol),
-    assetSymbol: knownSymbol ?? shortAddress(vault.main_mint),
+    assetSymbol: knownSymbol ?? tokenDisplayName(vault.main_mint),
     assetKnown: knownSymbol !== undefined,
     registered: served !== undefined || meta !== undefined,
     strategy: served?.strategy,

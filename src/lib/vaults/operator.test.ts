@@ -47,6 +47,7 @@ async function testVault(overrides: Partial<Vault> = {}): Promise<Vault> {
     accepting_deposits: false,
     pending_deposit_count: 0,
     pending_withdraw_count: 0,
+    pending_withdraw_shares: "0", total_shares: "1000", live_share_supply: null, staging: null,
     ...overrides,
   } as Vault;
 }
@@ -146,6 +147,26 @@ describe("vault operator", () => {
 
     const priced = await buildSelfProcessWithdrawInstructions(stubRpc(0n), manager, { ...vault, equity_computed: true });
     expect(priced).toHaveLength(1);
+  });
+
+  it.each([false, true])("builds the final withdrawal against live supply (priced=%s)", async priced => {
+    const vault = await testVault({ equity_computed: priced, pending_withdraw_count: 1,
+      total_shares: "1000", live_share_supply: "900", pending_withdraw_shares: "900" });
+    const manager = await createVaultManager(vault, USER);
+    const ixs = await buildSelfProcessWithdrawInstructions(stubRpc(900n), manager, vault);
+    expect(ixs).toHaveLength(priced ? 1 : 3);
+    expect(ixs.at(-1)).toEqual(await manager.processFinalWithdrawal(address(USER)));
+    expect(wireSize(ixs)).toBeLessThanOrEqual(1232);
+  });
+
+  it("does not build a final withdrawal with pending deposits or staging", async () => {
+    const vault = await testVault({ equity_computed: true, pending_withdraw_count: 1,
+      total_shares: "1000", live_share_supply: "900", pending_withdraw_shares: "900" });
+    const manager = await createVaultManager(vault, USER);
+    await expect(buildSelfProcessWithdrawInstructions(stubRpc(900n), manager, { ...vault, pending_deposit_count: 1 })).rejects.toThrow("pending");
+    await expect(buildSelfProcessWithdrawInstructions(stubRpc(900n), manager, { ...vault, staging: {} as Vault["staging"] })).rejects.toThrow("staged");
+    const partial = await buildSelfProcessWithdrawInstructions(stubRpc(900n), manager, { ...vault, pending_withdraw_shares: "899" });
+    expect(partial).toEqual([await manager.processWithdrawals([address(USER)])]);
   });
 
   it("returns SDK next steps for the dashboard", () => {

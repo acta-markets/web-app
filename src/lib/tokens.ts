@@ -239,3 +239,7 @@ export function getTokenSymbolByMint(mint: string): string | undefined {
   return referenceTokens.get(normalizedMint)?.symbol;
 }
 
+
+export function tokenDisplayName(mint: string): string {
+  return getTokenSymbolByMint(mint) ?? `Unknown token (${mint.slice(0, 4)}…${mint.slice(-4)})`;
+}

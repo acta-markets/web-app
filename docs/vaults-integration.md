@@ -128,7 +128,7 @@ In idle, deposits are only processed once idle capital is priced. A non-manager 
 
 Native-SOL vaults (`isNativeVault`) wrap and unwrap automatically. `buildRequestDepositInstructions` tops up wSOL, and the cancel/refund/self-process builders take `unwrap`. Unwrap closes the whole wSOL account, so the hook passes it only when the wallet held no other wSOL.
 
-**Gap:** withdrawing the last shares of a vault (`shares == live_share_supply`) needs `process_final_withdrawal`. The TS SDK has the builder (`VaultManagerPlanner.processFinalWithdrawal`), but `depositor.ts` has no wrapper for it yet. Block that case in the UI until the wrapper is added.
+The last LP can request all their shares. Self-processing uses `processFinalWithdrawal` when the SDK rules confirm that the sole pending withdrawal equals `live_share_supply` (falling back to `total_shares`). An unpriced idle vault is valued first in the same transaction. Pending deposits, staging, phase and public-processing delays still apply. Final redemption can pay out both vault assets.
 
 ## Portfolio page
 

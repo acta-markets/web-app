@@ -4,19 +4,19 @@ import type { ReactNode } from "react";
 import { ActaWsClient, ActaWsRequestError, type QuoteReceivedMessage } from "@acta-markets/ts-sdk/ws";
 import { RfqProvider, useRfqContext } from "./rfq-provider";
 
-const mocks = vi.hoisted(() => ({ create: vi.fn(), toast: vi.fn(), disconnect: vi.fn() }));
+const mocks = vi.hoisted(() => ({ create: vi.fn(), toast: vi.fn(), disconnect: vi.fn(), account: null as { address: string } | null, sign: vi.fn() }));
 vi.mock("@/lib/rfq-client", async importOriginal => ({
   ...await importOriginal<typeof import("@/lib/rfq-client")>(), createRfqClient: mocks.create,
 }));
 vi.mock("@/components/solana/solana-wallet-provider", () => ({
-  useSolana: () => ({ selectedAccount: null, isConnected: false, signMessage: null, disconnectWallet: mocks.disconnect }),
+  useSolana: () => ({ selectedAccount: mocks.account, isConnected: mocks.account !== null, signMessage: mocks.sign, disconnectWallet: mocks.disconnect }),
 }));
 vi.mock("@/components/app-ui/toast", () => ({ useToast: () => ({ show: mocks.toast }) }));
 vi.mock("@/components/app-ui/app-modal", () => ({ AppModal: () => null }));
 vi.mock("@/components/referral/referral-gate-modal", () => ({ ReferralGateModal: () => null }));
 vi.mock("@/components/referral/ref-capture", () => ({ clearPendingRefCode: vi.fn() }));
 afterEach(cleanup);
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.clearAllMocks(); mocks.account = null; });
 
 function setup() {
   const client = new ActaWsClient({ url: "ws://localhost", role: "taker" });
@@ -133,6 +133,7 @@ describe("RFQ request ownership", () => {
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
     h.emit("quoteReceived", h.quote("ours", "a", 5, now - 30));
     expect(h.result.current.bestQuote?.maker).toBe("a");
+    expect(h.result.current.quoteSecondsRemaining(h.result.current.bestQuote!)).toBe(30);
   });
   it("cancels an unconfirmed RFQ whose receipt timed out once it is created", async () => {
     const h = setup();
@@ -237,8 +238,9 @@ describe("stored resume credential expiry", () => {
 
   it.each([undefined, null, 0, 1_000, 4_000_000_000])(
     "resumes only with a future expiry (%s)", async expiresAt => {
-      const h = setup();
       const wallet = "11111111111111111111111111111111";
+      mocks.account = { address: wallet };
+      const h = setup();
       window.localStorage.setItem("acta_rfq_ws_session", JSON.stringify({
         walletAddress: wallet, sessionId: "stored", expiresAt,
       }));
@@ -252,4 +254,74 @@ describe("stored resume credential expiry", () => {
       );
     },
   );
+});
+
+
+it.each([0, 250])("shares manual/automatic auth and retries after rejection (%sms)", async retryDelay => {
+  vi.useFakeTimers();
+  try {
+    mocks.account = { address: "11111111111111111111111111111111" };
+    const h = setup();
+    vi.spyOn(h.client, "getEarnSummary").mockReturnValue("summary");
+    vi.spyOn(h.client, "getMyReferralInfo").mockReturnValue("referral");
+    const connect = vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {});
+    h.emit("connected");
+    let first!: Promise<void>;
+    let same!: Promise<void>;
+    await act(async () => {
+      first = h.result.current.authenticate(mocks.account!.address, mocks.sign);
+      same = h.result.current.authenticate(mocks.account!.address, mocks.sign);
+    });
+    expect(first).toBe(same);
+    await act(async () => { vi.advanceTimersByTime(900); });
+    expect(connect).toHaveBeenCalledOnce();
+    const rejected = expect(first).rejects.toBeTruthy();
+    await act(async () => {
+      h.emit("error", { type: "client_generic", data: { message: "Signature declined" } });
+      await rejected;
+    });
+    await act(async () => { vi.advanceTimersByTime(retryDelay); });
+    expect(h.client.connectAnonymous).toHaveBeenCalledTimes(retryDelay === 0 ? 1 : 2);
+    expect(h.result.current.connectionState).not.toBe("authenticating");
+    connect.mockImplementation(() => { h.emit("authenticated", "session", 4_000_000_000); });
+    await act(() => h.result.current.authenticate(mocks.account!.address, mocks.sign));
+    expect(connect).toHaveBeenCalledTimes(2);
+    await act(async () => { vi.advanceTimersByTime(250); });
+    expect(h.client.connectAnonymous).toHaveBeenCalledTimes(retryDelay === 0 ? 1 : 2);
+    h.unmount();
+  } finally { vi.useRealTimers(); }
+});
+
+
+it("invalidates pending authentication when the selected wallet changes", async () => {
+  vi.useFakeTimers();
+  try {
+    const walletA = "11111111111111111111111111111111";
+    const walletB = "So11111111111111111111111111111111111111112";
+    mocks.account = { address: walletA };
+    const h = setup();
+    vi.spyOn(h.client, "getEarnSummary").mockReturnValue("summary");
+    vi.spyOn(h.client, "getMyReferralInfo").mockReturnValue("referral");
+    const connect = vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {});
+    h.emit("connected");
+    let pending!: Promise<void>;
+    await act(async () => { pending = h.result.current.authenticate(walletA, mocks.sign); });
+    const rejected = expect(pending).rejects.toThrow("Wallet changed");
+    mocks.account = { address: walletB };
+    h.rerender();
+    await act(async () => { await rejected; });
+    h.emit("authenticated", "wallet-A-session", 4_000_000_000);
+    expect(h.result.current.isAuthenticated).toBe(false);
+    expect(window.localStorage.getItem("acta_rfq_ws_session")).not.toContain("wallet-A-session");
+    connect.mockImplementation(() => { h.emit("authenticated", "wallet-B-session", 4_000_000_000); });
+    await act(() => h.result.current.authenticate(walletB, mocks.sign));
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(window.localStorage.getItem("acta_rfq_ws_session")!)).toMatchObject({ walletAddress: walletB, sessionId: "wallet-B-session" });
+    expect(h.result.current.isAuthenticated).toBe(true);
+    mocks.account = { address: walletA };
+    h.rerender();
+    expect(h.result.current.isAuthenticated).toBe(false);
+    expect(h.result.current.connectionState).toBe("disconnected");
+    h.unmount();
+  } finally { vi.useRealTimers(); window.localStorage.clear(); }
 });

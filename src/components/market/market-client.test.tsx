@@ -8,11 +8,11 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { ActaWsRequestError } from "@acta-markets/ts-sdk/ws";
 import { MarketClient } from "./market-client";
 
-const mocks = vi.hoisted(() => ({ params: "type=call", context: {} as Record<string, unknown>, account: null as { address: string } | null, refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), modal: vi.fn() }));
+const mocks = vi.hoisted(() => ({ params: "type=call", context: {} as Record<string, unknown>, account: null as { address: string } | null, refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), modal: vi.fn(), signMessage: vi.fn(), openSidebar: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useSearchParams: () => new URLSearchParams(mocks.params) }));
 vi.mock("@/components/rfq/rfq-provider", () => ({ RFQ_TTL_SECONDS: 30, useRfqContext: () => mocks.context }));
-vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ selectedAccount: mocks.account }) }));
-vi.mock("@/components/wallet/wallet-sidebar", () => ({ useWalletSidebar: () => ({ openSidebar: vi.fn() }) }));
+vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ selectedAccount: mocks.account, signMessage: mocks.signMessage }) }));
+vi.mock("@/components/wallet/wallet-sidebar", () => ({ useWalletSidebar: () => ({ openSidebar: mocks.openSidebar }) }));
 vi.mock("./rfq-flow-modal", () => ({ RfqFlowModal: (props: unknown) => { mocks.modal(props); return null; } }));
 const now = 1_800_000_000;
 function snapshot(spot = 100, stale = false): TokenMarketsInfoData {
@@ -42,6 +42,7 @@ beforeEach(() => {
   vi.spyOn(Connection.prototype, "getParsedTokenAccountsByOwner").mockResolvedValue({ context: { slot: 1 }, value: [] });
   vi.spyOn(Date, "now").mockReturnValue(now * 1000);
   mocks.context = {
+    earnSummary: null, getEarnSummary: vi.fn(), authenticate: vi.fn().mockResolvedValue(undefined),
     markets: [], marketDescriptors: [], tokenCaps: [], bestQuote: null, error: null,
     isConnected: true, isAuthenticated: false, connectionState: "connected", referralStatus: "unknown",
     getTokenMarketsInfo: mocks.refresh, cancelRfq: vi.fn(), submitRfq: vi.fn(),
@@ -222,5 +223,57 @@ describe("RFQ request feedback and collateral", () => {
       : "Could not request a quote. Please try again.");
     expect((mocks.modal.mock.lastCall?.[0] as { open: boolean }).open).toBe(false);
     expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
+  });
+});
+
+
+describe("RFQ sign-in and live caps", () => {
+  it("opens wallet connect before requesting quotes", () => {
+    render(<MarketClient asset="SOL" />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    expect(mocks.openSidebar).toHaveBeenCalledOnce();
+    expect(mocks.context.submitRfq).not.toHaveBeenCalled();
+  });
+
+  it.each(["connected", "disconnected"])("offers sign-in when the session is %s and lets a declined signature be retried", async connectionState => {
+    mocks.account = { address: "11111111111111111111111111111111" };
+    mocks.context.connectionState = connectionState;
+    mocks.context.isConnected = connectionState === "connected";
+    const authenticate = vi.fn().mockRejectedValueOnce(new Error("Declined")).mockResolvedValueOnce(undefined);
+    mocks.context.authenticate = authenticate;
+    render(<MarketClient asset="SOL" />);
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await screen.findByText("Sign-in was not completed. Click Sign in to try again.");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(authenticate).toHaveBeenCalledTimes(2));
+    expect(authenticate).toHaveBeenLastCalledWith(mocks.account.address, mocks.signMessage);
+    expect(mocks.context.submitRfq).not.toHaveBeenCalled();
+  });
+
+  it("waits for discovery on a direct backend-only asset link", () => {
+    const page = render(<MarketClient asset="CUSTOM" />);
+    expect(screen.getByText("Loading live market data...")).toBeTruthy();
+    expect(screen.queryByText("Market not found")).toBeNull();
+    mocks.context.earnSummary = [{ underlying_mint: getTokenMint("SOL"), underlying_symbol: "CUSTOM", position_type: "covered_call", cap_filled_pct: 0.4 }];
+    page.rerender(<MarketClient asset="CUSTOM" />);
+    expect(screen.queryByText("Loading live market data...")).toBeNull();
+    expect(screen.getByRole("heading", { name: "CUSTOM" })).toBeTruthy();
+    mocks.context.earnSummary = [];
+    page.rerender(<MarketClient asset="CUSTOM" />);
+    expect(screen.getByText("Market not found")).toBeTruthy();
+  });
+
+  it("uses the same per-strategy summary as trade, without a mock cap fallback", () => {
+    mocks.context.tokenCaps = [{ underlying_mint: getTokenMint("SOL"), utilization: 0.9 }];
+    mocks.context.earnSummary = [
+      { underlying_mint: getTokenMint("SOL"), underlying_symbol: "SOL", position_type: "covered_call", cap_filled_pct: 0.4 },
+      { underlying_mint: getTokenMint("SOL"), underlying_symbol: "SOL", position_type: "cash_secured_put", cap_filled_pct: 0.7 },
+    ];
+    const page = render(<MarketClient asset="SOL" />);
+    expect(screen.getAllByText("40%")).toHaveLength(2);
+    expect(screen.queryByText("90%")).toBeNull();
+    mocks.context.earnSummary = null;
+    page.rerender(<MarketClient asset="SOL" />);
+    expect(screen.queryByText("40%")).toBeNull();
   });
 });

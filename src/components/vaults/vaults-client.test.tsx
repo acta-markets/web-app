@@ -65,7 +65,7 @@ describe("VaultsClient", () => {
   it("lists the highest proven APY first and vaults winding down last", () => {
     state.vaults = { ...state.vaults, data: [CLOSING, ...SAMPLE.vaults] };
     render(<VaultsClient initialCategory="all" />);
-    expect(cardNames()).toEqual(["HYPE", "SPCX", "jitoSOL", "NVDAx", "USDC", "SPYx", "ZEC", "USDC vault"]);
+    expect(cardNames()).toEqual(["HYPE", "SPCX", "jitoSOL", "NVDAx", "USDC", "SPYx", "ZEC", "USDC / SOL vault · Wind…1111"]);
   });
 
   it("filters by section and keeps the URL shareable", async () => {
@@ -101,10 +101,10 @@ describe("VaultsClient", () => {
     const sort = screen.getByRole("combobox", { name: "Sort vaults" });
 
     await user.selectOptions(sort, "TVL");
-    expect(cardNames()).toEqual(["ZEC", "HYPE", "USDC", "SPYx", "SPCX", "NVDAx", "jitoSOL", "USDC vault"]);
+    expect(cardNames()).toEqual(["ZEC", "HYPE", "USDC", "SPYx", "SPCX", "NVDAx", "jitoSOL", "USDC / SOL vault · Wind…1111"]);
 
     await user.selectOptions(sort, "Name");
-    expect(cardNames()).toEqual(["HYPE", "jitoSOL", "NVDAx", "SPCX", "SPYx", "USDC", "USDC vault", "ZEC"]);
+    expect(cardNames()).toEqual(["HYPE", "jitoSOL", "NVDAx", "SPCX", "SPYx", "USDC", "USDC / SOL vault · Wind…1111", "ZEC"]);
 
     await user.click(screen.getByRole("button", { name: /^Stocks/ }));
     expect(cardNames()).toEqual(["NVDAx", "SPCX", "SPYx"]);
@@ -130,7 +130,7 @@ describe("VaultsClient", () => {
     await user.click(within(jito).getByRole("button", { name: "Deposit" }));
     expect(screen.getByTestId("vault-modal").dataset).toMatchObject({ pda: SAMPLE.keys.jitosol, tab: "deposit" });
 
-    const closing = screen.getByRole("article", { name: "USDC vault" });
+    const closing = screen.getByRole("article", { name: "USDC / SOL vault · Wind…1111" });
     await user.click(within(closing).getByRole("button", { name: "Manage" }));
     expect(screen.getByTestId("vault-modal").dataset).toMatchObject({ pda: CLOSING.vault_pda, tab: "withdraw" });
 

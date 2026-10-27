@@ -68,7 +68,7 @@ describe("resolveVaultMeta", () => {
   it("falls back to the asset and the governance address without inventing a curator", () => {
     const meta = resolveVaultMeta({ vault_pda: "pda-2", main_mint: SOL_MINT, governance: GOVERNANCE }, {});
     expect(meta).toMatchObject({
-      name: "SOL vault",
+      name: "SOL vault · pda-2",
       curator: "9amK…SbUf",
       curatorIsAddress: true,
       category: "Crypto",
@@ -88,10 +88,10 @@ describe("resolveVaultMeta", () => {
       {},
     );
     expect(meta).toMatchObject({
-      name: "Vault 7xKX…gAsU",
+      name: "Unknown token (Unkn…1111) vault · 7xKX…gAsU",
       category: "Crypto",
       assetKnown: false,
-      assetSymbol: "Unkn…1111",
+      assetSymbol: "Unknown token (Unkn…1111)",
     });
   });
 
@@ -100,7 +100,7 @@ describe("resolveVaultMeta", () => {
       { vault_pda: "pda-4", main_mint: "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh", governance: GOVERNANCE },
       {},
     );
-    expect(meta).toMatchObject({ assetSymbol: "NVDAx", assetKnown: true, category: "Stocks", name: "NVDAx vault" });
+    expect(meta).toMatchObject({ assetSymbol: "NVDAx", assetKnown: true, category: "Stocks", name: "NVDAx vault · pda-4" });
     expect(getToken("NVDAx")?.logo).toBe("/tokens/nvdax.png");
   });
 
@@ -160,7 +160,7 @@ describe("reference tokens", () => {
     const vault = makeVault({ main_mint: pt, main_decimals: 9, metadata: undefined });
     const meta = resolveVaultMeta(vault, {});
     expect(meta.assetSymbol).toBe("PTd1");
-    expect(meta.name).toBe("PTd1 vault");
+    expect(meta.name).toBe("PTd1 / SOL vault · 1111…1111");
     expect(mintUnits(makeVault(), pt)).toEqual({ symbol: "PTd1", decimals: 9 });
   });
 });
