@@ -34,7 +34,9 @@ describe("sample-data.json", () => {
       expect(data.depositors[vault.vault_pda]).toBeDefined();
     }
     expect(data.depositors[usdc].mainTokenBalance).toBeTypeOf("bigint");
-    expect(data.depositors[usdc].depositRequest?.createdAt).toBeTypeOf("bigint");
+    // the wallet holds USDC vault shares, with no request waiting
+    expect(data.depositors[usdc].shareBalance).toBeGreaterThan(0n);
+    expect(data.depositors[usdc].depositRequest).toBeNull();
   });
 
   it("fills every section with established vaults", () => {
@@ -100,9 +102,6 @@ describe("sample-data.json", () => {
     const vaultLater = later.vaults.find((v) => v.vault_pda === usdc)!;
     expect(Number(vaultLater.active_expiry) - Number(vaultNow.active_expiry)).toBe(shift);
     expect(Number(later.cycles[usdc][0].started_at) - Number(data.cycles[usdc][0].started_at)).toBe(shift);
-    expect(later.depositors[usdc].depositRequest!.createdAt - data.depositors[usdc].depositRequest!.createdAt).toBe(
-      BigInt(shift),
-    );
     // "0" means unset on chain and stays that way
     expect(later.vaults.find((v) => v.phase === "idle")!.active_expiry).toBe("0");
     // a month on, the 30-day window still has cycles in it

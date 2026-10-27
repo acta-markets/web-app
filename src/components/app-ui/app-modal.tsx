@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 export function AppModal({
@@ -71,11 +72,12 @@ export function AppModal({
           </div>
           <button
             type="button"
+            aria-label="Close"
             onClick={onClose}
             disabled={!dismissible}
-            className="px-3 py-2 font-mono text-sm font-medium text-content-secondary hover:bg-action-primary hover:text-content-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            className="-mr-2 -mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center text-content-secondary transition-colors hover:text-content-primary disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Close
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 

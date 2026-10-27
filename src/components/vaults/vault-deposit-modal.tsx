@@ -25,9 +25,10 @@ import {
 } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
 import { requestDepositBlock, requestWithdrawBlock } from "@/lib/vaults/rules";
-import { VAULTS_SAMPLE_MODE, peekSampleData } from "@/lib/vaults/sample";
+import { VAULTS_SAMPLE_MODE } from "@/lib/vaults/sample";
 import { describeVaultTxError } from "@/lib/vaults/tx-errors";
 import type { Vault } from "@/lib/vaults/types";
+import { useSampleDepositor } from "./use-sample-depositor";
 import { useVaultDepositor, type VaultDepositorActions } from "./use-vault-depositor";
 import { useNowSecs } from "./use-vaults";
 import { AprLabel } from "./vault-apr";
@@ -53,10 +54,15 @@ const TABS = [
   { value: "withdraw", label: "Withdraw" },
 ] as const;
 
+// Demo flow: sample vaults turn a deposit into shares straight away instead of
+// queueing a request for the end of the cycle, as the contract does.
+const INSTANT_DEPOSITS = VAULTS_SAMPLE_MODE;
+const DEPOSIT_LABEL = INSTANT_DEPOSITS ? "Deposit" : "Request deposit";
+
 function successCopy(action: VaultTxAction, vault: Vault): string {
   switch (action) {
     case "deposit":
-      return "Deposit requested";
+      return INSTANT_DEPOSITS ? "Deposit complete" : "Deposit requested";
     case "withdraw":
       return "Withdrawal requested";
     case "cancel_deposit":
@@ -115,12 +121,11 @@ export function VaultDepositModal({
   const { show } = useToast();
   const nowSecs = useNowSecs(5_000);
 
-  // sample vaults have no accounts on chain: read fixtures and never build a transaction
+  // sample vaults have no accounts on chain: fixture positions, and actions that only pretend to send
   const live = useVaultDepositor(VAULTS_SAMPLE_MODE ? null : vault);
-  const position: VaultDepositorState | null = VAULTS_SAMPLE_MODE
-    ? peekSampleData()?.depositors[vault.vault_pda] ?? null
-    : live.data;
-  const actions = VAULTS_SAMPLE_MODE ? null : live.actions;
+  const sample = useSampleDepositor(vault);
+  const position: VaultDepositorState | null = VAULTS_SAMPLE_MODE ? sample.data : live.data;
+  const actions = VAULTS_SAMPLE_MODE ? sample.actions : live.actions;
 
   const [tab, setTab] = useState<VaultModalTab>(initialTab);
   const [input, setInput] = useState("");
@@ -183,24 +188,24 @@ export function VaultDepositModal({
   const fill = (value: bigint) => changeInput(value > 0n ? formatUnits(value, decimals) : "");
 
   // The vault's own state goes first: connecting a wallet or redeeming an invite
-  // cannot open a vault that is closed to the request. Fixture vaults have no
-  // wallet and no actions, so they run the same checks and stop at a disabled button.
+  // cannot open a vault that is closed to the request. Fixture vaults skip the
+  // wallet and invite checks; their actions only pretend to send.
   const depositCta = (): Cta => {
     const block = requestDepositBlock(vault, nowSecs);
-    if (block) return { label: "Request deposit", disabled: true, notice: depositBlockMessage(block, vault) };
+    if (block) return { label: DEPOSIT_LABEL, disabled: true, notice: depositBlockMessage(block, vault) };
     if (!VAULTS_SAMPLE_MODE) {
       if (!walletAddress) return { label: "Connect wallet", onClick: openSidebar };
       if (referralStatus === "required") return { label: "Redeem invite to deposit", onClick: openReferralGate };
     }
     if (pending) return { label: "Submitting…", disabled: true };
     if (!position) return { label: "Loading…", disabled: true };
-    if (position.depositRequest) return { label: "Request deposit", disabled: true, notice: REQUEST_EXISTS_COPY.deposit };
+    if (position.depositRequest) return { label: DEPOSIT_LABEL, disabled: true, notice: REQUEST_EXISTS_COPY.deposit };
     if (amount === null || amount === 0n) return { label: "Enter an amount", disabled: true };
     if (estimatedShares === 0n) return { label: "Amount is too small", disabled: true };
     if (amount > walletAvailable) return { label: `Not enough ${symbol}`, disabled: true };
     if (capacity !== null && amount > capacity) return { label: "Above remaining capacity", disabled: true };
-    if (!actions) return { label: "Request deposit", disabled: true };
-    return { label: "Request deposit", onClick: () => void run("deposit", () => actions.requestDeposit(amount)) };
+    if (!actions) return { label: DEPOSIT_LABEL, disabled: true };
+    return { label: DEPOSIT_LABEL, onClick: () => void run("deposit", () => actions.requestDeposit(amount)) };
   };
 
   const withdrawCta = (): Cta => {
@@ -266,7 +271,9 @@ export function VaultDepositModal({
           <div className="border border-bg-border bg-[rgba(40,40,40,0.24)] p-4">
             <div className="font-mono text-base font-medium text-content-primary">{successCopy(requested.action, vault)}</div>
             <p className="mt-2 font-mono text-sm leading-[1.5] text-content-secondary">
-              {requested.action === "deposit"
+              {requested.action === "deposit" && INSTANT_DEPOSITS
+                ? `Your ${symbol} is in the vault. Your shares show in your position above and earn from now on.`
+                : requested.action === "deposit"
                 ? "Your deposit is pending and earns nothing until the vault completes it at the end of the cycle. It then converts to shares at the share price calculated at that point."
                 : `Your withdrawal is pending. When the vault completes it at the end of the cycle, your shares are paid out in ${symbol} at the share price calculated then.`}
             </p>
@@ -391,8 +398,10 @@ export function VaultDepositModal({
           ) : null}
 
           <p className="font-mono text-xs leading-[1.5] text-content-secondary">
-            Requests complete at the end of the cycle, at the share price calculated then. The manager can make bad trades
-            and you carry the losses.{" "}
+            {INSTANT_DEPOSITS && tab === "deposit"
+              ? "Deposits convert to shares at the current share price."
+              : "Requests complete at the end of the cycle, at the share price calculated then."}{" "}
+            The manager can make bad trades and you carry the losses.{" "}
             <Link href="/docs/guide/returns-and-risks" className="text-accent-secondary hover:text-accent-primary">
               Returns, fees and risks
             </Link>

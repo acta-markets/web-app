@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const NOW = Math.floor(Date.now() / 1000);
@@ -29,10 +29,11 @@ afterEach(() => {
 });
 
 describe("VaultDepositModal with fixture vaults", () => {
-  it("reads like the real thing and never sends anything", async () => {
-    const user = userEvent.setup();
+  it("reads like the real thing and completes a deposit without a wallet or a request step", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     // the app loads the JSON before any vault renders; the modal then reads it synchronously
     const data = await loadSampleData();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     const vault = data.vaults.find((v) => v.vault_pda === data.keys.jitosol)!;
     render(<VaultDepositModal vault={vault} meta={resolveVaultMeta(vault, data.meta)} onClose={vi.fn()} />);
 
@@ -41,8 +42,12 @@ describe("VaultDepositModal with fixture vaults", () => {
     expect(screen.queryByRole("button", { name: "Redeem invite to deposit" })).toBeNull();
 
     await user.type(screen.getByLabelText("Deposit"), "1");
-    const cta = screen.getByRole("button", { name: "Request deposit" }) as HTMLButtonElement;
-    expect(cta.disabled).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Deposit" }));
+    expect(screen.getByRole("button", { name: "Submitting…" })).toBeTruthy();
+
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+    expect(screen.getByText("Deposit complete")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/sample/i);
+    vi.useRealTimers();
   });
 });

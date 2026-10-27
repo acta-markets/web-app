@@ -573,15 +573,15 @@
         "capabilities": 0,
         "active_expiry": "1792216800",
         "open_positions": "4",
-        "total_shares": "2076180481342",
+        "total_shares": "2076672734251",
         "share_price": "1015738030",
-        "equity": "2108855472043",
+        "equity": "2109355472043",
         "capital_generation": "0",
         "accepting_deposits": false,
         "equity_computed": false,
-        "pending_deposit_count": 6,
+        "pending_deposit_count": 5,
         "pending_withdraw_count": 0,
-        "pending_deposit_amount": "30000000000",
+        "pending_deposit_amount": "29500000000",
         "pending_withdraw_shares": "0",
         "performance_fee_bps": 1000,
         "management_fee_bps": 200,
@@ -596,7 +596,7 @@
         "main_balance": null,
         "second_balance": null,
         "balance_updated_at": null,
-        "live_share_supply": "2076180481342",
+        "live_share_supply": "2076672734251",
         "observed_manager_stake_shares": null,
         "balance_chain_slot": null,
         "policy": {
@@ -831,13 +831,10 @@
         }
       ],
       "position": {
-        "shareBalance": "0",
+        "shareBalance": "492252909",
         "mainTokenBalance": "1250000000",
         "nativeLamports": null,
-        "depositRequest": {
-          "amount": "500000000",
-          "createdAt": 1791734400
-        },
+        "depositRequest": null,
         "withdrawRequest": null
       }
     },
