@@ -4,14 +4,14 @@ A maker authenticates over WebSocket, subscribes to RFQs, quotes them and tracks
 
 ## Connection and authentication
 
-The first message from the client is `Hello`. The server accepts any `protocol_version` `>= min_supported_version`; otherwise it replies with `VersionMismatch` and closes the connection. `features` is opt-in. `quote_expired` makes the server send `QuoteExpired` instead of expiring quotes silently. `cancel_on_disconnect` cancels the session's open quotes when the connection ends; without it, resting quotes stay live while the maker is offline. `Welcome.enabled_features` lists what the server accepted.
+The first message is `Hello` with exact `protocol_version: "1.0.0"` and required `on_disconnect: "cancel_quotes" | "keep_quotes"`. A different version gets typed `unsupported_protocol_version` and close code 4006. Spreads are part of the base protocol, and QuoteExpired is always sent. Subscribe requires a nonempty products list; only selected RFQ products are broadcast.
 
 ```json
 {
   "type": "Hello",
   "data": {
     "protocol_version": "1.0.0",
-    "features": [],
+    "on_disconnect": "cancel_quotes",
     "client_name": "maker-bot",
     "client_version": "0.1.0"
   }
@@ -41,6 +41,7 @@ A resumed session keeps its server-side routing and mint scope. After fresh auth
 {
   "type": "Subscribe",
   "data": {
+    "products": ["covered_call", "cash_secured_put", "call_spread", "put_spread"],
     "request_id": "<uuid>",
     "channels": ["rfqs", "chain_events"],
     "underlying_mints": [],
@@ -55,7 +56,9 @@ A resumed session keeps its server-side routing and mint scope. After fresh auth
 
 ## Quoting
 
-On `RfqBroadcast`, check the [market PDA and terms](../reference/maker-api.md#quote-flow) against your Acta program. Pick a strike from `rfq.strike` or `rfq.order_options` and compute the premium. Set `now + min_quote_validity_seconds <= valid_until <= market.expiry_ts`; read `min_quote_validity_seconds` from `GET /api/v1/venue` at startup, do not hardcode it. Build the 182-byte order preimage (Quote rules in the [Maker API reference](../reference/maker-api.md)) and hash it to `order_id`. Sign the 32-byte hash with `quote_signing` and send `Quote`:
+Units: `rfq.quantity` (and `size_rule`, `QuoteFilled.quantity`) is in underlying atoms; `strike` and `price` are 1e9-scaled per underlying token, independent of decimals. Decimals are not in `RfqBroadcast`: read `underlying_decimals` and `quote_decimals` from `GetMarketDescriptors` and cache them by `market.market_pda`. The gross premium (before protocol fees) in quote atoms is `floor(price * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))`, the contract's rounding.
+
+On `RfqBroadcast`, check the [market PDA and terms](../reference/maker-api.md#quote-flow) against your Acta program. Pick a strike from `rfq.strike` or `rfq.order_options` and compute the premium. Set `now + min_quote_validity_seconds <= valid_until <= market.expiry_ts`; read `min_quote_validity_seconds` from `GET /api/v1/venue` at startup, do not hardcode it, and keep `valid_until − settlement_buffer_seconds` after now. Build the 182-byte order preimage (Quote rules in the [Maker API reference](../reference/maker-api.md)) and hash it to `order_id`. Sign the 32-byte hash with `quote_signing` and send `Quote`:
 
 ```json
 {
@@ -82,7 +85,7 @@ Reprice with `ReplaceQuote`, which is one atomic round trip. `CancelQuote` follo
 
 ## Lifecycle events
 
-Lifecycle events are keyed by `order_id`. `RfqClosed` is the terminal RFQ event. `QuoteFilled` carries fill details and is followed by `RfqClosed`.
+Lifecycle events are keyed by `order_id`. `RfqClosed` is the terminal RFQ event. `QuoteFilled` carries fill details and arrives after `RfqClosed`.
 
 | Event | Description |
 |---|---|
@@ -92,11 +95,11 @@ Lifecycle events are keyed by `order_id`. `RfqClosed` is the terminal RFQ event.
 | `QuoteOutbid` | Quote has been displaced by a better one. |
 | `QuoteRefreshRequested` | Settlement-buffer cutoff is approaching; resubmit with `valid_until ≥ min_valid_until` before the cutoff. |
 | `QuoteSelected` | Quote locked; awaiting the taker signature. |
-| `QuoteFilled` | Position opened on-chain. Carries `position_pda` and `tx_signature`. |
-| `QuoteCancelled` | Terminal. `reason` ∈ {`requested`, `risk_check`, `rfq_accepted`, `maker_disconnected`}. |
-| `QuoteExpired` | Emitted only when `quote_expired` was enabled in `Hello`. |
+| `QuoteFilled` | Position opened on-chain. Carries `market_pda`, `position_type`, `position_pda` and `tx_signature`, so it can be attributed without the RFQ. `expiry_ts` is optional when the server no longer knows the market. |
+| `QuoteCancelled` | Removes only the listed `order_ids`; an empty list removes nothing. `CancelQuoteAck` acknowledges the command. Reconcile after disconnect. `reason` ∈ {`requested`, `risk_check`, `rfq_accepted`, `maker_disconnected`}. |
+| `QuoteExpired` | Always emitted when a quote expires. |
 | `RfqAvailableAgain` | Settlement reverted; the auction has reopened. The maker may re-quote with a fresh `order_id`. |
-| `RfqClosed` | Terminal RFQ event. Drop per-RFQ state. |
+| `RfqClosed` | Closes the auction. Keep unresolved execution obligations tracked separately. |
 
 ## On-chain responsibilities
 
@@ -128,7 +131,7 @@ If the account is enrolled in pre-trade pricing, the server periodically sends `
 
 ## Reconnection
 
-Cancel-on-disconnect (COD) is active when `cancel_on_disconnect` is in both `Hello.features` and `Welcome.enabled_features`. On disconnect, Core removes the connection's active and retained non-winning quotes. Selected and executing orders stay. Without COD, resting quotes stay fillable while you are offline. The server does not replay events missed while disconnected. In-flight events may arrive again after recovery; dedupe by `order_id`.
+Cancel-on-disconnect (COD) is active when required `Hello.on_disconnect` is `"cancel_quotes"`. On disconnect, Core removes the connection's active and retained non-winning quotes. Selected and executing orders stay. Without COD, resting quotes stay fillable while you are offline. The server does not replay events missed while disconnected. In-flight events may arrive again after recovery; dedupe by `order_id`.
 
 After reauthentication, read state on `/maker/data` and subscribe on `/maker`:
 
@@ -141,7 +144,7 @@ After reauthentication, read state on `/maker/data` and subscribe on `/maker`:
 
 `GetMyQuotes { scope: "live" }` returns the full unpaged owner set, including retained, selected, and executing quotes. `scope: "history"` returns paginated rows from the database. If the ACK for an order was lost, check `GetOrderStatus`. An empty live response does not tell you the order is gone. `GetMyTrades` pages with `cursor` and `cursor_id` and takes a `market` filter. Details are in the [Maker API reference](../reference/maker-api.md).
 
-For a dashboard bootstrap, send `GetMmSummary` on `/maker/data` after auth or reconnect. Do not poll it.
+For a dashboard bootstrap, send `GetMmSummary` on `/maker/data` after auth or reconnect. Use manual refresh or drift recovery for later snapshots. If many workers reconnect together, add a small random delay before expensive recovery reads. Do not poll it.
 
 ## Discovery
 

@@ -280,6 +280,8 @@ export function getOpenApiDocument(context: DeploymentContext) {
           type: "object",
           required: [
             "program_id",
+            "protocol_fee_bps_premium",
+            "protocol_fee_bps_volume",
             "min_quote_validity_seconds",
             "settlement_buffer_seconds",
             "quote_refresh_lead_seconds",
@@ -292,43 +294,68 @@ export function getOpenApiDocument(context: DeploymentContext) {
           ],
           properties: {
             program_id: { type: "string" },
+            protocol_fee_bps_premium: { type: "integer" },
+            protocol_fee_bps_volume: { type: "integer" },
             min_quote_validity_seconds: { type: "integer" },
             settlement_buffer_seconds: { type: "integer" },
             quote_refresh_lead_seconds: { type: "integer" },
             min_rfq_timeout_seconds: { type: "integer" },
             max_rfq_timeout_seconds: { type: "integer" },
             signature_timeout_seconds: { type: "integer" },
-            max_quotes_per_rfq: { anyOf: [{ type: "integer" }, { type: "null" }] },
-            max_active_rfqs_per_taker: { anyOf: [{ type: "integer" }, { type: "null" }] },
+            max_quotes_per_rfq: { $ref: "#/components/schemas/CountLimit" },
+            max_active_rfqs_per_taker: { $ref: "#/components/schemas/CountLimit" },
             pre_expiry_cutoff_seconds: { type: "integer" },
           },
           additionalProperties: true,
         },
+        CountLimit: {
+          oneOf: [
+            { type: "object", required: ["type"], properties: { type: { const: "unlimited" } } },
+            {
+              type: "object",
+              required: ["type", "value"],
+              properties: { type: { const: "limited" }, value: { type: "integer" } },
+            },
+          ],
+        },
         Token: {
           type: "object",
-          required: ["mint", "symbol", "decimals"],
+          required: ["mint", "symbol", "decimals", "oracle_feed_ids", "role"],
           properties: {
             mint: { type: "string" },
             symbol: { type: "string" },
             decimals: { type: "integer" },
             oracle_feed_ids: { type: "array", items: { type: "string" } },
-            size_rule: {
-              type: "object",
-              required: ["min_size", "max_size", "step"],
-              properties: {
-                min_size: { type: "integer", format: "int64" },
-                max_size: { type: "integer", format: "int64" },
-                step: { type: "integer", format: "int64" },
-              },
+            role: {
+              description: "Only underlyings carry sizing and a strike grid.",
+              oneOf: [
+                { type: "object", required: ["type"], properties: { type: { const: "quote" } } },
+                {
+                  type: "object",
+                  required: ["type", "size_rule", "strike_tick", "quote_mints"],
+                  properties: {
+                    type: { const: "underlying" },
+                    size_rule: {
+                      type: "object",
+                      required: ["min_size", "max_size", "step"],
+                      properties: {
+                        min_size: { type: "integer", format: "int64" },
+                        max_size: { type: "integer", format: "int64" },
+                        step: { type: "integer", format: "int64" },
+                      },
+                    },
+                    strike_tick: { type: "integer", format: "int64" },
+                    quote_mints: { type: "array", items: { type: "string" } },
+                  },
+                },
+              ],
             },
-            strike_tick: { type: "integer", format: "int64" },
-            quote_mints: { type: "array", items: { type: "string" } },
           },
           additionalProperties: true,
         },
         Market: {
           type: "object",
-          required: ["pda", "underlying", "quote", "expiry_ts", "is_put", "status"],
+          required: ["pda", "underlying", "quote", "expiry_ts", "is_put", "status", "settlement_price"],
           properties: {
             pda: { type: "string" },
             underlying: { type: "string", description: "Underlying mint" },
@@ -337,9 +364,8 @@ export function getOpenApiDocument(context: DeploymentContext) {
             is_put: { type: "boolean" },
             status: { type: "string", enum: ["active", "closed", "finalized"] },
             settlement_price: {
-              type: "integer",
-              format: "int64",
-              description: "Settlement price at 1e9 scale",
+              anyOf: [{ type: "integer", format: "int64" }, { type: "null" }],
+              description: "Settlement price at 1e9 scale; null until the market is finalized",
             },
           },
           additionalProperties: true,
@@ -359,7 +385,7 @@ export function getOpenApiDocument(context: DeploymentContext) {
             owner: { type: "string" },
             quote_signing: { type: "string" },
             total_trades: { type: "integer", format: "int64" },
-            total_volume: { type: "integer", format: "int64" },
+            total_volume: { type: "string", description: "Exact decimal text" },
             total_quotes: { type: "integer", format: "int64" },
           },
           additionalProperties: true,
@@ -367,6 +393,7 @@ export function getOpenApiDocument(context: DeploymentContext) {
         Stats: {
           type: "object",
           required: [
+            "usd",
             "total_volume_24h",
             "total_trades_24h",
             "active_markets",
@@ -384,7 +411,7 @@ export function getOpenApiDocument(context: DeploymentContext) {
                 priced_trades_24h: { type: "integer", minimum: 0 },
               },
             },
-            total_volume_24h: { type: "integer", format: "int64" },
+            total_volume_24h: { type: "string", description: "Exact decimal text" },
             total_trades_24h: { type: "integer", format: "int64" },
             active_markets: { type: "integer", format: "int64" },
             active_makers: { type: "integer", format: "int64" },

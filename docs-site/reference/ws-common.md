@@ -207,7 +207,7 @@ Validate the whole challenge **before signing**. Require the exact text and blan
 
 Then sign the original UTF-8 bytes: no normalization, prefix or hashing. The fixed text is the authentication domain. The same key signs orders, so signing arbitrary text from an endpoint can authorize an order.
 
-Managed SDK clients (`acta-maker-sdk` 0.5.2, `@acta-markets/ts-sdk` 0.2.2) validate before signing. Raw clients use `validate_maker_auth_challenge` (Rust) or `validateAuthChallenge` (TypeScript). These check format only. For `/vault`, use `validate_vault_auth_challenge(challenge, operator, vault)` (Rust) or `assertVaultAuthChallenge(challenge, operator, vault)` (TypeScript), which also bind the operator and vault; `validateAuthChallenge` rejects a vault challenge. Which endpoint to trust is your configuration.
+Managed SDK clients (`acta-maker-sdk` 0.5.4, `@acta-markets/ts-sdk` 0.2.4) validate before signing. Raw clients use `validate_maker_auth_challenge` (Rust) or `validateAuthChallenge` (TypeScript). These check format only. For `/vault`, use `validate_vault_auth_challenge(challenge, operator, vault)` (Rust) or `assertVaultAuthChallenge(challenge, operator, vault)` (TypeScript), which also bind the operator and vault; `validateAuthChallenge` rejects a vault challenge. Which endpoint to trust is your configuration.
 
 ### AuthChallenge (client -> server)
 
@@ -609,7 +609,7 @@ Messages addressed to your session alone (responses, your own lifecycle, `Positi
 
 ### VaultCatalogChanged
 
-Sent on the `vaults` channel after a vault is created, re-delegated or closed, and only then. It carries only the vault address. Re-list vaults (`GET /api/v1/vaults`) to pick up the change.
+Sent on the `vaults` channel to maker and taker sessions after a vault is created, re-delegated (`RotateVaultDelegate`) or closed. Disabling a delegate (`DisableVaultDelegate`) does not send it. `/vault` operator sessions do not receive it. It carries only the vault address. Re-list vaults (`GET /api/v1/vaults`) to pick up the change.
 
 It is critical on `/maker` and `/taker` (see [Delivery criticality](#delivery-criticality)): if your outbound queue is full the frame is dropped and the server closes the connection, so a loss always shows up as a disconnect. It is not replayed, so re-list vaults after every connect and reconnect as well.
 
@@ -619,7 +619,9 @@ It is critical on `/maker` and `/taker` (see [Delivery criticality](#delivery-cr
 
 ### VaultProjectionAdvanced
 
-Sent on the `vaults` channel when the indexed vault row changed. Reload `GET /api/v1/vaults/{vault_pda}`. Maker and taker subscribers receive it for every vault; a `/vault` session receives it for its own vault only.
+Sent on the `vaults` channel after a committed on-chain event advances the vault projection. Reload `GET /api/v1/vaults/{vault_pda}`. `/maker` quote sessions and taker subscribers receive it for every vault; a `/vault` session receives it for its own vault only.
+
+`version` increases with each projected vault event. Reload on a version gap or reconnect. Delivery follows the same drop-and-disconnect rule as `VaultCatalogChanged`.
 
 ```json
 {
@@ -630,10 +632,12 @@ Sent on the `vaults` channel when the indexed vault row changed. Reload `GET /ap
     "slot": 312345678,
     "transaction_index": 3,
     "signature": "TxSignatureBase58",
-    "event_index": 0
+    "event_index": 1
   }
 }
 ```
+
+`slot`, `transaction_index`, `signature` and `event_index` identify the event that produced `version`.
 
 ## Timeout hierarchy
 
@@ -654,30 +658,30 @@ rfq.signature_deadline
 - `rfq.expires_at` is the auction deadline: makers quote and the taker accepts until then. An order already enqueued stays open until it executes or fails.
 - `quote.valid_until` is the expiry the maker signs into the order. The program rejects settlement after it.
 
-Set `valid_until` later than `expires_at` to leave time to build, sign and confirm the transaction. The settlement buffer defaults to 90 seconds. Core does not enforce the relationship between the two.
+Set `valid_until` later than `expires_at` to leave time to build, sign and confirm the transaction. The settlement buffer defaults to 50 seconds. Core does not enforce the relationship between the two.
 
 ### Recommended `valid_until` range
 
 ```
-min:  now + min_signature_expiry_seconds          (default 100s)
+min:  now + min_signature_expiry_seconds          (default 60s)
 max:  rfq.expires_at + settlement_buffer_seconds  (recommended upper bound)
 hard max: market.expiry_ts
 ```
 
 Values above the recommended max are accepted up to `market.expiry_ts`. Later values return `QuoteRejected.reason = "market_expired"`.
 
-Example: RFQ with `expires_at = now + 60s`, settlement buffer 90s:
+Example: RFQ with `expires_at = now + 60s`, settlement buffer 50s:
 
 ```
-valid_until range: [now + 100s, now + 150s]
+valid_until range: [now + 60s, now + 110s]
 effective_expiry:  [now + 10s,  now + 60s]
 ```
 
 ### Invariants
 
-- `quote.valid_until >= now + min_signature_expiry_seconds` (default 100s; server rejects shorter expiries)
+- `quote.valid_until >= now + min_signature_expiry_seconds` (default 60s; server rejects shorter expiries)
 - `quote.valid_until <= market.expiry_ts` (hard server-side bound)
-- `effective_expiry = quote.valid_until - settlement_buffer` (default 90s)
+- `effective_expiry = quote.valid_until - settlement_buffer` (default 50s)
 - `rfq.expires_at < market.expiry_ts` (recommended client-side validation)
 - `signature_deadline <= min(effective_expiry, rfq.expires_at)`
 

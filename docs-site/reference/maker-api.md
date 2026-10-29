@@ -55,7 +55,7 @@ Protocol constraints:
   "type": "Hello",
   "data": {
     "protocol_version": "1.0.0",
-    "features": [],
+    "on_disconnect": "cancel_quotes",
     "client_name": "maker-bot",
     "client_version": "0.1.0"
   }
@@ -71,22 +71,24 @@ Protocol constraints:
     "protocol_version": "1.0.0",
     "server_version": "0.1.0",
     "min_supported_version": "1.0.0",
-    "enabled_features": [],
-    "server_time_unix_ms": 1710000000000
+    "server_time_unix_ms": 1710000000000,
+    "min_quote_validity_seconds": 60,
+    "settlement_buffer_seconds": 50
   }
 }
 ```
 
 `server_time_unix_ms` is required. Use it for clock skew estimation (see [WS common conventions](ws-common.md)).
 
-If the client's `protocol_version` is incompatible, the server sends `VersionMismatch` instead of `Welcome` and closes the connection.
+`min_quote_validity_seconds` and `settlement_buffer_seconds` are the venue quote window, the same values as `GET /api/v1/venue`: `valid_until` must be at least `now + min_quote_validity_seconds`, and a quote stays executable only while `valid_until - settlement_buffer_seconds > now`. The Rust `QuoteBuilder::welcome(&welcome)` applies both.
 
-`features` is opt-in. The server echoes the subset it enabled in `Welcome.enabled_features`. A feature missing from `enabled_features` is not active.
+Hello must use exact protocol version `1.0.0`; another version receives typed `unsupported_protocol_version` and close code 4006.
 
-| Feature | Effect |
-|---------|--------|
-| `quote_expired` | The server sends `QuoteExpired` events instead of expiring quotes silently. |
-| `cancel_on_disconnect` | On disconnect (socket close or liveness timeout), the server removes active and retained non-winning quotes owned by that session, including retained quotes in locked RFQs. A session takeover keeps the quotes; cleanup of the replaced connection cannot cancel the new owner's book. Selected quotes (`QuoteSelected`) stay locked and settle or expire on their own timers. Without this feature, resting quotes survive a disconnect and can be filled while the maker is offline. Resume does not restore cancelled quotes. |
+Spreads are part of the base protocol and QuoteExpired is always sent. Required
+`on_disconnect: "cancel_quotes" | "keep_quotes"` controls the connection's active
+and retained non-winning quotes. Selected or executing orders retain their timers.
+Takeover keeps quotes; cleanup of the replaced connection cannot cancel the new
+owner's book. Resume does not restore cancelled quotes.
 
 ### Subscribe
 
@@ -94,6 +96,7 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
 {
   "type": "Subscribe",
   "data": {
+    "products": ["covered_call", "cash_secured_put", "call_spread", "put_spread"],
     "request_id": "uuid",
     "channels": ["rfqs", "chain_events"],
     "underlying_mints": ["UnderlyingMintBase58"],
@@ -174,13 +177,51 @@ If the client's `protocol_version` is incompatible, the server sends `VersionMis
 
 ### Server -> Maker (owner-direct, no subscription)
 
-- `PositionUpdated`, `MakerCapsUpdated`
+- `PositionUpdated`, `MakerCapsUpdated`, `TradeExecuted`
+
+Delivered to the owner's quote session and ready `/maker/data` sessions. Data
+sessions become eligible after a successful `GetMmSummary` response; authentication
+alone does not enable pushes. No subscription is needed. Up to four authenticated
+data sessions per owner are allowed; the fifth receives `AuthError` with
+`reason = "session_limit_exceeded"`. Disconnect or logout releases its slot.
+A full data queue closes only that session (`4002 slow_consumer`). Reconcile on
+restart/reconnect: these pushes are not replayed.
 
 ### Server -> Maker (broadcast if subscribed)
 
-- `TradeExecuted`, `StatsUpdate`, `ChainEvent`
+- `StatsUpdate`, `ChainEvent`
 - `MarketCreated`, `MarketFinalized`
 - `VaultCatalogChanged`, `VaultProjectionAdvanced` (`vaults` channel; see [WebSocket conventions](ws-common.md#vaultcatalogchanged)). `VaultProjectionAdvanced` arrives for every vault; `VaultCatalogChanged` is not replayed, so re-list vaults after (re)connect too.
+
+### Delivery by endpoint
+
+Pushes reach a session in one of three ways: a channel the session subscribed
+to (`Subscribe` is accepted on `/maker` and `/vault`, not on `/maker/data`),
+the session that sent the quote, or the maker owner's `/maker` and ready
+`/maker/data` sessions regardless of subscriptions. Query responses (`MyQuotes`, `MakerPositions`,
+`MmSummary`, ...) return on the connection that asked.
+
+| Message | `/maker` | `/maker/data` | `/vault` |
+|---|---|---|---|
+| `RfqBroadcast` | `rfqs` channel, within the mint scope | no | sessions with `sign_maker_quotes`, no subscription |
+| `RfqSkipped` | `rfqs` channel, makers the caps prefilter skipped | no | sessions with `sign_maker_quotes` the prefilter skipped |
+| `IndicativePricesRequest` | `rfqs` channel | no | no |
+| `QuoteAcknowledged`, `QuoteRejected`, `QuoteBestStatus`, `QuoteOutbid`, `QuoteSelected`, `QuoteRefreshRequested`, `QuoteExpired`, `QuoteCancelled` | the session that sent the quote | no | the session that sent the quote |
+| `QuoteFilled` | the session that sent the winning quote | no | the session that sent the winning quote |
+| `RfqClosed`, `RfqAvailableAgain` | every session that quoted the RFQ | no | every session that quoted the RFQ, and the taker session |
+| `OrderAccepted`, `SponsoredTxToSign`, `OrderSubmitted`, `OrderConfirmed`, `OrderFailed` | never: these go to the taker | no | only as the taker of its own RFQ |
+| `TradeExecuted` | owner's session, no subscription | owner's ready sessions, no subscription | no |
+| `PositionUpdated`, `MakerCapsUpdated` | owner's session, no subscription | owner's ready sessions, no subscription | no |
+| `ReferenceChanged` | every session | every ready session | every session |
+| `MarketCreated`, `MarketFinalized` | `markets` channel | no | no |
+| `StatsUpdate` / `ChainEvent` | `stats` / `chain_events` channel | no | no |
+| `VaultCatalogChanged` | `vaults` channel | no | no |
+| `VaultProjectionAdvanced` | `vaults` channel | no | `vaults` channel, own vault only |
+
+A maker learns of its fill from `QuoteFilled` (and `TradeExecuted`), never from
+`OrderConfirmed`. `PositionUpdated` and `MakerCapsUpdated` reach only the
+owner's `/maker` session; a client that reads on `/maker/data` alone recovers
+them with `GetMakerPositions`, `GetMyCaps` or `GetMmSummary`.
 
 ## Quote flow
 
@@ -256,9 +297,9 @@ Sent instead of `RfqBroadcast` when cap limits pre-filter the maker. `reason` is
 ```
 
 Rules:
-- `valid_until` >= `now + 100` seconds, otherwise `quote_expiry_too_short`
+- `valid_until` >= `now + min_quote_validity_seconds` from `GET /api/v1/venue` (currently 60 seconds), otherwise `quote_expiry_too_short`
 - `valid_until` <= the market's `expiry_ts`, otherwise `market_expired`
-- The server applies a settlement buffer (`settlement_buffer_seconds` from `GET /api/v1/venue`, currently 90): the quote is tradable until `valid_until` minus that buffer. Set `valid_until` to at least `rfq.expires_at + min_quote_validity_seconds` (currently 100) so it stays tradable for the whole auction.
+- The server applies a settlement buffer (`settlement_buffer_seconds` from `GET /api/v1/venue`, currently 50): the quote is tradable until `valid_until` minus that buffer. Set `valid_until` to at least `rfq.expires_at + min_quote_validity_seconds` (currently 60) so it stays tradable for the whole auction.
 - `order_id = sha256(preimage182)`
 - maker signs only 32-byte `order_id`
 - if `order_options` is present, strike must be from that set
@@ -451,6 +492,9 @@ Keyed by `(rfq_id, strike)`, not `order_id`. With several strikes per RFQ, keep 
   "data": {
     "rfq_id": "uuid",
     "order_id": "0x...64chars",
+    "market_pda": "MarketPdaBase58",
+    "expiry_ts": 1710489600,
+    "position_type": "covered_call",
     "taker": "TakerPubkeyBase58",
     "price": 50000000,
     "quantity": 1000000000,
@@ -462,10 +506,10 @@ Keyed by `(rfq_id, strike)`, not `order_id`. With several strikes per RFQ, keep 
 }
 ```
 
-`QuoteFilled` carries fill details for the winning maker. `RfqClosed` is the terminal RFQ event.
+`QuoteFilled` carries fill details for the winning maker. `RfqClosed` is the terminal RFQ event. `market_pda`, `expiry_ts` (market expiry, Unix seconds; `null` if the server no longer knows the market, so resolve it from `market_pda`) and `position_type` identify the market without the RFQ, so a fill can be attributed after a restart; the market's mint decimals come from `GetMarketDescriptors`. `quantity` is underlying atoms and `price` is 1e9-scaled per underlying token, so the gross premium (before protocol fees) in quote atoms is `floor(price * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))`, the contract's rounding (Rust SDK `total_premium_quote_atoms`, TS SDK `totalPremiumQuoteAtoms`).
 
 On a fill:
-- the winning maker receives `QuoteFilled`, then `RfqClosed`
+- the winning maker receives `RfqClosed`, then `QuoteFilled`; accept fill details after the RFQ has closed
 - the taker receives `OrderConfirmed`, then `RfqClosed`
 - drop RFQ state only on `RfqClosed`
 
@@ -520,7 +564,7 @@ On a fill:
 
 ### QuoteExpired (server -> maker)
 
-Sent only if `"quote_expired"` is in both `Hello.features` and `Welcome.enabled_features`.
+Sent for every session when a quote expires.
 
 ```json
 {
@@ -605,10 +649,10 @@ Sent instead of `Welcome` when the client's `protocol_version` is not compatible
 {
   "type": "VersionMismatch",
   "data": {
-    "requested_version": "2.0.0",
+    "requested_version": "1.0.0",
     "server_version": "1.0.0",
     "min_supported_version": "1.0.0",
-    "message": "Client version 2.0.0 is not supported"
+    "message": "Client version 1.0.0 is not supported"
   }
 }
 ```
@@ -842,6 +886,8 @@ List of all distinct market expiry timestamps (Unix seconds).
 Each mint once (see [`TokenInfo`](ws-common.md#tokeninfo)). Underlyings carry `size_rule`, `strike_tick` and `quote_mints`.
 
 ### MarketDescriptorInfo (from `MarketDescriptors`)
+
+Token decimals live here and nowhere in `RfqBroadcast`: `RfqBroadcast.quantity`, `QuoteFilled.quantity` and `size_rule` are underlying atoms. Cache `underlying_decimals` / `quote_decimals` by `market.market_pda` (the Rust SDK's `MarketDecimals` does this from `MarketDescriptors`).
 
 ```typescript
 type MarketDescriptor = {
@@ -1369,7 +1415,7 @@ All variants require `signature` (tx signature, base58), `instruction_index` (in
 
 ## Delivery and recovery
 
-When your outbound queue is full, a critical message is dropped and the server closes the connection (`4002 slow_consumer`), so its loss always shows up as a disconnect. Best-effort broadcasts are dropped silently. For `/maker` the critical set is `RfqBroadcast`, the quote and order lifecycle, `QuoteRefreshRequested`, `MarketCreated`, `MarketFinalized`, `VaultCatalogChanged`, `VaultProjectionAdvanced`, and every message addressed to your session alone (responses, `PositionUpdated`, `MakerCapsUpdated`). `TradeExecuted`, `ChainEvent`, `StatsUpdate`, `RfqSkipped` and `IndicativePricesRequest` are best-effort. The full table is in [WebSocket conventions](ws-common.md#delivery-criticality).
+When your outbound queue is full, a critical message is dropped and the server closes the connection (`4002 slow_consumer`), so its loss always shows up as a disconnect. Best-effort broadcasts are dropped silently. For `/maker` the critical set is `RfqBroadcast`, the quote and order lifecycle, `QuoteRefreshRequested`, `MarketCreated`, `MarketFinalized`, `VaultCatalogChanged`, `VaultProjectionAdvanced`, and every message addressed to your session alone (responses, `PositionUpdated`, `MakerCapsUpdated`). `ChainEvent`, `StatsUpdate`, `RfqSkipped` and `IndicativePricesRequest` broadcasts are best-effort. Owner-direct `TradeExecuted` uses addressed delivery and closes the affected session on queue overflow. The full table is in [WebSocket conventions](ws-common.md#delivery-criticality).
 
 On every (re)connect read `GetActiveRfqs` and complete `GetMyQuotes { scope: Live }` on `/maker`, and `GetMmSummary` on `/maker/data`. The managed Rust SDK sends exactly these reads per endpoint before `Ready`; querying `GetOrderStatus` for orders you still consider unresolved is up to you. They mix Core live state and DB projections, so they are not one atomic snapshot. `ActiveRfqs` supplies each RFQ's taker and market PDA for the quote preimage.
 
@@ -1483,7 +1529,7 @@ Handling:
 | `requested` | Maker requested cancellation |
 | `risk_check` | Server-side risk check triggered |
 | `rfq_accepted` | RFQ accepted another quote |
-| `maker_disconnected` | Session had `cancel_on_disconnect` enabled and disconnected |
+| `maker_disconnected` | Session selected `on_disconnect: "cancel_quotes"` and disconnected |
 
 ### RfqAvailableAgainReason
 

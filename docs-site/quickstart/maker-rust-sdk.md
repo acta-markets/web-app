@@ -10,10 +10,10 @@ Runnable examples ship with the crate: run them with `cargo run --example <name>
 
 ```toml
 [dependencies]
-acta-maker-sdk = { version = "0.5.2", features = ["ws-client"] }
+acta-maker-sdk = { version = "0.5.4", features = ["ws-client"] }
 ```
 
-Version 0.5.2 targets the program deployed to devnet and mainnet on 2026-10-17. Upgrading from 0.5.0/0.5.1: `ManagedWsConfig::new` takes the maker owner, `QuoteBuilder` requires `maker_owner` and `min_valid_until`, and `MakerQuoteClient` quotes through `quote_in_epoch` / `replace_in_epoch` / `batch_quotes_in_epoch` (see the crate's `CHANGELOG.md`). Vault operators use the `vault` feature and the `/vault` session described in [Vault API, SDKs and swaps](../protocol/vault-integration.md).
+This guide covers version 0.5.4. Upgrading from 0.5.0/0.5.1: `ManagedWsConfig::new` takes the maker owner, `QuoteBuilder` requires `maker_owner` and `min_valid_until`, and `MakerQuoteClient` quotes through `quote_in_epoch` / `replace_in_epoch` / `batch_quotes_in_epoch` (see the crate's `CHANGELOG.md`). Vault operators use the `vault` feature and the `/vault` session described in [Vault API, SDKs and swaps](../protocol/vault-integration.md).
 
 Quote-only integrations need `ws-client`. `chain` adds Solana instruction builders, including `chain::vault`. `chain-rpc` adds on-chain reads. `http` adds the read-only HTTP client. `vault` adds the vault operator client and implies `ws-client` and `chain`.
 
@@ -24,34 +24,32 @@ One key signs both the auth challenge and every quote: the `quote_signing` key i
 The code runs inside an async function returning `Result`. Inputs: `url: String`, `hello: HelloData`, `subscribe_data: SubscribeData`, `maker_owner: [u8; 32]`, and `quote_signing_secret: [u8; 32]`. The signing key must be registered under that maker owner.
 
 ```rust
-use acta_maker_sdk::{BytesSigner, encode_base58};
+use acta_maker_sdk::{Address32, BytesSigner};
 use acta_maker_sdk::ws::maker::{MakerDataClient, MakerQuoteClient};
 use acta_maker_sdk::ws::managed::{ManagedWsConfig, MakerWsEndpoint};
 use std::sync::Arc;
 
 let signer = Arc::new(BytesSigner::from_secret(quote_signing_secret));
-let maker_owner_base58 = encode_base58(&maker_owner);
 
 let quote_config =
-    ManagedWsConfig::new(url.clone(), hello.clone(), signer.clone(), maker_owner_base58.clone())
-        .with_cancel_on_disconnect(true)
+    ManagedWsConfig::new(url.clone(), hello.clone(), signer.clone(), Address32::new(maker_owner))
         .low_latency()
         .with_initial_subscribe(subscribe_data);
 
 let quote_client = MakerQuoteClient::spawn(quote_config)?;
 let mut messages = quote_client.subscribe_messages(); // Consume recovery before quoting.
 
-let data_config = ManagedWsConfig::new(url, hello, signer.clone(), maker_owner_base58)
+let data_config = ManagedWsConfig::new(url, hello, signer.clone(), Address32::new(maker_owner))
     .with_endpoint(MakerWsEndpoint::Data);
 
 let data_client = MakerDataClient::spawn(data_config)?;
 ```
 
-`url` accepts `http(s)://` and `ws(s)://` interchangeably. The default endpoint appends `/maker`; `with_endpoint(MakerWsEndpoint::Data)` appends `/maker/data`. `hello` carries the protocol version (use `WS_PROTOCOL_VERSION`), opt-in `features`, and `client_name` / `client_version` strings.
+`url` accepts `http(s)://` and `ws(s)://` interchangeably. The default endpoint appends `/maker`; `with_endpoint(MakerWsEndpoint::Data)` appends `/maker/data`. `hello` carries the protocol version (use `WS_PROTOCOL_VERSION`), required `on_disconnect`, and `client_name` / `client_version` strings.
 
 The signer is an `Arc<dyn SignerLike + Send + Sync>` and signs the auth challenge. The fourth argument is the maker owner, required even when the owner key signs. Use the same owner in `QuoteBuilder::maker_owner`. `ManagedWsConfig::new_async(url, hello, signer, owner)` takes an `AsyncSignerLike` for HSM- or KMS-backed keys. `BytesSigner` holds an ed25519 keypair in memory and zeroes it on drop.
 
-The managed quote client requests cancel-on-disconnect (COD) by default. On disconnect the server cancels the connection's active and retained non-winning quotes. Selected and executing orders stay. To turn COD off, set `.with_cancel_on_disconnect(false)` and leave `cancel_on_disconnect` out of `HelloData.features`. The setter keeps features you added by hand. The data client does not add COD. If a required feature is missing from `Welcome.enabled_features`, the session ends with `FeatureUnsupported`.
+`HelloData.on_disconnect` is required: choose `OnDisconnect::CancelQuotes` or `OnDisconnect::KeepQuotes`. There is no feature handshake. Subscribe requires a nonempty product list, including spreads only when the strategy wants their RFQs. All sessions can read spread positions and history.
 
 `low_latency()` uses 2 s ping/pong deadlines, a 1 s write timeout and a larger command buffer. The inbound ring holds 4096 messages by default. The default gap policy is `EndpointDefault`: reconnect on inbound gaps for Quote, report them to the caller for Data. `low_latency()` selects `Reconnect` on either endpoint. So a gap on the quote endpoint reconnects, and COD removes the connection's active and retained non-winning quotes (selected and executing orders stay). Keep the receiver draining.
 
@@ -86,6 +84,10 @@ let quote = RfqBinding::from_broadcast(rfq)?
 quote_client.quote_in_epoch(quote, recovery_epoch).await?;
 ```
 
+With the `http` feature, `.venue(&venue)` replaces `.min_valid_until(...)`: given the `Venue` from `HttpClient::new(DEVNET_API)?.venue().await?`, it sets the floor to `now + min_quote_validity_seconds` at the current clock and refuses a `valid_until` whose `valid_until − settlement_buffer_seconds` is not after now (`QuoteBuildError::ValidUntilWithinSettlementBuffer`). Fetch the venue at startup; the builder reads the clock when `.venue` is called. `DEVNET_API`, `DEVNET_WS`, `MAINNET_API` and `MAINNET_WS` are the public origins.
+
+Units: `RfqBroadcast.quantity` and `QuoteFilled.quantity` are underlying atoms; `Price` and `Strike` are 1e9-scaled per underlying token, independent of decimals. Mint decimals come only from `GetMarketDescriptors` on `/maker/data` (`underlying_decimals`, `quote_decimals` per `market_pda`); `MarketDecimals::observe(&message)` caches them and `get(market_pda)` returns them. `total_premium_quote_atoms(price, quantity, underlying_decimals, quote_decimals)` is the fill's gross premium (before protocol fees) in quote atoms with the contract's rounding; `Price::as_decimal()`, `Strike::as_decimal()` and `Quantity::to_units(decimals)` are for display.
+
 `QuoteExpiry` stores whole Unix seconds; build it with `QuoteExpiry::from_unix_seconds(...)` or `QuoteExpiry::after(...)`. `RfqBinding` can also pick a permitted strike from `order_options`. The `managed_quote` example (`cargo run --example managed_quote --features ws-client,http`) shows recovery, epoch checks and gap handling.
 
 `quote_in_epoch`, `replace_in_epoch` and `batch_quotes_in_epoch` (and their `try_` forms) return `NotReady` if the connection has changed. Pass the epoch whose recovery you applied, not the latest transport epoch.
@@ -107,9 +109,9 @@ Lifecycle events arrive on the managed receiver with a connection epoch and sequ
 | `QuoteBestStatus` / `QuoteOutbid` | Current book position. |
 | `QuoteRefreshRequested` | Settlement-buffer cutoff approaching. Resubmit with `valid_until ≥ min_valid_until`. |
 | `QuoteSelected` | Quote locked; awaiting the taker signature. |
-| `QuoteFilled` | Position opened on-chain. Carries `position_pda` and `tx_signature`. |
+| `QuoteFilled` | Position opened on-chain. Carries `market_pda`, `expiry_ts`, `position_type`, `position_pda` and `tx_signature`, so it can be attributed without the RFQ. `expiry_ts` is optional when the server no longer knows the market. |
 | `QuoteCancelled` | Removes only the listed `order_ids`. An empty list removes nothing. Not an ACK for a cancel command. |
-| `QuoteExpired` | Emitted only when `quote_expired` was opted into via `Hello`. |
+| `QuoteExpired` | Always emitted when a quote expires. |
 | `RfqAvailableAgain` | Settlement reverted; re-quote with a fresh `order_id`. |
 | `RfqClosed` | Closes the auction. Selected or executing orders are tracked separately. |
 
@@ -204,7 +206,7 @@ Once it lands, restart the quote and data sessions with the new signer. The owne
 
 ## Low-level WsClient
 
-The `hello_auth` example (`cargo run --example hello_auth`) shows the Hello, challenge and subscription sequence by hand. You supply request IDs yourself.
+The `hello_auth` example (`cargo run --example hello_auth --features ws-client`) shows the Hello, challenge and subscription sequence by hand. You supply request IDs yourself.
 
 Convenience methods exist for every `ClientMessage` variant. `WsClient` does not reconnect, re-authenticate, or queue outbound messages.
 

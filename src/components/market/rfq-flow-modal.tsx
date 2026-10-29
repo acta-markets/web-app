@@ -10,15 +10,20 @@ import { useRfqOrder } from "./use-rfq-order";
 import type { VersionedTransaction } from "@solana/web3.js";
 import { IS_MAINNET } from "@/lib/tokens";
 
-type PositionType = "covered_call" | "cash_secured_put";
+import { isSpread, isSpreadTerms, productLabel, quoteMatchesProduct, spreadName, spreadPreview, type ProductTerms } from "@/lib/spreads";
+import { formatDate } from "@/lib/vaults/format";
+import { SpreadPreview, type SpreadFees } from "./spread-preview";
+import type { SpreadTerms } from "@acta-markets/ts-sdk/chain";
 
 export type RfqOrderPreview = {
   asset: string;
-  positionType: PositionType;
-  strike: number;
+  terms: ProductTerms;
+  spread?: { terms: SpreadTerms; fees: SpreadFees; quoteSymbol?: string };
   quantity: number;
   strikeDisplay: string;
   quantityDisplay: string;
+  /** Market expiry in unix seconds, shown in the spread summary line. */
+  expiryTs?: number;
   lockedAprPct?: number | null;
   lockedPremiumUsd?: number | null;
 };
@@ -39,6 +44,7 @@ type FlowStep =
 interface RfqFlowModalProps {
   open: boolean;
   onClose: () => void;
+  onBusyChange?: (busy: boolean) => void;
   /** Incremented by parent whenever a new quote is requested */
   requestNonce: number;
   preview: RfqOrderPreview | null;
@@ -52,6 +58,7 @@ interface RfqFlowModalProps {
 export function RfqFlowModal({
   open,
   onClose,
+  onBusyChange,
   requestNonce,
   preview,
   walletAddress,
@@ -61,6 +68,7 @@ export function RfqFlowModal({
 }: RfqFlowModalProps) {
   const {
     bestQuote,
+    quoteSecondsRemaining,
     isAuthenticated,
     error: rfqError,
     acceptQuote,
@@ -73,6 +81,7 @@ export function RfqFlowModal({
   const [quoteStep, setStep] = useState<"idle" | "requesting_quote" | "quote_received" | "failed">("idle");
   const [error, setError] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteReceivedMessage | null>(null);
+  const [, tick] = useState(0);
   const [recoveredOpen, setRecoveredOpen] = useState(false);
   const { flow, accept, accepting, abandon, canAbandon, reset, checkStatus, txSignature, restored } = useRfqOrder({
     getClient, acceptQuote, submitSignedTx, signTransaction, rpc,
@@ -84,6 +93,10 @@ export function RfqFlowModal({
   const flowError = flow.type === "failed" ? flow.message : error;
   const isRestoredOrder = restored;
   const modalOpen = open || recoveredOpen;
+  useEffect(() => {
+    onBusyChange?.(modalOpen);
+    return () => onBusyChange?.(false);
+  }, [modalOpen, onBusyChange]);
 
   useEffect(() => {
     if (flow.type === "idle") setRecoveredOpen(false);
@@ -104,13 +117,16 @@ export function RfqFlowModal({
 
   useEffect(() => {
     if (!preview || accepting || flow.type !== "idle" || (quoteStep !== "requesting_quote" && quoteStep !== "quote_received")) return;
-    if (bestQuote && Number(bestQuote.strike) === preview.strike) {
+    if (bestQuote && quoteMatchesProduct(bestQuote, preview.terms)) {
       setQuote(bestQuote);
       setStep("quote_received");
+    } else if (!bestQuote && quote && quoteSecondsRemaining(quote) === 0) {
+      setStep("quote_received");
     } else {
+      setQuote(null);
       setStep("requesting_quote");
     }
-  }, [bestQuote, preview, accepting, flow.type, quoteStep]);
+  }, [bestQuote, preview, accepting, flow.type, quoteStep, quote, quoteSecondsRemaining]);
 
   useEffect(() => {
     if (!rfqError || flow.type !== "idle" || step === "idle") {
@@ -140,7 +156,22 @@ export function RfqFlowModal({
     return () => { client.off("rfqClosed", onClosed); };
   }, [getClient, flow.type, quote]);
 
-  const handleAcceptQuote = () => { if (quote) void accept(quote, rfqTerms(quote.rfq_id)); };
+  useEffect(() => {
+    if (!modalOpen || flow.type !== "idle" || accepting || !quote) return;
+    const timer = window.setInterval(() => tick(value => value + 1), 250);
+    return () => window.clearInterval(timer);
+  }, [modalOpen, flow.type, accepting, quote]);
+
+  useEffect(() => {
+    if (!open || !preview?.spread || quoteStep !== "requesting_quote" || flow.type !== "idle") return;
+    const timer = window.setTimeout(() => { cancelRfq(); setError("No spread quote arrived within 30 seconds. Try another pair or size."); setStep("failed"); }, 30_000);
+    return () => window.clearTimeout(timer);
+  }, [open, preview, quoteStep, flow.type, cancelRfq]);
+
+  const secondsRemaining = quote ? quoteSecondsRemaining(quote) : 0;
+  const handleAcceptQuote = () => {
+    if (spreadQuoteValid && quote && quoteSecondsRemaining(quote) > 0) void accept(quote, rfqTerms(quote.rfq_id));
+  };
 
   const handleClose = () => {
     if (flow.type !== "idle" && flow.type !== "confirmed" && flow.type !== "failed") {
@@ -169,11 +200,21 @@ export function RfqFlowModal({
     return `${value.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    })} USDC`;
+    })} ${preview?.spread?.quoteSymbol ?? "USDC"}`;
   };
   const quoteQuantity = preview ? preview.quantity / 1_000_000_000 : 0;
   const quoteUnitPremium = quote ? Number(quote.net_price ?? quote.price) / 1_000_000_000 : null;
-  const totalPremiumUsd =
+  let spreadQuoteValid = !preview || !isSpread(preview.terms.type);
+  let spreadNetPremium: number | null = null;
+  if (preview?.spread && quote) {
+    try {
+      const { terms, fees } = preview.spread;
+      const result = spreadPreview(terms, BigInt(quote.price), fees.premiumBps, fees.volumeBps);
+      spreadQuoteValid = quoteMatchesProduct(quote, preview.terms);
+      spreadNetPremium = Number(result.netPremium) / 10 ** terms.quoteDecimals;
+    } catch { spreadQuoteValid = false; }
+  }
+  const totalPremiumUsd = preview && isSpread(preview.terms.type) ? spreadNetPremium :
     preview?.lockedPremiumUsd != null
       ? preview.lockedPremiumUsd
       : quoteUnitPremium != null
@@ -199,18 +240,29 @@ export function RfqFlowModal({
             ? "Order confirmed"
             : step === "failed" ? "Order failed" : "Checking order status";
   const panelClass = "border border-bg-border bg-action-primary/30 p-4";
+  // spreads get one summary line, one result list and one status line instead of the stacked panels
+  const compact = !isRestoredOrder && preview?.spread != null;
+  const spreadSummary = compact && preview && isSpreadTerms(preview.terms) && preview.terms.upper_strike != null
+    ? `Sell ${spreadName(preview.asset, preview.terms.type, preview.terms.lower_strike, preview.terms.upper_strike)} spread · ${preview.quantityDisplay}${preview.expiryTs ? ` · ${formatDate(preview.expiryTs)}` : ""}`
+    : null;
+  const busyStep = step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting";
+  const statusText =
+    step === "requesting_quote" ? "Getting a quote from market makers…"
+      : step === "quote_received" ? (secondsRemaining > 0 ? "Quote received" : "Quote expired. Request a fresh quote.")
+        : step === "accepting_quote" || step === "signing" || step === "submitting" ? processingLabel
+          : step === "confirmed" ? "Order confirmed"
+            : step === "failed" ? flowError ?? "Order failed" : null;
 
   return (
     <AppModal open={modalOpen} onClose={handleClose} title="Submit Order" showHowItWorks={false}>
       <div className="space-y-4">
-        {                   }
+
         {isRestoredOrder ? (
           <div className={panelClass}>
             <div className="font-mono text-sm font-medium text-content-secondary">Recovered order</div>
-            {flow.type !== "idle" && flow.type !== "confirmed" && flow.type !== "failed" && (
-              <div className="mt-2 break-all font-mono text-xs text-content-secondary">Order ID: {flow.order.orderId}</div>
-            )}
           </div>
+        ) : compact ? (
+          <p className="font-mono text-base leading-[1.3] tracking-[-0.32px] text-content-primary">{spreadSummary}</p>
         ) : preview ? <div className={panelClass}>
           <div className="font-mono text-sm font-medium text-content-secondary">Order</div>
           <div className="mt-2 space-y-2 font-mono">
@@ -221,7 +273,7 @@ export function RfqFlowModal({
             <div className="flex justify-between">
               <span className="text-content-secondary">Type</span>
               <span className="font-semibold text-content-primary">
-                {preview.positionType === "covered_call" ? "Covered Call" : "Cash-Secured Put"}
+                {productLabel(preview.terms.type)}
               </span>
             </div>
             <div className="flex justify-between">
@@ -247,7 +299,19 @@ export function RfqFlowModal({
           </div>
         </div> : null}
 
-        {              }
+        {compact && quote && <SpreadPreview terms={preview.spread!.terms} fees={preview.spread!.fees} quoteSymbol={preview.spread!.quoteSymbol} price={quote.price} />}
+
+        {compact ? (statusText && (
+          <div>
+            <div role="status" className="flex items-start gap-2 font-mono text-sm leading-[1.4]">
+              {busyStep ? <Loader2 className="mt-px h-4 w-4 shrink-0 animate-spin text-accent-primary" />
+                : step === "confirmed" ? <CheckCircle2 className="mt-px h-4 w-4 shrink-0 text-accent-primary" />
+                  : step === "failed" ? <XCircle className="mt-px h-4 w-4 shrink-0 text-error" /> : null}
+              <span className={step === "failed" ? "text-error" : "text-content-secondary"}>{statusText}</span>
+            </div>
+            {step === "confirmed" && solscanLink}
+          </div>
+        )) : <>
         <div className="flex items-center gap-2 font-mono text-sm">
           {(step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting") ? (
             <Loader2 className="h-4 w-4 animate-spin text-accent-primary" />
@@ -261,7 +325,6 @@ export function RfqFlowModal({
           <span className="text-content-secondary">{progressText}</span>
         </div>
 
-        {                              }
         {step === "requesting_quote" && (
           <div className={panelClass}>
             <div className="flex items-center gap-2 font-mono text-sm font-semibold text-accent-primary">
@@ -274,10 +337,12 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {                   }
         {!isRestoredOrder && quote && step === "quote_received" && (
           <div className={panelClass}>
             <div className="font-mono text-sm font-semibold text-accent-primary">Quote Received</div>
+            <p role="timer" className="mt-1 font-mono text-sm text-content-secondary">
+              {secondsRemaining > 0 ? `Quote expires in ${secondsRemaining}s` : "Quote expired. Request a fresh quote."}
+            </p>
             <div className="mt-3 space-y-2 font-mono">
               <div className="flex justify-between">
                 <span className="text-content-secondary">Total premium</span>
@@ -293,8 +358,9 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {                   }
-        {step === "confirmed" && (
+        </>}
+
+        {!compact && step === "confirmed" && (
           <div className={`${panelClass} text-center`}>
             <CheckCircle2 className="mx-auto h-12 w-12 text-additional-green-primary" />
             <div className="mt-3 font-mono font-semibold text-content-primary">Order Confirmed!</div>
@@ -307,8 +373,7 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {                 }
-        {step === "failed" && flowError && (
+        {!compact && step === "failed" && flowError && (
           <div className={panelClass}>
             <div className="flex items-start gap-3">
               <XCircle className="h-5 w-5 shrink-0 text-additional-red-primary" />
@@ -321,7 +386,7 @@ export function RfqFlowModal({
         )}
 
         {(step === "recovering" || step === "pending" || step === "unknown") && (
-          <div className={panelClass}>
+          <div className={compact ? undefined : panelClass}>
             <p className="font-mono text-sm text-content-secondary">
               {step === "recovering" ? "Connection lost. Your order will be checked after reconnect."
                 : step === "pending" ? (txSignature ? "Transaction sent. Waiting for on-chain confirmation." : "Order submitted. Waiting for on-chain confirmation.")
@@ -335,15 +400,14 @@ export function RfqFlowModal({
           </div>
         )}
 
-        {                    }
         <div className="flex gap-2">
           {step === "quote_received" && (
             <>
               <AppButton variant="secondary" className="flex-1" onClick={handleClose}>
                 Cancel
               </AppButton>
-              <AppButton className="flex-1" onClick={handleAcceptQuote} disabled={accepting}>
-                Accept Quote
+              <AppButton className="flex-1" onClick={handleAcceptQuote} disabled={accepting || secondsRemaining === 0 || !spreadQuoteValid}>
+                {!compact ? "Accept Quote" : secondsRemaining > 0 ? `Accept · ${secondsRemaining}s` : "Accept"}
               </AppButton>
             </>
           )}
