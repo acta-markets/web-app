@@ -7,10 +7,13 @@ import { AppTable, AppTd, AppTh } from "@/components/app-ui/app-table";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { getTokenBrand } from "@/lib/token-brand";
 import { getTokenLogoSrc } from "@/lib/token-assets";
+import { getRpcEndpoint } from "@/lib/network";
 import { TOKENS, getNetwork, normalizeTokenSymbol } from "@/lib/tokens";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
+import { isCashSettled, lowerStrike } from "@/lib/spreads";
+import { SpreadPositions } from "./spread-positions";
 import { PortfolioEarningsChart } from "@/components/portfolio/portfolio-earnings-chart";
 
 function fmtDate(ts: number) {
@@ -121,7 +124,6 @@ export function PortfolioClient() {
     marketDescriptors: rfqMarketDescriptors,
     isAuthenticated: rfqAuthenticated,
     fetchPositions: fetchRfqPositions,
-    connectionState,
   } = useRfqContext();
 
   useEffect(() => {
@@ -164,9 +166,7 @@ export function PortfolioClient() {
     if (unresolvedMarketPdas.length === 0) return;
 
     let cancelled = false;
-    const rpcEndpoint =
-      process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-      (currentNetwork === "mainnet" ? "https://api.mainnet-beta.solana.com" : "https://api.devnet.solana.com");
+    const rpcEndpoint = getRpcEndpoint();
 
     const resolveMissingMarkets = async () => {
       try {
@@ -208,7 +208,7 @@ export function PortfolioClient() {
   const rows = useMemo<PortfolioRow[]>(() => {
     const decimals = 1_000_000_000;
     const premiumDecimals = 1_000_000;
-    return rfqPositions.map((p) => {
+    return rfqPositions.filter(p => !isCashSettled(p.terms.type)).map((p) => {
       const px = p as unknown as { total_premium?: number; underlying_mint?: string; quote_mint?: string };
       const market = marketByPda.get(p.market);
       const descriptor = rfqMarketDescriptors.find((d) => {
@@ -226,7 +226,7 @@ export function PortfolioClient() {
         descriptorSymbol ??
         (underlyingMint ? mintToSymbol.get(underlyingMint) ?? "Unknown" : "Unknown");
       const assetSymbol = normalizeTokenSymbol(rawSymbol);
-      const strike = Number(p.strike) / decimals;
+      const strike = Number(lowerStrike(p.terms)) / decimals;
       const quantity = Number(p.quantity) / decimals;
       const premiumUsd =
         Number.isFinite(px.total_premium)
@@ -248,9 +248,9 @@ export function PortfolioClient() {
       return {
         id: p.pda,
         asset: assetSymbol,
-        type: p.position_type === "cash_secured_put" ? "Cash-secured put" : "Covered call",
-        status: (String(p.status).toLowerCase() as PortfolioRow["status"]) ?? "open",
-        userStatus: toUserStatus(String(p.status)),
+        type: p.terms.type === "cash_secured_put" ? "Cash-secured put" : "Covered call",
+        status: p.state,
+        userStatus: toUserStatus(p.state),
         createdTs,
         expiryTs,
         quantity,
@@ -314,7 +314,8 @@ export function PortfolioClient() {
       return { t: e.t, v: acc };
     });
   }, [rows]);
-  const hasLoadedRfqData = rows.length > 0;
+  const hasSpreads = rfqPositions.some(p => isCashSettled(p.terms.type));
+  const hasLoadedRfqData = rfqPositions.length > 0;
   const shouldShowAuthPrompt = !rfqAuthenticated && !hasLoadedRfqData;
 
   if (!walletConnected) {
@@ -353,6 +354,7 @@ export function PortfolioClient() {
         </div>
       </div>
 
+      {hasSpreads && <h2 className="mt-8 font-space text-2xl text-content-primary">Yield overview</h2>}
       {                         }
       <section className="mt-[80px] flex flex-col gap-2 max-md:mt-10">
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
@@ -423,7 +425,7 @@ export function PortfolioClient() {
       <section className="mt-16 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
-            {positionsTab === "positions" ? `Positions: ${openRows.length}` : "Transactions"}
+            {positionsTab === "positions" ? `${hasSpreads ? "Yield positions" : "Positions"}: ${openRows.length}` : "Transactions"}
           </h2>
           <AppSegmented
             value={positionsTab}
@@ -435,7 +437,6 @@ export function PortfolioClient() {
         {shouldShowAuthPrompt ? (
           <AppCard className="p-6 text-content-secondary">
             Connect wallet and approve RFQ auth to load live positions.
-            <div className="mt-2 text-xs text-content-secondary/60">RFQ state: {connectionState}</div>
           </AppCard>
         ) : positionsTab === "positions" ? (
           <AppTable>
@@ -455,7 +456,7 @@ export function PortfolioClient() {
               {openRows.length === 0 ? (
                 <tr>
                   <AppTd colSpan={8} className="py-10 text-center text-content-secondary">
-                    No open RFQ positions yet.
+                    {hasSpreads ? "No open yield positions yet." : "No open RFQ positions yet."}
                   </AppTd>
                 </tr>
               ) : (
@@ -498,7 +499,7 @@ export function PortfolioClient() {
               {historyRows.length === 0 ? (
                 <tr>
                   <AppTd colSpan={7} className="py-10 text-center text-content-secondary">
-                    No closed RFQ positions yet.
+                    {hasSpreads ? "No closed yield positions yet." : "No closed RFQ positions yet."}
                   </AppTd>
                 </tr>
               ) : (
@@ -517,6 +518,7 @@ export function PortfolioClient() {
             </tbody>
           </AppTable>
         )}
+        <SpreadPositions positions={rfqPositions} descriptors={rfqMarketDescriptors} history={positionsTab === "history"} />
         {!rfqAuthenticated && hasLoadedRfqData ? (
           <div className="text-xs text-content-secondary/60">
             Showing last synced positions while RFQ session reconnects.

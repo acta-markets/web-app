@@ -1,6 +1,7 @@
 import { AppButton, AppButtonLink } from "@/components/app-ui/app-button";
 import { cn } from "@/lib/cn";
-import { primaryVaultAction, vaultApr, type VaultModalTab } from "@/lib/vaults/presentation";
+import { CuratorLogo } from "./curator-logo";
+import { formatVaultTvl, primaryVaultAction, vaultApr, type VaultModalTab } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
 import type { Vault } from "@/lib/vaults/types";
 import { AprLabel } from "./vault-apr";
@@ -23,18 +24,15 @@ function CardBand() {
   );
 }
 
-/** Deposit asset (the logo), name, TVL, APR, curator, Deposit and Details. Everything else lives on the vault page. */
+/** Deposit asset (the logo), name, TVL, APY, curator, Deposit and Details. Everything else lives on the vault page. */
 export function VaultCard({
   vault,
   meta,
-  tvl,
   nowSecs,
   onOpen,
 }: {
   vault: Vault;
   meta: ResolvedVaultMeta;
-  /** formatted TVL, null while prices load */
-  tvl: string | null;
   nowSecs: number;
   onOpen: (pda: string, tab: VaultModalTab) => void;
 }) {
@@ -44,12 +42,12 @@ export function VaultCard({
   return (
     <article
       aria-label={meta.name}
-      className="relative flex h-full flex-col overflow-clip border border-bg-border bg-bg-primary px-6 pb-6 pt-11 backdrop-blur-[4px] transition-colors hover:border-[rgba(240,240,240,0.15)] max-md:px-4 max-md:pb-4"
+      className="relative flex h-full flex-col overflow-clip border border-bg-border bg-bg-primary px-6 pb-6 pt-11 transition-colors hover:border-content-secondary max-md:px-4 max-md:pb-4"
     >
       <CardBand />
 
       <div className="relative z-10 flex flex-col items-center gap-2.5 text-center">
-        <VaultAssetLogo symbol={meta.assetSymbol} size={56} ring label={`Deposit ${meta.assetSymbol}`} />
+        <VaultAssetLogo symbol={meta.assetSymbol} size={56} label={`Deposit ${meta.assetSymbol}`} />
         {/* two name lines reserved so the stats rows line up across a grid row */}
         <div className="flex min-h-[69px] w-full flex-col items-center justify-center gap-1">
           <h3
@@ -58,17 +56,13 @@ export function VaultCard({
           >
             {meta.name}
           </h3>
-          {tvl === null ? (
-            <div className="h-[17px] w-24 animate-pulse rounded bg-action-primary" />
-          ) : (
-            <p className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
-              TVL <span className="tabular-nums text-content-primary">{tvl}</span>
-            </p>
-          )}
+          <p className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
+            TVL <span className="tabular-nums text-content-primary">{formatVaultTvl(vault, meta.assetSymbol)}</span>
+          </p>
         </div>
       </div>
 
-      <div className="relative z-10 mt-4 flex w-full items-center gap-1">
+      <div className="relative z-10 mt-4 flex w-full items-start gap-4">
         <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center">
           <AprLabel apr={apr} className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary" />
           <span
@@ -80,14 +74,11 @@ export function VaultCard({
             {apr.value}
           </span>
         </div>
-        <div className="h-6 w-px shrink-0 bg-bg-border" />
         <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center">
           <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Curator</span>
-          <span
-            className="w-full truncate font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary"
-            title={meta.curatorIsAddress ? `Vault governance ${vault.governance}` : `Curated by ${meta.curator}`}
-          >
-            {meta.curator}
+          <span className="flex w-full items-center justify-center gap-1.5 font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary">
+            {meta.logoUrl ? <CuratorLogo src={meta.logoUrl} size={16} /> : null}
+            <span className="truncate">{meta.curator}</span>
           </span>
         </div>
       </div>
@@ -115,9 +106,8 @@ export function VaultCardSkeleton() {
           <div className="h-[17px] w-24 animate-pulse rounded bg-action-primary" />
         </div>
       </div>
-      <div className="relative z-10 mt-6 flex items-center gap-1">
+      <div className="relative z-10 mt-6 flex items-center gap-4">
         <div className="flex-1"><div className="mx-auto h-9 w-16 animate-pulse rounded bg-action-primary" /></div>
-        <div className="h-6 w-px bg-bg-border" />
         <div className="flex-1"><div className="mx-auto h-9 w-16 animate-pulse rounded bg-action-primary" /></div>
       </div>
       <div className="relative z-10 mt-auto flex gap-2">

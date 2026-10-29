@@ -1,6 +1,7 @@
-import { fetchVault, fetchVaultCycles, fetchVaults } from "./api";
+import { rememberReferenceTokens } from "@/lib/tokens";
+import { fetchTokens, fetchVault, fetchVaultCycles, fetchVaultDepositorHistory, fetchVaultExposure, fetchVaults } from "./api";
 import { loadSampleData, VAULTS_SAMPLE_MODE } from "./sample";
-import type { Vault, VaultCyclesPage } from "./types";
+import type { Vault, VaultCyclesPage, VaultDepositorEvent, VaultExposure } from "./types";
 
 /**
  * The only place fixture and live data split. Hooks read through here; `api.ts`
@@ -21,13 +22,31 @@ function withSampleLatency<T>(value: T, signal?: AbortSignal): Promise<T> {
   });
 }
 
-export function loadVaults(signal?: AbortSignal): Promise<Vault[]> {
-  if (!VAULTS_SAMPLE_MODE) return fetchVaults(signal);
+let referenceTokens: Promise<void> | null = null;
+
+/** Names for vault mints the static token list misses; a failed read only costs the names. */
+function loadReferenceTokens(): Promise<void> {
+  referenceTokens ??= fetchTokens()
+    .then((tokens) => rememberReferenceTokens(tokens.values()))
+    .catch(() => {
+      referenceTokens = null;
+    });
+  return referenceTokens;
+}
+
+export async function loadVaults(signal?: AbortSignal): Promise<Vault[]> {
+  if (!VAULTS_SAMPLE_MODE) {
+    const [vaults] = await Promise.all([fetchVaults(signal), loadReferenceTokens()]);
+    return vaults;
+  }
   return loadSampleData().then((data) => withSampleLatency(data.vaults, signal));
 }
 
-export function loadVault(pda: string, signal?: AbortSignal): Promise<Vault | null> {
-  if (!VAULTS_SAMPLE_MODE) return fetchVault(pda, signal);
+export async function loadVault(pda: string, signal?: AbortSignal): Promise<Vault | null> {
+  if (!VAULTS_SAMPLE_MODE) {
+    const [vault] = await Promise.all([fetchVault(pda, signal), loadReferenceTokens()]);
+    return vault;
+  }
   return loadSampleData().then((data) => withSampleLatency(data.vaults.find((v) => v.vault_pda === pda) ?? null, signal));
 }
 
@@ -37,18 +56,28 @@ export function loadVaultCycles(pda: string, signal?: AbortSignal): Promise<Vaul
   return loadSampleData().then((data) => withSampleLatency({ cycles: data.cycles[pda] ?? [], next_cursor: null }, signal));
 }
 
-/**
- * USD prices for deposit assets, keyed by upper-case symbol. Assets without a
- * price are left out. Live prices come from the app's own price route.
- */
-export async function loadUsdPrices(symbols: readonly string[], signal?: AbortSignal): Promise<Record<string, number>> {
-  const wanted = new Set(symbols.map((s) => s.toUpperCase()));
-  if (VAULTS_SAMPLE_MODE) {
-    const { pricesUsd } = await loadSampleData();
-    return Object.fromEntries(Object.entries(pricesUsd).filter(([symbol]) => wanted.has(symbol)));
-  }
-  const res = await fetch(`/api/market/price?symbols=${encodeURIComponent([...wanted].join(","))}`, { signal });
-  if (!res.ok) throw new Error(`Price request failed (${res.status})`);
-  const body = (await res.json()) as { prices?: Record<string, number> };
-  return body.prices ?? {};
+export function loadVaultExposure(pda: string, signal?: AbortSignal): Promise<VaultExposure | null> {
+  if (!VAULTS_SAMPLE_MODE) return fetchVaultExposure(pda, signal);
+  return loadSampleData().then((data) => withSampleLatency(data.exposure[pda] ?? null, signal));
+}
+
+const HISTORY_PAGE_LIMIT = 200;
+
+/** A wallet's history in one vault, newest first, down to the page that reaches `since`. Sample mode serves the fixture position's history. */
+export async function loadVaultDepositorHistory(
+  pda: string,
+  wallet: string,
+  since: bigint,
+  signal?: AbortSignal,
+): Promise<VaultDepositorEvent[]> {
+  if (VAULTS_SAMPLE_MODE) return loadSampleData().then((data) => withSampleLatency(data.history[pda] ?? [], signal));
+  const events: VaultDepositorEvent[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await fetchVaultDepositorHistory(pda, wallet, { limit: HISTORY_PAGE_LIMIT, cursor }, signal);
+    events.push(...page.events);
+    const oldest = page.events.at(-1);
+    cursor = oldest && BigInt(oldest.event_time) <= since ? undefined : page.next_cursor ?? undefined;
+  } while (cursor);
+  return events;
 }

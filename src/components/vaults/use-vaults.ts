@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActaHttpError } from "@/lib/vaults/api";
-import { loadUsdPrices, loadVault, loadVaultCycles, loadVaults } from "@/lib/vaults/source";
-import type { Vault, VaultCyclesPage } from "@/lib/vaults/types";
+import { loadVault, loadVaultCycles, loadVaultExposure, loadVaults } from "@/lib/vaults/source";
+import type { Vault, VaultCyclesPage, VaultExposure } from "@/lib/vaults/types";
 
 const VAULT_REFRESH_MS = 30_000;
 
@@ -100,10 +100,9 @@ export function useVaultCycles(pda: string | null): Loadable<VaultCyclesPage | n
   return { ...state, disabled };
 }
 
-/** USD prices for these asset symbols, keyed in upper case; null until the first answer. */
-export function useUsdPrices(symbols: readonly string[]): Loadable<Record<string, number> | null> {
-  const key = symbols.length > 0 ? `prices:${[...symbols].sort().join(",")}` : null;
-  return usePolled((signal) => loadUsdPrices(symbols, signal), null, key);
+/** Open positions at spot. Polled with the vault, only where the vault page shows them. */
+export function useVaultExposure(pda: string): Loadable<VaultExposure | null> {
+  return usePolled((signal) => loadVaultExposure(pda, signal), null, `exposure:${pda}`);
 }
 
 /** Wall-clock seconds, refreshed on an interval, for countdowns and phase checks. */

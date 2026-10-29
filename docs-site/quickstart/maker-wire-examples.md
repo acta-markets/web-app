@@ -12,7 +12,7 @@ Replace placeholder addresses, signatures, IDs and timestamps before use. Reques
   "type": "Hello",
   "data": {
     "protocol_version": "1.0.0",
-    "features": [],
+    "on_disconnect": "cancel_quotes",
     "client_name": "maker-bot",
     "client_version": "0.1.0"
   }
@@ -28,8 +28,9 @@ Replace placeholder addresses, signatures, IDs and timestamps before use. Reques
     "protocol_version": "1.0.0",
     "server_version": "0.1.0",
     "min_supported_version": "1.0.0",
-    "enabled_features": [],
-    "server_time_unix_ms": 1710000000000
+    "server_time_unix_ms": 1710000000000,
+    "min_quote_validity_seconds": 60,
+    "settlement_buffer_seconds": 50
   }
 }
 ```
@@ -101,6 +102,7 @@ The server verifies the signature against the registered `quote_signing` key.
 {
   "type": "Subscribe",
   "data": {
+    "products": ["covered_call", "cash_secured_put", "call_spread", "put_spread"],
     "request_id": "a1b2c3d4-e5f6-4890-abcd-ef1234567890",
     "channels": ["rfqs"],
     "underlying_mints": [],
@@ -189,26 +191,7 @@ At example time `1710000000`, this quote has 140 seconds of on-chain validity an
 }
 ```
 
-### 8) QuoteFilled
-
-```json
-{
-  "type": "QuoteFilled",
-  "data": {
-    "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
-    "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
-    "taker": "TakerPubkeyBase58",
-    "price": 50000000,
-    "quantity": 1000000000,
-    "strike": 160000000000,
-    "position_pda": "PositionPdaBase58",
-    "tx_signature": "5eyk...base58sig",
-    "filled_at": 1710000042
-  }
-}
-```
-
-### 9) RfqClosed
+### 8) RfqClosed
 
 ```json
 {
@@ -222,7 +205,29 @@ At example time `1710000000`, this quote has 140 seconds of on-chain validity an
 }
 ```
 
-The winning maker gets `QuoteFilled`, then `RfqClosed`.
+### 9) QuoteFilled
+
+```json
+{
+  "type": "QuoteFilled",
+  "data": {
+    "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
+    "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+    "market_pda": "MarketPdaBase58",
+    "expiry_ts": 1710489600,
+    "position_type": "covered_call",
+    "taker": "TakerPubkeyBase58",
+    "price": 50000000,
+    "quantity": 1000000000,
+    "strike": 160000000000,
+    "position_pda": "PositionPdaBase58",
+    "tx_signature": "5eyk...base58sig",
+    "filled_at": 1710000042
+  }
+}
+```
+
+The winning maker gets `RfqClosed`, then `QuoteFilled`; `expiry_ts` is `null` when the server no longer knows the market.
 
 ## Additional scenarios
 
@@ -528,10 +533,10 @@ Next page (keyset pagination):
 {
   "type": "VersionMismatch",
   "data": {
-    "requested_version": "2.0.0",
+    "requested_version": "1.0.0",
     "server_version": "1.0.0",
     "min_supported_version": "1.0.0",
-    "message": "Client version 2.0.0 is not supported"
+    "message": "Client version 1.0.0 is not supported"
   }
 }
 ```

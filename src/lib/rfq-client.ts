@@ -51,7 +51,10 @@ export type {
 
 import { ActaWsClient, ActaWsRequestError, WalletAuthProvider } from "@acta-markets/ts-sdk/ws";
 
-const RFQ_WS_URL = process.env.NEXT_PUBLIC_RFQ_WS_URL || "wss://beta-api.acta.markets";
+import { getDefaultRfqWsUrl } from "./network";
+import packageJson from "../../package.json";
+
+export const CLIENT_VERSION = packageJson.version;
 
 export interface CreateClientOptions {
   url?: string;
@@ -66,11 +69,14 @@ function normalizeWsUrl(url: string): string {
   return url;
 }
 
-export function createRfqClient(options?: CreateClientOptions): ActaWsClient {
+export async function createRfqClient(options?: CreateClientOptions): Promise<ActaWsClient> {
   const url = options?.url ? normalizeWsUrl(options.url) : getRfqBackendUrl();
+
   return new ActaWsClient({
     url,
     role: "taker",
+    onDisconnect: "keep_quotes", products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"],
+    clientName: "acta-web-app", clientVersion: CLIENT_VERSION,
     autoReconnect: true,
     debug: options?.debug ?? false,
   });
@@ -85,7 +91,7 @@ export function wsErrorMessage(err: unknown): string {
 }
 
 export function getRfqBackendUrl(): string {
-  return normalizeWsUrl(RFQ_WS_URL);
+  return normalizeWsUrl(process.env.NEXT_PUBLIC_RFQ_WS_URL || getDefaultRfqWsUrl());
 }
 
 export interface WalletAdapter {
@@ -102,11 +108,11 @@ export function createWalletAuthProvider(wallet: WalletAdapter): WalletAuthProvi
   });
 }
 
-let clientInstance: ActaWsClient | null = null;
+let clientInstance: Promise<ActaWsClient> | null = null;
 
-export function getRfqClient(): ActaWsClient {
+export function getRfqClient(): Promise<ActaWsClient> {
   if (!clientInstance) {
-    clientInstance = createRfqClient();
+    clientInstance = createRfqClient().catch(error => { clientInstance = null; throw error; });
   }
   return clientInstance;
 }

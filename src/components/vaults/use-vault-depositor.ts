@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { flows } from "@acta-markets/ts-sdk/chain";
+import { withdrawSelfProcessView } from "@/lib/vaults/presentation";
 import type { Instruction } from "@solana/kit";
 import type { VersionedTransaction } from "@solana/web3.js";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
@@ -46,6 +48,13 @@ export function useVaultDepositor(vault: Vault | null): UseVaultDepositor {
   const [pending, setPending] = useState(false);
 
   const vaultKey = vault ? `${vault.vault_pda}:${vault.share_mint}` : null;
+  const binding = useRef({ owner, rpc, vaultKey });
+  binding.current = { owner, rpc, vaultKey };
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   useEffect(() => {
     setDepositor(null);
     setDepositorError(null);
@@ -80,6 +89,12 @@ export function useVaultDepositor(vault: Vault | null): UseVaultDepositor {
       try {
         return await sendWalletTransaction({
           rpc,
+          assertBinding: () => {
+            const current = binding.current;
+            if (!mounted.current || current.owner !== owner || current.rpc !== rpc || current.vaultKey !== vaultKey) {
+              throw new Error("Wallet or vault connection changed. Please try again.");
+            }
+          },
           feePayer: owner,
           instructions,
           signTransaction: (tx: VersionedTransaction) => signTransaction(tx),
@@ -89,12 +104,12 @@ export function useVaultDepositor(vault: Vault | null): UseVaultDepositor {
         refresh();
       }
     },
-    [owner, rpc, signTransaction, refresh],
+    [owner, rpc, vaultKey, signTransaction, refresh],
   );
 
   const current = state.data;
   const unwrap = native && current !== null && current.mainTokenBalance === 0n;
-  const actions: VaultDepositorActions | null = depositor && vault && owner
+  const actions: VaultDepositorActions | null = depositor && vault && owner && depositor.user.address === owner && depositor.vault === vault.vault_pda
     ? {
         requestDeposit: async (amount) => {
           const wrapped = current?.mainTokenBalance ?? 0n;
@@ -103,12 +118,20 @@ export function useVaultDepositor(vault: Vault | null): UseVaultDepositor {
         },
         cancelDeposit: () => send(buildCancelDepositInstructions(depositor, unwrap)),
         emergencyRefund: () => send(buildEmergencyRefundInstructions(depositor, unwrap)),
-        requestWithdraw: (shares) => send(buildRequestWithdrawInstructions(depositor, shares)),
+        requestWithdraw: (shares) => {
+          if (flows.requestWithdrawBlock(vault, Math.floor(Date.now() / 1000))) throw new Error("Withdrawals are not available right now");
+          return send(buildRequestWithdrawInstructions(depositor, shares));
+        },
         cancelWithdraw: () => send(buildCancelWithdrawInstructions(depositor)),
         processOwnDeposit: async () =>
           send(await buildSelfProcessDepositInstructions(await createVaultManager(vault, owner), unwrap)),
-        processOwnWithdraw: async () =>
-          send(await buildSelfProcessWithdrawInstructions(rpc, await createVaultManager(vault, owner), vault)),
+        processOwnWithdraw: async () => {
+          const request = current?.withdrawRequest;
+          if (!request || withdrawSelfProcessView(vault, request.createdAt, Math.floor(Date.now() / 1000)).kind !== "available") {
+            throw new Error("Withdrawal processing is not available yet");
+          }
+          return send(await buildSelfProcessWithdrawInstructions(rpc, await createVaultManager(vault, owner), vault));
+        },
       }
     : null;
 

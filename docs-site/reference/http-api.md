@@ -80,8 +80,8 @@ The program id and the limits the server validates against. `null` means no limi
 ```json
 {
   "program_id": "ProgramIdBase58",
-  "min_quote_validity_seconds": 100,
-  "settlement_buffer_seconds": 90,
+  "min_quote_validity_seconds": 60,
+  "settlement_buffer_seconds": 50,
   "quote_refresh_lead_seconds": 10,
   "min_rfq_timeout_seconds": 5,
   "max_rfq_timeout_seconds": 120,
@@ -210,7 +210,7 @@ Get a single maker DTO.
 
 The [Vault HTTP API](vault-http-api.md) covers `/api/v1/vaults`, vault detail, cycles, positions and depositor state/history. They serve indexed data. Current share ownership is in Solana token accounts.
 
-`/maker` quote sessions and taker WebSocket sessions subscribed to the `vaults` channel receive [`VaultCatalogChanged`](ws-common.md#vaultcatalogchanged) when a vault is created, re-delegated or closed, and [`VaultProjectionAdvanced`](ws-common.md#vaultprojectionadvanced) when any vault row changes. Re-read `/api/v1/vaults` or the vault detail on them instead of polling. Neither is replayed, so also re-list after every (re)connect.
+`/maker` quote sessions and taker WebSocket sessions subscribed to the `vaults` channel receive [`VaultCatalogChanged`](ws-common.md#vaultcatalogchanged) when a vault is created, re-delegated or closed (not when a delegate is disabled), and [`VaultProjectionAdvanced`](ws-common.md#vaultprojectionadvanced) when any vault row changes. Re-read `/api/v1/vaults` or the vault detail on them instead of polling. Neither is replayed, so also re-list after every (re)connect.
 
 ## Participant history
 

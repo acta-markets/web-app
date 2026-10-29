@@ -20,7 +20,7 @@ function PresetButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLBut
   return (
     <button
       type="button"
-      className="inline-flex h-6 items-center border border-[rgba(240,240,240,0.1)] px-2.5 py-0.5 text-xs font-medium tracking-tight text-content-primary transition-colors hover:border-[rgba(240,240,240,0.25)] disabled:cursor-not-allowed disabled:opacity-40"
+      className="inline-flex h-6 items-center px-1 text-xs font-medium text-accent-secondary transition-colors hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
       {...props}
     >
       {children}
@@ -76,7 +76,7 @@ export function AppAmountInput({
         "flex cursor-text flex-col gap-2 overflow-clip border bg-action-primary p-4 transition-colors",
         invalid
           ? "border-error"
-          : "border-[rgba(240,240,240,0.1)] hover:border-[rgba(240,240,240,0.15)] focus-within:border-[rgba(240,240,240,0.15)]"
+          : "border-bg-border hover:border-content-secondary focus-within:border-content-secondary"
       )}
       onClick={() => inputRef.current?.focus()}
     >

@@ -11,7 +11,7 @@ Addresses, signatures, IDs and timestamps below are placeholders. Request, sessi
   "type": "Hello",
   "data": {
     "protocol_version": "1.0.0",
-    "features": [],
+    "on_disconnect": "keep_quotes",
     "client_name": "my-app",
     "client_version": "0.1.0"
   }
@@ -27,8 +27,9 @@ Addresses, signatures, IDs and timestamps below are placeholders. Request, sessi
     "protocol_version": "1.0.0",
     "server_version": "0.1.0",
     "min_supported_version": "1.0.0",
-    "enabled_features": [],
-    "server_time_unix_ms": 1710000000000
+    "server_time_unix_ms": 1710000000000,
+    "min_quote_validity_seconds": 60,
+    "settlement_buffer_seconds": 50
   }
 }
 ```
@@ -366,7 +367,7 @@ Valid session: `AuthSuccess` as in step 3, without signing. Invalid or expired: 
 
 ### Blockhash expiry → reopen
 
-The keeper retries submission failures up to five times. If the outcome is still uncertain, the order stays `Enqueued`. Check it with `GetOrderStatus`. A reported blockhash failure:
+The keeper retries retryable submission failures within five attempts. If the outcome is still uncertain, the order stays `Enqueued`. Check it with `GetOrderStatus`. A reported blockhash failure:
 
 ```json
 {
@@ -375,7 +376,7 @@ The keeper retries submission failures up to five times. If the outcome is still
 }
 ```
 
-If the server knows the transaction was never forwarded, it reopens the RFQ with `reason: "tx_failed"`:
+Only a locally proven-unforwarded failure may reopen an eligible RFQ with `reason: "tx_failed"`:
 
 ```json
 {
@@ -389,7 +390,7 @@ If the server knows the transaction was never forwarded, it reopens the RFQ with
 }
 ```
 
-The winning quote is discarded. Pick from the remaining quotes and do not replay the old `order_id`. Other `reason` values: `signature_timeout`, `tx_build_failed`. `OrderFailed` reasons `on_chain`, `submission_rejected`, `safety_timeout` and `shutdown` are not retryable. Do not re-accept after them.
+The winning quote is discarded. Pick from the remaining quotes and do not replay the old `order_id`. `RfqAvailableAgain.reason` is an enum: `signature_timeout`, `tx_failed`, `tx_build_failed`. `OrderFailed.reason` is a free-form diagnostic string. Display it; do not match exact values or use it to authorize re-acceptance.
 
 `order_version`: accepted `1`, submitted `2`, failed/expired `3`, confirmed `4`.
 A late on-chain confirmation replaces a local failure. A failure does not replace a confirmation.

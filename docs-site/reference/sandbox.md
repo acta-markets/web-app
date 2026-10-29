@@ -12,7 +12,7 @@
 
 All WebSocket endpoints use the same [message envelopes and encodings](ws-common.md).
 
-The devnet program build differs from mainnet in two vault paths: swaps go through a mock router instead of Jupiter, and vault Pyth checks accept older and less aligned prices. See [Devnet differences](../protocol/vault-integration.md#devnet-differences). Everything else differs only externally: mints, oracles and environment config.
+Vault swaps use hops through programs and instruction selectors registered in `SwapVenues`. A devnet mock swap program must be registered like any other venue. Vault pricing uses per-mint `PriceRoute` accounts and their brick accounts; Each Pyth brick sets its maximum price age; `PriceRoute.max_skew_secs` limits the spread of Pyth publish times. Read the target environment's routes and venue registry before building a swap.
 
 ## Maker registration
 

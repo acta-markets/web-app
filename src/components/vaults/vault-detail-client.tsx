@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AppButton, AppButtonLink } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
+import { cn } from "@/lib/cn";
 import { finishedCycles } from "@/lib/vaults/metrics";
+import { CuratorLogo } from "./curator-logo";
 import { primaryVaultAction, vaultStatus, type VaultModalTab } from "@/lib/vaults/presentation";
 import { resolveVaultMeta } from "@/lib/vaults/registry";
-import { useNowSecs, useVault, useVaultCycles } from "./use-vaults";
+import { useNowSecs, useVault, useVaultCycles, useVaultExposure } from "./use-vaults";
 import { VaultAssetLogo } from "./vault-asset-logo";
+import { VaultCurrentCycle, VaultExposureCard } from "./vault-cycle";
 import { VaultCyclesTable } from "./vault-cycles-table";
 import { LazyVaultDepositModal as VaultDepositModal, usePrefetchVaultModal } from "./vault-deposit-modal-lazy";
 import { VaultMetrics } from "./vault-metrics";
@@ -38,12 +41,12 @@ function DetailSkeleton() {
         <div className="h-16 w-16 animate-pulse rounded-full bg-action-primary" />
         <div className="h-12 w-64 animate-pulse rounded bg-action-primary" />
       </div>
-      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-8 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-[106px] animate-pulse border border-bg-border bg-[rgba(40,40,40,0.24)]" />
+          <div key={i} className="h-[72px] animate-pulse bg-action-tertiary" />
         ))}
       </div>
-      <div className="h-[360px] animate-pulse border border-bg-border bg-[rgba(40,40,40,0.24)]" />
+      <div className="h-[320px] animate-pulse bg-action-tertiary" />
     </div>
   );
 }
@@ -51,6 +54,7 @@ function DetailSkeleton() {
 export function VaultDetailClient({ pda }: { pda: string }) {
   const vaultState = useVault(pda);
   const cyclesState = useVaultCycles(pda);
+  const exposureState = useVaultExposure(pda);
   const nowSecs = useNowSecs();
   const [modalTab, setModalTab] = useState<VaultModalTab | null>(null);
   usePrefetchVaultModal();
@@ -58,7 +62,13 @@ export function VaultDetailClient({ pda }: { pda: string }) {
   const vault = vaultState.data;
   const meta = useMemo(() => (vault ? resolveVaultMeta(vault) : null), [vault]);
   const cycles = useMemo(() => cyclesState.data?.cycles ?? [], [cyclesState.data]);
-  const finished = useMemo(() => finishedCycles(cycles), [cycles]);
+  // charts never compound across a share-price reset
+  const generation = vault?.capital_generation;
+  const generationCycles = useMemo(
+    () => cycles.filter((cycle) => cycle.capital_generation !== null && cycle.capital_generation === generation),
+    [cycles, generation],
+  );
+  const finished = useMemo(() => finishedCycles(generationCycles), [generationCycles]);
 
   if (!vault || !meta) {
     let body: React.ReactNode;
@@ -96,6 +106,8 @@ export function VaultDetailClient({ pda }: { pda: string }) {
 
   const status = vaultStatus(vault, nowSecs);
   const action = primaryVaultAction(vault, nowSecs);
+  // a failed read means no fresh positions (503 past 15 s): hide rather than show stale numbers
+  const exposure = !exposureState.error && exposureState.data?.positions.length ? exposureState.data : null;
   const historyLoading = cyclesState.loading && cyclesState.data === null && !cyclesState.disabled;
 
   return (
@@ -111,18 +123,29 @@ export function VaultDetailClient({ pda }: { pda: string }) {
               {meta.name}
             </h1>
           </div>
+          {meta.strategy ? (
+            <p className="font-mono text-base leading-[1.4] tracking-[-0.02em] text-content-primary [overflow-wrap:anywhere]">{meta.strategy}</p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
-            <span className="text-[11px] uppercase tracking-[0.12em]">{meta.category}</span>
-            <span>
-              Deposit <span className="text-content-primary">{meta.assetSymbol}</span>
+            <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+              Curator
+              {meta.logoUrl ? <CuratorLogo src={meta.logoUrl} size={16} /> : null}
+              <span className="truncate text-content-primary">{meta.curator}</span>
             </span>
-            <span title={meta.curatorIsAddress ? `Vault governance ${vault.governance}` : undefined}>
-              Curator <span className="text-content-primary">{meta.curator}</span>
-            </span>
+            {meta.website ? (
+              <a className="underline hover:text-content-primary" href={meta.website} target="_blank" rel="noopener noreferrer nofollow">
+                Website
+              </a>
+            ) : null}
+            {meta.twitter ? (
+              <a className="underline hover:text-content-primary" href={`https://x.com/${meta.twitter}`} target="_blank" rel="noopener noreferrer nofollow">
+                X
+              </a>
+            ) : null}
             <VaultStatusLabel status={status} />
           </div>
           {meta.description ? (
-            <p className="max-w-[560px] font-mono text-base leading-[1.55] tracking-[-0.02em] text-content-secondary">
+            <p className="max-w-[560px] font-mono text-base leading-[1.55] tracking-[-0.02em] text-content-secondary [overflow-wrap:anywhere]">
               {meta.description}
             </p>
           ) : null}
@@ -139,21 +162,18 @@ export function VaultDetailClient({ pda }: { pda: string }) {
       ) : null}
 
       <div className="mt-12 flex flex-col gap-12 max-md:mt-8 max-md:gap-8">
-        <VaultMetrics
-          vault={vault}
-          symbol={meta.assetSymbol}
-          stakingAprPct={meta.stakingAprPct}
-          finished={finished}
-          nowSecs={nowSecs}
-          historyLoading={historyLoading}
-          historyDisabled={cyclesState.disabled}
-        />
+        <VaultMetrics vault={vault} symbol={meta.assetSymbol} stakingAprPct={meta.stakingAprPct} />
+
+        <section className={cn("grid grid-cols-1 gap-12 empty:hidden max-md:gap-8", exposure && "md:grid-cols-2")}>
+          <VaultCurrentCycle vault={vault} nowSecs={nowSecs} />
+          {exposure ? <VaultExposureCard exposure={exposure} /> : null}
+        </section>
 
         {cyclesState.disabled ? null : (
           <VaultPerformanceCard
             vault={vault}
             symbol={meta.assetSymbol}
-            cycles={cycles}
+            cycles={generationCycles}
             finished={finished}
             nowSecs={nowSecs}
             loading={historyLoading}
@@ -162,7 +182,7 @@ export function VaultDetailClient({ pda }: { pda: string }) {
         )}
 
         {cyclesState.disabled ? null : (
-          <VaultCyclesTable cycles={cycles} decimals={vault.main_decimals} symbol={meta.assetSymbol} />
+          <VaultCyclesTable cycles={cycles} />
         )}
 
         <VaultTerms vault={vault} symbol={meta.assetSymbol} />

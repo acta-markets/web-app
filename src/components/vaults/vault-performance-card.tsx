@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AppCard } from "@/components/app-ui/app-card";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { cn } from "@/lib/cn";
 import {
@@ -63,7 +62,7 @@ export function VaultPerformanceCard({
   }
 
   return (
-    <AppCard className="p-4">
+    <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">
           Performance
@@ -77,7 +76,7 @@ export function VaultPerformanceCard({
               { value: "tvl", label: `TVL (${symbol})` },
             ]}
           />
-          <div role="group" aria-label="Range" className="flex items-center gap-1">
+          <div role="group" aria-label="Range" className="flex items-center gap-3">
             {RANGES.map((r) => (
               <button
                 key={r.value}
@@ -85,10 +84,8 @@ export function VaultPerformanceCard({
                 aria-pressed={range === r.value}
                 onClick={() => setRange(r.value)}
                 className={cn(
-                  "inline-flex h-6 items-center border px-2.5 py-0.5 font-mono text-xs font-medium tracking-tight text-content-primary transition-colors",
-                  range === r.value
-                    ? "border-accent-primary/30 bg-accent-primary/20 backdrop-blur-[4px]"
-                    : "border-[rgba(240,240,240,0.1)] hover:border-[rgba(240,240,240,0.25)]",
+                  "font-mono text-sm font-medium leading-[1.2] tracking-[-0.28px] transition-colors",
+                  range === r.value ? "text-accent-secondary" : "text-content-secondary hover:text-content-primary",
                 )}
               >
                 {r.label}
@@ -98,11 +95,11 @@ export function VaultPerformanceCard({
         </div>
       </div>
 
-      <div className="mt-3">
+      <div>
         {loading ? (
-          <div className="h-[280px] animate-pulse bg-[rgba(40,40,40,0.24)]" />
+          <div className="h-[280px] animate-pulse bg-action-tertiary" />
         ) : empty ? (
-          <div className="flex h-[280px] items-center justify-center border border-dashed border-bg-border px-6 text-center font-mono text-sm text-content-secondary">
+          <div className="flex h-[280px] items-center justify-center px-6 text-center font-mono text-sm text-content-secondary">
             {empty}
           </div>
         ) : (
@@ -115,12 +112,9 @@ export function VaultPerformanceCard({
         )}
       </div>
 
-      <p className="mt-3 font-mono text-xs leading-[1.5] text-content-secondary">
-        {series === "return"
-          ? "Compounded return of completed cycles, after fees. Within a range, the return earned inside it."
-          : `Vault equity in ${symbol} at each cycle boundary, including deposits and withdrawals.`}
-        {truncated ? " Showing the latest 200 cycles." : ""}
-      </p>
-    </AppCard>
+      {truncated ? (
+        <p className="font-mono text-xs leading-[1.5] text-content-secondary">Showing the latest 200 cycles.</p>
+      ) : null}
+    </section>
   );
 }
