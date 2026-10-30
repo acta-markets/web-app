@@ -43,8 +43,8 @@ Closed vaults are left out of the list. Detail for a closed or unknown vault ret
 | `pending_deposit_amount`, `pending_withdraw_shares` | string | Pending main-token amount and pending shares. |
 | `performance_fee_bps`, `management_fee_bps`, `manager_stake_min_bps` | number | Fee and stake settings. |
 | `last_hwm_update_ts`, `last_hwm_reset_ts`, `last_settlement_ts` | string | Recorded timestamps. |
-| `cap_limit`, `capital_fallback_delay_secs` | string | Deposit cap (`0` is uncapped) and fallback delay. |
-| `capacity` | object | `cap_limit` and `remaining = max(0, cap_limit − equity − pending_deposit_amount)` in main atoms; `remaining` is `null` when uncapped. |
+| `capital_fallback_delay_secs` | string | Fallback delay. |
+| `capacity` | object | `{ "type": "unlimited" }`, or `{ "type": "limited", "cap_limit", "remaining" }` with `remaining = max(0, cap_limit − equity − pending_deposit_amount)` in main atoms. |
 | `deposit_window_set_ts` | string or null | Recorded intake-window timestamp. |
 | `main_balance`, `second_balance`, `live_share_supply`, `observed_manager_stake_shares` | string or null | Balances and supply read from chain separately from events. |
 | `balance_updated_at`, `balance_chain_slot` | string or null | When those balances were read, and at which chain slot. |
