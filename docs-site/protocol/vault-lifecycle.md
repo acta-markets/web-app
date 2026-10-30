@@ -34,7 +34,7 @@ A swap can leave an intermediate asset in a vault-owned account between two tran
 
 While the slot is open, `VaultStagingActive` blocks equity processing, cycle finalization, final redemption, recovery conversion, shutdown and vault closure. Priced manager top-ups and fee changes also wait. Complete the unstage before pricing capital. Deposit refunds and request cancellations keep their own eligibility rules.
 
-In TypeScript 0.2.4, capital rules take `staging`. `processEquityBlock`, `processIdleWithdrawalBlock` and `finalizeCycleBlock` return `"staged"`; `nextCapitalStep` does not propose equity or finalization while staged. See [Two-stage swaps](vault-integration.md#two-stage-swaps) and [Staging recovery](recovery.md#an-intermediate-asset-is-staged).
+In TypeScript, capital rules take `staging`. `processEquityBlock`, `processIdleWithdrawalBlock` and `finalizeCycleBlock` return `"staged"`; `nextCapitalStep` does not propose equity or finalization while staged. See [Two-stage swaps](vault-integration.md#two-stage-swaps) and [Staging recovery](recovery.md#an-intermediate-asset-is-staged).
 
 ## Safety modes
 
