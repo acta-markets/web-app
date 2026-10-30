@@ -16,3 +16,5 @@ A vault can charge a management fee and a performance fee. Both are paid by mint
 - Selling puts can leave the vault buying an asset for more than it is worth.
 - Bought options can expire worthless.
 - The manager can make bad trades. You carry the losses.
+- Asset valuations use configured price feeds and rates. A term token’s valuation can differ from its sale price.
+- A swap split across two transactions leaves an intermediate asset in the vault until the second transaction completes. Prices can change during that wait, and withdrawals can be delayed.

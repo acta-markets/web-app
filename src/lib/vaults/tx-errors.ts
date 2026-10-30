@@ -6,6 +6,7 @@ import {
   ACTA_CONTRACT_ERROR__VAULT_POLICY_LIMIT_EXCEEDED,
   ACTA_CONTRACT_ERROR__VAULT_REQUEST_EXISTS,
   ACTA_CONTRACT_ERROR__VAULT_SHARE_AMOUNT_TOO_SMALL,
+  ACTA_CONTRACT_ERROR__VAULT_STAGING_ACTIVE,
   ACTA_CONTRACT_ERROR__VAULT_WITHDRAW_CLOSED,
 } from "@acta-markets/ts-sdk";
 import { LAST_SHARES_COPY } from "./presentation";
@@ -25,6 +26,7 @@ const CONTRACT_ERROR_COPY: Record<number, string> = {
     "The vault is processing capital right now. Try again after this cycle's requests are processed.",
   [ACTA_CONTRACT_ERROR__VAULT_CAPITAL_PROCESSING_CLOSED]: "Requests cannot be processed at this point in the cycle.",
   [ACTA_CONTRACT_ERROR__VAULT_POLICY_LIMIT_EXCEEDED]: "The vault's limits do not allow this amount right now.",
+  [ACTA_CONTRACT_ERROR__VAULT_STAGING_ACTIVE]: "The vault is in the middle of a two-step swap. Try again once it completes.",
 };
 
 /** Program error code from simulation logs (`custom program error: 0x467`) or a status (`"Custom":1127`). */

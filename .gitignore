@@ -19,3 +19,5 @@ pnpm-debug.log*
 
 
 .figma-specs/
+
+*.tsbuildinfo

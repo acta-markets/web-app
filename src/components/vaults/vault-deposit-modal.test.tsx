@@ -172,13 +172,15 @@ describe("VaultDepositModal", () => {
     await waitFor(() => expect(env.depositor.actions!.cancelDeposit).toHaveBeenCalled());
   });
 
-  it("blocks redeeming the vault's last shares", async () => {
+  it("allows requesting the vault's last live shares", async () => {
     const user = userEvent.setup();
-    env.depositor.data = position({ shareBalance: 1000n * SOL });
-    renderModal(solVault(), "withdraw");
+    env.depositor.data = position({ shareBalance: 900n * SOL });
+    renderModal(solVault({ live_share_supply: String(900n * SOL) }), "withdraw");
     await user.click(screen.getByRole("button", { name: "MAX" }));
     expect(screen.getByText(LAST_SHARES_COPY)).toBeTruthy();
-    expect(cta("Request withdrawal").disabled).toBe(true);
+    expect(cta("Request withdrawal").disabled).toBe(false);
+    await user.click(cta("Request withdrawal"));
+    expect(env.depositor.actions!.requestWithdraw).toHaveBeenCalledWith(900n * SOL);
   });
 
   it("explains why a closing vault takes no deposits", () => {

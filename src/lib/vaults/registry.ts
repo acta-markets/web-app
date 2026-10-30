@@ -1,12 +1,11 @@
-import { getTokenSymbolByMint } from "@/lib/tokens";
+import { getTokenSymbolByMint, tokenDisplayName } from "@/lib/tokens";
 import { shortAddress } from "./format";
 import { VAULTS_SAMPLE_MODE, peekSampleData } from "./sample";
 import type { Vault } from "./types";
 
 /**
- * Display metadata the backend does not serve yet: name, curator and
- * category, keyed by vault PDA. Unregistered vaults still render, with
- * fallbacks that never invent anything.
+ * Display metadata: the backend's operator-curated `metadata`, then sample-mode
+ * fixtures keyed by vault PDA, then fallbacks that never invent anything.
  */
 
 export type VaultCategory = "Crypto" | "Stocks" | "Stables";
@@ -24,12 +23,10 @@ export type VaultMeta = {
   /**
    * Yearly staking yield of the deposit asset itself (jitoSOL and other LSTs), in
    * percent. The vault's share price is denominated in the asset, so it misses
-   * this part; the headline APR adds it to the vault's premium.
+   * this part; the headline APY adds it to the vault's premium.
    */
   stakingAprPct?: number;
 };
-
-export const VAULT_REGISTRY: Readonly<Record<string, VaultMeta>> = {};
 
 const STABLES = new Set(["USDC", "USDT", "PYUSD", "USDS", "USDG", "FDUSD", "DAI", "EURC", "USDE", "USDH"]);
 // Tokenized equities: NVDAx style (xStocks) or xNVDA style. Case-sensitive, so XRP stays out.
@@ -46,8 +43,7 @@ export function deriveCategory(symbol: string | undefined): VaultCategory {
 
 // Fixture names come from sample-data.json, which source.ts loads before any vault renders.
 function activeRegistry(): Readonly<Record<string, VaultMeta>> {
-  if (!VAULTS_SAMPLE_MODE) return VAULT_REGISTRY;
-  return { ...peekSampleData()?.meta, ...VAULT_REGISTRY };
+  return (VAULTS_SAMPLE_MODE && peekSampleData()?.meta) || {};
 }
 
 export function getRegisteredVaultMeta(pda: string): VaultMeta | undefined {
@@ -61,31 +57,49 @@ export type ResolvedVaultMeta = {
   curatorIsAddress: boolean;
   category: VaultCategory;
   assetSymbol: string;
-  /** false when the deposit mint is unknown and assetSymbol is a short address */
+  /** false when the deposit mint is unknown and assetSymbol is a labelled mint address */
   assetKnown: boolean;
   registered: boolean;
+  strategy?: string;
   description?: string;
+  website?: string;
+  twitter?: string;
+  logoUrl?: string;
   /** 0 unless the registry gives the deposit asset's own staking yield */
   stakingAprPct: number;
 };
 
 export function resolveVaultMeta(
-  vault: Pick<Vault, "vault_pda" | "main_mint" | "governance">,
+  vault: Pick<Vault, "vault_pda" | "main_mint" | "governance" | "metadata"> & Partial<Pick<Vault, "second_mint">>,
   registry: Readonly<Record<string, VaultMeta>> = activeRegistry(),
 ): ResolvedVaultMeta {
   const meta = registry[vault.vault_pda];
+  const served = vault.metadata;
+  const curator = served?.curator ?? meta?.curator;
   const knownSymbol = meta?.assetSymbol ?? getTokenSymbolByMint(vault.main_mint);
+  const legs = [knownSymbol ?? tokenDisplayName(vault.main_mint)];
+  if (vault.second_mint && vault.second_mint !== vault.main_mint) legs.push(tokenDisplayName(vault.second_mint));
   return {
-    name: meta?.name ?? (knownSymbol ? `${knownSymbol} vault` : `Vault ${shortAddress(vault.vault_pda)}`),
-    curator: meta?.curator ?? shortAddress(vault.governance),
-    curatorIsAddress: !meta,
+    name: served?.name ?? meta?.name ?? `${legs.join(" / ")} vault · ${shortAddress(vault.vault_pda)}`,
+    curator: curator ?? shortAddress(vault.governance),
+    curatorIsAddress: curator === undefined,
     category: meta?.category ?? deriveCategory(knownSymbol),
-    assetSymbol: knownSymbol ?? shortAddress(vault.main_mint),
+    assetSymbol: knownSymbol ?? tokenDisplayName(vault.main_mint),
     assetKnown: knownSymbol !== undefined,
-    registered: meta !== undefined,
-    description: meta?.description,
+    registered: served !== undefined || meta !== undefined,
+    strategy: served?.strategy,
+    description: served?.description ?? meta?.description,
+    website: httpsUrl(served?.website),
+    twitter: served?.twitter && X_HANDLE.test(served.twitter) ? served.twitter : undefined,
+    logoUrl: httpsUrl(served?.logo_url),
     stakingAprPct: meta?.stakingAprPct ?? 0,
   };
+}
+
+const X_HANDLE = /^[A-Za-z0-9_]{1,15}$/;
+
+function httpsUrl(value: string | undefined): string | undefined {
+  return value && /^https:\/\/\S+$/.test(value) ? value : undefined;
 }
 
 export function categorySlug(category: VaultCategory): string {

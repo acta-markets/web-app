@@ -16,7 +16,6 @@ function isAppEnabled() {
 }
 
 const BLOCKED_PAGE_PREFIXES = ["/earn", "/trade", "/portfolio", "/market"];
-const BLOCKED_API_PREFIXES = ["/api/market", "/api/portfolio"];
 const MARKDOWN_PATHS = new Set(["/", "/earn", "/trade"]);
 const DOCS_HOSTNAME = "docs.acta.markets";
 const DOCS_RESERVED_PATHS = [
@@ -174,8 +173,7 @@ export function middleware(req: NextRequest) {
   }
 
   const blocked =
-    BLOCKED_PAGE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
-    BLOCKED_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+    BLOCKED_PAGE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
   if (!isAppEnabled() && blocked) {
     const url = req.nextUrl.clone();

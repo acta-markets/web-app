@@ -94,7 +94,7 @@ export function formatDate(secs: number, opts: { year?: boolean; time?: boolean 
     ...(opts.year ? { year: "numeric" } : {}),
   });
   if (!opts.time) return day;
-  const time = date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const time = date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false, timeZoneName: "short" });
   return `${day}, ${time}`;
 }
 

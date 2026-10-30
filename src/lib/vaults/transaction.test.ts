@@ -56,6 +56,21 @@ describe("sendWalletTransactions", () => {
     expect(rpc.sendTransaction).not.toHaveBeenCalled();
   });
 
+  it.each(["message", "count", "binding"])("rejects changed %s before broadcast", async change => {
+    const rpc = fakeRpc();
+    let connected = true;
+    await expect(sendWalletTransactions({
+      rpc: rpc as never, feePayer: FEE_PAYER, transactions: [[ix(1)]],
+      assertBinding: () => { if (!connected) throw new Error("Connection changed"); },
+      signAllTransactions: async txs => {
+        if (change === "message") txs[0].message.recentBlockhash = "11111111111111111111111111111112";
+        if (change === "binding") connected = false;
+        return change === "count" ? [] : txs;
+      },
+    })).rejects.toThrow();
+    expect(rpc.sendTransaction).not.toHaveBeenCalled();
+  });
+
   it("does nothing for an empty step", async () => {
     const rpc = fakeRpc();
     const signAll = vi.fn();

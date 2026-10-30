@@ -6,7 +6,7 @@ A vault has governance, a primary trading delegate, a share mint, policy and cus
 
 | Role | Responsibility |
 | --- | --- |
-| Protocol cold authority | Creates vaults. Freezes, unfreezes and starts emergency unwind. |
+| Protocol cold authority | Creates vaults. Registers price routes and swap venues through the timelock. Freezes, unfreezes and starts emergency unwind. |
 | Protocol guardian | Freezes vaults. |
 | Vault governance | Sets policy and delegation. Runs vault shutdown. |
 | Primary delegate | Trades and processes capital under its active on-chain grant. |
@@ -27,6 +27,12 @@ Governance can use the same wallet as the primary delegate.
 | `SET_DEPOSIT_WINDOW` | 32 | Open or close the deposit window. |
 
 Opening positions and rebalancing also check strategy capabilities and policy. Under the fallback rules, anyone can process capital. Governance, or a delegate with `SET_DEPOSIT_WINDOW`, can change the deposit window. Phase and safety mode apply to both.
+
+## Swap and staging authority
+
+`REBALANCE` does not permit arbitrary external calls. Every hop must use a registered venue and one of its allowed instruction selectors. Governance can propose a timelocked second-leg roll; the contract checks its capital boundary and route compatibility.
+
+A rebalance actor can drain staged tokens into main while safety is `normal`. After 300 seconds, governance can drain the slot into main in any safety mode, subject to the applicable pause and price checks. `RecoveryStage` is governance-only and follows recovery eligibility. Neither public capital processing nor its fallback delay grants swap authority.
 
 ## Shared governance and delegate key
 

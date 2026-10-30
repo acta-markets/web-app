@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { getToken, getTokenMint } from "@/lib/tokens";
+import { getToken, getTokenMint, rememberReferenceTokens } from "@/lib/tokens";
+import { mintUnits } from "./presentation";
+import { makeVault } from "./sample";
 import {
   categoryHref,
   deriveCategory,
@@ -27,10 +29,46 @@ describe("resolveVaultMeta", () => {
     });
   });
 
+  it("prefers the backend's metadata and keeps the governance address when it names no curator", () => {
+    const vault = { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE };
+    const fixture = { "pda-1": { name: "SOL desk", curator: "Acta", description: "Weekly calls" } };
+    expect(resolveVaultMeta({ ...vault, metadata: { name: "SOL income", curator: "Desk" } }, fixture)).toMatchObject({
+      name: "SOL income",
+      curator: "Desk",
+      curatorIsAddress: false,
+      description: "Weekly calls",
+      registered: true,
+    });
+    expect(resolveVaultMeta({ ...vault, metadata: { name: "SOL income" } }, {})).toMatchObject({
+      name: "SOL income",
+      curator: "9amK…SbUf",
+      curatorIsAddress: true,
+      registered: true,
+    });
+  });
+
+  it("passes curator links only when they are https URLs and a bare handle", () => {
+    const vault = { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE };
+    const good = resolveVaultMeta({ ...vault, metadata: {
+      name: "SOL income", strategy: "Weekly calls", website: "https://acta.markets",
+      twitter: "acta_markets", logo_url: "https://acta.markets/logo.png",
+    } }, {});
+    expect(good).toMatchObject({
+      strategy: "Weekly calls", website: "https://acta.markets",
+      twitter: "acta_markets", logoUrl: "https://acta.markets/logo.png",
+    });
+    const bad = resolveVaultMeta({ ...vault, metadata: {
+      name: "SOL income", website: "javascript:alert(1)", twitter: "@acta", logo_url: "http://acta.markets/logo.png",
+    } }, {});
+    expect(bad.website).toBeUndefined();
+    expect(bad.twitter).toBeUndefined();
+    expect(bad.logoUrl).toBeUndefined();
+  });
+
   it("falls back to the asset and the governance address without inventing a curator", () => {
     const meta = resolveVaultMeta({ vault_pda: "pda-2", main_mint: SOL_MINT, governance: GOVERNANCE }, {});
     expect(meta).toMatchObject({
-      name: "SOL vault",
+      name: "SOL vault · pda-2",
       curator: "9amK…SbUf",
       curatorIsAddress: true,
       category: "Crypto",
@@ -50,10 +88,10 @@ describe("resolveVaultMeta", () => {
       {},
     );
     expect(meta).toMatchObject({
-      name: "Vault 7xKX…gAsU",
+      name: "Unknown token (Unkn…1111) vault · 7xKX…gAsU",
       category: "Crypto",
       assetKnown: false,
-      assetSymbol: "Unkn…1111",
+      assetSymbol: "Unknown token (Unkn…1111)",
     });
   });
 
@@ -62,7 +100,7 @@ describe("resolveVaultMeta", () => {
       { vault_pda: "pda-4", main_mint: "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh", governance: GOVERNANCE },
       {},
     );
-    expect(meta).toMatchObject({ assetSymbol: "NVDAx", assetKnown: true, category: "Stocks", name: "NVDAx vault" });
+    expect(meta).toMatchObject({ assetSymbol: "NVDAx", assetKnown: true, category: "Stocks", name: "NVDAx vault · pda-4" });
     expect(getToken("NVDAx")?.logo).toBe("/tokens/nvdax.png");
   });
 
@@ -112,5 +150,17 @@ describe("category params", () => {
   it("round-trips through the href", () => {
     expect(categoryHref("all")).toBe("/earn");
     expect(categoryHref("Stables")).toBe("/earn?category=stables");
+  });
+});
+
+describe("reference tokens", () => {
+  it("names a vault whose deposit mint only the API's token list knows", () => {
+    const pt = "DSVwUv5iRHVgscHSRm1r9qE3eXw8hpuBDHdcWX9v1729";
+    rememberReferenceTokens([{ mint: pt, symbol: "PTd1", decimals: 9 }]);
+    const vault = makeVault({ main_mint: pt, main_decimals: 9, metadata: undefined });
+    const meta = resolveVaultMeta(vault, {});
+    expect(meta.assetSymbol).toBe("PTd1");
+    expect(meta.name).toBe("PTd1 / SOL vault · 1111…1111");
+    expect(mintUnits(makeVault(), pt)).toEqual({ symbol: "PTd1", decimals: 9 });
   });
 });

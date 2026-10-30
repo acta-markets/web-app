@@ -77,7 +77,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
                   className="font-mono text-[11px] uppercase text-content-secondary"
                   style={{ letterSpacing: "0.12em" }}
                 >
-                  APR
+                  APY
                 </span>
               </div>
               <div

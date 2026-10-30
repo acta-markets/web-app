@@ -18,9 +18,9 @@ describe("agent discovery", () => {
     vi.stubEnv("NEXT_PUBLIC_SOLANA_NETWORK", network);
     try {
       expect(getDeploymentContext("http://127.0.0.1:3115/openapi.json")).toMatchObject({
-        environment: "beta",
-        apiOrigin: "https://beta-api.acta.markets",
-        solanaCluster: "mainnet-beta",
+        environment: network ? "beta" : "devnet",
+        apiOrigin: network ? "https://beta-api.acta.markets" : "https://devnet-api.acta.markets",
+        solanaCluster: network ? "mainnet-beta" : "devnet",
       });
     } finally {
       vi.unstubAllEnvs();
