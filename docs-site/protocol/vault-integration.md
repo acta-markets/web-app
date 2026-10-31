@@ -174,7 +174,7 @@ Do not sign a served transaction blind. The SDKs rebuild the expected instructio
 
 A swap's minimum output must meet your own floor (`min_output_floor` in Rust, `minOutputFloor` in TypeScript). This floor does not apply to the first `stage`, whose output is an intermediate asset. Each half still has its own minimum output and contract price-drift check.
 
-| | Rust (`acta-maker-sdk` 0.5.4, feature `vault`) | TypeScript (`@acta-markets/ts-sdk` 0.2.4) |
+| | Rust (`acta-maker-sdk` 0.6.0, feature `vault`) | TypeScript (`@acta-markets/ts-sdk` 0.3.0) |
 | --- | --- | --- |
 | Position open | `VaultOperatorClient::verify_and_sign_sponsored_tx` | `verifyAndSignSponsoredTx` from `/ws` |
 | Swap | `VaultOperatorClient::verify_and_sign_swap` | `verifyAndSignSwap` from `/ws` |

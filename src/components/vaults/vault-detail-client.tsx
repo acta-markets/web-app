@@ -6,6 +6,7 @@ import { AppButton, AppButtonLink } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
 import { cn } from "@/lib/cn";
 import { finishedCycles } from "@/lib/vaults/metrics";
+import { shortAddress } from "@/lib/vaults/format";
 import { CuratorLogo } from "./curator-logo";
 import { primaryVaultAction, vaultStatus, type VaultModalTab } from "@/lib/vaults/presentation";
 import { resolveVaultMeta } from "@/lib/vaults/registry";
@@ -127,10 +128,15 @@ export function VaultDetailClient({ pda }: { pda: string }) {
             <p className="font-mono text-base leading-[1.4] tracking-[-0.02em] text-content-primary [overflow-wrap:anywhere]">{meta.strategy}</p>
           ) : null}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
-            <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+            <span className="text-[11px] uppercase tracking-[0.12em]">{meta.category}</span>
+            <span>
+              Deposit <span className="text-content-primary">{meta.assetSymbol}</span>
+            </span>
+            <span className="inline-flex min-w-0 max-w-full items-center gap-1.5" title={`Vault governance ${vault.governance}`}>
               Curator
               {meta.logoUrl ? <CuratorLogo src={meta.logoUrl} size={16} /> : null}
               <span className="truncate text-content-primary">{meta.curator}</span>
+              {!meta.curatorIsAddress && ` · ${shortAddress(vault.governance)}`}
             </span>
             {meta.website ? (
               <a className="underline hover:text-content-primary" href={meta.website} target="_blank" rel="noopener noreferrer nofollow">
@@ -164,7 +170,7 @@ export function VaultDetailClient({ pda }: { pda: string }) {
       <div className="mt-12 flex flex-col gap-12 max-md:mt-8 max-md:gap-8">
         <VaultMetrics vault={vault} symbol={meta.assetSymbol} stakingAprPct={meta.stakingAprPct} />
 
-        <section className={cn("grid grid-cols-1 gap-12 empty:hidden max-md:gap-8", exposure && "md:grid-cols-2")}>
+        <section className={cn("grid grid-cols-1 gap-3 empty:hidden", exposure && "md:grid-cols-2")}>
           <VaultCurrentCycle vault={vault} nowSecs={nowSecs} />
           {exposure ? <VaultExposureCard exposure={exposure} /> : null}
         </section>
@@ -182,7 +188,7 @@ export function VaultDetailClient({ pda }: { pda: string }) {
         )}
 
         {cyclesState.disabled ? null : (
-          <VaultCyclesTable cycles={cycles} />
+          <VaultCyclesTable cycles={cycles} decimals={vault.main_decimals} symbol={meta.assetSymbol} />
         )}
 
         <VaultTerms vault={vault} symbol={meta.assetSymbol} />

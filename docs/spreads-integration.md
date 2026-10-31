@@ -1,21 +1,13 @@
 # Spreads UI development
 
-The feature depends on the unpublished SDK in `../acta-contract/ts-sdk` on
-`research/spreads` (validated integration revision `45a2c25`). `package.json` and the lockfile retain published `0.2.5`;
-that release does not provide the spread APIs. Build and install the local SDK
-before development, tests or builds:
+Install the exact published `@acta-markets/ts-sdk@0.3.0` from the lockfile:
 
 ```sh
-npm ci --ignore-scripts --no-audit --no-fund
-(cd ../acta-contract/ts-sdk && npm run build:esm && npm run build:cjs)
-npm install --no-save --ignore-scripts --install-links --no-audit --no-fund ../acta-contract/ts-sdk
+npm ci
 ```
 
-`--install-links` installs a local package copy and resolves its dependencies
-inside web-app. A direct symlink can expose a second incompatible Solana type
-installation from the SDK's node_modules. Repeat the commands above after SDK changes to refresh the installed copy.
-Do not save the file dependency or commit node_modules. `npm ci` restores the
-published dependency and removes this local override.
+No local SDK override is needed. This release requires WS 1.0.0 and ships with
+the backend in the mainnet maintenance window; it has no legacy-wire fallback.
 
 ## Product and wire boundaries
 
@@ -25,12 +17,19 @@ and SDK vault routes); the web-app vault exposure table labels vault spread
 positions as "Call spread"/"Put spread" (the exposure endpoint reports no
 intrinsic for them). Maker and taker may be the same owner.
 
+The cash-put ticket uses `cash_put` on the wire and the SDK's zero-lower-strike
+put-spread economics for collateral, fees and preview. It settles in the quote
+token without underlying delivery. Both tickets require an unexpired descriptor
+that explicitly includes the selected product. Mainnet policy `products=3`
+exposes only physical calls and puts: neither cash-settled goal is offered.
+
 The UI sends required `side: "sell"` and tagged `terms` on every request, and
 accepts only quotes with the same side and terms:
 
 ```ts
 { type: "covered_call", strike }
 { type: "cash_secured_put", strike }
+{ type: "cash_put", strike }
 { type: "call_spread", lower_strike, upper_strike }
 { type: "put_spread", lower_strike, upper_strike }
 ```
@@ -97,21 +96,6 @@ Unit/component coverage includes integer payoff and fee rounding, lower/upper pu
 orientation, full-collateral and unknown-balance blocking, product/side/pair quote
 separation, capability loss and finalized cash payout presentation. Successful
 local gates do not prove a deployed backend or on-chain spread execution.
-
-
-Validated locally against SDK `45a2c25`:
-
-```text
-npm run lint                         exit 0 (6 existing warnings)
-npx tsc --noEmit --incremental false exit 0
-npm test                             Test Files 36 passed (36); Tests 392 passed (392)
-npm run build                        Compiled successfully; Generating static pages (52/52); exit 0
-```
-
-The build also reports an outdated Browserslist database. Package manifests,
-the lockfile and tracked `tsconfig.tsbuildinfo` remain unchanged. Browser visual
-verification was unavailable because the local browser runner has no Chrome or
-Chromium installed. Live wallet/backend/on-chain execution was not exercised.
 
 
 Position rows are self-contained: use required `underlying_decimals` and

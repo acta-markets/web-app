@@ -63,3 +63,25 @@ describe("spread ticket", () => {
     expect(mocks.submit).not.toHaveBeenCalled();
   });
 });
+
+
+describe("cash put ticket", () => {
+  it("requires full strike collateral and sends cash_put rather than a zero-leg spread", async () => {
+    mocks.balance = 99_999_999n;
+    const busy = vi.fn();
+    const view = render(<SpreadMarket asset="SOL" cashPut onBusyChange={busy} />);
+    expect(screen.queryByLabelText("Buy at")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Strike"), { target: { value: "100000000000" } });
+    await waitFor(() => expect(mocks.fees).toHaveBeenCalled());
+    const button = screen.getByRole("button", { name: "Get cash put quote" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    mocks.balance = 100_000_000n;
+    view.rerender(<SpreadMarket asset="SOL" cashPut onBusyChange={busy} />);
+    await waitFor(() => expect(button.disabled).toBe(false));
+    fireEvent.click(button);
+    expect(mocks.submit).toHaveBeenCalledExactlyOnceWith({ market: "put", terms: { type: "cash_put", strike: 100e9 }, quantity: 1_000_000 });
+    mocks.enabled = false;
+    view.rerender(<SpreadMarket asset="SOL" cashPut onBusyChange={busy} />);
+    expect(button.disabled).toBe(true);
+  });
+});

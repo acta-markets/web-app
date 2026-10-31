@@ -14,3 +14,10 @@ it("shows Unlimited for u64::MAX even when the API returns remaining capacity", 
   expect(screen.queryByText(/18\.45B/)).toBeNull();
 });
 
+it("renders a zero cap without division by zero", () => {
+  const vault = makeVault();
+  render(<VaultTerms vault={{ ...vault, capacity: {
+    type: "limited", cap_limit: "0", remaining: "0",
+  } }} symbol="SOL" />);
+  expect(screen.getByText("0 SOL left")).toBeTruthy();
+});

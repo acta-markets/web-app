@@ -33,7 +33,7 @@ async function setup() {
     (client as unknown as { emit: (event: string, ...args: unknown[]) => void }).emit(event, ...args);
   });
   emit("marketDescriptors", [{ products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], market: { market_pda: "market", underlying_mint: "underlying", is_put: false }, underlying_decimals: 6, quote_decimals: 6 }]);
-  emit("tokens", [{ mint: "underlying", symbol: "U", decimals: 6, strike_tick: 1_000_000_000 }]);
+  emit("tokens", [{ mint: "underlying", symbol: "U", decimals: 6, role: { type: "underlying", strike_tick: 1_000_000_000, size_rule: { min_size: 1, max_size: 1e9, step: 1 }, quote_mints: [] } }]);
   const submit = () => {
     act(() => hook.result.current.submitRfq({ market: "market", terms: { type: "covered_call", strike: 1 }, quantity: 10 }));
     return create.mock.lastCall![0].requestId!;
@@ -381,4 +381,38 @@ it("does not connect a late venue-discovery result after unmount", async () => {
   await act(async () => resolve(client));
   expect(connect).not.toHaveBeenCalled();
   expect(disconnect).toHaveBeenCalledOnce();
+});
+
+
+it("loads anonymous product policy and invalidates it on a reference change", async () => {
+  const h = await setup();
+  const tokens = vi.spyOn(h.client, "getTokens").mockReturnValue("tokens");
+  const summary = vi.spyOn(h.client, "getEarnSummary").mockReturnValue("summary");
+  h.emit("connected");
+  expect(h.client.getMarketDescriptors).toHaveBeenCalled();
+  expect(tokens).toHaveBeenCalled();
+  h.emit("referenceChanged", {});
+  expect(h.result.current.marketDescriptors).toEqual([]);
+  expect(h.result.current.strikeTicks.size).toBe(0);
+  expect(h.client.getMarketDescriptors).toHaveBeenCalledTimes(2);
+  expect(summary).toHaveBeenCalledTimes(2);
+});
+
+it("disconnects an incompatible backend instead of displaying legacy frames", async () => {
+  const h = await setup();
+  const disconnect = vi.spyOn(h.client, "disconnect");
+  h.emit("error", { type: "invalid_frame", data: { message_type: "MarketDescriptors", reason: "missing products" } });
+  expect(disconnect).toHaveBeenCalledOnce();
+  expect(h.result.current.isAuthenticated).toBe(false);
+  expect(document.body.textContent).toContain("Trading temporarily unavailable");
+});
+
+
+it("rejects a legacy earn summary even when it arrives before descriptors", async () => {
+  const h = await setup();
+  const disconnect = vi.spyOn(h.client, "disconnect");
+  h.emit("earnSummary", { assets: [{ underlying_symbol: "SOL", min_apr: 1, max_apr: 2 }] });
+  expect(disconnect).toHaveBeenCalledOnce();
+  expect(h.result.current.earnSummary).toBeNull();
+  expect(document.body.textContent).toContain("Trading temporarily unavailable");
 });

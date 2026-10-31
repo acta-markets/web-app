@@ -44,7 +44,8 @@ describe("spread economics", () => {
 });
 describe("server strike ticks", () => {
   it("maps positive ticks by mint and requires one for spreads", () => {
-    const ticks = strikeTicksByMint([{ mint: "A", strike_tick: 500_000_000 }, { mint: "B" }, { mint: "C", strike_tick: 0 }]);
+    const role = { type: "underlying" as const, size_rule: { min_size: 1, max_size: 100, step: 1 }, quote_mints: [] };
+    const ticks = strikeTicksByMint([{ mint: "A", role: { ...role, strike_tick: 500_000_000 } }, { mint: "B", role: { type: "quote" } }, { mint: "C", role: { ...role, strike_tick: 0 } }]);
     expect([...ticks]).toEqual([["A", 500_000_000n]]);
     expect(requireStrikeTick(ticks, "A")).toBe(500_000_000n);
     expect(() => requireStrikeTick(ticks, "B")).toThrow();

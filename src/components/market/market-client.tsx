@@ -78,16 +78,17 @@ function formatInputValue(value: number, maxDecimals: number): string {
 
 export function MarketClient({ asset }: { asset: string }) {
   const { cancelRfq, marketDescriptors } = useRfqContext();
-  const spreadsEnabled = marketDescriptors.some(d => normalizeTokenSymbol(d.underlying_symbol) === normalizeTokenSymbol(asset) && d.products.includes(d.market.is_put ? "put_spread" : "call_spread"));
-  const [goal, setGoal] = useState<"yield" | "spreads">("yield");
+  const spreadsEnabled = marketDescriptors.some(d => normalizeTokenSymbol(d.underlying_symbol) === normalizeTokenSymbol(asset) && d.products.includes(d.market.is_put ? "put_spread" : "call_spread") && Number(d.market.expiry_ts) * 1000 > Date.now());
+  const cashPutEnabled = marketDescriptors.some(d => normalizeTokenSymbol(d.underlying_symbol) === normalizeTokenSymbol(asset) && d.market.is_put && d.products.includes("cash_put") && Number(d.market.expiry_ts) * 1000 > Date.now());
+  const [goal, setGoal] = useState<"yield" | "spreads" | "cash_put">("yield");
   const [busy, setBusy] = useState(false);
   const spread = goal === "spreads" && (spreadsEnabled || busy);
   return <>
-    {spreadsEnabled && <div className="mx-auto mt-20 w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
+    {(spreadsEnabled || cashPutEnabled) && <div className="mx-auto mt-20 w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
       <AppSegmented ariaLabel="Trading goal" value={goal} disabled={busy} onChange={(value) => { cancelRfq(); setGoal(value); }}
-        options={[{ value: "yield", label: "Earn yield" }, { value: "spreads", label: "Sell spreads" }]} />
+        options={[{ value: "yield", label: "Earn yield" }, ...(spreadsEnabled ? [{ value: "spreads" as const, label: "Sell spreads" }] : []), ...(cashPutEnabled ? [{ value: "cash_put" as const, label: "Sell cash put" }] : [])]} />
     </div>}
-    {spread ? <SpreadMarket asset={asset} onBusyChange={setBusy} /> : <YieldMarketClient asset={asset} onBusyChange={setBusy} hasGoals={spreadsEnabled} />}
+    {goal === "cash_put" && (cashPutEnabled || busy) ? <SpreadMarket key="cash_put" asset={asset} cashPut onBusyChange={setBusy} /> : spread ? <SpreadMarket key="spreads" asset={asset} onBusyChange={setBusy} /> : <YieldMarketClient asset={asset} onBusyChange={setBusy} hasGoals={spreadsEnabled || cashPutEnabled} />}
   </>;
 }
 

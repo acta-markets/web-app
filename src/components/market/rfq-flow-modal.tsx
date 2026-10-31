@@ -10,7 +10,7 @@ import { useRfqOrder } from "./use-rfq-order";
 import type { VersionedTransaction } from "@solana/web3.js";
 import { IS_MAINNET } from "@/lib/tokens";
 
-import { isSpread, isSpreadTerms, productLabel, quoteMatchesProduct, spreadName, spreadPreview, type ProductTerms } from "@/lib/spreads";
+import { isCashSettled, isSpreadTerms, productLabel, quoteMatchesProduct, spreadName, spreadPreview, type ProductTerms } from "@/lib/spreads";
 import { formatDate } from "@/lib/vaults/format";
 import { SpreadPreview, type SpreadFees } from "./spread-preview";
 import type { SpreadTerms } from "@acta-markets/ts-sdk/chain";
@@ -164,7 +164,7 @@ export function RfqFlowModal({
 
   useEffect(() => {
     if (!open || !preview?.spread || quoteStep !== "requesting_quote" || flow.type !== "idle") return;
-    const timer = window.setTimeout(() => { cancelRfq(); setError("No spread quote arrived within 30 seconds. Try another pair or size."); setStep("failed"); }, 30_000);
+    const timer = window.setTimeout(() => { cancelRfq(); setError("No cash-settled quote arrived within 30 seconds. Try another pair or size."); setStep("failed"); }, 30_000);
     return () => window.clearTimeout(timer);
   }, [open, preview, quoteStep, flow.type, cancelRfq]);
 
@@ -204,7 +204,7 @@ export function RfqFlowModal({
   };
   const quoteQuantity = preview ? preview.quantity / 1_000_000_000 : 0;
   const quoteUnitPremium = quote ? Number(quote.net_price ?? quote.price) / 1_000_000_000 : null;
-  let spreadQuoteValid = !preview || !isSpread(preview.terms.type);
+  let spreadQuoteValid = !preview || !isCashSettled(preview.terms.type);
   let spreadNetPremium: number | null = null;
   if (preview?.spread && quote) {
     try {
@@ -214,7 +214,7 @@ export function RfqFlowModal({
       spreadNetPremium = Number(result.netPremium) / 10 ** terms.quoteDecimals;
     } catch { spreadQuoteValid = false; }
   }
-  const totalPremiumUsd = preview && isSpread(preview.terms.type) ? spreadNetPremium :
+  const totalPremiumUsd = preview && isCashSettled(preview.terms.type) ? spreadNetPremium :
     preview?.lockedPremiumUsd != null
       ? preview.lockedPremiumUsd
       : quoteUnitPremium != null
@@ -244,7 +244,7 @@ export function RfqFlowModal({
   const compact = !isRestoredOrder && preview?.spread != null;
   const spreadSummary = compact && preview && isSpreadTerms(preview.terms) && preview.terms.upper_strike != null
     ? `Sell ${spreadName(preview.asset, preview.terms.type, preview.terms.lower_strike, preview.terms.upper_strike)} spread · ${preview.quantityDisplay}${preview.expiryTs ? ` · ${formatDate(preview.expiryTs)}` : ""}`
-    : null;
+    : compact && preview?.terms.type === "cash_put" ? `Sell ${preview.asset} ${preview.strikeDisplay} cash put · ${preview.quantityDisplay}${preview.expiryTs ? ` · ${formatDate(preview.expiryTs)}` : ""}` : null;
   const busyStep = step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting";
   const statusText =
     step === "requesting_quote" ? "Getting a quote from market makers…"
