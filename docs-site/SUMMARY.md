@@ -49,6 +49,7 @@
 * [Managing a vault](protocol/vault-owner.md)
 * [Roles and permissions](protocol/vault-permissions.md)
 * [Vault API, SDKs and swaps](protocol/vault-integration.md)
+* [Vault operator guide](quickstart/vault-operator-guide.md)
 * [Vault HTTP API](reference/vault-http-api.md)
 
 ## Reference

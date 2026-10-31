@@ -44,11 +44,11 @@ export function wireInteger(value: bigint): number {
 }
 
 /** Server strike ticks by underlying mint; the contract itself has no spread tick or width cap. */
-export function strikeTicksByMint(tokens: readonly { mint: string; strike_tick?: number | bigint | string }[]): ReadonlyMap<string, bigint> {
+export function strikeTicksByMint(tokens: readonly { mint: string; role: import("@acta-markets/ts-sdk/ws").TokenInfo["role"] }[]): ReadonlyMap<string, bigint> {
   const ticks = new Map<string, bigint>();
   for (const token of tokens) {
-    if (token.strike_tick === undefined) continue;
-    const tick = BigInt(token.strike_tick);
+    if (token.role.type !== "underlying") continue;
+    const tick = BigInt(token.role.strike_tick);
     if (tick > 0n) ticks.set(token.mint, tick);
   }
   return ticks;

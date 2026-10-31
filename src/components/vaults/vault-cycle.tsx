@@ -1,3 +1,4 @@
+import { AppCard } from "@/components/app-ui/app-card";
 import { cn } from "@/lib/cn";
 import { formatCountdown, formatDate } from "@/lib/vaults/format";
 import { cyclePhaseLabel, exposureRows, exposureTotals, formatPremium, mintUnits, stagingText } from "@/lib/vaults/presentation";
@@ -7,7 +8,7 @@ const TITLE = "font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex items-start justify-between gap-4 py-2.5">
       <dt className="shrink-0 text-content-secondary">{label}</dt>
       <dd className="min-w-0 text-right tabular-nums text-content-primary">{children}</dd>
     </div>
@@ -36,12 +37,12 @@ export function VaultCurrentCycle({ vault, nowSecs }: { vault: Vault; nowSecs: n
   if (!running && !cycle && !total && !staged) return null;
 
   return (
-    <section className="flex flex-col gap-4">
+    <AppCard className="p-4">
       <div className="flex items-center justify-between gap-4">
         <h2 className={TITLE}>Current cycle</h2>
         <span className="font-mono text-sm text-content-secondary">{cyclePhaseLabel(vault)}</span>
       </div>
-      <dl className="flex flex-col gap-2 font-mono text-sm leading-[1.3] tracking-[-0.28px]">
+      <dl className="mt-2 divide-y divide-bg-border font-mono text-sm leading-[1.3] tracking-[-0.28px]">
         {running ? (
           <Row label="Ends">
             {formatDate(expiry, { time: true })}
@@ -52,7 +53,7 @@ export function VaultCurrentCycle({ vault, nowSecs }: { vault: Vault; nowSecs: n
         {total ? <Row label={since ? `Premium since ${formatDate(Number(since))}` : "Premium"}>{total}</Row> : null}
         {staged ? <Row label="Swap in progress">{staged}</Row> : null}
       </dl>
-    </section>
+    </AppCard>
   );
 }
 
@@ -62,9 +63,9 @@ export function VaultExposureCard({ exposure }: { exposure: VaultExposure }) {
   const totals = exposureTotals(exposure);
 
   return (
-    <section className="flex flex-col gap-4">
+    <AppCard className="p-4">
       <h2 className={TITLE}>At risk now</h2>
-      <table className="w-full font-mono text-sm leading-[1.3] tracking-[-0.28px]">
+      <table className="mt-3 w-full font-mono text-sm leading-[1.3] tracking-[-0.28px]">
         <thead className="text-left text-content-secondary">
           <tr>
             <th className="pb-2 font-normal">Strike</th>
@@ -85,7 +86,7 @@ export function VaultExposureCard({ exposure }: { exposure: VaultExposure }) {
         </tbody>
       </table>
       {totals.length ? (
-        <dl className="font-mono text-sm leading-[1.3] tracking-[-0.28px]">
+        <dl className="mt-1 border-t border-bg-border font-mono text-sm leading-[1.3] tracking-[-0.28px]">
           <Row label="Net intrinsic at spot">
             {totals.map((t) => (
               <div key={t.quoteMint}>{t.value}</div>
@@ -93,6 +94,6 @@ export function VaultExposureCard({ exposure }: { exposure: VaultExposure }) {
           </Row>
         </dl>
       ) : null}
-    </section>
+    </AppCard>
   );
 }

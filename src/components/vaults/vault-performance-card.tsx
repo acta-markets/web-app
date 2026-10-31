@@ -113,7 +113,7 @@ export function VaultPerformanceCard({
       </div>
 
       {truncated ? (
-        <p className="font-mono text-xs leading-[1.5] text-content-secondary">Showing the latest 200 cycles.</p>
+        <p className="mt-3 font-mono text-xs leading-[1.5] text-content-secondary">Showing the latest 200 cycles.</p>
       ) : null}
     </section>
   );

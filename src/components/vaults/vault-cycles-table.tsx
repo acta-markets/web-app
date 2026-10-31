@@ -3,14 +3,21 @@
 import { useMemo, useState } from "react";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppTable, AppTd, AppTh } from "@/components/app-ui/app-table";
-import { NONE, formatDate, formatPercent, formatSharePrice } from "@/lib/vaults/format";
+import { NONE, formatDate, formatPercent, formatSharePrice, formatTokenAmount } from "@/lib/vaults/format";
 import type { VaultCycle } from "@/lib/vaults/types";
 
 const FIRST_PAGE = 10;
 const PAGE = 20;
 
-/** Cycle, when it ended, its return and the share price it closed at. */
-export function VaultCyclesTable({ cycles }: { cycles: readonly VaultCycle[] }) {
+export function VaultCyclesTable({
+  cycles,
+  decimals,
+  symbol,
+}: {
+  cycles: readonly VaultCycle[];
+  decimals: number;
+  symbol: string;
+}) {
   const [limit, setLimit] = useState(FIRST_PAGE);
   const rows = useMemo(() => [...cycles].sort((a, b) => Number(b.started_at) - Number(a.started_at)), [cycles]);
   if (rows.length === 0) return null;
@@ -27,9 +34,12 @@ export function VaultCyclesTable({ cycles }: { cycles: readonly VaultCycle[] }) 
         <thead className="border-b border-bg-border">
           <tr>
             <AppTh>Cycle</AppTh>
+            <AppTh>Started</AppTh>
             <AppTh>Ended</AppTh>
             <AppTh className="text-right">Return</AppTh>
             <AppTh className="text-right">Share price</AppTh>
+            <AppTh className="text-right">Equity</AppTh>
+            <AppTh className="text-right">Positions</AppTh>
           </tr>
         </thead>
         <tbody>
@@ -40,6 +50,7 @@ export function VaultCyclesTable({ cycles }: { cycles: readonly VaultCycle[] }) 
               <tr key={`${cycle.cycle_number}:${cycle.started_at}`} className="border-b border-bg-border last:border-b-0">
                 {/* cycle numbers start at 0 on chain; people count from 1 */}
                 <AppTd className="tabular-nums">{Number(cycle.cycle_number) + 1}</AppTd>
+                <AppTd>{formatDate(Number(cycle.started_at))}</AppTd>
                 <AppTd>{running ? <span className="text-content-secondary">Running</span> : formatDate(Number(cycle.finished_at))}</AppTd>
                 <AppTd className="text-right tabular-nums">
                   {running ? NONE : formatPercent(cycle.return_pct, { signed: true })}
@@ -47,6 +58,12 @@ export function VaultCyclesTable({ cycles }: { cycles: readonly VaultCycle[] }) 
                 <AppTd className="text-right tabular-nums">
                   {running || cycle.share_price_end == null ? NONE : formatSharePrice(cycle.share_price_end)}
                 </AppTd>
+                <AppTd className="text-right tabular-nums">
+                  {running || cycle.equity_end == null
+                    ? NONE
+                    : `${formatTokenAmount(BigInt(cycle.equity_end), decimals, { compact: true })} ${symbol}`}
+                </AppTd>
+                <AppTd className="text-right tabular-nums">{cycle.positions_opened}</AppTd>
               </tr>
             );
           })}

@@ -219,6 +219,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const { selectedAccount, isConnected: walletConnected, signMessage, disconnectWallet } = useSolana();
   const clientRef = useRef<ActaWsClient | null>(null);
   const walletAddressRef = useRef<string | null>(null);
+  const [protocolFailure, setProtocolFailure] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [markets, setMarkets] = useState<MarketInfo[]>([]);
   const [tokenCaps, setTokenCaps] = useState<TokenCapInfo[]>([]);
@@ -324,6 +325,14 @@ export function RfqProvider({ children }: RfqProviderProps) {
         setConnectionState("connecting");
       });
 
+      const rejectProtocol = () => {
+        if (disposed || clientRef.current !== client) return;
+        setProtocolFailure(true);
+        client.disconnect();
+        setConnectionState("error");
+      };
+      client.on("versionMismatch", rejectProtocol);
+
       client.on("welcome", (welcome) => {
         serverClockOffsetMsRef.current = Number(welcome.server_time_unix_ms) - Date.now();
       });
@@ -333,6 +342,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
         setConnectionState("connected");
         setError(null);
         client.getEarnSummary();
+        client.getMarketDescriptors();
+        client.getTokens();
       });
 
       client.on("stateChange", (state) => {
@@ -342,6 +353,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
           dropRfq();
           tokenMarketsRequest.current = null;
           setTokenMarketsInfo(null);
+          setMarketDescriptors([]);
+          setStrikeTicks(new Map());
         }
       });
 
@@ -375,6 +388,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
       client.on("error", (serverErr) => {
         if (disposed || clientRef.current !== client) return;
         console.error("[RfqProvider] Error:", serverErr);
+        if (serverErr.type === "invalid_frame" || serverErr.type === "unsupported_protocol_version") {
+          rejectProtocol();
+          return;
+        }
 
 
 
@@ -443,6 +460,14 @@ export function RfqProvider({ children }: RfqProviderProps) {
       client.on("tokens", (tokens) => setStrikeTicks(strikeTicksByMint(tokens)));
 
       client.on("earnSummary", (data) => {
+        // SDK 0.3.0 can emit legacy summaries before descriptor validation fails.
+        // Reject their old APR shape regardless of response ordering.
+        if (!Array.isArray(data.assets) || data.assets.some(asset => !asset.apr ||
+          (asset.apr.type !== "available" && asset.apr.type !== "unavailable") ||
+          (asset.apr.type === "available" && (!Number.isFinite(asset.apr.min) || !Number.isFinite(asset.apr.max))))) {
+          rejectProtocol();
+          return;
+        }
         console.log("[RfqProvider] Earn summary received:", data.assets?.length ?? 0, "assets");
         setEarnSummary(data.assets ?? []);
       });
@@ -457,6 +482,15 @@ export function RfqProvider({ children }: RfqProviderProps) {
       client.on("markets", (m) => {
         console.log(`[RfqProvider] Markets received: ${m.length}`);
         setMarkets(m);
+      });
+
+      client.on("referenceChanged", () => {
+        dropRfq();
+        setMarketDescriptors([]);
+        setStrikeTicks(new Map());
+        client.getMarketDescriptors();
+        client.getTokens();
+        client.getEarnSummary();
       });
 
       client.on("marketDescriptors", (m) => {
@@ -844,6 +878,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       }
       let spread: ReturnType<typeof spreadTerms> | null = null;
       try {
+        if (params.terms.type === "cash_put") spread = spreadTerms("put_spread", 0, params.terms.strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market.underlying_mint));
         if (isSpreadTerms(params.terms)) spread = spreadTerms(params.terms.type, params.terms.lower_strike, params.terms.upper_strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market.underlying_mint));
       } catch (err) {
         setError(new Error(wsErrorMessage(err)));
@@ -998,7 +1033,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
   return (
     <RfqContext.Provider value={value}>
-      {children}
+      {protocolFailure ? <main role="alert" className="mx-auto max-w-2xl px-6 py-24 font-mono text-content-primary">
+        <h1 className="mb-4 font-space text-3xl">Trading temporarily unavailable</h1>
+        <p>This app requires the WS 1.0.0 API. The connected backend returned an incompatible response. Please reload after the backend maintenance window.</p>
+      </main> : children}
       {showDebugBadge ? (
         <div className="fixed bottom-3 right-3 z-[120] rounded-lg border border-white/20 bg-black/80 px-3 py-2 text-[11px] font-semibold text-white shadow-lg backdrop-blur">
           <div className="text-white/70">state: {connectionState}</div>

@@ -278,3 +278,21 @@ describe("RFQ sign-in and live caps", () => {
     expect(screen.queryByText("40%")).toBeNull();
   });
 });
+
+describe("market product policy", () => {
+  it("hides cash-settled entry points for physical-only markets and reacts to policy changes", () => {
+    const descriptor = (products: string[]) => ({ underlying_symbol: "SOL", products, market: { is_put: true, expiry_ts: now + 86400 } });
+    mocks.context.marketDescriptors = [descriptor(["cash_secured_put"])];
+    const view = render(<MarketClient asset="SOL" />);
+    expect(screen.queryByRole("tab", { name: "Sell spreads" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Sell cash put" })).toBeNull();
+    mocks.context.marketDescriptors = [descriptor(["cash_secured_put", "put_spread", "cash_put"])];
+    view.rerender(<MarketClient asset="SOL" />);
+    expect(screen.getByRole("tab", { name: "Sell spreads" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Sell cash put" })).toBeTruthy();
+    mocks.context.marketDescriptors = [descriptor(["cash_secured_put"])];
+    view.rerender(<MarketClient asset="SOL" />);
+    expect(screen.queryByRole("tab", { name: "Sell spreads" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Sell cash put" })).toBeNull();
+  });
+});
