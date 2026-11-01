@@ -53,18 +53,18 @@ describe("vaultApr", () => {
     expect(vaultApr(makePerformance({ covered: false }))).toMatchObject({ value: "—", muted: true, sources: [] });
   });
 
-  it("projects a young vault from its history once it has a week of it", () => {
-    const fifteenDays = {
+  it("projects a young vault from its history once it has 20 days of it", () => {
+    const twentyFiveDays = {
       return_pct: 2.83,
       from_time: "1792219565",
-      to_time: String(1792219565 + 15 * 86_400),
+      to_time: String(1792219565 + 25 * 86_400),
     };
-    const apr = vaultApr(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: fifteenDays } }));
-    expect(apr.value).toBe("97.20%");
+    const apr = vaultApr(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: twentyFiveDays } }));
+    expect(apr.value).toBe("50.30%");
     expect(apr.muted).toBe(true);
-    expect(apr.note).toContain("15 days");
-    const sixDays = { ...fifteenDays, to_time: String(1792219565 + 6 * 86_400) };
-    const young = vaultApr(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: sixDays } }));
+    expect(apr.note).toContain("25 days");
+    const nineteenDays = { ...twentyFiveDays, to_time: String(1792219565 + 19 * 86_400) };
+    const young = vaultApr(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: nineteenDays } }));
     expect(young).toMatchObject({ value: "New" });
   });
 

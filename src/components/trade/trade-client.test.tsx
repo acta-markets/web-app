@@ -45,10 +45,9 @@ describe("Trade cash-settled discovery", () => {
     ];
 
     render(<TradeClient />);
-    expect(screen.getByRole("heading", { name: "Cash-settled" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /SOL Sell Call Spread/ }).getAttribute("href")).toBe("/market/SOL?product=call_spread&market=call");
-    expect(screen.getByRole("link", { name: /SOL Sell Put Spread/ }).getAttribute("href")).toBe("/market/SOL?product=put_spread&market=put");
-    expect(screen.getByRole("link", { name: /SOL Cash Put/ }).getAttribute("href")).toBe("/market/SOL?product=cash_put&market=put");
+    expect(screen.getByRole("link", { name: /Call spread/ }).getAttribute("href")).toBe("/market/SOL?product=call_spread&market=call");
+    expect(screen.getByRole("link", { name: /Put spread/ }).getAttribute("href")).toBe("/market/SOL?product=put_spread&market=put");
+    expect(screen.getByRole("link", { name: /Cash put/ }).getAttribute("href")).toBe("/market/SOL?product=cash_put&market=put");
     expect(mocks.getEarnSummary).toHaveBeenCalledOnce();
   });
 
@@ -59,6 +58,6 @@ describe("Trade cash-settled discovery", () => {
     ];
 
     render(<TradeClient />);
-    expect(screen.queryByRole("heading", { name: "Cash-settled" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Cash put/ })).toBeNull();
   });
 });

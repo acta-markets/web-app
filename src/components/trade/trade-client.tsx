@@ -11,8 +11,12 @@ import { getTokenLogoSrc } from "@/lib/token-assets";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { normalizeTokenSymbol } from "@/lib/tokens";
 import type { EarnAssetSummary } from "@/lib/rfq-client";
-import { productLabel } from "@/lib/spreads";
-import { cashSettledMarketRows, type CashSettledMarketRow } from "@/lib/trade-products";
+import {
+  CASH_SETTLED_PRODUCTS,
+  cashSettledMarketRows,
+  type CashSettledMarketRow,
+  type CashSettledProduct,
+} from "@/lib/trade-products";
 
 type EarnRow = {
   asset: string;
@@ -27,10 +31,6 @@ function typeShort(t: MarketType) {
   return t === "call" ? "Call" : "CSP";
 }
 
-function formatExpiry(expiryTs: number) {
-  return new Date(expiryTs * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
 function summaryToRow(s: EarnAssetSummary): EarnRow {
   const type: MarketType = s.position_type === "cash_secured_put" ? "csp" : "call";
   return {
@@ -43,34 +43,44 @@ function summaryToRow(s: EarnAssetSummary): EarnRow {
   };
 }
 
-function CashSettledMarkets({ rows }: { rows: CashSettledMarketRow[] }) {
-  return <section className="flex flex-col gap-4">
-    <div>
-      <h2 className="font-space text-xl font-semibold leading-[1.2] text-content-primary">
-        Cash-settled
-      </h2>
-      <p className="mt-2 text-sm text-content-secondary">Settle in cash, without exchanging the asset.</p>
-    </div>
-    <div className="border-y border-bg-border">
-      {rows.map((row) => (
+const CASH_TILES: Record<CashSettledProduct, { title: string; body: string }> = {
+  call_spread: {
+    title: "Call spread",
+    body: "Lock USDC and earn premium. If spot finishes above your lower price, you pay the difference, capped at your upper price",
+  },
+  put_spread: {
+    title: "Put spread",
+    body: "Lock USDC and earn premium. If spot finishes below your upper price, you pay the difference, capped at your lower price",
+  },
+  cash_put: {
+    title: "Cash put",
+    body: "Lock USDC and earn premium. If spot finishes below your price, you pay the difference in USDC",
+  },
+};
+
+function CashSettledTiles({ rows }: { rows: CashSettledMarketRow[] }) {
+  const tiles = CASH_SETTLED_PRODUCTS.flatMap((product) => {
+    const row = rows.find((candidate) => candidate.product === product);
+    return row ? [row] : [];
+  });
+  return (
+    <div className="flex w-full max-w-[850px] gap-2 max-xl:px-[71px] max-lg:px-6 max-md:flex-col">
+      {tiles.map((row) => (
         <Link
-          key={`${row.asset}:${row.product}`}
+          key={row.product}
           href={`/market/${encodeURIComponent(row.asset)}?product=${row.product}&market=${encodeURIComponent(row.marketPda)}`}
-          className="flex min-h-16 items-center gap-4 border-b border-bg-border py-3 last:border-b-0 max-md:flex-wrap"
+          className="flex flex-1 flex-col items-center gap-1.5 border border-bg-border bg-[rgba(18,18,18,0.01)] px-6 py-5 backdrop-blur-[4px] transition-colors hover:border-[rgba(240,240,240,0.2)] hover:bg-[rgba(40,40,40,0.24)]"
         >
-          <div className="flex min-w-40 flex-1 items-center gap-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-clip rounded-full border border-bg-border bg-content-primary">
-              <img src={getTokenLogoSrc(row.asset)} alt="" className="h-full w-full object-cover" loading="lazy" />
-            </div>
-            <span className="font-medium text-content-primary">{row.asset}</span>
-          </div>
-          <span className="min-w-36 text-sm text-content-primary">{productLabel(row.product)}</span>
-          <span className="text-sm text-content-secondary">Expires {formatExpiry(row.expiryTs)}</span>
-          <span aria-hidden className="text-content-secondary">→</span>
+          <span className="text-xl font-bold leading-[1.2] tracking-[-0.4px] text-content-primary">
+            {CASH_TILES[row.product].title}
+          </span>
+          <p className="w-full text-center text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
+            {CASH_TILES[row.product].body}
+          </p>
         </Link>
       ))}
     </div>
-  </section>;
+  );
 }
 
 export function TradeClient() {
@@ -171,14 +181,10 @@ export function TradeClient() {
             </button>
           ))}
         </div>
+        {cashRows.length > 0 ? <CashSettledTiles rows={cashRows} /> : null}
       </div>
 
       <div className="mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6">
-        {cashRows.length > 0 ? <>
-          <CashSettledMarkets rows={cashRows} />
-          <div className="h-16" />
-        </> : null}
-
         <section className="flex flex-col gap-4">
           <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
             Popular
