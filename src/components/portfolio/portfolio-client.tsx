@@ -75,7 +75,8 @@ type TableRow = {
 type PortfolioRow = {
   id: string;
   asset: string;
-  type: "Covered call" | "Cash-secured put";
+  type: "call" | "put";
+  outcome: string;
   status: "open" | "funded" | "liquidated" | "settled";
   userStatus: "Open" | "Closed";
   createdTs: number;
@@ -86,6 +87,14 @@ type PortfolioRow = {
   notionalUsd: number;
   apr: number;
 };
+
+/** What happened to a closed covered call or cash-secured put. */
+function physicalOutcome(position: PositionInfo): string {
+  if (position.state === "liquidated") return "Liquidated";
+  if (position.state !== "settled" || position.settlement.type !== "physical") return "\u2014";
+  if (position.settlement.is_otm) return "Expired OTM";
+  return `ITM at ${formatStrikePrice(Number(position.settlement.settlement_price) / 1_000_000_000)}`;
+}
 
 function toUserStatus(status: string): "Open" | "Closed" {
   const s = status.toLowerCase();
@@ -277,7 +286,8 @@ export function PortfolioClient() {
       return {
         id: p.pda,
         asset: assetSymbol,
-        type: p.terms.type === "cash_secured_put" ? "Cash-secured put" : "Covered call",
+        type: p.terms.type === "cash_secured_put" ? "put" : "call",
+        outcome: physicalOutcome(p),
         status: p.state,
         userStatus: toUserStatus(p.state),
         createdTs,
@@ -325,13 +335,13 @@ export function PortfolioClient() {
   const { openTable, closedTable } = useMemo(() => {
     const physical = (r: PortfolioRow): TableRow => ({
       id: r.id,
-      label: `${r.asset} ${formatStrikePrice(r.strike)} ${r.type.toLowerCase()}`,
+      label: `${r.asset} ${formatStrikePrice(r.strike)} ${r.type}`,
       status: r.userStatus,
       expiryTs: r.expiryTs ?? r.createdTs,
       createdTs: r.createdTs,
       size: `${fmtNumber(r.quantity, 4)} ${r.asset}`,
       premium: formatUsdSmart(r.premiumUsd),
-      last: r.userStatus === "Open" && Number.isFinite(r.apr) ? `${r.apr.toFixed(2)}%` : "\u2014",
+      last: r.userStatus === "Open" ? (Number.isFinite(r.apr) ? `${r.apr.toFixed(2)}%` : "\u2014") : r.outcome,
       negative: false,
     });
     const spreads = allPositions.flatMap((p): TableRow[] => {
@@ -466,15 +476,15 @@ export function PortfolioClient() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-bg-border">
-                  {["Position", "Status", "Maturity", "Size", "Premium", positionsTab === "history" ? "Result" : "APR"].map((title, index) => (
-                    <AppTh key={title} className={cn("sticky top-0 z-10 bg-bg-primary", index > 2 && "text-right")}>{title}</AppTh>
+                  {["Position", "Maturity", "Size", "Premium", positionsTab === "history" ? "Result" : "APR"].map((title, index) => (
+                    <AppTh key={title} className={cn("sticky top-0 z-10 bg-bg-primary", index > 1 && "text-right")}>{title}</AppTh>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {tableRows.length === 0 ? (
                   <tr>
-                    <AppTd colSpan={6} className="py-10 text-center text-content-secondary">
+                    <AppTd colSpan={5} className="py-10 text-center text-content-secondary">
                       {positionsTab === "positions" ? "No open positions yet." : history.loading ? "Loading positions..." : history.failed ? "Positions unavailable" : "No closed positions yet."}
                     </AppTd>
                   </tr>
@@ -482,7 +492,6 @@ export function PortfolioClient() {
                   tableRows.map((row) => (
                     <tr key={row.id} className="border-b border-bg-border last:border-b-0">
                       <AppTd className="font-medium text-content-primary">{row.label}</AppTd>
-                      <AppTd className="text-content-secondary">{row.status}</AppTd>
                       <AppTd className="font-mono text-content-secondary">
                         {row.expiryTs ? (
                           <div className="flex flex-col">

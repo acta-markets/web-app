@@ -51,7 +51,7 @@ export function spreadRowView(position: PositionInfo, descriptors: MarketDescrip
   const symbol = amounts?.symbol ?? null;
   const cash = (value: bigint | null, signed = false) => value == null || !amounts
     ? NONE
-    : `${signed && value > 0n ? "+" : ""}${(Number(value) / 10 ** amounts.quoteDecimals).toLocaleString("en-US", { maximumFractionDigits: 2 })}${amounts.quoteSymbol ? ` ${amounts.quoteSymbol}` : ""}`;
+    : `${signed && value > 0n ? "+" : ""}${value < 0n ? "-" : ""}$${(Math.abs(Number(value)) / 10 ** amounts.quoteDecimals).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   const pnl = amounts?.pnl ?? null;
   const expiry = Number(position.expiry_ts);
   const settled = position.state === "settled" && pnl != null;

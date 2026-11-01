@@ -42,6 +42,6 @@ describe("spread positions table", () => {
   it("shows a settled spread's signed cash result", () => {
     const view = spreadRowView({ ...position, pda: "a", market: "m", expiry_ts: 1_793_000_000 } as PositionInfo, [{ ...descriptor, market: { market_pda: "m" } } as MarketDescriptorInfo]);
     expect(view?.label).toBe("TEST 100/120 put");
-    expect([view?.result, view?.negative]).toEqual(["-8.02 USDC", true]);
+    expect([view?.result, view?.negative]).toEqual(["-$8.02", true]);
   });
 });
