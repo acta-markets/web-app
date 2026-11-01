@@ -391,7 +391,7 @@ function VaultDepositFlow({
           <p className="font-mono text-xs leading-[1.5] text-content-secondary">
             Requests complete at the end of the cycle, at the share price calculated then. The manager can make bad trades
             and you carry the losses.{" "}
-            <Link href="/docs/guide/returns-and-risks" className="text-accent-secondary hover:text-accent-primary">
+            <Link prefetch={false} href="/docs/guide/returns-and-risks" className="text-accent-secondary hover:text-accent-primary">
               Returns, fees and risks
             </Link>
           </p>
