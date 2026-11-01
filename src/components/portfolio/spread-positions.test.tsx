@@ -21,6 +21,12 @@ describe("spread portfolio cash results", () => {
 
 describe("spread positions table", () => {
   afterEach(cleanup);
+  it("annualizes premium on the locked collateral", () => {
+    const open = { ...position, pda: "a", market: "m", state: "open", created_at: 1_793_000_000, expiry_ts: 1_793_000_000 + 365 * 86_400 } as PositionInfo;
+    const amounts = spreadPositionAmounts(open, descriptor);
+    const expected = (Number(amounts?.premium) / Number(amounts?.collateral)) * 100;
+    expect(spreadRowView(open, [])?.apr).toBe(`${expected.toFixed(2)}%`);
+  });
   it("never shows a mint address as the symbol", () => {
     const mint = "Mint111111111111111111111111111111111111111";
     const view = spreadRowView({ ...position, pda: "a", market: "m", underlying_mint: mint, state: "open", expiry_ts: 1_793_000_000 } as PositionInfo, []);

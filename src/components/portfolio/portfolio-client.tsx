@@ -336,7 +336,7 @@ export function PortfolioClient() {
     });
     const spreads = allPositions.flatMap((p): TableRow[] => {
       const view = spreadRowView(p, rfqMarketDescriptors);
-      return view ? [{ ...view, id: p.pda, createdTs: Number(p.created_at), last: view.result }] : [];
+      return view ? [{ ...view, id: p.pda, createdTs: Number(p.created_at), last: view.status === "Open" ? view.apr : view.result }] : [];
     });
     const open = spreads.filter(r => r.status === "Open");
     const closed = spreads.filter(r => r.status !== "Open");
