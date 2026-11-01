@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { parseReferralCode } from "@/lib/rfq-client";
 
 const STORAGE_KEY = "acta_ref_pending";
 
@@ -36,8 +35,11 @@ export function RefCapture() {
   useEffect(() => {
     const raw = searchParams?.get("ref");
     if (!raw) return;
-    const parsed = parseReferralCode(raw);
-    if (parsed.ok) writePendingRefCode(parsed.code);
+    // The SDK is heavy and this runs on every page, including the landing.
+    void import("@/lib/rfq-client").then(({ parseReferralCode }) => {
+      const parsed = parseReferralCode(raw);
+      if (parsed.ok) writePendingRefCode(parsed.code);
+    });
   }, [searchParams]);
 
   return null;

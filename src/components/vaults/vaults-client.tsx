@@ -178,6 +178,7 @@ export function VaultsClient({ initialCategory }: { initialCategory: CategoryFil
               Curated vaults for the assets you already hold
             </p>
             <Link
+              prefetch={false}
               href="/docs/guide/vaults"
               className="inline-flex items-center gap-0.5 text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary"
             >

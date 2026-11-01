@@ -118,10 +118,10 @@ export function VaultRisks() {
         />
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 pt-5 font-mono text-sm">
-        <Link href="/docs/guide/deposits-and-withdrawals" className="text-accent-secondary hover:text-accent-primary">
+        <Link prefetch={false} href="/docs/guide/deposits-and-withdrawals" className="text-accent-secondary hover:text-accent-primary">
           Deposits and withdrawals
         </Link>
-        <Link href="/docs/guide/returns-and-risks" className="text-accent-secondary hover:text-accent-primary">
+        <Link prefetch={false} href="/docs/guide/returns-and-risks" className="text-accent-secondary hover:text-accent-primary">
           Returns, fees and risks
         </Link>
       </div>
