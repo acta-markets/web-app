@@ -1,7 +1,7 @@
 import { rememberReferenceTokens } from "@/lib/tokens";
-import { fetchTokens, fetchVault, fetchVaultCycles, fetchVaultDepositorHistory, fetchVaultExposure, fetchVaults } from "./api";
+import { fetchTokens, fetchUnsettledVaultPositions, fetchVault, fetchVaultCycles, fetchVaultDepositorHistory, fetchVaultExposure, fetchVaults } from "./api";
 import { loadSampleData, VAULTS_SAMPLE_MODE } from "./sample";
-import type { Vault, VaultCyclesPage, VaultDepositorEvent, VaultExposure } from "./types";
+import type { Vault, VaultCyclesPage, VaultDepositorEvent, VaultExposure, VaultPosition } from "./types";
 
 /**
  * The only place fixture and live data split. Hooks read through here; `api.ts`
@@ -59,6 +59,12 @@ export function loadVaultCycles(pda: string, signal?: AbortSignal): Promise<Vaul
 export function loadVaultExposure(pda: string, signal?: AbortSignal): Promise<VaultExposure | null> {
   if (!VAULTS_SAMPLE_MODE) return fetchVaultExposure(pda, signal);
   return loadSampleData().then((data) => withSampleLatency(data.exposure[pda] ?? null, signal));
+}
+
+/** Open positions with their premium and second strike. Sample vaults have none. */
+export function loadUnsettledVaultPositions(pda: string, signal?: AbortSignal): Promise<VaultPosition[]> {
+  if (!VAULTS_SAMPLE_MODE) return fetchUnsettledVaultPositions(pda, signal);
+  return withSampleLatency([], signal);
 }
 
 const HISTORY_PAGE_LIMIT = 200;

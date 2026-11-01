@@ -68,7 +68,7 @@ The limit is per IP (IPv6 grouped by /64), and users behind one NAT share it. Ke
 `use-vaults.ts` polls every 30 s (`VAULT_REFRESH_MS`), and only after the previous request has finished, so requests never overlap.
 
 - **List page:** one `/vaults` call. It already contains everything for cards, including `performance`. Don't fan out per-vault requests from the list.
-- **Detail page:** `/vaults/{pda}`, `/cycles` and `/exposure` on poll. Exposure is polled only there; a failed read (a 503 means positions older than 15 s) hides the block instead of showing stale numbers.
+- **Detail page:** `/vaults/{pda}`, `/cycles`, `/exposure` and unsettled `/positions` on poll. `/exposure` gives spot; `/positions` gives the premium and second strike, from which the page computes distance and P&L at spot for every position. Exposure is polled only there; a failed read (a 503 means positions older than 15 s) hides the block instead of showing stale numbers.
 - **Deposit modal:** the wallet's history in that vault down to the generation start, for the return since entry. It reloads when the share count or the generation changes.
 - **Portfolio page:** `/depositors/{wallet}` on poll. Fetch history on open and on "load more"; don't poll deep pages.
 - **Hidden tab:** stop polling (`document.visibilityState === "hidden"`) and refresh when it becomes visible again. `usePolled` does this.

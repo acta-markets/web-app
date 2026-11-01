@@ -23,14 +23,8 @@ export function VaultCyclesTable({
   if (rows.length === 0) return null;
 
   return (
-    <section aria-labelledby="cycle-history-heading" className="flex flex-col gap-4">
-      <h2
-        id="cycle-history-heading"
-        className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary"
-      >
-        Cycle history
-      </h2>
-      <AppTable>
+    <section aria-label="Cycle history" className="flex flex-col gap-4">
+      <AppTable className="border-0">
         <thead className="border-b border-bg-border">
           <tr>
             <AppTh>Cycle</AppTh>

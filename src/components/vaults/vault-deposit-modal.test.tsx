@@ -45,7 +45,7 @@ vi.mock("@/components/app-ui/toast", () => ({
   useToast: () => ({ show: env.show }),
 }));
 
-import { VaultDepositModal } from "./vault-deposit-modal";
+import { VaultDepositForm, VaultDepositModal } from "./vault-deposit-modal";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 
@@ -72,13 +72,6 @@ function position(overrides: Partial<VaultDepositorState> = {}): VaultDepositorS
     nativeLamports: 5n * SOL,
     ...overrides,
   };
-}
-
-function renderModal(vault = solVault(), initialTab: "deposit" | "withdraw" = "deposit") {
-  const meta = resolveVaultMeta(vault, { [vault.vault_pda]: { name: "SOL test vault", curator: "Acta" } });
-  const onTransaction = vi.fn();
-  render(<VaultDepositModal vault={vault} meta={meta} initialTab={initialTab} onClose={vi.fn()} onTransaction={onTransaction} />);
-  return { onTransaction };
 }
 
 const cta = (name: string | RegExp) => screen.getByRole("button", { name }) as HTMLButtonElement;
@@ -112,7 +105,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("VaultDepositModal", () => {
+describe.each(["modal", "inline"] as const)("Vault deposit flow (%s)", (presentation) => {
+function renderModal(vault = solVault(), initialTab: "deposit" | "withdraw" = "deposit") {
+  const meta = resolveVaultMeta(vault, { [vault.vault_pda]: { name: "SOL test vault", curator: "Acta" } });
+  const onTransaction = vi.fn();
+  render(presentation === "modal"
+    ? <VaultDepositModal vault={vault} meta={meta} initialTab={initialTab} onClose={vi.fn()} onTransaction={onTransaction} />
+    : <VaultDepositForm vault={vault} meta={meta} initialTab={initialTab} onTransaction={onTransaction} />);
+  return { onTransaction };
+}
+
+
   it("asks for a wallet before anything else", async () => {
     const user = userEvent.setup();
     env.wallet = null;

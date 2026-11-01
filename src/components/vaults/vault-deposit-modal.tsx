@@ -92,24 +92,32 @@ function maxOf(a: bigint, b: bigint): bigint {
   return a > b ? a : b;
 }
 
-/**
- * Allocation management for one vault: the wallet's position and open requests,
- * plus deposit and withdraw requests. Mount it only while open; it polls the
- * wallet's on-chain state for as long as it is mounted.
- */
-export function VaultDepositModal({
-  vault,
-  meta,
-  initialTab = "deposit",
-  onClose,
-  onTransaction,
-}: {
+type VaultDepositProps = {
   vault: Vault;
   meta: ResolvedVaultMeta;
   initialTab?: VaultModalTab;
-  onClose: () => void;
   onTransaction?: () => void;
-}) {
+};
+
+type Presentation = { presentation: "inline" } | { presentation: "modal"; onClose: () => void };
+
+/** The list page keeps its modal; both surfaces use the same form and transaction state. */
+export function VaultDepositModal(props: VaultDepositProps & { onClose: () => void }) {
+  return <VaultDepositFlow {...props} presentation="modal" />;
+}
+
+export function VaultDepositForm(props: VaultDepositProps) {
+  return <VaultDepositFlow {...props} presentation="inline" />;
+}
+
+/** Polls the connected wallet's on-chain position while mounted. */
+function VaultDepositFlow({
+  vault,
+  meta,
+  initialTab = "deposit",
+  onTransaction,
+  ...surface
+}: VaultDepositProps & Presentation) {
   const { selectedAccount } = useSolana();
   const { openSidebar } = useWalletSidebar();
   const { referralStatus, openReferralGate } = useRfqContext();
@@ -221,29 +229,24 @@ export function VaultDepositModal({
   const cta = tab === "deposit" ? depositCta() : withdrawCta();
   const requested = tx.kind === "success" && (tx.action === "deposit" || tx.action === "withdraw") ? tx : null;
 
-  return (
-    <AppModal
-      open
-      onClose={onClose}
-      title={meta.name}
-      showHowItWorks={false}
-      dismissible={!pending}
-      className="max-h-[calc(100dvh-2rem)] max-w-[480px] overflow-y-auto max-md:p-4"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <VaultAssetLogo symbol={symbol} size={32} />
-          <div className="min-w-0">
-            <AprLabel apr={apr} className="font-mono text-sm leading-[1.2] text-content-secondary" />
-            <div
-              className={`font-mono text-base font-medium leading-[1.3] tabular-nums ${apr.muted ? "text-content-secondary" : "text-content-primary"}`}
-            >
-              {apr.value}
+  const content = (
+    <>
+      {surface.presentation === "modal" ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <VaultAssetLogo symbol={symbol} size={32} />
+            <div className="min-w-0">
+              <AprLabel apr={apr} className="font-mono text-sm leading-[1.2] text-content-secondary" />
+              <div
+                className={`font-mono text-base font-medium leading-[1.3] tabular-nums ${apr.muted ? "text-content-secondary" : "text-content-primary"}`}
+              >
+                {apr.value}
+              </div>
             </div>
           </div>
+          <VaultStatusLabel status={status} showDetail={false} />
         </div>
-        <VaultStatusLabel status={status} showDetail={false} />
-      </div>
+      ) : null}
 
       {connected ? (
         <VaultPositionPanel
@@ -280,7 +283,7 @@ export function VaultDepositModal({
               View on Solscan ↗
             </a>
           </div>
-          <AppButton className="w-full" onClick={onClose}>
+          <AppButton className="w-full" onClick={() => surface.presentation === "modal" ? surface.onClose() : setTx({ kind: "idle" })}>
             Done
           </AppButton>
         </div>
@@ -343,12 +346,6 @@ export function VaultDepositModal({
                 </dd>
               </div>
             ) : null}
-            {tab === "deposit" && native ? (
-              <div className="flex justify-between gap-3">
-                <dt className="text-content-secondary">Kept for fees</dt>
-                <dd className="tabular-nums text-content-primary">{formatTokenAmount(NATIVE_FEE_RESERVE, decimals)} SOL</dd>
-              </div>
-            ) : null}
             {tab === "withdraw" && native ? (
               <div className="flex justify-between gap-3">
                 <dt className="text-content-secondary">Paid out as</dt>
@@ -408,6 +405,23 @@ export function VaultDepositModal({
           </AppButton>
         </>
       )}
+    </>
+  );
+
+  if (surface.presentation === "inline") {
+    return <section aria-label="Deposit or withdraw" className="space-y-3">{content}</section>;
+  }
+
+  return (
+    <AppModal
+      open
+      onClose={surface.onClose}
+      title={meta.name}
+      showHowItWorks={false}
+      dismissible={!pending}
+      className="max-h-[calc(100dvh-2rem)] max-w-[480px] overflow-y-auto max-md:p-4"
+    >
+      {content}
     </AppModal>
   );
 }
