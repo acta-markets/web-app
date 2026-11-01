@@ -11,6 +11,8 @@ import { getTokenLogoSrc } from "@/lib/token-assets";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { normalizeTokenSymbol } from "@/lib/tokens";
 import type { EarnAssetSummary } from "@/lib/rfq-client";
+import { productLabel } from "@/lib/spreads";
+import { cashSettledMarketRows, type CashSettledMarketRow } from "@/lib/trade-products";
 
 type EarnRow = {
   asset: string;
@@ -25,6 +27,10 @@ function typeShort(t: MarketType) {
   return t === "call" ? "Call" : "CSP";
 }
 
+function formatExpiry(expiryTs: number) {
+  return new Date(expiryTs * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function summaryToRow(s: EarnAssetSummary): EarnRow {
   const type: MarketType = s.position_type === "cash_secured_put" ? "csp" : "call";
   return {
@@ -37,11 +43,41 @@ function summaryToRow(s: EarnAssetSummary): EarnRow {
   };
 }
 
+function CashSettledMarkets({ rows }: { rows: CashSettledMarketRow[] }) {
+  return <section className="flex flex-col gap-4">
+    <div>
+      <h2 className="font-space text-xl font-semibold leading-[1.2] text-content-primary">
+        Cash-settled
+      </h2>
+      <p className="mt-2 text-sm text-content-secondary">Settle in cash, without exchanging the asset.</p>
+    </div>
+    <div className="border-y border-bg-border">
+      {rows.map((row) => (
+        <Link
+          key={`${row.asset}:${row.product}`}
+          href={`/market/${encodeURIComponent(row.asset)}?product=${row.product}&market=${encodeURIComponent(row.marketPda)}`}
+          className="flex min-h-16 items-center gap-4 border-b border-bg-border py-3 last:border-b-0 max-md:flex-wrap"
+        >
+          <div className="flex min-w-40 flex-1 items-center gap-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-clip rounded-full border border-bg-border bg-content-primary">
+              <img src={getTokenLogoSrc(row.asset)} alt="" className="h-full w-full object-cover" loading="lazy" />
+            </div>
+            <span className="font-medium text-content-primary">{row.asset}</span>
+          </div>
+          <span className="min-w-36 text-sm text-content-primary">{productLabel(row.product)}</span>
+          <span className="text-sm text-content-secondary">Expires {formatExpiry(row.expiryTs)}</span>
+          <span aria-hidden className="text-content-secondary">→</span>
+        </Link>
+      ))}
+    </div>
+  </section>;
+}
+
 export function TradeClient() {
   const [type, setType] = useState<MarketType>("call");
   const router = useRouter();
   const [howOpen, setHowOpen] = useState(false);
-  const { earnSummary, connectionState, getEarnSummary } = useRfqContext();
+  const { earnSummary, marketDescriptors, connectionState, getEarnSummary } = useRfqContext();
 
   const wsReady =
     connectionState !== "disconnected" && connectionState !== "error" && connectionState !== "connecting";
@@ -61,6 +97,9 @@ export function TradeClient() {
     if (!earnSummary) return [];
     return earnSummary.map(summaryToRow);
   }, [earnSummary]);
+
+  // The descriptor feed does not tick at expiry, so evaluate its validity on each Trade render.
+  const cashRows = cashSettledMarketRows(marketDescriptors);
 
   const rows = useMemo(() => allRows.filter((r) => r.type === type), [allRows, type]);
 
@@ -135,6 +174,11 @@ export function TradeClient() {
       </div>
 
       <div className="mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6">
+        {cashRows.length > 0 ? <>
+          <CashSettledMarkets rows={cashRows} />
+          <div className="h-16" />
+        </> : null}
+
         <section className="flex flex-col gap-4">
           <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
             Popular

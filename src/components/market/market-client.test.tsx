@@ -9,12 +9,16 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { ActaWsRequestError } from "@acta-markets/ts-sdk/ws";
 import { MarketClient } from "./market-client";
 
-const mocks = vi.hoisted(() => ({ params: "type=call", context: {} as Record<string, unknown>, account: null as { address: string } | null, refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), modal: vi.fn(), signMessage: vi.fn(), openSidebar: vi.fn() }));
+const mocks = vi.hoisted(() => ({ params: "type=call", context: {} as Record<string, unknown>, account: null as { address: string } | null, refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), modal: vi.fn(), spread: vi.fn(), signMessage: vi.fn(), openSidebar: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace }), useSearchParams: () => new URLSearchParams(mocks.params) }));
 vi.mock("@/components/rfq/rfq-provider", () => ({ RFQ_TTL_SECONDS: 30, useRfqContext: () => mocks.context }));
 vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ selectedAccount: mocks.account, signMessage: mocks.signMessage }) }));
 vi.mock("@/components/wallet/wallet-sidebar", () => ({ useWalletSidebar: () => ({ openSidebar: mocks.openSidebar }) }));
 vi.mock("./rfq-flow-modal", () => ({ RfqFlowModal: (props: unknown) => { mocks.modal(props); return null; } }));
+vi.mock("./spread-market", () => ({ SpreadMarket: (props: { cashPut?: boolean; initialProduct?: string; initialMarketId?: string | null }) => {
+  mocks.spread(props);
+  return <div data-testid="spread-market">{props.cashPut ? "cash put" : props.initialProduct}</div>;
+} }));
 const now = 1_800_000_000;
 function snapshot(spot = 100, stale = false): TokenMarketsInfoData {
   return {
@@ -61,8 +65,8 @@ describe("market APR from backend prices", () => {
     ];
     setSnapshot(data);
     render(<MarketClient asset="SOL" />);
-    expect(screen.getByRole("button", { name: /\$101\.1\s*APR/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /\$101\.4\s*APR/ }));
+    expect(screen.getByRole("radio", { name: /\$101\.1\s*APR/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: /\$101\.4\s*APR/ }));
     expect(screen.getByText("If spot below $101.4")).toBeTruthy();
     expect(screen.getByText("If spot above $101.4")).toBeTruthy();
   });
@@ -294,5 +298,25 @@ describe("market product policy", () => {
     view.rerender(<MarketClient asset="SOL" />);
     expect(screen.queryByRole("tab", { name: "Sell spreads" })).toBeNull();
     expect(screen.queryByRole("tab", { name: "Sell cash put" })).toBeNull();
+  });
+
+  it("opens a product-qualified direct link and returns to the physical market when the URL changes", async () => {
+    const descriptor = (products: string[]) => ({
+      underlying_symbol: "SOL",
+      products,
+      market: { market_pda: "put-market", is_put: true, expiry_ts: now + 86400 },
+    });
+    mocks.params = "product=put_spread&market=put-market";
+    mocks.context.marketDescriptors = [descriptor(["cash_secured_put", "put_spread", "cash_put"])];
+    const view = render(<MarketClient asset="SOL" />);
+    await waitFor(() => expect(screen.getByTestId("spread-market").textContent).toBe("put_spread"));
+    expect(mocks.spread.mock.lastCall?.[0]).toMatchObject({ initialProduct: "put_spread", initialMarketId: "put-market" });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Sell cash put" }));
+    expect(mocks.replace).toHaveBeenLastCalledWith("/market/SOL?product=cash_put");
+
+    mocks.params = "type=csp&market=physical-market";
+    view.rerender(<MarketClient asset="SOL" />);
+    await waitFor(() => expect(screen.queryByTestId("spread-market")).toBeNull());
   });
 });

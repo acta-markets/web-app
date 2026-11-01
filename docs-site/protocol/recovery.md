@@ -18,7 +18,7 @@ Read the finalized vault account and resolve the last swap’s status before req
 
 A rebalance actor can drain into main while the vault is normal. Governance can drain into main after the 300-second staging timeout in any safety mode; pause and price checks still apply. Completing into second requires current rebalance rights, including phase and expiry checks.
 
-For a recovery conversion that needs an intermediate token, `VaultStagingMode.RecoveryStage` starts from second under governance’s recovery rules. The current SDK checked helpers cannot verify a served `RecoveryStage`; see [Checked signing](vault-integration.md#checked-signing). Ordinary recovery conversion cannot run over an existing slot: unstage that slot first. Equity processing, cycle finalization and final redemption wait until the slot closes. Deposit refunds and request cancellations keep their own eligibility rules.
+For a recovery conversion that needs an intermediate token, `VaultStagingMode.RecoveryStage` starts from second under governance’s recovery rules. Current SDK checked helpers verify a served `RecoveryStage`; supply the main price section and accepted staging route described in [Checked signing](vault-integration.md#checked-signing). Ordinary recovery conversion cannot run over an existing slot: unstage that slot first. Equity processing, cycle finalization and final redemption wait until the slot closes. Deposit refunds and request cancellations keep their own eligibility rules.
 
 ## The backend is behind
 
