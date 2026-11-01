@@ -235,9 +235,18 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
     void (async () => {
       let awaitingSignature = false;
       if (submission === "unsigned") {
-        const snapshot = pushed ?? await client.getMyActiveRfqsAsync();
+        let snapshot = pushed ?? await client.getMyActiveRfqsAsync();
         if (!isCurrent()) return;
-        const rfq = snapshot.rfqs.find(rfq => rfq.rfq_id === order.rfqId);
+        let rfq = snapshot.rfqs.find(rfq => rfq.rfq_id === order.rfqId);
+        const seen = new Set<string>();
+        while (!rfq && snapshot.next_cursor !== null) {
+          const cursor = snapshot.next_cursor;
+          if (seen.has(cursor)) throw new Error("Active RFQ cursor did not advance");
+          seen.add(cursor);
+          snapshot = await client.getMyActiveRfqsAsync(undefined, { limit: 200, cursor: { type: "after", id: cursor } });
+          if (!isCurrent()) return;
+          rfq = snapshot.rfqs.find(row => row.rfq_id === order.rfqId);
+        }
         if (rfq?.locked_order_id === order.orderId) {
           if (rfq.state === "enqueued") {
             promoteSent(order);

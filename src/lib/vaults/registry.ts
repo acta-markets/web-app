@@ -55,6 +55,8 @@ export type ResolvedVaultMeta = {
   curator: string;
   /** true when the curator is the governance address, not a registered name */
   curatorIsAddress: boolean;
+  /** deposit asset first, then the second leg when the vault has one */
+  legs: string[];
   category: VaultCategory;
   assetSymbol: string;
   /** false when the deposit mint is unknown and assetSymbol is a labelled mint address */
@@ -83,6 +85,7 @@ export function resolveVaultMeta(
     name: served?.name ?? meta?.name ?? `${legs.join(" / ")} vault · ${shortAddress(vault.vault_pda)}`,
     curator: curator ?? shortAddress(vault.governance),
     curatorIsAddress: curator === undefined,
+    legs,
     category: meta?.category ?? deriveCategory(knownSymbol),
     assetSymbol: knownSymbol ?? tokenDisplayName(vault.main_mint),
     assetKnown: knownSymbol !== undefined,

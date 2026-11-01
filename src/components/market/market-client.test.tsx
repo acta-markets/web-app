@@ -22,7 +22,7 @@ vi.mock("./spread-market", () => ({ SpreadMarket: (props: { cashPut?: boolean; i
 const now = 1_800_000_000;
 function snapshot(spot = 100, stale = false): TokenMarketsInfoData {
   return {
-    request_id: "metadata", underlying_symbol: "SOL", underlying_decimals: 9,
+    next_cursor: null, request_id: "metadata", underlying_symbol: "SOL", underlying_decimals: 9,
     quote_symbol: "USDC", quote_decimals: 6,
     reference_price: spot * 1e9, size_rule: { min_size: 1e8, max_size: 1e10, step: 1e8 },
     markets: [{ products: ["covered_call", "cash_secured_put", "call_spread", "put_spread"], market_pda: "market" as Address, expiry_ts: now + 365 * 86400, is_put: false,

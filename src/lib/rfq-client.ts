@@ -78,6 +78,8 @@ export async function createRfqClient(options?: CreateClientOptions): Promise<Ac
     onDisconnect: "keep_quotes", products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"],
     clientName: "acta-web-app", clientVersion: CLIENT_VERSION,
     autoReconnect: true,
+    // The app reconciles open positions and active RFQs without fetching all history.
+    autoReconcile: false,
     debug: options?.debug ?? false,
   });
 }

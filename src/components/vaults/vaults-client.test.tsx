@@ -118,7 +118,7 @@ describe("VaultsClient", () => {
     render(<VaultsClient initialCategory="all" />);
     expect(card("jitoSOL").getByText("$102K")).toBeTruthy();
     expect(card("USDC").getByText("$2.11M")).toBeTruthy();
-    expect(card("ZEC").getByText("7,238 ZEC")).toBeTruthy();
+    expect(card("ZEC").getAllByText("7,238 ZEC")).toHaveLength(2);
   });
 
   it("opens deposits on Deposit, and a closing vault on Withdraw", async () => {
