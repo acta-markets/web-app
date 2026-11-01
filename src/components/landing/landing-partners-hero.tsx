@@ -23,7 +23,7 @@ export function LandingPartnersHero() {
           right: "-5%",
           width: "65%",
           mixBlendMode: "hard-light",
-          backgroundImage: "url(/landing/bg8-texture.png)",
+          backgroundImage: "url(/landing/bg8-texture.webp)",
           backgroundSize: "contain",
           backgroundRepeat: "no-repeat",
           backgroundPosition: "right center",

@@ -15,7 +15,7 @@ export function LandingCta() {
         className="absolute"
         style={{
           inset: "-10%",
-          backgroundImage: "url(/landing/ascii-mountain.png)",
+          backgroundImage: "url(/landing/ascii-mountain.webp)",
           backgroundSize: "cover",
           backgroundPosition: "center",
           mixBlendMode: "color-dodge",
