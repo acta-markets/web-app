@@ -35,10 +35,10 @@ describe("Portfolio WS history", () => {
     expect(screen.getByText("7 open positions")).toBeTruthy();
     expect(screen.getByTestId("income-chart").textContent).toContain('"v":123');
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
-    expect(screen.getByText(/covered call/)).toBeTruthy();
+    expect(screen.getByText(/ call$/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     await screen.findByText("SOL 100/120 put");
-    expect(screen.getByText(/covered call/)).toBeTruthy();
+    expect(screen.getByText(/ call$/)).toBeTruthy();
     expect(mocks.page).toHaveBeenLastCalledWith(mocks.client, { settled: true, limit: 50, cursor: "opaque-page-2" }, expect.any(AbortSignal));
     expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
     expect(screen.getByText("$123")).toBeTruthy();
@@ -62,7 +62,7 @@ describe("Portfolio WS history", () => {
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     await screen.findByRole("alert");
-    expect(screen.getByText(/covered call/)).toBeTruthy();
+    expect(screen.getByText(/ call$/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
     expect(mocks.page.mock.calls[2][1].cursor).toBe("retry");
@@ -81,7 +81,7 @@ describe("Portfolio WS history", () => {
     view.rerender(<PortfolioClient />);
     expect(pageSignal.aborted).toBe(false);
     await act(async () => resolvePage({ positions: [position("old", 1_700_000_000, true)], next_cursor: null }));
-    expect(screen.getByText(/covered call/)).toBeTruthy();
+    expect(screen.getByText(/ call$/)).toBeTruthy();
     expect(screen.getByText("SOL 100/120 put")).toBeTruthy();
     expect(mocks.page).toHaveBeenCalledTimes(2);
   });
