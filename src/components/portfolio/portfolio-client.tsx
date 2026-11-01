@@ -5,6 +5,7 @@ import { AppCard } from "@/components/app-ui/app-card";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { AppTd, AppTh } from "@/components/app-ui/app-table";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
+import type { PositionInfo } from "@/lib/rfq-client";
 import { getTokenBrand } from "@/lib/token-brand";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getRpcEndpoint } from "@/lib/network";
