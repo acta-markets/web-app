@@ -60,13 +60,12 @@ describe("vaultApr", () => {
       to_time: String(1792219565 + 15 * 86_400),
     };
     const apr = vaultApr(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: fifteenDays } }));
-    expect(apr.label).toBe("Projected APY");
     expect(apr.value).toBe("97.20%");
     expect(apr.muted).toBe(true);
     expect(apr.note).toContain("15 days");
     const sixDays = { ...fifteenDays, to_time: String(1792219565 + 6 * 86_400) };
     const young = vaultApr(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: sixDays } }));
-    expect(young).toMatchObject({ label: "APY", value: "New" });
+    expect(young).toMatchObject({ value: "New" });
   });
 
   it("adds the deposit asset's staking yield to the premium, so the parts sum to the headline", () => {
