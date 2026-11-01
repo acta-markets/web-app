@@ -14,6 +14,7 @@ import type {
 export type AprSource = { label: "Staking" | "Premium"; pct: number };
 
 export type AprView = {
+  label: "APY" | "Projected APY";
   value: string;
   muted: boolean;
   /** the parts the headline adds up, when there are figures to show */
@@ -22,18 +23,26 @@ export type AprView = {
 };
 
 const PREMIUM_NOTE = "Premium is what the vault earns selling options, after fees.";
+const PROJECTED_MIN_DAYS = 7;
+
+/** The backend's APY compounding, over the history the vault has so far. */
+function projectedApy(returnPct: number, days: number): number {
+  return 100 * ((1 + returnPct / 100) ** (365 / days) - 1);
+}
 const STAKING_NOTE = "Staking is the deposit asset's own yield, which the vault's share price does not include.";
 
 /**
  * The one APY every surface shows: the backend's 30-day APY plus any staking
- * yield of the deposit asset. A vault without 30 days of history reads "New";
- * one whose history the backend cannot cover reads as empty.
+ * yield of the deposit asset. Under 30 days of history it is a projection from
+ * what the vault has so far, or "New" under a week. A vault whose history the
+ * backend cannot cover reads as empty.
  */
 export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0): AprView {
   const staking: AprSource[] = stakingAprPct > 0 ? [{ label: "Staking", pct: stakingAprPct }] : [];
   const premium = performance?.apy_30d ?? null;
   if (premium !== null) {
     return {
+      label: "APY",
       value: formatPercent(stakingAprPct + premium),
       muted: false,
       sources: [...staking, { label: "Premium", pct: premium }],
@@ -43,8 +52,19 @@ export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0
   const all = performance?.returns.all ?? null;
   const young =
     performance?.covered === true && (all === null || Number(performance.computed_at) - Number(all.from_time) < APY_WINDOW_SECS);
-  if (!young) return { value: NONE, muted: true, sources: [], note: "Not available." };
-  return { value: "New", muted: true, sources: staking, note: "Premium shows after 30 days of history." };
+  if (!young) return { label: "APY", value: NONE, muted: true, sources: [], note: "Not available." };
+  const days = all === null ? 0 : (Number(all.to_time) - Number(all.from_time)) / 86_400;
+  if (all === null || days < PROJECTED_MIN_DAYS) {
+    return { label: "APY", value: "New", muted: true, sources: staking, note: "Premium shows after 7 days of history." };
+  }
+  const projected = projectedApy(all.return_pct, days);
+  return {
+    label: "Projected APY",
+    value: formatPercent(stakingAprPct + projected),
+    muted: true,
+    sources: [...staking, { label: "Premium", pct: projected }],
+    note: `Annualized from ${Math.floor(days)} days of history. The 30-day APY replaces it once the vault has 30 days. A short history can swing a lot.`,
+  };
 }
 
 /** Return of the current capital generation, net of fees. */

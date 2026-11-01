@@ -44,12 +44,29 @@ describe("vaultApr", () => {
       muted: false,
       sources: [{ label: "Premium", pct: 12.3 }],
     });
-    expect(vaultApr(makePerformance({ returns: { "7d": win(0.4), "30d": null, "90d": null, all: win(1.2) } })))
+    const firstDay = { ...win(1.2), to_time: "1700086400" };
+    expect(vaultApr(makePerformance({ returns: { "7d": win(0.4), "30d": null, "90d": null, all: firstDay } })))
       .toMatchObject({ value: "New", muted: true, sources: [] });
     expect(vaultApr(null)).toMatchObject({ value: "—", muted: true });
     const mature = { "7d": null, "30d": null, "90d": null, all: win(1.2, "1700000000") };
     expect(vaultApr(makePerformance({ computed_at: "1800000000", returns: mature }))).toMatchObject({ value: "—" });
     expect(vaultApr(makePerformance({ covered: false }))).toMatchObject({ value: "—", muted: true, sources: [] });
+  });
+
+  it("projects a young vault from its history once it has a week of it", () => {
+    const fifteenDays = {
+      return_pct: 2.83,
+      from_time: "1792219565",
+      to_time: String(1792219565 + 15 * 86_400),
+    };
+    const apr = vaultApr(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: fifteenDays } }));
+    expect(apr.label).toBe("Projected APY");
+    expect(apr.value).toBe("97.20%");
+    expect(apr.muted).toBe(true);
+    expect(apr.note).toContain("15 days");
+    const sixDays = { ...fifteenDays, to_time: String(1792219565 + 6 * 86_400) };
+    const young = vaultApr(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: sixDays } }));
+    expect(young).toMatchObject({ label: "APY", value: "New" });
   });
 
   it("adds the deposit asset's staking yield to the premium, so the parts sum to the headline", () => {

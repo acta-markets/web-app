@@ -60,6 +60,6 @@ describe("AprLabel", () => {
     expect(tip.getByText("Staking")).toBeTruthy();
     expect(tip.queryByText("Premium")).toBeNull();
     expect(tip.queryByText("APY")).toBeNull();
-    expect(tip.getByText("Premium shows after 30 days of history.")).toBeTruthy();
+    expect(tip.getByText("Premium shows after 7 days of history.")).toBeTruthy();
   });
 });
