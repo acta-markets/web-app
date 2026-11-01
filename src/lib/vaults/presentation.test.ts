@@ -146,7 +146,7 @@ describe("vault sorts", () => {
   });
 
   it("offers APY first, then TVL and name, with name ignoring case", () => {
-    expect(VAULT_SORTS.map((s) => s.label)).toEqual(["APY", "TVL", "Name"]);
+    expect(VAULT_SORTS.map((s) => s.label)).toEqual(["Projected APY", "TVL", "Name"]);
     const byName = VAULT_SORTS.find((s) => s.value === "name")!.compare;
     const entries = ["USDC", "jitoSOL", "HYPE", "ZEC"].map((name) => entry(name, apr(9)));
     expect(sorted(entries, byName)).toEqual(["HYPE", "jitoSOL", "USDC", "ZEC"]);
