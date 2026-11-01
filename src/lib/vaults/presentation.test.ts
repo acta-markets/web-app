@@ -13,8 +13,10 @@ import {
   depositBlockMessage,
   depositSelfProcessView,
   entryReturnPct,
+  exposurePnlTotals,
   exposureRows,
-  exposureTotals,
+  exposureSpots,
+  managerScope,
   formatPremium,
   formatVaultEquity,
   formatVaultTvl,
@@ -29,7 +31,7 @@ import {
   type VaultSortEntry,
 } from "./presentation";
 import { makePerformance, makeVault } from "./sample";
-import type { Vault, VaultExposure, VaultExposurePosition, VaultPerformance } from "./types";
+import type { Vault, VaultExposure, VaultExposurePosition, VaultPerformance, VaultPosition } from "./types";
 
 const NOW = 1_800_000_000;
 // the test build runs on devnet, so take the mint the token list knows
@@ -235,12 +237,85 @@ describe("exposure", () => {
     ]);
   });
 
-  it("totals intrinsic per quote mint and drops a mint without a full spot read", () => {
-    expect(exposureTotals(exposure([leg({ intrinsic: "-19000000000" })], "-19000000000"))).toEqual([
-      { quoteMint: USDC, value: "-19,000 USDC" },
-    ]);
-    expect(exposureTotals(exposure([leg({ role: "holder" })], "2500000"))).toEqual([{ quoteMint: USDC, value: "+2.5 USDC" }]);
-    expect(exposureTotals(exposure([leg({ spot: null, intrinsic: null })], null))).toEqual([]);
+  describe("cash products", () => {
+    const detail = (overrides: Partial<VaultPosition>): VaultPosition => ({
+      position: "p1",
+      role: "writer",
+      position_type: "call_spread",
+      strike: "100000000000",
+      quantity: "2000000000",
+      net_premium: "1000000",
+      product: { kind: "spread", upper_strike: "110000000000", collateral: "20000000" },
+      ...overrides,
+    } as VaultPosition);
+    const cash = (overrides: Partial<VaultExposurePosition>) => leg({
+      position_type: "call_spread", strike: "100000000000", quantity: "2000000000", spot: "95000000000",
+      distance_pct: null, itm: null, intrinsic: null, ...overrides,
+    });
+
+    it("prices an out-of-the-money spread at its premium", () => {
+      const [row] = exposureRows(exposure([cash({})], null), [detail({})]);
+      expect([row.strike, row.size, row.distance, row.itm, row.pnl]).toEqual(["100 / 110", "2 SOL", "5.3% OTM", false, "+1 USDC"]);
+    });
+
+    it("caps an in-the-money spread at its width and reverses the sign for the holder", () => {
+      const writer = exposureRows(exposure([cash({ spot: "120000000000" })], null), [detail({})]);
+      expect([writer[0].distance, writer[0].pnl]).toEqual(["16.7% ITM", "-19 USDC"]);
+      const holder = exposureRows(exposure([cash({ role: "holder", spot: "105000000000" })], null), [detail({ role: "holder" })]);
+      expect(holder[0].pnl).toBe("+9 USDC");
+    });
+
+    it("measures a put spread from its upper strike", () => {
+      const [row] = exposureRows(
+        exposure([cash({ position_type: "put_spread", spot: "105000000000" })], null),
+        [detail({ position_type: "put_spread" })],
+      );
+      expect([row.distance, row.itm, row.pnl]).toEqual(["4.8% ITM", true, "-9 USDC"]);
+    });
+
+    it("pays a cash put in full below its strike", () => {
+      const [row] = exposureRows(
+        exposure([cash({ position_type: "cash_put", strike: "94000000000", spot: "90000000000" })], null),
+        [detail({ position_type: "cash_put", strike: "94000000000", product: { kind: "spread", upper_strike: "94000000000", collateral: "1" } })],
+      );
+      expect([row.type, row.strike, row.distance, row.pnl]).toEqual(["Put spread", "0 / 94", "4.4% ITM", "-7 USDC"]);
+    });
+
+    it("leaves a row unpriced until its spot and premium arrive", () => {
+      expect(exposureRows(exposure([cash({})], null))[0].pnl).toBe("—");
+      expect(exposureRows(exposure([cash({ spot: null })], null), [detail({})])[0].distance).toBe("—");
+    });
+
+    it("totals P&L per quote mint and drops a mint with an unpriced row", () => {
+      const rows = exposureRows(exposure([cash({}), cash({ position: "p2", role: "holder" })], null), [
+        detail({ net_premium: "3000000" }),
+        detail({ position: "p2", role: "holder" }),
+      ]);
+      expect(exposurePnlTotals(rows)).toEqual([{ quoteMint: USDC, value: "+2 USDC" }]);
+      expect(exposurePnlTotals(exposureRows(exposure([cash({})], null)))).toEqual([]);
+    });
+
+    it("reads spot once per underlying", () => {
+      expect(exposureSpots(exposure([cash({}), cash({ position: "p2" }), cash({ spot: null })], null))).toEqual([{ symbol: "SOL", price: "$95" }]);
+    });
+  });
+});
+
+describe("managerScope", () => {
+  const policy = { max_open_positions: 64, max_rebalance_drift_bps: 100, min_main_liquidity_bps: 0 };
+
+  it("lists what the capabilities and policy allow", () => {
+    const scope = managerScope({ capabilities: 7, policy, manager_stake_min_bps: 500 }, "SOL", "USDC");
+    expect(scope.allowed).toContain("Sell and buy options.");
+    expect(scope.allowed).toContain("Trade with USDC as well as SOL.");
+    expect(scope.blocked.join(" ")).toContain("under 5%");
+  });
+
+  it("moves a missing capability to the blocked list and shows a liquidity floor", () => {
+    const scope = managerScope({ capabilities: 1, policy: { ...policy, min_main_liquidity_bps: 1000 }, manager_stake_min_bps: 0 }, "SOL", "USDC");
+    expect(scope.allowed).toContain("Sell options.");
+    expect(scope.blocked).toContain("Buy options.");
+    expect(scope.blocked.join(" ")).toContain("Leave under 10%");
   });
 });
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActaHttpError } from "@/lib/vaults/api";
-import { loadVault, loadVaultCycles, loadVaultExposure, loadVaults } from "@/lib/vaults/source";
-import type { Vault, VaultCyclesPage, VaultExposure } from "@/lib/vaults/types";
+import { loadUnsettledVaultPositions, loadVault, loadVaultCycles, loadVaultExposure, loadVaults } from "@/lib/vaults/source";
+import type { Vault, VaultCyclesPage, VaultExposure, VaultPosition } from "@/lib/vaults/types";
 
 const VAULT_REFRESH_MS = 30_000;
 
@@ -103,6 +103,11 @@ export function useVaultCycles(pda: string | null): Loadable<VaultCyclesPage | n
 /** Open positions at spot. Polled with the vault, only where the vault page shows them. */
 export function useVaultExposure(pda: string): Loadable<VaultExposure | null> {
   return usePolled((signal) => loadVaultExposure(pda, signal), null, `exposure:${pda}`);
+}
+
+/** Premium and second strike for the exposure rows. */
+export function useUnsettledVaultPositions(pda: string): Loadable<VaultPosition[]> {
+  return usePolled((signal) => loadUnsettledVaultPositions(pda, signal), [], `positions:${pda}`);
 }
 
 /** Wall-clock seconds, refreshed on an interval, for countdowns and phase checks. */

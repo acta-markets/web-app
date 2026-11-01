@@ -1,12 +1,14 @@
 import { flows } from "@acta-markets/ts-sdk/chain";
 import type { DepositorPerformance } from "@acta-markets/ts-sdk/http";
 import { getReferenceToken, getToken, getTokenSymbolByMint, tokenDisplayName } from "@/lib/tokens";
-import { formatDate, formatPercent, formatTokenAmount, formatUsd, NONE, shortAddress } from "./format";
+import { formatBps, formatDate, formatPercent, formatTokenAmount, formatUsd, NONE, shortAddress } from "./format";
 import type {
   Vault,
   VaultExposure,
+  VaultExposurePosition,
   VaultPerformance,
   VaultPhase,
+  VaultPosition,
   VaultPremiumFlow,
   VaultSafety,
 } from "./types";
@@ -182,47 +184,185 @@ export function formatPremium(flow: VaultPremiumFlow, units: { symbol: string; d
 
 export type ExposureRow = {
   position: string;
-  type: "Call" | "Put" | "Call spread" | "Put spread" | "Cash put";
+  type: "Call" | "Put" | "Call spread" | "Put spread";
   role: "Sold" | "Bought";
   strike: string;
+  size: string;
   distance: string;
   itm: boolean | null;
+  pnl: string;
+  /** quote atoms if the position expired at spot, null until spot and premium are known */
+  pnlAtoms: bigint | null;
+  quoteMint: string;
+  quoteDecimals: number | null;
+  sort: { strike: number; size: number; distance: number | null; pnl: number | null };
 };
 
 const STRIKE_DECIMALS = 9;
-const EXPOSURE_TYPE = {
+export const EXPOSURE_TYPE = {
   covered_call: "Call",
   cash_secured_put: "Put",
   call_spread: "Call spread",
   put_spread: "Put spread",
-  cash_put: "Cash put",
+  // a cash put is a put spread with a zero lower strike
+  cash_put: "Put spread",
 } as const;
 const APY_WINDOW_SECS = 30 * 86_400;
 
-export function exposureRows(exposure: VaultExposure): ExposureRow[] {
-  return exposure.positions.map((p) => ({
-    position: p.position,
-    type: EXPOSURE_TYPE[p.position_type],
-    role: p.role === "writer" ? "Sold" : "Bought",
-    strike: formatTokenAmount(BigInt(p.strike), STRIKE_DECIMALS, {
-      maxFractionDigits: BigInt(p.strike) < 10n ** BigInt(STRIKE_DECIMALS) ? STRIKE_DECIMALS : 2,
-    }),
-    distance:
-      p.distance_pct === null ? NONE : `${formatPercent(Math.abs(p.distance_pct), { digits: 1 })} ${p.itm ? "ITM" : "OTM"}`,
-    itm: p.itm,
+const positive = (value: bigint) => (value > 0n ? value : 0n);
+
+function formatStrike(atoms: bigint) {
+  return formatTokenAmount(atoms, STRIKE_DECIMALS, {
+    maxFractionDigits: atoms < 10n ** BigInt(STRIKE_DECIMALS) ? STRIKE_DECIMALS : 2,
+  });
+}
+
+/** Leg bounds: spreads pay between the two strikes, `lower` starts paying a call spread and `upper` a put spread. */
+function legBounds(position: VaultPosition) {
+  const lower = BigInt(position.strike);
+  return { lower, upper: position.product.kind === "spread" ? BigInt(position.product.upper_strike) : lower };
+}
+
+/** Strike at which the leg starts paying, in strike units. */
+function triggerStrike(position: VaultPosition) {
+  const { lower, upper } = legBounds(position);
+  return position.position_type === "put_spread" ? upper : lower;
+}
+
+/** Payoff per underlying unit at `spot`, matching the contract's settlement. */
+function payoffPerUnit(position: VaultPosition, spot: bigint) {
+  const { lower, upper } = legBounds(position);
+  const width = upper - lower;
+  switch (position.position_type) {
+    case "covered_call":
+      return positive(spot - lower);
+    case "cash_secured_put":
+    case "cash_put":
+      return positive(lower - spot);
+    case "call_spread":
+      return positive(spot - lower) < width ? positive(spot - lower) : width;
+    case "put_spread":
+      return positive(upper - spot) < width ? positive(upper - spot) : width;
+  }
+}
+
+/** Premium plus payoff at `spot` in quote atoms: writers keep the premium and owe the payoff, holders the reverse. */
+function pnlAtSpot(leg: VaultExposurePosition, position: VaultPosition, spot: bigint): bigint | null {
+  if (leg.underlying_decimals === null || leg.quote_decimals === null) return null;
+  const scale = 10n ** BigInt(STRIKE_DECIMALS + leg.underlying_decimals);
+  const payoff = (payoffPerUnit(position, spot) * BigInt(leg.quantity) * 10n ** BigInt(leg.quote_decimals)) / scale;
+  const premium = BigInt(position.net_premium);
+  return position.role === "writer" ? premium - payoff : payoff - premium;
+}
+
+function formatSigned(amount: bigint, decimals: number) {
+  return `${amount > 0n ? "+" : ""}${formatTokenAmount(amount, decimals, { maxFractionDigits: 4 })}`;
+}
+
+/** `positions` adds what `/exposure` lacks for cash products: the second strike and the premium. */
+export function exposureRows(exposure: VaultExposure, positions: readonly VaultPosition[] = []): ExposureRow[] {
+  const byPda = new Map(positions.map((position) => [position.position, position]));
+  return exposure.positions.map((p) => {
+    const position = byPda.get(p.position) ?? null;
+    const spot = p.spot === null ? null : BigInt(p.spot);
+    const trigger = position ? triggerStrike(position) : BigInt(p.strike);
+    const isCall = p.position_type === "covered_call" || p.position_type === "call_spread";
+    const computedDistance = spot === null || spot === 0n || !position
+      ? null
+      : (100 * Number(isCall ? trigger - spot : spot - trigger)) / Number(spot);
+    const distancePct = p.distance_pct ?? computedDistance;
+    const itm = p.itm ?? (computedDistance === null ? null : computedDistance < 0);
+    const pnlAtoms = spot === null || !position ? null : pnlAtSpot(p, position, spot);
+    const strike = p.position_type === "cash_put"
+      ? `0 / ${formatStrike(BigInt(p.strike))}`
+      : position?.product.kind === "spread"
+        ? `${formatStrike(BigInt(position.strike))} / ${formatStrike(BigInt(position.product.upper_strike))}`
+        : formatStrike(BigInt(p.strike));
+    return {
+      position: p.position,
+      type: EXPOSURE_TYPE[p.position_type],
+      role: p.role === "writer" ? "Sold" : "Bought",
+      strike,
+      size: p.underlying_decimals === null
+        ? NONE
+        : `${formatTokenAmount(BigInt(p.quantity), p.underlying_decimals)} ${tokenDisplayName(p.underlying_mint)}`,
+      distance: distancePct === null ? NONE : `${formatPercent(Math.abs(distancePct), { digits: 1 })} ${itm ? "ITM" : "OTM"}`,
+      itm,
+      pnl: pnlAtoms === null || p.quote_decimals === null
+        ? NONE
+        : `${formatSigned(pnlAtoms, p.quote_decimals)} ${tokenDisplayName(p.quote_mint)}`,
+      pnlAtoms,
+      quoteMint: p.quote_mint,
+      quoteDecimals: p.quote_decimals,
+      sort: {
+        strike: Number(trigger),
+        size: Number(p.quantity),
+        distance: distancePct === null ? null : itm ? -Math.abs(distancePct) : Math.abs(distancePct),
+        pnl: pnlAtoms === null ? null : Number(pnlAtoms),
+      },
+    };
+  });
+}
+
+/** Current price per underlying, from the same response as the rows. */
+export function exposureSpots(exposure: VaultExposure): { symbol: string; price: string }[] {
+  const spots = new Map<string, string>();
+  for (const p of exposure.positions) {
+    if (p.spot !== null && !spots.has(p.underlying_mint)) spots.set(p.underlying_mint, p.spot);
+  }
+  return [...spots].map(([mint, spot]) => ({
+    symbol: tokenDisplayName(mint),
+    price: `$${formatTokenAmount(BigInt(spot), STRIKE_DECIMALS, { maxFractionDigits: 2 })}`,
   }));
 }
 
-/** Net intrinsic value at spot per quote mint; a mint drops out while any of its legs lacks a spot. */
-export function exposureTotals(exposure: VaultExposure): { quoteMint: string; value: string }[] {
-  return exposure.totals.flatMap((total) => {
-    const decimals = exposure.positions.find((p) => p.quote_mint === total.quote_mint)?.quote_decimals ?? null;
-    if (total.outstanding_intrinsic === null || decimals === null) return [];
-    const symbol = tokenDisplayName(total.quote_mint);
-    const amount = BigInt(total.outstanding_intrinsic);
-    const sign = amount > 0n ? "+" : "";
-    return [{ quoteMint: total.quote_mint, value: `${sign}${formatTokenAmount(amount, decimals, { compact: true })} ${symbol}` }];
-  });
+/** Net P&L at spot per quote mint; a mint drops out while any of its rows is unpriced. */
+export function exposurePnlTotals(rows: readonly ExposureRow[]): { quoteMint: string; value: string }[] {
+  const totals = new Map<string, { atoms: bigint | null; decimals: number | null }>();
+  for (const row of rows) {
+    const total = totals.get(row.quoteMint) ?? { atoms: 0n, decimals: row.quoteDecimals };
+    total.atoms = total.atoms === null || row.pnlAtoms === null ? null : total.atoms + row.pnlAtoms;
+    totals.set(row.quoteMint, total);
+  }
+  return [...totals].flatMap(([quoteMint, { atoms, decimals }]) => (atoms === null || decimals === null
+    ? []
+    : [{ quoteMint, value: `${formatSigned(atoms, decimals)} ${tokenDisplayName(quoteMint)}` }]));
+}
+
+export type ManagerScope = { allowed: string[]; blocked: string[] };
+
+const CAN_SELL_OPTIONS = 1;
+const CAN_BUY_OPTIONS = 2;
+const CAN_USE_SECOND_MINT_STRATEGY = 4;
+
+/** What the vault's capabilities and policy let its manager do, in depositor terms. */
+export function managerScope(
+  vault: Pick<Vault, "capabilities" | "policy" | "manager_stake_min_bps">,
+  symbol: string,
+  secondSymbol: string,
+): ManagerScope {
+  const can = (bit: number) => (vault.capabilities & bit) !== 0;
+  const { max_rebalance_drift_bps, min_main_liquidity_bps } = vault.policy;
+  const [sell, buy] = [can(CAN_SELL_OPTIONS), can(CAN_BUY_OPTIONS)];
+  const options = sell && buy ? "Sell and buy options." : sell ? "Sell options." : buy ? "Buy options." : null;
+  return {
+    allowed: [
+      ...(options ? [options] : []),
+      ...(can(CAN_USE_SECOND_MINT_STRATEGY) ? [`Trade with ${secondSymbol} as well as ${symbol}.`] : []),
+      `Swap ${symbol} and ${secondSymbol} through approved venues, up to ${formatBps(max_rebalance_drift_bps)} off the oracle price.`,
+    ],
+    blocked: [
+      "Take funds out of the vault.",
+      "Trade with pending deposits.",
+      "Mix expiries within a cycle.",
+      "Change fees, the deposit cap or limits without a timelock.",
+      `Open positions with under ${formatBps(vault.manager_stake_min_bps)} of their own money in the vault.`,
+      ...(!sell ? ["Sell options."] : []),
+      ...(!buy ? ["Buy options."] : []),
+      ...(!can(CAN_USE_SECOND_MINT_STRATEGY) ? [`Trade with ${secondSymbol}.`] : []),
+      ...(min_main_liquidity_bps > 0 ? [`Leave under ${formatBps(min_main_liquidity_bps)} of the vault in ${symbol} at the end of a cycle.`] : []),
+    ],
+  };
 }
 
 /** Return since entry weighted by lot shares; null unless priced lots hold exactly `shares`. */
