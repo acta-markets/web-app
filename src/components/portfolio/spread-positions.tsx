@@ -30,6 +30,7 @@ export function spreadPositionAmounts(position: PositionInfo, descriptor?: Marke
     symbol: descriptor?.underlying_symbol ?? underlying?.symbol ?? null };
 }
 
+const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
 const STATUS: Record<string, string> = { open: "Open", funded: "Open", liquidated: "Liquidated", settled: "Settled" };
 
 export type SpreadRowView = {
@@ -38,6 +39,7 @@ export type SpreadRowView = {
   expiryTs: number | null;
   size: string;
   premium: string;
+  apr: string;
   result: string;
   negative: boolean;
 };
@@ -53,6 +55,10 @@ export function spreadRowView(position: PositionInfo, descriptors: MarketDescrip
   const pnl = amounts?.pnl ?? null;
   const expiry = Number(position.expiry_ts);
   const settled = position.state === "settled" && pnl != null;
+  const secondsToExpiry = expiry - Number(position.created_at);
+  const apr = amounts?.premium != null && amounts.collateral > 0n && secondsToExpiry > 0
+    ? `${((Number(amounts.premium) / Number(amounts.collateral)) * (SECONDS_PER_YEAR / secondsToExpiry) * 100).toFixed(2)}%`
+    : NONE;
   return {
     label: terms.upper_strike == null ? NONE : position.terms.type === "cash_put"
       ? `${symbol ? `${symbol} ` : ""}0/${strikeText(terms.upper_strike)} put`
@@ -61,6 +67,7 @@ export function spreadRowView(position: PositionInfo, descriptors: MarketDescrip
     expiryTs: expiry > 0 ? expiry : null,
     size: amounts ? `${amounts.quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })}${symbol ? ` ${symbol}` : ""}` : NONE,
     premium: cash(amounts?.premium ?? null),
+    apr,
     result: settled ? cash(pnl, true) : NONE,
     negative: settled && pnl < 0n,
   };
