@@ -6,7 +6,7 @@ import { makePerformance } from "@/lib/vaults/sample";
 import { AprLabel } from "./vault-apr";
 
 const STAKED = vaultApr(makePerformance({ apy_30d: 10 }), 5);
-const INFO = { name: "What makes up this APY" };
+const INFO = { name: "What makes up this Projected APY" };
 
 afterEach(() => {
   cleanup();
@@ -23,7 +23,7 @@ describe("AprLabel", () => {
     expect(screen.getByRole("button", INFO).getAttribute("aria-describedby")).toBe(tip.id);
     expect(tip.textContent).toContain("Staking5.00%");
     expect(tip.textContent).toContain("Premium10.00%");
-    expect(tip.textContent).toContain("APY15.00%");
+    expect(tip.textContent).toContain("Projected APY15.00%");
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("tooltip")).toBeNull();
@@ -59,7 +59,7 @@ describe("AprLabel", () => {
     const tip = within(screen.getByRole("tooltip"));
     expect(tip.getByText("Staking")).toBeTruthy();
     expect(tip.queryByText("Premium")).toBeNull();
-    expect(tip.queryByText("APY")).toBeNull();
+    expect(tip.queryByText("Projected APY")).toBeNull();
     expect(tip.getByText("Premium shows after 7 days of history.")).toBeTruthy();
   });
 });

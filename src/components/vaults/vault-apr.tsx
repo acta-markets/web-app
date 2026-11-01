@@ -17,7 +17,7 @@ export function AprBreakdown({ apr }: { apr: AprView }) {
           ))}
           {apr.sources.length > 1 && !apr.muted ? (
             <div className="flex justify-between gap-6 border-t border-bg-border pt-1 font-medium">
-              <dt>{apr.label}</dt>
+              <dt>Projected APY</dt>
               <dd className="tabular-nums">{apr.value}</dd>
             </div>
           ) : null}
@@ -28,12 +28,12 @@ export function AprBreakdown({ apr }: { apr: AprView }) {
   );
 }
 
-/** The APY label with an (i) that breaks the figure down. */
+/** "Projected APY" with an (i) that breaks the figure down. */
 export function AprLabel({ apr, className }: { apr: AprView; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-1", className)}>
-      {apr.label}
-      <InfoTooltip label={`What makes up this ${apr.label}`}>
+      Projected APY
+      <InfoTooltip label="What makes up this Projected APY">
         <AprBreakdown apr={apr} />
       </InfoTooltip>
     </span>
