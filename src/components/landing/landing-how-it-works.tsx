@@ -66,7 +66,7 @@ export function LandingHowItWorks() {
                   aria-hidden
                   className="absolute inset-0"
                   style={{
-                    backgroundImage: "url(/landing/ascii-mountain.png)",
+                    backgroundImage: "url(/landing/ascii-mountain.webp)",
                     backgroundSize: "180% 180%",
                     backgroundPosition: `${step.offset[0]}% ${step.offset[1]}%`,
                     mixBlendMode: "color-dodge",
