@@ -23,7 +23,7 @@ The TypeScript SDK exports `chain.flows.VaultManagerPlanner` to build vault inst
 | Normal rebalance and staging | `swaps.spotRebalance()`, `swaps.stagingSwap()` |
 | Second-leg rollover | `governance.proposeUpdate()`, `governance.applySecondLeg()` |
 
-TypeScript 0.2.0 renamed the capital and liquidation payout fields (`refundDestination` → `refundTo`, `shareDestination` → `sharesTo` / `sharesBackTo`, `liquidateVaultPosition(l, { owner, paidTo }, pos)`). Old names are silently ignored in JavaScript and the payout goes to the canonical ATA. See [Capital transactions](vault-integration.md#capital-transactions).
+The payout fields are `refundTo`, `sharesTo`, `sharesBackTo` and `liquidateVaultPosition(liquidator, { owner, paidTo }, position)`. JavaScript silently ignores older field names, and the payout goes to the canonical ATA. See [Capital transactions](vault-integration.md#capital-transactions).
 
 A bought option must be funded before expiry, or liquidators take its intrinsic value. See [Funding bought options](vault-integration.md#funding-bought-options).
 

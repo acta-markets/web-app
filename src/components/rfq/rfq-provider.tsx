@@ -424,7 +424,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         clearPendingRefCode();
         pendingReferralReqsRef.current.delete(data.request_id);
         client.getMyReferralInfo();
-        showToastRef.current("Invite redeemed — welcome to Acta.", "success");
+        showToastRef.current("Invite redeemed. Welcome to Acta.", "success");
       });
 
       client.on("referralCodeClaimed", (data) => {

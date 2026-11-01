@@ -13,6 +13,7 @@ import { AppPill } from "@/components/app-ui/app-pill";
 import { RfqFlowModal, type RfqOrderPreview } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getTokenMint, normalizeTokenSymbol } from "@/lib/tokens";
+import { descriptorSupportsCashProduct, type CashSettledProduct } from "@/lib/trade-products";
 import { useTokenBalance } from "./use-token-balance";
 import { SpreadMarket } from "./spread-market";
 import { RFQ_TTL_SECONDS, useRfqContext } from "@/components/rfq/rfq-provider";
@@ -77,18 +78,65 @@ function formatInputValue(value: number, maxDecimals: number): string {
 }
 
 export function MarketClient({ asset }: { asset: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { cancelRfq, marketDescriptors } = useRfqContext();
-  const spreadsEnabled = marketDescriptors.some(d => normalizeTokenSymbol(d.underlying_symbol) === normalizeTokenSymbol(asset) && d.products.includes(d.market.is_put ? "put_spread" : "call_spread") && Number(d.market.expiry_ts) * 1000 > Date.now());
-  const cashPutEnabled = marketDescriptors.some(d => normalizeTokenSymbol(d.underlying_symbol) === normalizeTokenSymbol(asset) && d.market.is_put && d.products.includes("cash_put") && Number(d.market.expiry_ts) * 1000 > Date.now());
+  const requestedProduct = searchParams.get("product") as CashSettledProduct | null;
+  const requestedGoal = requestedProduct === "call_spread" || requestedProduct === "put_spread"
+    ? "spreads"
+    : requestedProduct === "cash_put" ? "cash_put" : null;
+  const initialSpreadProduct = requestedProduct === "put_spread" ? "put_spread" : "call_spread";
+  const requestedMarketId = searchParams.get("market");
+  const descriptorForAsset = (descriptor: (typeof marketDescriptors)[number]) =>
+    normalizeTokenSymbol(descriptor.underlying_symbol) === normalizeTokenSymbol(asset);
+  const spreadsEnabled = marketDescriptors.some((descriptor) => descriptorForAsset(descriptor)
+    && (descriptorSupportsCashProduct(descriptor, "call_spread") || descriptorSupportsCashProduct(descriptor, "put_spread")));
+  const cashPutEnabled = marketDescriptors.some((descriptor) => descriptorForAsset(descriptor)
+    && descriptorSupportsCashProduct(descriptor, "cash_put"));
   const [goal, setGoal] = useState<"yield" | "spreads" | "cash_put">("yield");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (busy) return;
+    if (requestedGoal === "spreads" && spreadsEnabled) {
+      setGoal("spreads");
+      return;
+    }
+    if (requestedGoal === "cash_put" && cashPutEnabled) {
+      setGoal("cash_put");
+      return;
+    }
+    setGoal("yield");
+  }, [busy, cashPutEnabled, requestedGoal, spreadsEnabled]);
+
+  const changeGoal = (next: "yield" | "spreads" | "cash_put") => {
+    cancelRfq();
+    setGoal(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "yield") {
+      params.delete("product");
+      params.delete("market");
+    } else {
+      const product = next === "cash_put"
+        ? "cash_put"
+        : requestedProduct === "put_spread" ? "put_spread" : "call_spread";
+      params.set("product", product);
+      params.delete("market");
+    }
+    router.replace(`/market/${encodeURIComponent(asset)}${params.size ? `?${params}` : ""}`);
+  };
+
   const spread = goal === "spreads" && (spreadsEnabled || busy);
   return <>
     {(spreadsEnabled || cashPutEnabled) && <div className="mx-auto mt-20 w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-      <AppSegmented ariaLabel="Trading goal" value={goal} disabled={busy} onChange={(value) => { cancelRfq(); setGoal(value); }}
+      <AppSegmented ariaLabel="Trading goal" value={goal} disabled={busy} onChange={changeGoal}
         options={[{ value: "yield", label: "Earn yield" }, ...(spreadsEnabled ? [{ value: "spreads" as const, label: "Sell spreads" }] : []), ...(cashPutEnabled ? [{ value: "cash_put" as const, label: "Sell cash put" }] : [])]} />
     </div>}
-    {goal === "cash_put" && (cashPutEnabled || busy) ? <SpreadMarket key="cash_put" asset={asset} cashPut onBusyChange={setBusy} /> : spread ? <SpreadMarket key="spreads" asset={asset} onBusyChange={setBusy} /> : <YieldMarketClient asset={asset} onBusyChange={setBusy} hasGoals={spreadsEnabled || cashPutEnabled} />}
+    {goal === "cash_put" && (cashPutEnabled || busy)
+      ? <SpreadMarket key={`cash_put:${asset}`} asset={asset} cashPut initialMarketId={requestedMarketId} onBusyChange={setBusy} />
+      : spread
+        ? <SpreadMarket key={`spreads:${asset}`} asset={asset} initialProduct={initialSpreadProduct} initialMarketId={requestedMarketId} onBusyChange={setBusy} />
+        : <YieldMarketClient asset={asset} onBusyChange={setBusy} hasGoals={spreadsEnabled || cashPutEnabled} />}
   </>;
 }
 
@@ -105,6 +153,7 @@ function YieldMarketClient({ asset, onBusyChange, hasGoals }: { asset: string; o
   const [priceIdx, setPriceIdx] = useState(0);
   const [deposit, setDeposit] = useState("");
   const depositInputRef = useRef<HTMLInputElement>(null);
+  const priceButtons = useRef<Array<HTMLButtonElement | null>>([]);
 
   const [rfqModalOpen, setRfqModalOpen] = useState(false);
   const [rfqRequestNonce, setRfqRequestNonce] = useState(0);
@@ -334,6 +383,13 @@ function YieldMarketClient({ asset, onBusyChange, hasGoals }: { asset: string; o
   ]);
 
   const priceOptions = useMemo(() => priceOptionsWithApr.map(o => o.strike), [priceOptionsWithApr]);
+
+  const selectPrice = (index: number) => {
+    const next = clampNumber(index, 0, priceOptionsWithApr.length - 1);
+    if (!priceOptionsWithApr.length) return;
+    setPriceIdx(next);
+    priceButtons.current[next]?.focus();
+  };
 
   useEffect(() => {
     setPriceIdx((i) => clampNumber(i, 0, priceOptions.length - 1));
@@ -869,7 +925,7 @@ function YieldMarketClient({ asset, onBusyChange, hasGoals }: { asset: string; o
                 <span className="text-content-primary">{formatDate(expiryDate)} (in {termDisplay})</span>
               </p>
 
-              <div className="mt-3 grid grid-cols-2 gap-2 md:flex">
+              <div className="mt-3 grid grid-cols-2 gap-2 md:flex" role="radiogroup" aria-label="Strike">
                 {shouldShowIndicativeLoading
                   ? Array.from({ length: 4 }).map((_, idx) => (
                     <div key={`price-skeleton-${idx}`} className="flex min-w-0 flex-1 flex-col items-start justify-center gap-1 border border-bg-border px-4 py-3">
@@ -878,13 +934,32 @@ function YieldMarketClient({ asset, onBusyChange, hasGoals }: { asset: string; o
                     </div>
                   ))
                   : priceOptionsWithApr.map((option, idx) => {
-                    const active = idx === priceIdx;
+                    const active = idx === selectedPriceIdx;
                     const aprForIdx = option.apr;
                     return (
                       <button
                         key={option.strike}
+                        ref={(node) => { priceButtons.current[idx] = node; }}
                         type="button"
-                        onClick={() => setPriceIdx(idx)}
+                        role="radio"
+                        aria-checked={active}
+                        tabIndex={active || (!priceOptionsWithApr.length && idx === 0) ? 0 : -1}
+                        onClick={() => selectPrice(idx)}
+                        onKeyDown={(event) => {
+                          if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+                            event.preventDefault();
+                            selectPrice((idx - 1 + priceOptionsWithApr.length) % priceOptionsWithApr.length);
+                          } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+                            event.preventDefault();
+                            selectPrice((idx + 1) % priceOptionsWithApr.length);
+                          } else if (event.key === "Home") {
+                            event.preventDefault();
+                            selectPrice(0);
+                          } else if (event.key === "End") {
+                            event.preventDefault();
+                            selectPrice(priceOptionsWithApr.length - 1);
+                          }
+                        }}
                         className={[
                           "flex min-w-0 flex-1 flex-col items-start justify-center gap-1 border px-4 py-3 backdrop-blur-[4px] transition-colors",
                           active

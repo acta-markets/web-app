@@ -27,7 +27,7 @@ The TypeScript SDK's vault instruction builders and `/vault` client (`ActaWsClie
 
 Redeem all remaining shares with the SDK's final-withdrawal builder.
 
-TypeScript 0.2.0 renamed the payout fields. `processDeposits` takes `{ user, refundTo?, sharesTo? }` (was `refundDestination`, `shareDestination`), `processWithdrawals` takes `{ user, sharesBackTo? }`, `processFinalWithdrawal` takes an address or `{ user, sharesBackTo }`, and `liquidateVaultPosition(liquidator, { owner, paidTo }, position)` takes the writer as an address or `{ owner, paidTo? }`. In JavaScript the old field names are silently ignored, so the payout goes to the canonical ATA instead of the destination you meant. Rename them when upgrading.
+`processDeposits` takes `{ user, refundTo?, sharesTo? }`, `processWithdrawals` takes `{ user, sharesBackTo? }`, `processFinalWithdrawal` takes an address or `{ user, sharesBackTo }`, and `liquidateVaultPosition(liquidator, { owner, paidTo }, position)` takes the writer as an address or `{ owner, paidTo? }`. Older field names are silently ignored in JavaScript, so the payout goes to the canonical ATA instead of the destination you intended.
 
 ## Operator session
 
@@ -187,7 +187,7 @@ TypeScript takes `{ vault: planner, request, quote, priceRoutes, minOutputFloor,
 
 In both SDKs, the routes' `staging` list names the intermediate mints you accept; an empty list refuses staged swaps. `shards` lists accepted Pyth push-oracle shards. `request` is the original `SwapQuoteData`, including `request_id` and `vault_pda`. Neither intent takes a router field.
 
-The current checked helpers do not accept a served `RecoveryStage`: they rebuild a `"stage"` quote as ordinary `Stage`, while the backend emits the distinct recovery mode. The contract and TypeScript manual planner support recovery staging. Rust 0.5.4 has no manual builder for this mode either.
+Checked helpers accept a served `RecoveryStage`. Supply its main price section and the accepted staging route before signing.
 
 ## Building swaps
 

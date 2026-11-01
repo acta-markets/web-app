@@ -4,12 +4,14 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { address, createSolanaRpc } from "@solana/kit";
 import { fetchConfigAccountByAddress, findConfigPda } from "@acta-markets/ts-sdk/chain";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 import { AppButton } from "@/components/app-ui/app-button";
+import { AppChoicePicker } from "@/components/app-ui/app-choice-picker";
 import { AppTabs } from "@/components/app-ui/app-tabs";
 import { formatStrikePrice } from "@/lib/markets";
 import { getRpcEndpoint } from "@/lib/network";
@@ -35,12 +37,26 @@ function expiryLabel(expirySecs: number) {
   return `${date} · ${days <= 1 || hours < 24 ? `${hours}h` : `${days}d`}`;
 }
 
-export function SpreadMarket({ asset, onBusyChange, cashPut = false }: { asset: string; cashPut?: boolean; onBusyChange: (busy: boolean) => void }) {
+export function SpreadMarket({
+  asset,
+  onBusyChange,
+  cashPut = false,
+  initialProduct = "call_spread",
+  initialMarketId,
+}: {
+  asset: string;
+  cashPut?: boolean;
+  initialProduct?: SpreadProduct;
+  initialMarketId?: string | null;
+  onBusyChange: (busy: boolean) => void;
+}) {
   const rfq = useRfqContext();
   const wallet = useSolana();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const id = useId();
-  const [selectedProduct, setProduct] = useState<SpreadProduct>("call_spread");
-  const [marketId, setMarketId] = useState("");
+  const [selectedProduct, setProduct] = useState<SpreadProduct>(initialProduct);
+  const [marketId, setMarketId] = useState(initialMarketId ?? "");
   const [lower, setLower] = useState<number | null>(null);
   const [upper, setUpper] = useState<number | null>(null);
   const [quantity, setQuantity] = useState("1");
@@ -51,7 +67,46 @@ export function SpreadMarket({ asset, onBusyChange, cashPut = false }: { asset: 
   const [nonce, setNonce] = useState(0);
   const rpc = useMemo(() => createSolanaRpc(getRpcEndpoint()), []);
   const symbol = normalizeTokenSymbol(asset);
-  const mint = rfq.earnSummary?.find(row => normalizeTokenSymbol(row.underlying_symbol) === symbol)?.underlying_mint ?? getTokenMint(symbol);
+
+  useEffect(() => {
+    if (!cashPut && initialProduct !== selectedProduct) {
+      setProduct(initialProduct);
+      setLower(null);
+      setUpper(null);
+    }
+    // The route is the source of truth only when its initial product changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cashPut, initialProduct]);
+
+  useEffect(() => {
+    const nextMarketId = initialMarketId ?? "";
+    if (nextMarketId !== marketId) {
+      setMarketId(nextMarketId);
+      setLower(null);
+      setUpper(null);
+    }
+    // A local expiry pick updates the URL first; do not reset until navigation changes this prop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMarketId]);
+
+  const replaceSelection = (nextProduct: SpreadProduct | "cash_put", nextMarketId: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("product", nextProduct);
+    if (nextMarketId) params.set("market", nextMarketId);
+    else params.delete("market");
+    router.replace(`/market/${encodeURIComponent(asset)}?${params}`);
+  };
+  // Descriptors are authoritative for dynamic assets that are not in the static token registry.
+  // Prefer the active market so a direct link selects its exact underlying mint.
+  const descriptorsForAsset = rfq.marketDescriptors.filter(
+    (descriptor) => normalizeTokenSymbol(descriptor.underlying_symbol) === symbol,
+  );
+  const descriptorMint = descriptorsForAsset.find((descriptor) => descriptor.market.market_pda === marketId)?.market.underlying_mint
+    ?? descriptorsForAsset.find((descriptor) => descriptor.market.market_pda === initialMarketId)?.market.underlying_mint
+    ?? descriptorsForAsset[0]?.market.underlying_mint;
+  const mint = descriptorMint
+    ?? rfq.earnSummary?.find(row => normalizeTokenSymbol(row.underlying_symbol) === symbol)?.underlying_mint
+    ?? getTokenMint(symbol);
   const eligibleProducts = rfq.marketDescriptors.filter(d => d.market.underlying_mint === mint && d.products.includes(d.market.is_put ? "put_spread" : "call_spread") && Number(d.market.expiry_ts) * 1000 > Date.now());
   const product = cashPut ? "cash_put" : eligibleProducts.some(d => d.market.is_put === (selectedProduct === "put_spread")) ? selectedProduct : eligibleProducts[0]?.market.is_put ? "put_spread" : "call_spread";
   const { getTokenMarketsInfo, isConnected } = rfq;
@@ -119,7 +174,14 @@ export function SpreadMarket({ asset, onBusyChange, cashPut = false }: { asset: 
     rfq.submitRfq({ market: descriptor.market.market_pda, terms: wireTerms, quantity: wireInteger(terms.quantity) });
     setOpen(true);
   };
-  const changeProduct = (value: SpreadProduct) => { rfq.cancelRfq(); setProduct(value); setLower(null); setUpper(null); setMarketId(""); };
+  const changeProduct = (value: SpreadProduct) => {
+    rfq.cancelRfq();
+    setProduct(value);
+    setLower(null);
+    setUpper(null);
+    setMarketId("");
+    replaceSelection(value, null);
+  };
   // the short leg is the lower strike of a call spread and the upper strike of a put spread
   const [lowerLabel, upperLabel] = product === "call_spread" ? ["Sell at", "Buy at"] : ["Buy at", "Sell at"];
   const strikeOptions = (selected: number | null) => Array.from(new Set([...ladder, ...(selected == null ? [] : [selected])])).sort((a, b) => a - b);
@@ -144,26 +206,36 @@ export function SpreadMarket({ asset, onBusyChange, cashPut = false }: { asset: 
       {!cashPut && <AppTabs value={product as SpreadProduct} onChange={changeProduct} ariaLabel="Spread type" options={([{ value: "call_spread", label: "Sell call spread" }, { value: "put_spread", label: "Sell put spread" }] as const).filter(option => rfq.marketDescriptors.some(d => d.market.underlying_mint === mint && d.market.is_put === (option.value === "put_spread") && d.products.includes(option.value) && Number(d.market.expiry_ts) * 1000 > Date.now()))} />}
       <div className={FIELD_GROUP}>
         <label htmlFor={`${id}-expiry`} className={LABEL}>Expiry</label>
-        <select id={`${id}-expiry`} className={FIELD} value={descriptor?.market.market_pda ?? ""} onChange={e => { rfq.cancelRfq(); setMarketId(e.target.value); setLower(null); setUpper(null); }}>
+        <select id={`${id}-expiry`} className={FIELD} value={descriptor?.market.market_pda ?? ""} onChange={e => {
+          rfq.cancelRfq();
+          setMarketId(e.target.value);
+          setLower(null);
+          setUpper(null);
+          replaceSelection(cashPut ? "cash_put" : product as SpreadProduct, e.target.value || null);
+        }}>
           {!available.length && <option value="">Waiting for available markets</option>}
           {available.map(d => <option key={d.market.market_pda} value={d.market.market_pda}>{expiryLabel(Number(d.market.expiry_ts))}</option>)}
         </select>
       </div>
       <div className={cashPut ? "grid grid-cols-1 gap-4" : "grid grid-cols-1 gap-4 sm:grid-cols-2"}>
-        {!cashPut && <div className={FIELD_GROUP}>
-          <label htmlFor={`${id}-lower`} className={LABEL}>{lowerLabel}</label>
-          <select id={`${id}-lower`} className={FIELD} value={lower ?? ""} onChange={e => setLower(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">Choose a strike</option>
-            {strikeOptions(lower).map(strike => <option key={strike} value={strike}>{formatStrikePrice(strike / 1e9)}</option>)}
-          </select>
-        </div>}
-        <div className={FIELD_GROUP}>
-          <label htmlFor={`${id}-upper`} className={LABEL}>{cashPut ? "Strike" : upperLabel}</label>
-          <select id={`${id}-upper`} className={FIELD} value={upper ?? ""} onChange={e => setUpper(e.target.value ? Number(e.target.value) : null)}>
-            <option value="">Choose a strike</option>
-            {strikeOptions(upper).map(strike => <option key={strike} value={strike} disabled={lower != null && strike <= lower}>{formatStrikePrice(strike / 1e9)}</option>)}
-          </select>
-        </div>
+        {!cashPut && <AppChoicePicker
+          label={lowerLabel}
+          value={lower}
+          onChange={setLower}
+          options={strikeOptions(lower).map((strike) => ({ value: strike, label: formatStrikePrice(strike / 1e9) }))}
+          optionsClassName="max-h-56 overflow-y-auto pr-1"
+        />}
+        <AppChoicePicker
+          label={cashPut ? "Strike" : upperLabel}
+          value={upper}
+          onChange={setUpper}
+          options={strikeOptions(upper).map((strike) => ({
+            value: strike,
+            label: formatStrikePrice(strike / 1e9),
+            disabled: lower != null && strike <= lower,
+          }))}
+          optionsClassName="max-h-56 overflow-y-auto pr-1"
+        />
       </div>
       <div className={FIELD_GROUP}>
         <label htmlFor={`${id}-size`} className={LABEL}>Size ({symbol})</label>
