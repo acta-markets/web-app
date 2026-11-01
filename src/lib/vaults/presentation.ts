@@ -22,7 +22,7 @@ export type AprView = {
 };
 
 const PREMIUM_NOTE = "Premium is what the vault earns selling options, after fees. Projected APY annualizes the last 30 days; it is not a promise.";
-const PROJECTED_MIN_DAYS = 7;
+const PROJECTED_MIN_DAYS = 20;
 
 /** The backend's APY compounding, over the history the vault has so far. */
 function projectedApy(returnPct: number, days: number): number {
@@ -33,7 +33,7 @@ const STAKING_NOTE = "Staking is the deposit asset's own yield, which the vault'
 /**
  * The one projected APY every surface shows: the backend's 30-day figure plus any
  * staking yield of the deposit asset. Under 30 days it annualizes the history so
- * far, and reads "New" under a week. A vault whose history the backend cannot
+ * far, and reads "New" under 20 days. A vault whose history the backend cannot
  * cover reads as empty.
  */
 export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0): AprView {
@@ -53,7 +53,7 @@ export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0
   if (!young) return { value: NONE, muted: true, sources: [], note: "Not available." };
   const days = all === null ? 0 : (Number(all.to_time) - Number(all.from_time)) / 86_400;
   if (all === null || days < PROJECTED_MIN_DAYS) {
-    return { value: "New", muted: true, sources: staking, note: "Premium shows after 7 days of history." };
+    return { value: "New", muted: true, sources: staking, note: "Projected APY shows after 20 days of history." };
   }
   const projected = projectedApy(all.return_pct, days);
   return {
