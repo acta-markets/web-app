@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { SpreadPositions, spreadPositionAmounts } from "./spread-positions";
+import { spreadPositionAmounts, spreadRowView } from "./spread-positions";
 import type { PositionInfo, MarketDescriptorInfo } from "@/lib/rfq-client";
 const position = { side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 }, quantity: 1_000_000, total_premium: 1_980_000, state: "settled", underlying_decimals: 6, quote_decimals: 6, settlement: { type: "cash", settlement_price: 110e9, maker_payoff: 10_000_000, taker_return: 10_000_000 } } as PositionInfo;
 const descriptor = { underlying_decimals: 6, quote_decimals: 6, underlying_symbol: "TEST", quote_symbol: "USDC" } as MarketDescriptorInfo;
@@ -21,27 +21,21 @@ describe("spread portfolio cash results", () => {
 
 describe("spread positions table", () => {
   afterEach(cleanup);
-  it("shows five single-value columns and never a mint address as the symbol", () => {
+  it("never shows a mint address as the symbol", () => {
     const mint = "Mint111111111111111111111111111111111111111";
-    render(<SpreadPositions history={false} descriptors={[]}
-      positions={[{ ...position, pda: "a", market: "m", underlying_mint: mint, state: "open", expiry_ts: 1_793_000_000 } as PositionInfo]} />);
-    expect(screen.getAllByRole("columnheader").map((th) => th.textContent)).toEqual(["Spread", "Expiry", "Size", "Premium", "Result"]);
-    expect(screen.getByText("100/120 put")).toBeTruthy();
-    expect(screen.getByText("Open")).toBeTruthy();
-    expect(document.body.textContent).not.toContain("Mint1");
-    expect(document.body.textContent).not.toContain("Unknown");
+    const view = spreadRowView({ ...position, pda: "a", market: "m", underlying_mint: mint, state: "open", expiry_ts: 1_793_000_000 } as PositionInfo, []);
+    expect(view?.label).toBe("100/120 put");
+    expect(view?.status).toBe("Open");
+    expect(JSON.stringify(view)).not.toContain("Mint1");
   });
-  it("renders a cash put with its one public strike and full-width collateral", () => {
+  it("names a cash put as a put spread from zero with full-width collateral", () => {
     const cashPut = { ...position, pda: "cash", market: "m", terms: { type: "cash_put", strike: 120e9 }, expiry_ts: 1_793_000_000 } as PositionInfo;
     expect(spreadPositionAmounts(cashPut, descriptor)?.collateral).toBe(120_000_000n);
-    render(<SpreadPositions history descriptors={[{ ...descriptor, market: { market_pda: "m" } } as MarketDescriptorInfo]} positions={[cashPut]} />);
-    expect(screen.getByText("TEST 120 cash put")).toBeTruthy();
-    expect(document.body.textContent).not.toContain("0/120");
+    expect(spreadRowView(cashPut, [{ ...descriptor, market: { market_pda: "m" } } as MarketDescriptorInfo])?.label).toBe("TEST 0/120 put");
   });
   it("shows a settled spread's signed cash result", () => {
-    render(<SpreadPositions history descriptors={[{ ...descriptor, market: { market_pda: "m" } } as MarketDescriptorInfo]}
-      positions={[{ ...position, pda: "a", market: "m", expiry_ts: 1_793_000_000 } as PositionInfo]} />);
-    expect(screen.getByText("TEST 100/120 put")).toBeTruthy();
-    expect(screen.getByText("-8.02 USDC").className).toContain("text-error");
+    const view = spreadRowView({ ...position, pda: "a", market: "m", expiry_ts: 1_793_000_000 } as PositionInfo, [{ ...descriptor, market: { market_pda: "m" } } as MarketDescriptorInfo]);
+    expect(view?.label).toBe("TEST 100/120 put");
+    expect([view?.result, view?.negative]).toEqual(["-8.02 USDC", true]);
   });
 });

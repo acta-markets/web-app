@@ -25,7 +25,9 @@ async function setup() {
   const cancel = vi.spyOn(client, "cancelRfq").mockReturnValue("cancel");
   vi.spyOn(client, "isAuthenticated").mockReturnValue(true);
   vi.spyOn(client, "getMarketDescriptors").mockReturnValue("descriptors");
-  const metadataRequest = vi.spyOn(client, "request").mockImplementation(() => new Promise(() => {}));
+  vi.spyOn(client, "getPositions").mockReturnValue("positions");
+  vi.spyOn(client, "getMyActiveRfqs").mockReturnValue("active-rfqs");
+  const metadataRequest = vi.spyOn(client, "requestAll").mockImplementation(() => new Promise(() => {}));
   mocks.create.mockReturnValue(client);
   const hook = renderHook(useRfqContext, { wrapper: ({ children }: { children: ReactNode }) => <RfqProvider>{children}</RfqProvider> });
   await act(async () => {});
@@ -201,7 +203,7 @@ describe("token market response ownership", () => {
     expect(h.result.current.tokenMarketsInfo).toBeNull();
     h.emit("tokenMarketsInfo", info(idB, "market-B"));
     expect(h.result.current.tokenMarketsInfo).toEqual({ underlyingMint: "7CD4aXXHH8wRoggACBuF8Wpdvs3sfngFbcuvufbxYLHM", data: info(idB, "market-B") });
-    expect(h.metadataRequest).toHaveBeenLastCalledWith("TokenMarketsInfo", { type: "GetTokenMarketsInfo", data: { request_id: idB, underlying_mint: "7CD4aXXHH8wRoggACBuF8Wpdvs3sfngFbcuvufbxYLHM" } });
+    expect(h.metadataRequest).toHaveBeenLastCalledWith("TokenMarketsInfo", { type: "GetTokenMarketsInfo", data: { request_id: idB, underlying_mint: "7CD4aXXHH8wRoggACBuF8Wpdvs3sfngFbcuvufbxYLHM", limit: 200, cursor: { type: "start" } } });
   });
   it.each(["disconnected", "stateChange"])("invalidates in-flight metadata on %s", async event => {
     const h = await setup();
@@ -415,4 +417,25 @@ it("rejects a legacy earn summary even when it arrives before descriptors", asyn
   expect(disconnect).toHaveBeenCalledOnce();
   expect(h.result.current.earnSummary).toBeNull();
   expect(document.body.textContent).toContain("Trading temporarily unavailable");
+});
+
+
+describe("Portfolio position scope", () => {
+  it("leaves continuation to the SDK instead of starting duplicate page streams", async () => {
+    const h = await setup();
+    const getPositions = vi.spyOn(h.client, "getPositions").mockReturnValue("first");
+    act(() => h.result.current.fetchPositions());
+    h.emit("message", { type: "Positions", data: { request_id: "history", positions: [], next_cursor: "ignore" } });
+    h.emit("message", { type: "Positions", data: { request_id: "first", positions: [], next_cursor: "next" } });
+    h.emit("message", { type: "Positions", data: { request_id: "first", positions: [], next_cursor: null } });
+    expect(getPositions).toHaveBeenCalledTimes(1);
+    expect(getPositions).toHaveBeenCalledWith(expect.objectContaining({ status: ["open", "funded"] }));
+  });
+
+  it("requests only open and funded positions using the published wire shape", async () => {
+    const h = await setup();
+    const getPositions = vi.spyOn(h.client, "getPositions").mockReturnValue("positions-request");
+    act(() => h.result.current.fetchPositions());
+    expect(getPositions).toHaveBeenCalledWith(expect.objectContaining({ status: ["open", "funded"] }));
+  });
 });

@@ -76,6 +76,8 @@ interface RfqContextValue {
   disconnect: () => void;
   /** Fetch positions (requires auth) */
   fetchPositions: () => void;
+  /** the last positions request came back with an error */
+  positionsFailed: boolean;
   /** Get indicative prices for a market */
   getIndicativePrices: (market: string, positionType: "covered_call" | "cash_secured_put") => void;
   /** Submit RFQ request */
@@ -227,6 +229,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [earnSummary, setEarnSummary] = useState<EarnAssetSummary[] | null>(null);
   const [marketDescriptors, setMarketDescriptors] = useState<MarketDescriptorInfo[]>([]);
   const [positions, setPositions] = useState<PositionInfo[]>([]);
+  const [positionsFailed, setPositionsFailed] = useState(false);
+  const positionsRequestRef = useRef<string | null>(null);
+  const activeRfqsRequestRef = useRef<string | null>(null);
   const pendingRfqRef = useRef<{ requestId: string; identity: ProductTerms; spread: ReturnType<typeof spreadTerms> | null; rfqId: string | null; rfq: RfqBeforeCreation } | null>(null);
   const abandonedRequestsRef = useRef(new Set<string>());
   const quotesRef = useRef(new Map<string, QuoteReceivedMessage>());
@@ -306,7 +311,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const fetchPortfolioPrereqs = useCallback(() => {
     const client = clientRef.current;
     if (!client) return;
-    client.getPositions(ALL_POSITIONS);
+    positionsRequestRef.current = client.getPositions({ ...ALL_POSITIONS, status: ["open", "funded"] });
   }, []);
 
   walletAddressRef.current = selectedAccount?.address ?? null;
@@ -368,6 +373,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
         if (walletAddressRef.current) {
           persistSession(walletAddressRef.current, sessionId, expiresAt);
         }
+        activeRfqsRequestRef.current = client.getMyActiveRfqs();
+        fetchPortfolioPrereqs();
         client.getMarketDescriptors();
         client.getTokenCaps(false);
         client.getTokens();
@@ -444,6 +451,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       });
 
       client.on("requestError", ({ request_id, error }) => {
+        if (request_id === positionsRequestRef.current) setPositionsFailed(true);
         const kind = pendingReferralReqsRef.current.get(request_id);
         if (!kind) return;
         pendingReferralReqsRef.current.delete(request_id);
@@ -498,9 +506,19 @@ export function RfqProvider({ children }: RfqProviderProps) {
         setMarketDescriptors(m);
       });
 
+      client.on("message", (message) => {
+        if (message.type === "MyActiveRfqs" && message.data.request_id === activeRfqsRequestRef.current) {
+          if (message.data.next_cursor === null) activeRfqsRequestRef.current = null;
+          return;
+        }
+        if (message.type === "Positions" && message.data.request_id === positionsRequestRef.current
+          && message.data.next_cursor === null) positionsRequestRef.current = null;
+      });
+
       client.on("positions", (p) => {
         console.log("[RfqProvider] Positions:", p);
         setPositions(p);
+        setPositionsFailed(false);
       });
       client.on("positionUpdated", () => {
         setPositions([...client.state.positions.values()]);
@@ -518,6 +536,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
             const pt = ind.position_type as "covered_call" | "cash_secured_put";
             const key = getIndicativeKey(mkt.market_pda, pt);
             updates[key] = {
+              next_cursor: null,
               request_id: data.request_id,
               market: mkt.market_pda as IndicativePricesMessage["market"],
               position_type: pt,
@@ -602,7 +621,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       cleanup();
     };
-  }, [getIndicativeKey, refreshBestQuote, dropRfq, resetToAnonymous]);
+  }, [getIndicativeKey, refreshBestQuote, dropRfq, resetToAnonymous, fetchPortfolioPrereqs]);
 
   const authenticate = useCallback(
     (walletAddress: string, signMessage: (msg: Uint8Array) => Promise<Uint8Array>) => {
@@ -805,8 +824,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
     const requestId = crypto.randomUUID();
     tokenMarketsRequest.current = { requestId, underlyingMint };
     setTokenMarketsInfo(previous => previous?.underlyingMint === underlyingMint ? previous : null);
-    void client.request("TokenMarketsInfo", {
-      type: "GetTokenMarketsInfo", data: { request_id: requestId, underlying_mint: address(underlyingMint) },
+    void client.requestAll("TokenMarketsInfo", {
+      type: "GetTokenMarketsInfo", data: { request_id: requestId, underlying_mint: address(underlyingMint), limit: 200, cursor: { type: "start" } },
     }).catch(() => {
       if (tokenMarketsRequest.current?.requestId !== requestId) return;
       tokenMarketsRequest.current = null;
@@ -1014,6 +1033,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     authenticate,
     disconnect,
     fetchPositions,
+    positionsFailed,
     getIndicativePrices,
     submitRfq,
     acceptQuote,

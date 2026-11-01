@@ -37,7 +37,7 @@ function setup() {
   const client = new ActaWsClient({ url: "ws://localhost", role: "taker", onDisconnect: "keep_quotes", products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], clientName: "test", clientVersion: "0" });
   vi.spyOn(client, "isAuthenticated").mockReturnValue(true);
   vi.spyOn(client, "getSessionId").mockReturnValue("credential");
-  vi.spyOn(client, "getMyActiveRfqsAsync").mockResolvedValue({ request_id: "read", rfqs: [] });
+  vi.spyOn(client, "getMyActiveRfqsAsync").mockResolvedValue({ next_cursor: null, request_id: "read", rfqs: [] });
   const cancelOnServer = vi.spyOn(client, "cancelRfq").mockReturnValue("cancel");
   const status = vi.spyOn(client, "request").mockResolvedValue({
     request_id: "read", order_id: "order", state: { type: "unknown" },

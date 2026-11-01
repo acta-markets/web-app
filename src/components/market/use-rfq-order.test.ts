@@ -35,7 +35,7 @@ function storageKey(scope = defaultScope) {
 }
 function setup({
   scope = defaultScope,
-  snapshotResult = { request_id: "snapshot", rfqs: [] } as ActiveRfqSnapshot,
+  snapshotResult = { next_cursor: null, request_id: "snapshot", rfqs: [] } as ActiveRfqSnapshot,
 }: { scope?: typeof defaultScope; snapshotResult?: ActiveRfqSnapshot } = {}) {
   const client = new ActaWsClient({ url: "ws://localhost", role: "taker", onDisconnect: "keep_quotes", products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], clientName: "test", clientVersion: "0" });
   vi.spyOn(client, "isAuthenticated").mockReturnValue(true);
@@ -60,7 +60,7 @@ function setup({
     (client as unknown as { emit: (event: string, ...args: unknown[]) => void }).emit(event, ...args);
   });
   const select = (terms: TakerFillRfq | null = rfq) => act(async () => { await hook.result.current.accept(quote, terms); });
-  const reauth = (rfqs: ActiveRfqSnapshot["rfqs"] = []) => emit("myActiveRfqs", { request_id: "reconcile", rfqs });
+  const reauth = (rfqs: ActiveRfqSnapshot["rfqs"] = []) => emit("myActiveRfqs", { next_cursor: null, request_id: "reconcile", rfqs });
   return { ...hook, client, request, snapshot, session, sign, cancel, accept, submit, emit, select, reauth, scope, options };
 }
 
@@ -512,16 +512,16 @@ describe("recovery with the current backend contract", () => {
 
   it("persists an enqueued order as sent and never offers to abandon it after reload", async () => {
     const first = setup(); await first.select(); first.unmount();
-    const stale = setup({ scope: defaultScope, snapshotResult: { request_id: "snapshot", rfqs: [] } });
+    const stale = setup({ scope: defaultScope, snapshotResult: { next_cursor: null, request_id: "snapshot", rfqs: [] } });
     expect(stale.result.current.canAbandon).toBe(false);
     stale.unmount();
 
-    const reconciled = setup({ snapshotResult: { request_id: "snapshot", rfqs: [enqueued] } });
+    const reconciled = setup({ snapshotResult: { next_cursor: null, request_id: "snapshot", rfqs: [enqueued] } });
     await waitFor(() => expect(reconciled.result.current.flow.type).toBe("pending"));
     expect(JSON.parse(window.localStorage.getItem(storageKey()) ?? "{}")).toMatchObject({ submission: "sent" });
     reconciled.unmount();
 
-    const reloaded = setup({ snapshotResult: { request_id: "snapshot", rfqs: [pendingSignature] } });
+    const reloaded = setup({ snapshotResult: { next_cursor: null, request_id: "snapshot", rfqs: [pendingSignature] } });
     await waitFor(() => expect(reloaded.request).toHaveBeenCalled());
     expect(reloaded.result.current.flow).toMatchObject({ submission: "sent" });
     expect(reloaded.result.current.canAbandon).toBe(false);
@@ -533,7 +533,7 @@ describe("recovery with the current backend contract", () => {
     const a = setup(); a.accept.mockImplementation(() => new Promise(() => {}));
     act(() => { void a.result.current.accept(quote, rfq); });
     await waitFor(() => expect(a.result.current.flow.type).toBe("awaiting_signature"));
-    const b = setup({ snapshotResult: { request_id: "snapshot", rfqs: [enqueued] } });
+    const b = setup({ snapshotResult: { next_cursor: null, request_id: "snapshot", rfqs: [enqueued] } });
     await waitFor(() => expect(b.result.current.flow.type).toBe("pending"));
 
     act(() => a.result.current.abandon());
@@ -556,7 +556,7 @@ describe("recovery with the current backend contract", () => {
   it("keeps an enqueued order's obligation when it cannot be persisted", async () => {
     const first = setup(); await first.select(); first.unmount();
     const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota"); });
-    const h = setup({ snapshotResult: { request_id: "snapshot", rfqs: [enqueued] } });
+    const h = setup({ snapshotResult: { next_cursor: null, request_id: "snapshot", rfqs: [enqueued] } });
     await waitFor(() => expect(h.result.current.flow.type).toBe("pending"));
     expect(h.result.current.canAbandon).toBe(false);
     write.mockRestore();
@@ -566,7 +566,7 @@ describe("recovery with the current backend contract", () => {
     const first = setup(); await first.select(); first.unmount();
     const h = setup();
     h.request.mockResolvedValue({ request_id: "read", order_id: "order", state: { type: "pending" } });
-    h.emit("myActiveRfqs", { request_id: "x", rfqs: [] });
+    h.emit("myActiveRfqs", { next_cursor: null, request_id: "x", rfqs: [] });
     await waitFor(() => expect(h.result.current.flow.type).toBe("pending"));
     expect(JSON.parse(window.localStorage.getItem(storageKey()) ?? "{}")).toMatchObject({ submission: "sent" });
   });
@@ -594,7 +594,7 @@ describe("recovery with the current backend contract", () => {
 
     const restored = setup({
       scope: first.scope,
-      snapshotResult: { request_id: "snapshot", rfqs: [pendingSignature] },
+      snapshotResult: { next_cursor: null, request_id: "snapshot", rfqs: [pendingSignature] },
     });
     restored.request.mockResolvedValue({ request_id: "read", order_id: "order", state: { type: "pending" } });
     await waitFor(() => expect(restored.result.current.flow.type).toBe("unknown"));
@@ -632,7 +632,7 @@ describe("recovery with the current backend contract", () => {
     h.options.scope = nextScope;
     h.rerender();
     expect(h.result.current.flow.type).toBe("idle");
-    await act(async () => resolve({ request_id: "snapshot", rfqs: [pendingSignature] }));
+    await act(async () => resolve({ next_cursor: null, request_id: "snapshot", rfqs: [pendingSignature] }));
     expect(h.result.current.flow.type).toBe("idle");
     expect(window.localStorage.getItem(storageKey(h.scope))).toContain('"orderId":"order"');
     expect(window.localStorage.getItem(storageKey(nextScope))).toBeNull();
@@ -649,7 +649,7 @@ describe("recovery with the current backend contract", () => {
   it("does not abort signing for another RFQ's timeout", async () => {
     const h = setup(); let resolve!: (tx: VersionedTransaction) => void;
     h.sign.mockImplementation(() => new Promise(r => { resolve = r; }));
-    h.snapshot.mockResolvedValue({ request_id: "snapshot", rfqs: [pendingSignature] });
+    h.snapshot.mockResolvedValue({ next_cursor: null, request_id: "snapshot", rfqs: [pendingSignature] });
     await h.select(); h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.sign).toHaveBeenCalled());
     h.emit("error", { type: "SignatureTimeout" });
@@ -722,12 +722,23 @@ describe("recovery with the current backend contract", () => {
     expect(h.request).toHaveBeenCalledTimes(1);
   });
 
+  it("finds an in-flight RFQ beyond the first 1000 recovery rows", async () => {
+    const h = setup();
+    await h.select();
+    h.emit("disconnected", 1006, "lost");
+    h.snapshot.mockResolvedValueOnce({ next_cursor: null, request_id: "next", rfqs: [enqueued] });
+    h.emit("myActiveRfqs", { next_cursor: "next-rfq", request_id: "first", rfqs: Array.from({ length: 1000 }, (_, n) => ({ ...enqueued, rfq_id: `other-${n}` })) });
+    await waitFor(() => expect(h.result.current.flow.type).toBe("pending"));
+    expect(h.snapshot).toHaveBeenCalledWith(undefined, { limit: 200, cursor: { type: "after", id: "next-rfq" } });
+    expect(h.request).not.toHaveBeenCalled();
+  });
+
   it("ignores a recovery snapshot from a connection that closed meanwhile", async () => {
     const h = setup(); let resolve!: (value: Awaited<ReturnType<typeof h.client.getMyActiveRfqsAsync>>) => void;
     h.snapshot.mockImplementation(() => new Promise(r => { resolve = r; }));
     await h.select(); h.emit("disconnected", 1006, "lost"); act(() => h.result.current.checkStatus());
     h.emit("disconnected", 1006, "lost again");
-    await act(async () => resolve({ request_id: "snapshot", rfqs: [pendingSignature] }));
+    await act(async () => resolve({ next_cursor: null, request_id: "snapshot", rfqs: [pendingSignature] }));
     expect(h.result.current.flow.type).toBe("recovering");
     expect(h.accept).toHaveBeenCalledTimes(1);
   });
@@ -737,7 +748,7 @@ describe("recovery with the current backend contract", () => {
     h.snapshot.mockImplementation(() => new Promise(r => { resolve = r; }));
     await h.select(); h.emit("disconnected", 1006, "lost"); act(() => h.result.current.checkStatus());
     h.emit("orderConfirmed", "order", "pda");
-    await act(async () => resolve({ request_id: "snapshot", rfqs: [pendingSignature] }));
+    await act(async () => resolve({ next_cursor: null, request_id: "snapshot", rfqs: [pendingSignature] }));
     expect(h.result.current.flow).toEqual({ type: "confirmed", orderId: "order", positionPda: "pda" });
     expect(h.accept).toHaveBeenCalledTimes(1);
   });

@@ -1,12 +1,13 @@
+import { Fragment } from "react";
 import { AppButton, AppButtonLink } from "@/components/app-ui/app-button";
 import { cn } from "@/lib/cn";
-import { shortAddress } from "@/lib/vaults/format";
 import { CuratorLogo } from "./curator-logo";
-import { formatVaultTvl, primaryVaultAction, vaultApr, type VaultModalTab } from "@/lib/vaults/presentation";
+import { formatVaultEquity, formatVaultTvl, primaryVaultAction, vaultApr, vaultStatus, type VaultModalTab } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
 import type { Vault } from "@/lib/vaults/types";
 import { AprLabel } from "./vault-apr";
 import { VaultAssetLogo } from "./vault-asset-logo";
+import { VaultStatusLabel } from "./vault-status-label";
 
 export function vaultHref(pda: string): string {
   return `/earn/${encodeURIComponent(pda)}`;
@@ -14,6 +15,7 @@ export function vaultHref(pda: string): string {
 
 // AppButton's sizes are all h-10/text-base; two of those do not fit a 275px card
 const CARD_BUTTON = "h-9 flex-1 px-3 text-sm";
+const STAT = "flex items-center justify-between gap-3 py-2";
 
 function CardBand() {
   return (
@@ -25,7 +27,7 @@ function CardBand() {
   );
 }
 
-/** Deposit asset (the logo), name, TVL, APY, curator, Deposit and Details. Everything else lives on the vault page. */
+/** The pair, name, TVL, balance, APY, curator, status, Deposit and Details. Everything else lives on the vault page. */
 export function VaultCard({
   vault,
   meta,
@@ -48,47 +50,47 @@ export function VaultCard({
       <CardBand />
 
       <div className="relative z-10 flex flex-col items-center gap-2.5 text-center">
-        <VaultAssetLogo symbol={meta.assetSymbol} size={56} label={`Deposit ${meta.assetSymbol}`} />
-        {/* two name lines reserved so the stats rows line up across a grid row */}
-        <div className="flex min-h-[69px] w-full flex-col items-center justify-center gap-1">
-          <h3
-            className="line-clamp-2 max-w-full break-words font-mono text-xl font-bold leading-[1.2] tracking-[-0.4px] text-content-primary"
-            title={meta.name}
-          >
-            {meta.name}
+        <div className="flex items-center gap-1.5">
+          {meta.legs.map((leg, index) => (
+            <Fragment key={leg}>
+              {index > 0 ? <span aria-hidden="true" className="font-mono text-2xl text-content-secondary">/</span> : null}
+              <VaultAssetLogo symbol={leg} size={48} label={index === 0 ? `Deposit ${leg}` : leg} />
+            </Fragment>
+          ))}
+        </div>
+        <div className="flex w-full flex-col items-center gap-1">
+          <h3 className="max-w-full truncate font-mono text-xl font-bold leading-[1.2] tracking-[-0.4px] text-content-primary" title={meta.name}>
+            {meta.legs.join(" / ")}
           </h3>
-          <p className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
-            TVL <span className="tabular-nums text-content-primary">{formatVaultTvl(vault, meta.assetSymbol)}</span>
-          </p>
+          <p className="max-w-full truncate font-mono text-xs leading-[1.2] text-content-secondary">{meta.name}</p>
         </div>
       </div>
 
-      <div className="relative z-10 mt-4 flex w-full items-start gap-4">
-        <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center">
-          <AprLabel apr={apr} className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary" />
-          <span
-            className={cn(
-              "font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] tabular-nums",
-              apr.muted ? "text-content-secondary" : "text-content-primary",
-            )}
-          >
-            {apr.value}
-          </span>
+      <dl className="relative z-10 mt-4 divide-y divide-bg-border font-mono text-sm leading-[1.2] tracking-[-0.28px]">
+        <div className={STAT}>
+          <dt className="text-content-secondary">TVL</dt>
+          <dd className="tabular-nums text-content-primary">{formatVaultTvl(vault, meta.assetSymbol)}</dd>
         </div>
-        <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center">
-          <span className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Curator</span>
-          <span
-            className="flex w-full items-center justify-center gap-1.5 font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-content-primary"
-            title={`Vault governance ${vault.governance}`}
-          >
+        <div className={STAT}>
+          <dt className="text-content-secondary">Balance</dt>
+          <dd className="tabular-nums text-content-primary">{formatVaultEquity(vault)} {meta.assetSymbol}</dd>
+        </div>
+        <div className={STAT}>
+          <dt className="text-content-secondary"><AprLabel apr={apr} /></dt>
+          <dd className={cn("tabular-nums", apr.muted ? "text-content-secondary" : "text-content-primary")}>{apr.value}</dd>
+        </div>
+        <div className={STAT}>
+          <dt className="text-content-secondary">Curator</dt>
+          <dd className="flex min-w-0 items-center gap-1.5 text-content-primary" title={`Vault governance ${vault.governance}`}>
             {meta.logoUrl ? <CuratorLogo src={meta.logoUrl} size={16} /> : null}
             <span className="truncate">{meta.curator}</span>
-          </span>
-          {!meta.curatorIsAddress && (
-            <span className="font-mono text-xs leading-[1.2] text-content-secondary">{shortAddress(vault.governance)}</span>
-          )}
+          </dd>
         </div>
-      </div>
+        <div className={STAT}>
+          <dt className="text-content-secondary">Status</dt>
+          <dd className="min-w-0"><VaultStatusLabel status={vaultStatus(vault, nowSecs)} showDetail={false} /></dd>
+        </div>
+      </dl>
 
       <div className="relative z-10 mt-auto flex gap-2 pt-6">
         <AppButton className={CARD_BUTTON} onClick={() => onOpen(vault.vault_pda, action.tab)}>

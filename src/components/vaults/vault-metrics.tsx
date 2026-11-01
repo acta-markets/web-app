@@ -43,13 +43,18 @@ export function VaultMetrics({ vault, symbol, stakingAprPct }: { vault: Vault; s
 export function VaultCapacity({ vault, symbol }: { vault: Vault; symbol: string }) {
   const limit = depositCap(vault.capacity);
   const amount = (value: bigint) => formatTokenAmount(value, vault.main_decimals, { compact: true });
+  const usd = vaultTvlUsd(vault);
+  const figures = (text: string) => (
+    <p className="mt-2 flex justify-between gap-3 tabular-nums text-content-secondary">
+      <span>{usd === null ? null : formatUsd(usd)}</span>
+      <span>{text}</span>
+    </p>
+  );
   if (!limit) {
     return (
-      <section aria-label="Vault capacity" className="font-mono text-sm">
+      <section aria-label="Vault capacity" className="min-w-0 font-mono text-xs">
         <div className="h-2 bg-action-tertiary" />
-        <p className="mt-2 text-right tabular-nums text-content-secondary">
-          {amount(BigInt(vault.equity))} {symbol} / No cap
-        </p>
+        {figures(`${amount(BigInt(vault.equity))} ${symbol} / No cap`)}
       </section>
     );
   }
@@ -57,7 +62,7 @@ export function VaultCapacity({ vault, symbol }: { vault: Vault; symbol: string 
   const used = cap > remaining ? cap - remaining : 0n;
   const pct = cap === 0n ? 0 : Math.min(100, Number(used * 10_000n / cap) / 100);
   return (
-    <section aria-label="Vault capacity" className="font-mono text-sm">
+    <section aria-label="Vault capacity" className="min-w-0 font-mono text-xs">
       <div
         role="progressbar"
         aria-label="Capacity used"
@@ -69,9 +74,7 @@ export function VaultCapacity({ vault, symbol }: { vault: Vault; symbol: string 
       >
         <div className="h-full bg-accent-primary" style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-2 text-right tabular-nums text-content-secondary">
-        {amount(used)} / {amount(cap)} {symbol}
-      </p>
+      {figures(`${amount(used)} / ${amount(cap)} ${symbol}`)}
     </section>
   );
 }

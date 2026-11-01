@@ -54,10 +54,10 @@ describe("vault api", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("calls the configured backend through the SDK client", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ vaults: [vault()] }), { status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ vaults: [vault()], next_cursor: null }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(fetchVaults()).resolves.toHaveLength(1);
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/api\/v1\/vaults$/);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/api\/v1\/vaults\?.*limit=200/);
   });
 });
 
