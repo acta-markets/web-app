@@ -273,6 +273,28 @@ describe("spread quote preview isolation", () => {
       expect(row("Deposit to exercise")?.textContent).toContain("2 SOL");
     });
 
+    it("shows max loss, max gain and break-even for a bought spread, with no deposit", async () => {
+      const terms = { type: "call_spread" as const, lower_strike: 150e9, upper_strike: 160e9 };
+      setup({ ...buyPreview, terms }, { ...buyQuote, terms });
+      await screen.findByText("Quote Received");
+      expect(screen.getByText("Buy a call spread")).toBeTruthy();
+      expect(screen.getByText("Max loss").nextElementSibling?.textContent).toBe("10.00 USDC");
+      expect(screen.getByText("Max gain").nextElementSibling?.textContent).toBe("20.00 USDC");
+      expect(screen.getByText("Break-even").nextElementSibling?.textContent).toBe("$155.00");
+      expect(screen.queryByText("Deposit to exercise")).toBeNull();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByText(/No deposit/)).toBeTruthy();
+    });
+
+    it("breaks even under the upper leg of a bought cash put", async () => {
+      const terms = { type: "cash_put" as const, strike: 150e9 };
+      setup({ ...buyPreview, terms }, { ...buyQuote, terms });
+      await screen.findByText("Quote Received");
+      expect(screen.getByText("Buy a cash put")).toBeTruthy();
+      expect(screen.getByText("Max gain").nextElementSibling?.textContent).toBe("300.00 USDC");
+      expect(screen.getByText("Break-even").nextElementSibling?.textContent).toBe("$145.00");
+    });
+
     it("waits on a quote of the wrong side", () => {
       setup(buyPreview, { ...buyQuote, side: "sell" });
       expect(screen.queryByRole("button", { name: "Accept Quote" })).toBeNull();

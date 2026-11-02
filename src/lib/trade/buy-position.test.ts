@@ -39,8 +39,8 @@ describe("buyStatus", () => {
     ["put", put, 140, 160],
   ])("keeps a funded %s exercising unless it finalized out of the money", (_, facts, itm, otm) => {
     const funded = { ...facts, state: "funded" as const };
-    expect(buyStatus(funded, expiryTs - 1)).toBe("will_exercise");
-    expect(buyStatus(funded, expiryTs)).toBe("will_exercise");
+    expect(buyStatus(funded, expiryTs - 1)).toBe("funded");
+    expect(buyStatus(funded, expiryTs)).toBe("funded");
     expect(buyStatus({ ...funded, settlementPrice1e9: itm }, expiryTs)).toBe("will_exercise");
     expect(buyStatus({ ...funded, settlementPrice1e9: otm }, expiryTs)).toBe("deposit_returns");
   });

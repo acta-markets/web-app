@@ -1,7 +1,8 @@
 /** A live bought option in Portfolio: funding closes at expiry, and an unfunded buy forfeits even in the money. */
-export type BuyStatus = "deposit" | "will_exercise" | "deposit_returns" | "not_exercised" | "expired" | "settling";
+export type BuyStatus = "deposit" | "funded" | "will_exercise" | "deposit_returns" | "not_exercised" | "expired" | "settling";
 
 export const BUY_STATUS_LABEL: Record<Exclude<BuyStatus, "deposit">, string> = {
+  funded: "Deposited",
   will_exercise: "Will exercise",
   deposit_returns: "Deposit returns",
   not_exercised: "Not exercised",
@@ -25,7 +26,7 @@ export function isInTheMoney(isPut: boolean, price1e9: number, strike1e9: number
 
 export function buyStatus({ state, expiryTs, isPut, strike1e9, settlementPrice1e9 }: BuyFacts, nowSec: number): BuyStatus {
   const itm = settlementPrice1e9 == null ? null : isInTheMoney(isPut, settlementPrice1e9, strike1e9);
-  if (state === "funded") return itm === false ? "deposit_returns" : "will_exercise";
+  if (state === "funded") return itm == null ? "funded" : itm ? "will_exercise" : "deposit_returns";
   if (nowSec < expiryTs) return "deposit";
   if (itm == null) return "settling";
   return itm ? "not_exercised" : "expired";

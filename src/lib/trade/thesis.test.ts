@@ -4,12 +4,19 @@ import {
   amountSymbol,
   buyBreakEven,
   buyOutcomeCopy,
+  buySpreadTerms,
   buyZoneLabels,
   depositSymbol,
   directionInfo,
   easyCta,
   exerciseDepositText,
   isRight,
+  spreadBounds,
+  spreadBreakEven,
+  spreadLegLabel,
+  spreadLegs,
+  spreadMaxGain,
+  spreadOutcomeCopy,
   cushionText,
   outcomeCopy,
   scenario,
@@ -194,5 +201,49 @@ describe("buying", () => {
     expect(buyZoneLabels({ asset: "SOL", direction: "above", strike: 150 }).right).toEqual({ title: "Buy SOL at $150", premium: null });
     expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).right.title).toBe("Sell SOL at $150");
     expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).wrong.premium).toBeNull();
+  });
+});
+
+describe("bought spreads", () => {
+  const ladder = [90e9, 95e9, 100e9, 105e9, 110e9, 115e9, 120e9];
+
+  it("offers the nearest higher strikes on a call and never a naked call", () => {
+    expect(spreadLegs(ladder, 100e9, false)).toEqual([105e9, 110e9, 115e9]);
+    expect(spreadLegs(ladder, 120e9, false)).toEqual([]);
+    expect(spreadLegs(ladder, 100e9, false)).not.toContain(0);
+  });
+
+  it("offers lower strikes on a put and a cash put down to zero", () => {
+    expect(spreadLegs(ladder, 100e9, true)).toEqual([95e9, 90e9, 0]);
+    expect(spreadLegs([100e9], 100e9, true)).toEqual([0]);
+  });
+
+  it("builds the wire terms of each product", () => {
+    expect(buySpreadTerms(false, 100e9, 110e9)).toEqual({ type: "call_spread", lower_strike: 100e9, upper_strike: 110e9 });
+    expect(buySpreadTerms(true, 100e9, 90e9)).toEqual({ type: "put_spread", lower_strike: 90e9, upper_strike: 100e9 });
+    expect(buySpreadTerms(true, 100e9, 0)).toEqual({ type: "cash_put", strike: 100e9 });
+  });
+
+  it("reads the legs back from the terms and refuses physical terms", () => {
+    expect(spreadBounds({ type: "cash_put", strike: 100e9 })).toEqual({ lower: 0, upper: 100e9 });
+    expect(spreadBounds({ type: "put_spread", lower_strike: 90e9, upper_strike: 100e9 })).toEqual({ lower: 90e9, upper: 100e9 });
+    expect(spreadBounds({ type: "covered_call", strike: 100e9 })).toBeNull();
+  });
+
+  it("caps the gain at the width and breaks even past the near strike by the premium", () => {
+    expect(spreadMaxGain(2, 100e9, 110e9)).toBe(20);
+    expect(spreadMaxGain(2, 100e9, 0)).toBe(200);
+    expect(spreadBreakEven(false, 100, 3)).toBe(103);
+    expect(spreadBreakEven(true, 100, 3)).toBe(97);
+  });
+
+  it("names the leg and says what can come back", () => {
+    expect(spreadLegLabel(false, 110e9)).toBe("Up to $110");
+    expect(spreadLegLabel(true, 90e9)).toBe("Down to $90");
+    expect(spreadLegLabel(true, 0)).toBe("To $0 (cash put)");
+    const copy = spreadOutcomeCopy({ asset: "SOL", direction: "above", strike1e9: 100e9, leg1e9: 110e9, maxGain: "$20" });
+    expect(copy.right.result).toContain("up to $20");
+    expect(copy.right.note).toContain("No deposit");
+    expect(copy.wrong.note).toBe("You lose the premium.");
   });
 });
