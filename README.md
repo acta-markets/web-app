@@ -27,7 +27,12 @@ the selected wallet's signing callback without logging or rewriting the message.
 Maker-quote fills are signed only through `verifyAndSignTakerFill`: the served
 transaction is rebuilt from the accepted quote and RFQ terms before the wallet
 sees it (a vault maker is recognised from its on-chain account, read when the
-quote is accepted), and the wallet's result must be that transaction.
+quote is accepted), and the wallet's result must be that transaction. Every open
+is a keeper-sponsored v0 transaction: the fee payer must be the GlobalConfig
+`hot_authority`, read from chain at accept (cached per network for 30s), and the
+lookup tables the message names are fetched from chain at `confirmed`; a missing,
+foreign or deactivating table rejects the transaction and cancels the RFQ. Neither
+the keeper nor table contents are taken from the server.
 
 Resume credentials require a future expiry in Unix seconds. Missing or expired
 stored credentials start fresh authentication; reconnect recovery preserves the

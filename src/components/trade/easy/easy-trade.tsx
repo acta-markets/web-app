@@ -258,12 +258,12 @@ export function EasyTrade({
     if (cta.action === "redeem") return openReferralGate();
     if (cta.action !== "quote" || !asset || !expiry || !strike || quantity == null || lockedDeposit == null) return;
     if (amountInput != null && lockedText != null && lockedText !== amountText) setAmountInput(lockedText);
+    const terms = { type: info.positionType, strike: strike.strike1e9 };
     request(
-      { market: expiry.pda, positionType: info.positionType, strike: strike.strike1e9, quantity },
+      { market: expiry.pda, terms, quantity },
       {
         asset: asset.symbol,
-        positionType: info.positionType,
-        strike: strike.strike1e9,
+        terms,
         quantity,
         underlyingDecimals: decimals,
         strikeDisplay: formatStrikePrice(strike.strike),

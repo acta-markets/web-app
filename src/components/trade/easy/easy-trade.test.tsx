@@ -50,15 +50,15 @@ function snapshot({ stale = false } = {}): TokenMarketsInfoData {
       { market_pda: "call-soon", expiry_ts: now + 7 * day, is_put: false,
         indicatives: [indicatives("covered_call", [[105, 1], [110, 0.5]], stale)] },
     ],
-  };
+  } as unknown as TokenMarketsInfoData;
 }
 
 function summary(): EarnAssetSummary[] {
   const row = (symbol: string, mint: string, positionType: string): EarnAssetSummary => ({
     underlying_mint: mint, underlying_symbol: symbol, quote_mint: "usdc", quote_symbol: "USDC", position_type: positionType,
-    min_apr: 0.1, max_apr: 0.5, cap_filled_pct: 0, cap_total: 0, cap_used: 0, strikes_count: 3,
+    apr: { type: "available", min: 0.1, max: 0.5 }, cap_filled_pct: 0, cap_total: 0, cap_used: 0, strikes_count: 3,
     nearest_market_pda: "pda", markets_count: 2, nearest_expiry_ts: now + 7 * day,
-  });
+  } as unknown as EarnAssetSummary);
   return [row("SOL", SOL, "cash_secured_put"), row("SOL", SOL, "covered_call"), row("JLP", JLP, "covered_call")];
 }
 
@@ -164,11 +164,11 @@ describe("Easy mode", () => {
     expect(screen.getByText("Locks 997.5 USDC (size steps of 9.5)")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Get quote" }));
     expect(mocks.context.submitRfq).toHaveBeenCalledWith({
-      market: "put-soon", positionType: "cash_secured_put", strike: 95e9, quantity: 10_500_000_000, timeoutSeconds: 30,
+      market: "put-soon", terms: { type: "cash_secured_put", strike: 95e9 }, quantity: 10_500_000_000, timeoutSeconds: 30,
     });
     const preview = (mocks.modal.mock.lastCall?.[0] as { preview: Record<string, unknown> }).preview;
     expect(preview).toMatchObject({
-      asset: "SOL", positionType: "cash_secured_put", strike: 95e9, quantity: 10_500_000_000, underlyingDecimals: 9,
+      asset: "SOL", terms: { type: "cash_secured_put", strike: 95e9 }, quantity: 10_500_000_000, underlyingDecimals: 9,
       thesis: "SOL will be above $95 on Jan 22",
     });
     expect((screen.getByLabelText("Amount in USDC") as HTMLInputElement).value).toBe("997.5");

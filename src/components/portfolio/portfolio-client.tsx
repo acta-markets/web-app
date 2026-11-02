@@ -2,15 +2,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AppCard } from "@/components/app-ui/app-card";
-import { AppSegmented, type AppSegmentedOption } from "@/components/app-ui/app-segmented";
-import { AppTable, AppTd, AppTh } from "@/components/app-ui/app-table";
+import { AppSegmented } from "@/components/app-ui/app-segmented";
+import { AppTd, AppTh } from "@/components/app-ui/app-table";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
+import type { PositionInfo } from "@/lib/rfq-client";
 import { getTokenBrand } from "@/lib/token-brand";
 import { getTokenLogoSrc } from "@/lib/token-assets";
+import { getRpcEndpoint } from "@/lib/network";
 import { TOKENS, getNetwork, normalizeTokenSymbol } from "@/lib/tokens";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
+import { cn } from "@/lib/cn";
+import { AppButton } from "@/components/app-ui/app-button";
+import { isCashSettled, lowerStrike } from "@/lib/spreads";
+import { formatPortfolioPremium, portfolioIncomeSeries } from "@/lib/portfolio-api";
+import { useWalletHistory } from "./use-wallet-history";
+import { spreadRowView } from "./spread-positions";
 import { PortfolioEarningsChart } from "@/components/portfolio/portfolio-earnings-chart";
 
 function fmtDate(ts: number) {
@@ -48,15 +56,28 @@ function formatCountdown(targetTs: number, nowMs: number) {
 }
 
 type PositionsTab = "positions" | "history";
-const positionsTabOptions: Array<AppSegmentedOption<PositionsTab>> = [
+const positionsTabOptions: Array<{ value: PositionsTab; label: string }> = [
   { value: "positions", label: "Positions" },
   { value: "history", label: "History" }
 ];
 
+type TableRow = {
+  id: string;
+  label: string;
+  status: string;
+  expiryTs: number | null;
+  createdTs: number;
+  size: string;
+  premium: string;
+  last: string;
+  negative: boolean;
+};
+
 type PortfolioRow = {
   id: string;
   asset: string;
-  type: "Covered call" | "Cash-secured put";
+  type: "call" | "put";
+  outcome: string;
   status: "open" | "funded" | "liquidated" | "settled";
   userStatus: "Open" | "Closed";
   createdTs: number;
@@ -67,6 +88,18 @@ type PortfolioRow = {
   notionalUsd: number;
   apr: number;
 };
+
+/** Result of a closed covered call or cash-secured put: premium, less the move past the strike. */
+function physicalOutcome(position: PositionInfo, premiumUsd: number, strike: number, quantity: number): string {
+  if (position.state === "liquidated") return "Liquidated";
+  if (position.state !== "settled" || position.settlement.type !== "physical") return "\u2014";
+  const earned = position.side === "buy" ? -premiumUsd : premiumUsd;
+  const signed = (value: number) => `${value < 0 ? "-" : "+"}${formatUsdSmart(Math.abs(value))}`;
+  if (position.settlement.is_otm) return signed(earned);
+  const settlement = Number(position.settlement.settlement_price) / 1_000_000_000;
+  const moved = Math.abs(settlement - strike) * quantity;
+  return `ITM ${signed(position.side === "buy" ? earned + moved : earned - moved)}`;
+}
 
 function toUserStatus(status: string): "Open" | "Closed" {
   const s = status.toLowerCase();
@@ -114,15 +147,28 @@ export function PortfolioClient() {
   const [positionsTab, setPositionsTab] = useState<PositionsTab>("positions");
   const [resolvedUnderlyingByMarket, setResolvedUnderlyingByMarket] = useState<Record<string, string>>({});
   const nowMs = useNow(1000);
-  const { isConnected: walletConnected } = useSolana();
+  const { isConnected: walletConnected, selectedAccount } = useSolana();
   const {
     positions: rfqPositions,
     markets: rfqMarkets,
     marketDescriptors: rfqMarketDescriptors,
     isAuthenticated: rfqAuthenticated,
     fetchPositions: fetchRfqPositions,
-    connectionState,
+    positionsFailed,
+    getClient,
   } = useRfqContext();
+
+  const history = useWalletHistory(walletConnected && rfqAuthenticated ? selectedAccount?.address ?? null : null, rfqPositions, getClient);
+  const allPositions = useMemo(() => [...rfqPositions.filter(p => p.state === "open" || p.state === "funded"), ...history.positions], [rfqPositions, history.positions]);
+  const [quoteMint, setQuoteMint] = useState("");
+  const summary = history.summary?.find(s => s.quote_mint === quoteMint)
+    ?? history.summary?.find(s => s.quote_mint === TOKENS.USDC.mint[getNetwork()])
+    ?? history.summary?.[0];
+  const figuresUnavailable = positionsFailed || history.failed || history.summary === null;
+  const quoteSymbol = Object.values(TOKENS).find(t => t.mint[getNetwork()] === summary?.quote_mint)?.symbol;
+  const formatIncome = (value: number) => !summary || quoteSymbol === "USDC"
+    ? formatUsdSmart(value)
+    : `${fmtNumber(value, summary.quote_decimals)} ${quoteSymbol ?? summary.quote_mint}`;
 
   useEffect(() => {
     if (!rfqAuthenticated) return;
@@ -152,7 +198,7 @@ export function PortfolioClient() {
   useEffect(() => {
     const unresolvedMarketPdas = Array.from(
       new Set(
-        rfqPositions
+        allPositions
           .filter((p) => {
             const pp = p as unknown as { underlying_mint?: string };
             return !pp.underlying_mint;
@@ -164,9 +210,7 @@ export function PortfolioClient() {
     if (unresolvedMarketPdas.length === 0) return;
 
     let cancelled = false;
-    const rpcEndpoint =
-      process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
-      (currentNetwork === "mainnet" ? "https://api.mainnet-beta.solana.com" : "https://api.devnet.solana.com");
+    const rpcEndpoint = getRpcEndpoint();
 
     const resolveMissingMarkets = async () => {
       try {
@@ -203,12 +247,11 @@ export function PortfolioClient() {
     return () => {
       cancelled = true;
     };
-  }, [rfqPositions, marketByPda, resolvedUnderlyingByMarket, currentNetwork]);
+  }, [allPositions, marketByPda, resolvedUnderlyingByMarket, currentNetwork]);
 
   const rows = useMemo<PortfolioRow[]>(() => {
-    const decimals = 1_000_000_000;
-    const premiumDecimals = 1_000_000;
-    return rfqPositions.map((p) => {
+    const strikeScale = 1_000_000_000;
+    return allPositions.filter(p => !isCashSettled(p.terms.type)).map((p) => {
       const px = p as unknown as { total_premium?: number; underlying_mint?: string; quote_mint?: string };
       const market = marketByPda.get(p.market);
       const descriptor = rfqMarketDescriptors.find((d) => {
@@ -226,19 +269,15 @@ export function PortfolioClient() {
         descriptorSymbol ??
         (underlyingMint ? mintToSymbol.get(underlyingMint) ?? "Unknown" : "Unknown");
       const assetSymbol = normalizeTokenSymbol(rawSymbol);
-      const strike = Number(p.strike) / decimals;
-      const quantity = Number(p.quantity) / decimals;
+      const strike = Number(lowerStrike(p.terms)) / strikeScale;
+      const quantity = Number(p.quantity) / 10 ** p.underlying_decimals;
       const premiumUsd =
         Number.isFinite(px.total_premium)
-          ? Number(px.total_premium) / premiumDecimals
-          : Number(p.price) / decimals;
+          ? Number(px.total_premium) / 10 ** p.quote_decimals
+          : Number(p.price) / strikeScale;
       const notionalUsd = quantity * strike;
       const createdTs = Number(p.created_at);
-      const descriptorData = descriptor as
-        | { market?: { expiry_ts?: number }; expiry_ts?: number }
-        | undefined;
-      const descriptorExpiry = descriptorData?.market?.expiry_ts ?? descriptorData?.expiry_ts;
-      const expiryTs = market?.expiry_ts ? Number(market.expiry_ts) : descriptorExpiry ? Number(descriptorExpiry) : null;
+      const expiryTs = Number(p.expiry_ts) > 0 ? Number(p.expiry_ts) : null;
       const durationSec = expiryTs != null ? Math.max(1, expiryTs - createdTs) : 0;
       const apr =
         premiumUsd > 0 && notionalUsd > 0 && durationSec > 0
@@ -248,9 +287,10 @@ export function PortfolioClient() {
       return {
         id: p.pda,
         asset: assetSymbol,
-        type: p.position_type === "cash_secured_put" ? "Cash-secured put" : "Covered call",
-        status: (String(p.status).toLowerCase() as PortfolioRow["status"]) ?? "open",
-        userStatus: toUserStatus(String(p.status)),
+        type: p.terms.type === "cash_secured_put" ? "put" : "call",
+        outcome: physicalOutcome(p, premiumUsd, strike, quantity),
+        status: p.state,
+        userStatus: toUserStatus(p.state),
         createdTs,
         expiryTs,
         quantity,
@@ -260,61 +300,70 @@ export function PortfolioClient() {
         apr,
       };
     });
-  }, [rfqPositions, marketByPda, rfqMarketDescriptors, resolvedUnderlyingByMarket, mintToSymbol]);
+  }, [allPositions, marketByPda, rfqMarketDescriptors, resolvedUnderlyingByMarket, mintToSymbol]);
 
   const openRows = useMemo(
     () => rows.filter((r) => r.userStatus === "Open"),
     [rows]
   );
   const historyRows = useMemo(
-    () => rows.filter((r) => r.userStatus === "Closed"),
+    () => rows.filter((r) => r.userStatus === "Closed").sort((a, b) => b.createdTs - a.createdTs),
     [rows]
   );
 
+  const openSpreads = useMemo(
+    () => allPositions.flatMap((p) => {
+      const view = spreadRowView(p, rfqMarketDescriptors);
+      return view?.status === "Open" ? [view] : [];
+    }),
+    [allPositions, rfqMarketDescriptors]
+  );
   const totalNotionalUsd = useMemo(
-    () => openRows.reduce((sum, r) => sum + (Number.isFinite(r.notionalUsd) ? r.notionalUsd : 0), 0),
-    [openRows]
+    () => openRows.reduce((sum, r) => sum + (Number.isFinite(r.notionalUsd) ? r.notionalUsd : 0), 0)
+      + openSpreads.reduce((sum, r) => sum + r.collateralUsd, 0),
+    [openRows, openSpreads]
   );
-  const totalIncomeUsd = useMemo(
-    () => rows.reduce((sum, r) => sum + (Number.isFinite(r.premiumUsd) ? r.premiumUsd : 0), 0),
-    [rows]
-  );
-  const incomeLast30dUsd = useMemo(() => {
-    const since = now - 30 * 24 * 60 * 60;
-    return rows
-      .filter((r) => r.createdTs >= since && r.createdTs <= now)
-      .reduce((sum, r) => sum + (Number.isFinite(r.premiumUsd) ? r.premiumUsd : 0), 0);
-  }, [rows, now]);
-
   const weightedApr = useMemo(() => {
-    const denom = openRows.reduce((sum, r) => sum + r.notionalUsd, 0);
-    if (denom <= 0) return 0;
-    const num = openRows.reduce((sum, r) => sum + r.apr * r.notionalUsd, 0);
-    return num / denom;
-  }, [openRows]);
+    if (totalNotionalUsd <= 0) return 0;
+    const physical = openRows.reduce((sum, r) => sum + r.apr * r.notionalUsd, 0);
+    return (physical + openSpreads.reduce((sum, r) => sum + r.aprPct * r.collateralUsd, 0)) / totalNotionalUsd;
+  }, [openRows, openSpreads, totalNotionalUsd]);
 
   const nextMaturity = useMemo(() => {
-    const expiries = openRows
+    const expiries = [...openRows, ...openSpreads]
       .map((r) => r.expiryTs)
       .filter((x): x is number => typeof x === "number" && Number.isFinite(x) && x > 0)
       .sort((a, b) => a - b);
     return expiries[0] ?? null;
-  }, [openRows]);
+  }, [openRows, openSpreads]);
   const countdown = nextMaturity ? formatCountdown(nextMaturity, nowMs) : "\u2014";
 
   const monthlyRate = weightedApr / 12;
-  const pnlSeries = useMemo(() => {
-    const earned = rows
-      .filter((r) => r.premiumUsd > 0)
-      .map((r) => ({ t: r.createdTs, delta: r.premiumUsd }))
-      .sort((a, b) => a.t - b.t);
-    let acc = 0;
-    return earned.map((e) => {
-      acc += e.delta;
-      return { t: e.t, v: acc };
+  const pnlSeries = useMemo(() => summary ? portfolioIncomeSeries(summary) : [], [summary]);
+  const { openTable, closedTable } = useMemo(() => {
+    const physical = (r: PortfolioRow): TableRow => ({
+      id: r.id,
+      label: `${r.asset} ${formatStrikePrice(r.strike)} ${r.type}`,
+      status: r.userStatus,
+      expiryTs: r.expiryTs ?? r.createdTs,
+      createdTs: r.createdTs,
+      size: `${fmtNumber(r.quantity, 4)} ${r.asset}`,
+      premium: formatUsdSmart(r.premiumUsd),
+      last: r.userStatus === "Open" ? (Number.isFinite(r.apr) ? `${r.apr.toFixed(2)}%` : "\u2014") : r.outcome,
+      negative: r.outcome.includes("-"),
     });
-  }, [rows]);
-  const hasLoadedRfqData = rows.length > 0;
+    const spreads = allPositions.flatMap((p): TableRow[] => {
+      const view = spreadRowView(p, rfqMarketDescriptors);
+      return view ? [{ ...view, id: p.pda, createdTs: Number(p.created_at), last: view.status === "Open" ? view.apr : view.result }] : [];
+    });
+    const open = spreads.filter(r => r.status === "Open");
+    const closed = spreads.filter(r => r.status !== "Open");
+    return {
+      openTable: [...openRows.map(physical), ...open].sort((a, b) => (a.expiryTs ?? 0) - (b.expiryTs ?? 0)),
+      closedTable: [...historyRows.map(physical), ...closed].sort((a, b) => b.createdTs - a.createdTs),
+    };
+  }, [allPositions, rfqMarketDescriptors, openRows, historyRows]);
+  const hasLoadedRfqData = rfqPositions.length > 0;
   const shouldShowAuthPrompt = !rfqAuthenticated && !hasLoadedRfqData;
 
   if (!walletConnected) {
@@ -333,71 +382,71 @@ export function PortfolioClient() {
     );
   }
 
+  const tiles = [
+    {
+      label: "Current APR",
+      value: !figuresUnavailable && Number.isFinite(weightedApr) ? `${weightedApr.toFixed(2)}%` : "\u2014",
+      sub: `Next maturity in ${countdown}`,
+    },
+    {
+      label: "Total Earnings",
+      value: figuresUnavailable ? "\u2014" : summary ? formatPortfolioPremium(summary.premium_all_time, summary.quote_decimals, quoteSymbol ?? summary.quote_mint) : "$0",
+      sub: `All-time income${quoteSymbol ? ` (${quoteSymbol})` : ""}`,
+    },
+    {
+      label: "Value locked",
+      value: figuresUnavailable ? "\u2014" : formatUsdSmart(totalNotionalUsd),
+      sub: `${figuresUnavailable ? "\u2014" : history.summary?.reduce((sum, s) => sum + s.open_positions, 0)} open positions`,
+    },
+    {
+      label: "Monthly",
+      value: figuresUnavailable ? "\u2014" : summary ? formatPortfolioPremium(summary.premium_30d, summary.quote_decimals, quoteSymbol ?? summary.quote_mint) : "$0",
+      sub: `${!figuresUnavailable && Number.isFinite(monthlyRate) ? `${monthlyRate.toFixed(2)}%` : "\u2014"} monthly APR`,
+    },
+  ];
+  const tableRows = positionsTab === "history" ? closedTable : openTable;
+
   return (
-    <div className="mx-auto w-full max-w-[850px] pb-16 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-16">
-      {                        }
-      <div className="flex flex-col items-center gap-3">
+    <div className="mx-auto w-full max-w-[850px] pb-16 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-8">
+      <div className="flex flex-col items-center gap-2">
         <h1 className="text-center font-space text-[64px] font-semibold leading-[1.2] tracking-[-1.28px] text-content-primary max-md:text-[40px]">
           Portfolio
         </h1>
-        <div className="flex flex-col items-center gap-1.5">
-          <p className="text-center font-mono text-base leading-[1.2] tracking-[-0.32px] text-content-secondary">
-            Track all your positions and earnings
-          </p>
-          <a href="/docs" className="inline-flex items-center gap-0.5 font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary">
-            How it works
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="shrink-0">
-              <path d="M7.5 5l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </a>
-        </div>
+        <p className="text-center font-mono text-base leading-[1.2] tracking-[-0.32px] text-content-secondary">
+          Track all your positions and earnings
+        </p>
+        <a href="/docs" className="inline-flex items-center gap-0.5 font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary">
+          How it works
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="shrink-0">
+            <path d="M7.5 5l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </a>
       </div>
 
-      {                         }
-      <section className="mt-[80px] flex flex-col gap-2 max-md:mt-10">
+      {positionsFailed || history.failed ? (
+        <p role="alert" className="mt-4 text-center font-mono text-sm text-error">
+          Couldn&apos;t load your positions. The figures below may be incomplete.
+        </p>
+      ) : null}
+      {history.summary && history.summary.length > 1 ? (
+        <label className="mt-4 flex gap-2 font-mono text-sm">Income currency
+          <select aria-label="Income currency" value={summary?.quote_mint ?? ""} onChange={event => setQuoteMint(event.target.value)}>
+            {history.summary.map(s => <option key={s.quote_mint} value={s.quote_mint}>{mintToSymbol.get(s.quote_mint) ?? s.quote_mint}</option>)}
+          </select>
+        </label>
+      ) : null}
+
+      <section className="mt-8 flex flex-col gap-2">
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-          <AppCard className="p-4">
-            <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Current APR</div>
-            <div className="mt-2 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">
-              {Number.isFinite(weightedApr) ? `${weightedApr.toFixed(2)}%` : "\u2014"}
-            </div>
-            <div className="mt-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] tabular-nums text-content-secondary">
-              Next maturity in {countdown}
-            </div>
-          </AppCard>
-
-          <AppCard className="p-4">
-            <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Total Earnings</div>
-            <div className="mt-2 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">
-              {formatUsdSmart(totalIncomeUsd)}
-            </div>
-            <div className="mt-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] tabular-nums text-content-secondary">
-              All-time income
-            </div>
-          </AppCard>
-
-          <AppCard className="p-4">
-            <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Value locked</div>
-            <div className="mt-2 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">
-              {formatUsdSmart(totalNotionalUsd)}
-            </div>
-            <div className="mt-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] tabular-nums text-content-secondary">
-              {openRows.length} open positions
-            </div>
-          </AppCard>
-
-          <AppCard className="p-4">
-            <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Monthly</div>
-            <div className="mt-2 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">
-              {formatUsdSmart(incomeLast30dUsd)}
-            </div>
-            <div className="mt-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] tabular-nums text-content-secondary">
-              {Number.isFinite(monthlyRate) ? `${monthlyRate.toFixed(2)}%` : "\u2014"} monthly APR
-            </div>
-          </AppCard>
+          {tiles.map((tile) => (
+            <AppCard key={tile.label} className="p-4">
+              <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">{tile.label}</div>
+              <div className="mt-2 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">{tile.value}</div>
+              <div className="mt-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] tabular-nums text-content-secondary">{tile.sub}</div>
+            </AppCard>
+          ))}
         </div>
 
-        {           }
         <AppCard className="p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">Income</div>
@@ -406,116 +455,73 @@ export function PortfolioClient() {
               onChange={setChartRange}
               options={[
                 { value: "24h", label: "24H" },
-                { value: "7d", label: "5D" },
-                { value: "30d", label: "7D" }
+                { value: "7d", label: "7D" },
+                { value: "30d", label: "30D" }
               ]}
               className="sm:w-auto"
             />
           </div>
-
           <div className="mt-3">
-            <PortfolioEarningsChart points={pnlSeries} now={now} range={chartRange} />
+            {figuresUnavailable || pnlSeries === null ? <p className="font-mono text-sm text-content-secondary">Income unavailable</p> : <PortfolioEarningsChart points={pnlSeries} now={now} range={chartRange} formatValue={formatIncome} />}
           </div>
         </AppCard>
       </section>
 
-      {                               }
-      <section className="mt-16 flex flex-col gap-4">
+      <section className="mt-8 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
-            {positionsTab === "positions" ? `Positions: ${openRows.length}` : "Transactions"}
+            {positionsTab === "positions" ? `Positions: ${openTable.length}` : "Transactions"}
           </h2>
-          <AppSegmented
-            value={positionsTab}
-            onChange={setPositionsTab}
-            options={positionsTabOptions}
-          />
+          <AppSegmented value={positionsTab} onChange={setPositionsTab} options={positionsTabOptions} />
         </div>
 
-        {shouldShowAuthPrompt ? (
+        {shouldShowAuthPrompt && positionsTab === "positions" ? (
           <AppCard className="p-6 text-content-secondary">
             Connect wallet and approve RFQ auth to load live positions.
-            <div className="mt-2 text-xs text-content-secondary/60">RFQ state: {connectionState}</div>
           </AppCard>
-        ) : positionsTab === "positions" ? (
-          <AppTable>
-            <thead>
-              <tr className="border-b border-bg-border">
-                <AppTh>Asset</AppTh>
-                <AppTh>Type</AppTh>
-                <AppTh>Status</AppTh>
-                <AppTh>Maturity</AppTh>
-                <AppTh className="text-right">Quantity</AppTh>
-                <AppTh className="text-right">Strike</AppTh>
-                <AppTh className="text-right">Premium</AppTh>
-                <AppTh className="text-right">APR</AppTh>
-              </tr>
-            </thead>
-            <tbody>
-              {openRows.length === 0 ? (
-                <tr>
-                  <AppTd colSpan={8} className="py-10 text-center text-content-secondary">
-                    No open RFQ positions yet.
-                  </AppTd>
-                </tr>
-              ) : (
-                openRows.map((p) => (
-                  <tr key={p.id} className="border-b border-bg-border last:border-b-0">
-                    <AppTd className="font-medium text-content-primary">{p.asset}</AppTd>
-                    <AppTd className="text-content-secondary">{p.type}</AppTd>
-                    <AppTd className="text-content-secondary">{p.userStatus}</AppTd>
-                    <AppTd className="font-mono text-content-secondary">
-                      {p.expiryTs ? (
-                        <div className="flex flex-col">
-                          <span>{fmtDate(p.expiryTs)}</span>
-                          <span className="text-xs text-content-secondary/60">{formatCountdown(p.expiryTs, nowMs)}</span>
-                        </div>
-                      ) : "\u2014"}
-                    </AppTd>
-                    <AppTd className="text-right tabular-nums text-content-secondary">{fmtNumber(p.quantity, 4)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-content-secondary">{formatStrikePrice(p.strike)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.premiumUsd)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-content-secondary">{Number.isFinite(p.apr) ? `${p.apr.toFixed(2)}%` : "\u2014"}</AppTd>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </AppTable>
         ) : (
-          <AppTable>
-            <thead>
-              <tr className="border-b border-bg-border">
-                <AppTh>Asset</AppTh>
-                <AppTh>Type</AppTh>
-                <AppTh>Status</AppTh>
-                <AppTh>Maturity</AppTh>
-                <AppTh className="text-right">Quantity</AppTh>
-                <AppTh className="text-right">Strike</AppTh>
-                <AppTh className="text-right">Premium</AppTh>
-              </tr>
-            </thead>
-            <tbody>
-              {historyRows.length === 0 ? (
-                <tr>
-                  <AppTd colSpan={7} className="py-10 text-center text-content-secondary">
-                    No closed RFQ positions yet.
-                  </AppTd>
+          <div className="max-h-[440px] overflow-y-auto border border-bg-border">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-bg-border">
+                  {["Position", "Maturity", "Size", "Premium", positionsTab === "history" ? "Result" : "APR"].map((title, index) => (
+                    <AppTh key={title} className={cn("sticky top-0 z-10 bg-bg-primary", index > 1 && "text-right")}>{title}</AppTh>
+                  ))}
                 </tr>
-              ) : (
-                historyRows.map((p) => (
-                  <tr key={p.id} className="border-b border-bg-border last:border-b-0">
-                    <AppTd className="font-medium text-content-primary">{p.asset}</AppTd>
-                    <AppTd className="text-content-secondary">{p.type}</AppTd>
-                    <AppTd className="text-content-secondary">{p.userStatus}</AppTd>
-                    <AppTd className="font-mono text-content-secondary">{fmtDate(p.expiryTs ?? p.createdTs)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-content-secondary">{fmtNumber(p.quantity, 4)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-content-secondary">{formatStrikePrice(p.strike)}</AppTd>
-                    <AppTd className="text-right tabular-nums text-content-secondary">{formatUsdSmart(p.premiumUsd)}</AppTd>
+              </thead>
+              <tbody>
+                {tableRows.length === 0 ? (
+                  <tr>
+                    <AppTd colSpan={5} className="py-10 text-center text-content-secondary">
+                      {positionsTab === "positions" ? "No open positions yet." : history.loading ? "Loading positions..." : history.failed ? "Positions unavailable" : "No closed positions yet."}
+                    </AppTd>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </AppTable>
+                ) : (
+                  tableRows.map((row) => (
+                    <tr key={row.id} className="border-b border-bg-border last:border-b-0">
+                      <AppTd className="font-medium text-content-primary">{row.label}</AppTd>
+                      <AppTd className="font-mono text-content-secondary">
+                        {row.expiryTs ? (
+                          <div className="flex flex-col">
+                            <span>{fmtDate(row.expiryTs)}</span>
+                            {positionsTab === "positions" ? <span className="text-xs text-content-secondary/60">{formatCountdown(row.expiryTs, nowMs)}</span> : null}
+                          </div>
+                        ) : "\u2014"}
+                      </AppTd>
+                      <AppTd className="text-right tabular-nums text-content-secondary">{row.size}</AppTd>
+                      <AppTd className="text-right tabular-nums text-content-secondary">{row.premium}</AppTd>
+                      <AppTd className={row.negative ? "text-right tabular-nums text-error" : "text-right tabular-nums text-content-secondary"}>{row.last}</AppTd>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+            {positionsTab === "history" && history.nextCursor ? (
+              <AppButton variant="ghost" className="m-2" disabled={history.loading} onClick={() => void history.loadMore()}>
+                {history.loading ? "Loading..." : "Show more"}
+              </AppButton>
+            ) : null}
+          </div>
         )}
         {!rfqAuthenticated && hasLoadedRfqData ? (
           <div className="text-xs text-content-secondary/60">

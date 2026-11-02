@@ -25,7 +25,7 @@ export function tradeAssets(summary: EarnAssetSummary[] | null): TradeAsset[] {
       { symbol, mint: row.underlying_mint, hasPut: false, hasCall: false, maxApr: null };
     if (row.position_type === "cash_secured_put") entry.hasPut = true;
     if (row.position_type === "covered_call") entry.hasCall = true;
-    if (row.max_apr != null) entry.maxApr = Math.max(entry.maxApr ?? 0, row.max_apr);
+    if (row.apr.type === "available") entry.maxApr = Math.max(entry.maxApr ?? 0, row.apr.max);
     byMint.set(row.underlying_mint, entry);
   }
   const rank = (symbol: string) => {

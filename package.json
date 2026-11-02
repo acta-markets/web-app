@@ -14,8 +14,7 @@
     "check:docs": "node scripts/validate-docs.mjs"
   },
   "dependencies": {
-    "@acta-markets/ts-sdk": "0.2.2",
-    "@fontsource/syne": "^5.2.7",
+    "@acta-markets/ts-sdk": "0.3.2",
     "@microsoft/clarity": "^1.0.2",
     "@privy-io/react-auth": "^3.9.1",
     "@solana-program/memo": "^0.10.0",

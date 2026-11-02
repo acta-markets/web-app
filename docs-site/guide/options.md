@@ -1,6 +1,6 @@
 # How Earn works
 
-Pick a price at which you want to sell or buy, and a date. You get paid yield right away. On the date, if the market reached your price, the trade happens at your price. If not, you get your funds back. The yield stays with you either way.
+Pick a price at which you want to sell or buy, and an expiry date. You receive a premium when the position opens. The finalized price at expiry determines whether your assets are exchanged at the strike or returned. You keep the premium either way. The examples below use premiums after protocol fees.
 
 ## Calls: sell higher
 
@@ -19,7 +19,11 @@ SOL is $160. You want to buy at $150. You lock 150 USDC for a week and get $3 no
 ## Good to know
 
 - The yield is paid by market makers, who compete to offer you the best rate.
-- Your funds are isolated: each trade has its own account in the contract, not shared with anyone else, and stays locked until the date.
+- Your funds are isolated: each trade has its own account in the contract, not shared with anyone else, and stays locked until settlement after expiry.
 - APR shows the yield as a yearly rate.
 
 Payout and fee rules for integrators: [Options and settlement](../reference/protocol-flow.md).
+
+## Cash-settled trades
+
+Calls and puts above can sell your SOL or leave you holding it. Call spreads, put spreads and cash puts only pay in USDC. See [Cash-settled spreads and puts](cash-settled-options.md).

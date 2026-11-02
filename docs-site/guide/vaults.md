@@ -12,6 +12,8 @@ If a vault holds 100 SOL after fees and has 100 shares, one share is worth 1 SOL
 
 A vault can sell options, buy options and swap between its two assets, depending on what it is allowed to do. The manager decides what to trade and how much to commit. Read the strategy, fees and withdrawal terms before you deposit. The manager can lose money, and the manager's own stake does not cover your losses.
 
+Some swaps take two transactions. Between them, the vault holds an intermediate asset. It must finish that swap before calculating a new share price or completing the cycle. Term-token vaults can also replace an emptied second asset with a compatible new term through a governance update.
+
 ## The cycle
 
 1. The manager trades options. The money in those trades is locked until expiry.

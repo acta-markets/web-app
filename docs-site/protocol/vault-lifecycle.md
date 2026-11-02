@@ -9,7 +9,7 @@ A vault has a phase, a safety mode and a deposit-window flag. The phase tracks t
 | `idle` | Open the first position → `active` | Idle capital is unpriced, intake is closed, and the delegate holds trading permission under the policy. The position sets the active expiry. |
 | `active` | Reach expiry → `settling` | New risk closes at the expiry cutoff. The contract reads chain time. |
 | `active` / `settling` | Close the last position → `processing_capital` | All positions are closed and funding is settled. Capital starts uncomputed. |
-| `processing_capital` | Compute equity | Requires fresh price accounts. The boundary becomes computed. |
+| `processing_capital` | Compute equity | Requires fresh prices from the route’s brick accounts and no open staging slot. The boundary becomes computed. |
 | `processing_capital` | Finalize the cycle → `idle` | Equity is computed and the deposit and withdrawal queues are empty. Idle capital becomes unpriced again. |
 
 `idle` capital is unpriced, accepting deposits, or priced. When the manager closes the deposit window, it can start trading from unpriced idle capital. Priced idle capital lets the manager process requests but not open a position.
@@ -27,6 +27,14 @@ The manager normally prices capital and drains the queues. If it does not, anyon
 Public processing requires settled positions, validated prices and valid recipient accounts.
 
 Deposit and withdrawal cancellation closes once idle capital is priced and at the active expiry cutoff. Deposit refunds under `emergency_unwind` and `withdraw_only` have their own instructions. In `closing`, withdrawals can be requested and cancelled at any phase and time.
+
+## Staged assets
+
+A swap can leave an intermediate asset in a vault-owned account between two transactions. This is an open staging slot, separate from the phase and safety mode. HTTP returns it in `staging`; `null` means no slot is open.
+
+While the slot is open, `VaultStagingActive` blocks equity processing, cycle finalization, final redemption, recovery conversion, shutdown and vault closure. Priced manager top-ups and fee changes also wait. Complete the unstage before pricing capital. Deposit refunds and request cancellations keep their own eligibility rules.
+
+In TypeScript, capital rules take `staging`. `processEquityBlock`, `processIdleWithdrawalBlock` and `finalizeCycleBlock` return `"staged"`; `nextCapitalStep` does not propose equity or finalization while staged. See [Two-stage swaps](vault-integration.md#two-stage-swaps) and [Staging recovery](recovery.md#an-intermediate-asset-is-staged).
 
 ## Safety modes
 

@@ -55,7 +55,7 @@ export function AppNav() {
       </div>
       <div className="flex w-[129px] flex-col items-end">
         <SolanaConnectButton />
-        <Link href="/docs" className="mt-2 text-xs text-content-secondary hover:text-accent-secondary">Docs</Link>
+        <Link prefetch={false} href="/docs" className="mt-2 text-xs text-content-secondary hover:text-accent-secondary">Docs</Link>
       </div>
     </nav>
   );

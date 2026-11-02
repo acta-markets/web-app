@@ -1,3 +1,4 @@
+import type { Address } from "@solana/kit";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WalletTransactionSigner } from "@acta-markets/ts-sdk/ws";
@@ -15,24 +16,28 @@ vi.mock("@/lib/rfq-client", async (importOriginal) => ({
   verifyAndSignTakerFill: async ({ txBase64, signer }: { txBase64: string; signer: WalletTransactionSigner }) =>
     btoa(String.fromCharCode(...await signer.signTransaction(Uint8Array.from(atob(txBase64), c => c.charCodeAt(0))))),
 }));
+vi.mock("@/lib/sponsored-tx", () => ({
+  resolveKeeper: async () => "Keeper1111111111111111111111111111111111111",
+  resolveLookupTables: async () => ({}),
+}));
 vi.mock("@solana/web3.js", () => ({ VersionedTransaction: { deserialize: vi.fn(() => ({})) } }));
 beforeEach(() => localStorage.clear());
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 const quote = {
-  rfq_id: "rfq", order_id: "order", maker: "maker", strike: 1_000_000_000,
+  rfq_id: "rfq", order_id: "order", maker: "maker", side: "sell", terms: { type: "covered_call", strike: 1_000_000_000 },
   price: 1_000_000_000, valid_until: 9999999999, nonce: 1n,
 } as QuoteReceivedMessage;
 const preview: RfqOrderPreview = {
-  asset: "SOL", positionType: "covered_call" as const, strike: 1_000_000_000,
+  asset: "SOL", terms: { type: "covered_call" as const, strike: 1_000_000_000 },
   quantity: 1_000_000_000, underlyingDecimals: 9, strikeDisplay: "$1", quantityDisplay: "1 SOL",
 };
 
 function setup(previewOverrides: Partial<RfqOrderPreview> = {}) {
-  const client = new ActaWsClient({ url: "ws://localhost", role: "taker" });
+  const client = new ActaWsClient({ url: "ws://localhost", role: "taker", onDisconnect: "keep_quotes", products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], clientName: "test", clientVersion: "0" });
   vi.spyOn(client, "isAuthenticated").mockReturnValue(true);
   vi.spyOn(client, "getSessionId").mockReturnValue("credential");
-  vi.spyOn(client, "getMyActiveRfqsAsync").mockResolvedValue({ request_id: "read", rfqs: [] });
+  vi.spyOn(client, "getMyActiveRfqsAsync").mockResolvedValue({ next_cursor: null, request_id: "read", rfqs: [] });
   const cancelOnServer = vi.spyOn(client, "cancelRfq").mockReturnValue("cancel");
   const status = vi.spyOn(client, "request").mockResolvedValue({
     request_id: "read", order_id: "order", state: { type: "unknown" },
@@ -42,9 +47,9 @@ function setup(previewOverrides: Partial<RfqOrderPreview> = {}) {
   const sign = vi.fn().mockResolvedValue({ serialize: () => new Uint8Array([1]) });
   const cancel = vi.fn();
   context.read.mockReturnValue({
-    bestQuote: quote, isAuthenticated: true, error: null,
+    bestQuote: quote, quoteSecondsRemaining: (q: QuoteReceivedMessage) => Math.max(0, Math.ceil(Number(q.valid_until) - Date.now() / 1000)), isAuthenticated: true, error: null,
     getClient: () => client, acceptQuote: accept, submitSignedTx: submit, cancelRfq: cancel,
-    rfqTerms: () => ({ position_type: "covered_call", quantity: 1_000_000_000 }) as TakerFillRfq,
+    rfqTerms: () => ({ rfq_id: "rfq", terms: { type: "covered_call", strike: 1_000_000_000 }, side: "sell", quantity: 1_000_000_000 }) as TakerFillRfq,
   });
   const props = {
     preview: { ...preview, ...previewOverrides }, open: true, onClose: vi.fn(), requestNonce: 1,
@@ -80,6 +85,14 @@ describe("RFQ order modal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(h.cancel).toHaveBeenCalledOnce();
     expect(h.props.onClose).toHaveBeenCalledOnce();
+  });
+
+  it("removes a withdrawn quote before its expiry", () => {
+    const h = setup();
+    context.read.mockReturnValue({ ...context.read(), bestQuote: null });
+    h.rerender(<RfqFlowModal {...h.props} />);
+    expect(screen.queryByRole("button", { name: "Accept Quote" })).toBeNull();
+    expect(screen.getByText("Getting quote from market makers")).toBeTruthy();
   });
 
   it("prices the premium with the underlying's own decimals", async () => {
@@ -173,9 +186,62 @@ describe("RFQ order modal", () => {
   it("shows confirmation when reload lookup completes immediately", async () => {
     const h = setup();
     await h.send();
-    h.status.mockResolvedValue({ request_id: "read", order_id: "order", state: { type: "confirmed", position_pda: "position" } });
+    h.status.mockResolvedValue({ request_id: "read", order_id: "order", state: { type: "confirmed", position_pda: "position" as Address } });
     h.reload();
     await screen.findByText("Order Confirmed!");
     expect(h.submit).toHaveBeenCalledOnce();
+  });
+});
+
+
+it("counts down the server-adjusted validity, disables expiry, and refreshes for a new quote", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-27T10:00:00Z"));
+  const h = setup();
+  const remaining = (q: QuoteReceivedMessage) => Math.max(0, Math.ceil(Number(q.valid_until) - (Date.now() / 1000 + 5)));
+  const expiring = { ...quote, valid_until: Date.now() / 1000 + 8 };
+  context.read.mockReturnValue({ ...context.read(), bestQuote: expiring, quoteSecondsRemaining: remaining });
+  h.rerender(<RfqFlowModal {...h.props} />);
+  expect(screen.getByRole("timer").textContent).toBe("Quote expires in 3s");
+  act(() => vi.advanceTimersByTime(3000));
+  context.read.mockReturnValue({ ...context.read(), bestQuote: null });
+  h.rerender(<RfqFlowModal {...h.props} />);
+  expect(screen.getByRole("timer").textContent).toBe("Quote expired. Request a fresh quote.");
+  expect((screen.getByRole("button", { name: "Accept Quote" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Accept Quote" }));
+  expect(h.accept).not.toHaveBeenCalled();
+  context.read.mockReturnValue({ ...context.read(), bestQuote: { ...expiring, valid_until: Date.now() / 1000 + 15 } });
+  h.rerender(<RfqFlowModal {...h.props} />);
+  expect(screen.getByRole("timer").textContent).toBe("Quote expires in 10s");
+  expect((screen.getByRole("button", { name: "Accept Quote" }) as HTMLButtonElement).disabled).toBe(false);
+});
+
+describe("spread quote preview isolation", () => {
+  const spread = { ...preview, terms: { type: "call_spread" as const, lower_strike: 100e9, upper_strike: 120e9 }, strikeDisplay: "100 / 120 USDC", quantity: 1_000_000,
+    spread: { terms: { positionType: 2 as const, lowerStrike: 100_000_000_000n, upperStrike: 120_000_000_000n, quantity: 1_000_000n, underlyingDecimals: 6, quoteDecimals: 6 }, fees: { premiumBps: 100, volumeBps: 100 } } };
+  it("never displays a physical quote or another pair for a spread preview", () => {
+    const h = setup();
+    const props = { ...h.props, preview: spread, requestNonce: 2 };
+    for (const candidate of [
+      { ...quote, terms: { type: "covered_call", strike: 100e9 } },
+      { ...quote, side: "sell", terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 130e9 } },
+      { ...quote, side: "buy", terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 120e9 } },
+    ]) {
+      context.read.mockReturnValue({ ...context.read(), bestQuote: candidate });
+      h.rerender(<RfqFlowModal {...props} />);
+      expect(screen.queryByRole("button", { name: /^Accept/ })).toBeNull();
+    }
+    context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, side: "sell", terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 120e9 }, price: 2e9 } });
+    h.rerender(<RfqFlowModal {...props} />);
+    expect((screen.getByRole("button", { name: /^Accept · \d+s$/ }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByText("Sell SOL 100/120 call spread · 1 SOL")).toBeTruthy();
+    expect(screen.getAllByText("1.98 USDC")).toHaveLength(1);
+    expect(screen.getByText("18.02 USDC")).toBeTruthy();
+    expect(screen.getByText("101.98 USDC")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Quote received");
+    expect(screen.queryByRole("img")).toBeNull();
+    context.read.mockReturnValue({ ...context.read(), bestQuote: { ...context.read().bestQuote, price: 20e9 } });
+    h.rerender(<RfqFlowModal {...props} />);
+    expect((screen.getByRole("button", { name: /^Accept · \d+s$/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

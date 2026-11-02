@@ -4,10 +4,6 @@ import { Suspense, type ReactNode } from "react";
 import { RefCapture } from "@/components/referral/ref-capture";
 import { WebMcpProvider } from "@/components/webmcp-provider";
 import "./globals.css";
-import "@fontsource/syne/400.css";
-import "@fontsource/syne/600.css";
-import "@fontsource/syne/700.css";
-import "@fontsource/syne/800.css";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
