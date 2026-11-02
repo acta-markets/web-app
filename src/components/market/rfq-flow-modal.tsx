@@ -10,7 +10,7 @@ import { useRfqOrder } from "./use-rfq-order";
 import type { VersionedTransaction } from "@solana/web3.js";
 import { IS_MAINNET } from "@/lib/tokens";
 
-import { isCashSettled, isSpreadTerms, productLabel, quoteMatchesProduct, spreadName, spreadPreview, type ProductTerms } from "@/lib/spreads";
+import { isCashSettled, isSpreadTerms, lowerStrike, productLabel, quoteMatchesProduct, spreadName, spreadPreview, type ProductTerms, type TakerSide } from "@/lib/spreads";
 import { formatDate } from "@/lib/vaults/format";
 import { SpreadPreview, type SpreadFees } from "./spread-preview";
 import type { SpreadTerms } from "@acta-markets/ts-sdk/chain";
@@ -18,6 +18,7 @@ import type { SpreadTerms } from "@acta-markets/ts-sdk/chain";
 export type RfqOrderPreview = {
   asset: string;
   terms: ProductTerms;
+  side?: TakerSide;
   spread?: { terms: SpreadTerms; fees: SpreadFees; quoteSymbol?: string };
   /** underlying atomic units */
   quantity: number;
@@ -121,7 +122,7 @@ export function RfqFlowModal({
 
   useEffect(() => {
     if (!preview || accepting || flow.type !== "idle" || (quoteStep !== "requesting_quote" && quoteStep !== "quote_received")) return;
-    if (bestQuote && quoteMatchesProduct(bestQuote, preview.terms)) {
+    if (bestQuote && quoteMatchesProduct(bestQuote, preview.terms, preview.side)) {
       setQuote(bestQuote);
       setStep("quote_received");
     } else if (!bestQuote && quote && quoteSecondsRemaining(quote) === 0) {
@@ -207,7 +208,8 @@ export function RfqFlowModal({
     })} ${preview?.spread?.quoteSymbol ?? "USDC"}`;
   };
   const quoteQuantity = preview ? preview.quantity / 10 ** preview.underlyingDecimals : 0;
-  const quoteUnitPremium = quote ? Number(quote.net_price ?? quote.price) / 1_000_000_000 : null;
+  const isBuy = preview?.side === "buy";
+  const quoteUnitPremium = quote ? Number(isBuy ? quote.price : quote.net_price ?? quote.price) / 1_000_000_000 : null;
   let spreadQuoteValid = !preview || !isCashSettled(preview.terms.type);
   let spreadNetPremium: number | null = null;
   if (preview?.spread && quote) {
