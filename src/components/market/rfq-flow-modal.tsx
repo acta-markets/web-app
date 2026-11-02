@@ -384,11 +384,11 @@ export function RfqFlowModal({
                   {totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : "—"}
                 </span>
               </div>
-              {isBuy && preview ? (
+              {isBuy && preview && quoteUnitPremium != null ? (
                 <BuyQuoteRows
                   preview={preview}
                   quantity={quoteQuantity}
-                  grossPerUnit={Number(quote.price) / 1_000_000_000}
+                  grossPerUnit={quoteUnitPremium}
                   maxLoss={totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : "—"}
                 />
               ) : (
