@@ -40,6 +40,8 @@ export type SpreadRowView = {
   size: string;
   premium: string;
   apr: string;
+  aprPct: number;
+  collateralUsd: number;
   result: string;
   negative: boolean;
 };
@@ -56,9 +58,9 @@ export function spreadRowView(position: PositionInfo, descriptors: MarketDescrip
   const expiry = Number(position.expiry_ts);
   const settled = position.state === "settled" && pnl != null;
   const secondsToExpiry = expiry - Number(position.created_at);
-  const apr = amounts?.premium != null && amounts.collateral > 0n && secondsToExpiry > 0
-    ? `${((Number(amounts.premium) / Number(amounts.collateral)) * (SECONDS_PER_YEAR / secondsToExpiry) * 100).toFixed(2)}%`
-    : NONE;
+  const aprPct = amounts?.premium != null && amounts.collateral > 0n && secondsToExpiry > 0
+    ? (Number(amounts.premium) / Number(amounts.collateral)) * (SECONDS_PER_YEAR / secondsToExpiry) * 100
+    : 0;
   return {
     label: terms.upper_strike == null ? NONE : position.terms.type === "cash_put"
       ? `${symbol ? `${symbol} ` : ""}0/${strikeText(terms.upper_strike)} put`
@@ -67,7 +69,9 @@ export function spreadRowView(position: PositionInfo, descriptors: MarketDescrip
     expiryTs: expiry > 0 ? expiry : null,
     size: amounts ? `${amounts.quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })}${symbol ? ` ${symbol}` : ""}` : NONE,
     premium: cash(amounts?.premium ?? null),
-    apr,
+    apr: aprPct > 0 ? `${aprPct.toFixed(2)}%` : NONE,
+    aprPct,
+    collateralUsd: amounts ? Number(amounts.collateral) / 10 ** amounts.quoteDecimals : 0,
     result: settled ? cash(pnl, true) : NONE,
     negative: settled && pnl < 0n,
   };

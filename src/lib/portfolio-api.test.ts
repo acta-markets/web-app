@@ -14,7 +14,7 @@ describe("wallet portfolio WS API", () => {
 });
 
 it("formats quote atoms without dropping precision or merging currencies", () => {
-  expect(formatPortfolioPremium("9007199254740993", 6, "USDC")).toBe("$9,007,199,254.740993");
-  expect(formatPortfolioPremium("1000000001", 9, "SOL")).toBe("1.000000001 SOL");
-  expect(formatPortfolioPremium("0", 6, "USDC")).toBe("$0");
+  expect(formatPortfolioPremium("9007199254740993", 6, "USDC")).toBe("$9,007,199,254.74");
+  expect(formatPortfolioPremium("1000000001", 9, "SOL")).toBe("1.00 SOL");
+  expect(formatPortfolioPremium("0", 6, "USDC")).toBe("$0.00");
 });

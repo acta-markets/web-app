@@ -36,13 +36,12 @@ export async function fetchWalletPositionSummary(client: PortfolioReader, signal
   return response.summaries;
 }
 
-/** Keep aggregate quote atoms exact, even above Number.MAX_SAFE_INTEGER. */
+/** Two decimals for display, from exact atoms even above Number.MAX_SAFE_INTEGER. */
 export function formatPortfolioPremium(atoms: string, decimals: number, currency: string): string {
-  const amount = BigInt(atoms);
   const scale = 10n ** BigInt(decimals);
-  const whole = (amount / scale).toLocaleString("en-US");
-  const fraction = (amount % scale).toString().padStart(decimals, "0").replace(/0+$/, "");
-  const value = fraction ? `${whole}.${fraction}` : whole;
+  const cents = (BigInt(atoms) * 100n) / scale;
+  const whole = (cents / 100n).toLocaleString("en-US");
+  const value = `${whole}.${(cents % 100n).toString().padStart(2, "0")}`;
   return currency === "USDC" ? `$${value}` : `${value} ${currency}`;
 }
 
