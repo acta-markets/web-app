@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import { AppButton, AppButtonLink } from "@/components/app-ui/app-button";
 import { cn } from "@/lib/cn";
+import { shortAddress } from "@/lib/vaults/format";
 import { CuratorLogo } from "./curator-logo";
 import { formatVaultEquity, formatVaultTvl, primaryVaultAction, vaultApr, vaultStatus, type VaultModalTab } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
@@ -41,6 +42,7 @@ export function VaultCard({
 }) {
   const apr = vaultApr(vault.performance, meta.stakingAprPct);
   const action = primaryVaultAction(vault, nowSecs);
+  const pair = meta.legs.join(" / ");
 
   return (
     <article
@@ -60,9 +62,11 @@ export function VaultCard({
         </div>
         <div className="flex w-full flex-col items-center gap-1">
           <h3 className="max-w-full truncate font-mono text-xl font-bold leading-[1.2] tracking-[-0.4px] text-content-primary" title={meta.name}>
-            {meta.legs.join(" / ")}
+            {pair}
           </h3>
-          <p className="max-w-full truncate font-mono text-xs leading-[1.2] text-content-secondary">{meta.name}</p>
+          <p className="max-w-full truncate font-mono text-xs leading-[1.2] text-content-secondary">
+            {meta.name.startsWith(pair) ? shortAddress(vault.vault_pda) : meta.name}
+          </p>
         </div>
       </div>
 
