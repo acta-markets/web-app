@@ -31,7 +31,7 @@ describe("Portfolio WS history", () => {
     mocks.page.mockResolvedValueOnce({ positions: [position("new", 1_800_000_000)], next_cursor: "opaque-page-2" })
       .mockResolvedValueOnce({ positions: [position("old", 1_700_000_000, true)], next_cursor: null });
     render(<PortfolioClient />);
-    await screen.findByText("$123");
+    await screen.findByText("$123.00");
     expect(screen.getByText("7 open positions")).toBeTruthy();
     expect(screen.getByTestId("income-chart").textContent).toContain('"v":123');
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
@@ -41,7 +41,7 @@ describe("Portfolio WS history", () => {
     expect(screen.getByText(/ call$/)).toBeTruthy();
     expect(mocks.page).toHaveBeenLastCalledWith(mocks.client, { settled: true, limit: 50, cursor: "opaque-page-2" }, expect.any(AbortSignal));
     expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
-    expect(screen.getByText("$123")).toBeTruthy();
+    expect(screen.getByText("$123.00")).toBeTruthy();
   });
 
   it.each(["page", "summary"] as const)("shows an alert and no zero figures on initial %s failure", async (kind) => {
@@ -58,7 +58,7 @@ describe("Portfolio WS history", () => {
       .mockRejectedValueOnce(new Error("unavailable"))
       .mockResolvedValueOnce({ positions: [], next_cursor: null });
     render(<PortfolioClient />);
-    await screen.findByText("$123");
+    await screen.findByText("$123.00");
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     await screen.findByRole("alert");
@@ -73,7 +73,7 @@ describe("Portfolio WS history", () => {
     mocks.page.mockResolvedValueOnce({ positions: [position("new", 1_800_000_000)], next_cursor: "next" })
       .mockImplementationOnce(() => new Promise(resolve => { resolvePage = resolve; }));
     const view = render(<PortfolioClient />);
-    await screen.findByText("$123");
+    await screen.findByText("$123.00");
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     const pageSignal = mocks.page.mock.calls[1][2] as AbortSignal;
@@ -90,7 +90,7 @@ describe("Portfolio WS history", () => {
     mocks.page.mockResolvedValue({ positions: [], next_cursor: null });
     mocks.summary.mockResolvedValue([{ ...summary[0], premium_all_time: "9007199254740993" }]);
     render(<PortfolioClient />);
-    await screen.findByText("$9,007,199,254.740993");
+    await screen.findByText("$9,007,199,254.74");
     expect(screen.queryByTestId("income-chart")).toBeNull();
   });
 
@@ -101,7 +101,7 @@ describe("Portfolio WS history", () => {
     const view = render(<PortfolioClient />);
     mocks.wallet = "wallet-b";
     view.rerender(<PortfolioClient />);
-    await screen.findByText("$123");
+    await screen.findByText("$123.00");
     await act(async () => resolveOld({ positions: [position("stale", 1_800_000_000)], next_cursor: "stale" }));
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
     expect(screen.queryByText("Covered call")).toBeNull();

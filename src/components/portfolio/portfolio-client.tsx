@@ -89,12 +89,16 @@ type PortfolioRow = {
   apr: number;
 };
 
-/** What happened to a closed covered call or cash-secured put. */
-function physicalOutcome(position: PositionInfo): string {
+/** Result of a closed covered call or cash-secured put: premium, less the move past the strike. */
+function physicalOutcome(position: PositionInfo, premiumUsd: number, strike: number, quantity: number): string {
   if (position.state === "liquidated") return "Liquidated";
   if (position.state !== "settled" || position.settlement.type !== "physical") return "\u2014";
-  if (position.settlement.is_otm) return "Expired OTM";
-  return `ITM at ${formatStrikePrice(Number(position.settlement.settlement_price) / 1_000_000_000)}`;
+  const earned = position.side === "buy" ? -premiumUsd : premiumUsd;
+  const signed = (value: number) => `${value < 0 ? "-" : "+"}${formatUsdSmart(Math.abs(value))}`;
+  if (position.settlement.is_otm) return signed(earned);
+  const settlement = Number(position.settlement.settlement_price) / 1_000_000_000;
+  const moved = Math.abs(settlement - strike) * quantity;
+  return `ITM ${signed(position.side === "buy" ? earned + moved : earned - moved)}`;
 }
 
 function toUserStatus(status: string): "Open" | "Closed" {
@@ -273,11 +277,7 @@ export function PortfolioClient() {
           : Number(p.price) / strikeScale;
       const notionalUsd = quantity * strike;
       const createdTs = Number(p.created_at);
-      const descriptorData = descriptor as
-        | { market?: { expiry_ts?: number }; expiry_ts?: number }
-        | undefined;
-      const descriptorExpiry = descriptorData?.market?.expiry_ts ?? descriptorData?.expiry_ts;
-      const expiryTs = market?.expiry_ts ? Number(market.expiry_ts) : descriptorExpiry ? Number(descriptorExpiry) : null;
+      const expiryTs = Number(p.expiry_ts) > 0 ? Number(p.expiry_ts) : null;
       const durationSec = expiryTs != null ? Math.max(1, expiryTs - createdTs) : 0;
       const apr =
         premiumUsd > 0 && notionalUsd > 0 && durationSec > 0
@@ -288,7 +288,7 @@ export function PortfolioClient() {
         id: p.pda,
         asset: assetSymbol,
         type: p.terms.type === "cash_secured_put" ? "put" : "call",
-        outcome: physicalOutcome(p),
+        outcome: physicalOutcome(p, premiumUsd, strike, quantity),
         status: p.state,
         userStatus: toUserStatus(p.state),
         createdTs,
@@ -311,24 +311,31 @@ export function PortfolioClient() {
     [rows]
   );
 
+  const openSpreads = useMemo(
+    () => allPositions.flatMap((p) => {
+      const view = spreadRowView(p, rfqMarketDescriptors);
+      return view?.status === "Open" ? [view] : [];
+    }),
+    [allPositions, rfqMarketDescriptors]
+  );
   const totalNotionalUsd = useMemo(
-    () => openRows.reduce((sum, r) => sum + (Number.isFinite(r.notionalUsd) ? r.notionalUsd : 0), 0),
-    [openRows]
+    () => openRows.reduce((sum, r) => sum + (Number.isFinite(r.notionalUsd) ? r.notionalUsd : 0), 0)
+      + openSpreads.reduce((sum, r) => sum + r.collateralUsd, 0),
+    [openRows, openSpreads]
   );
   const weightedApr = useMemo(() => {
-    const denom = openRows.reduce((sum, r) => sum + r.notionalUsd, 0);
-    if (denom <= 0) return 0;
-    const num = openRows.reduce((sum, r) => sum + r.apr * r.notionalUsd, 0);
-    return num / denom;
-  }, [openRows]);
+    if (totalNotionalUsd <= 0) return 0;
+    const physical = openRows.reduce((sum, r) => sum + r.apr * r.notionalUsd, 0);
+    return (physical + openSpreads.reduce((sum, r) => sum + r.aprPct * r.collateralUsd, 0)) / totalNotionalUsd;
+  }, [openRows, openSpreads, totalNotionalUsd]);
 
   const nextMaturity = useMemo(() => {
-    const expiries = openRows
+    const expiries = [...openRows, ...openSpreads]
       .map((r) => r.expiryTs)
       .filter((x): x is number => typeof x === "number" && Number.isFinite(x) && x > 0)
       .sort((a, b) => a - b);
     return expiries[0] ?? null;
-  }, [openRows]);
+  }, [openRows, openSpreads]);
   const countdown = nextMaturity ? formatCountdown(nextMaturity, nowMs) : "\u2014";
 
   const monthlyRate = weightedApr / 12;
@@ -343,7 +350,7 @@ export function PortfolioClient() {
       size: `${fmtNumber(r.quantity, 4)} ${r.asset}`,
       premium: formatUsdSmart(r.premiumUsd),
       last: r.userStatus === "Open" ? (Number.isFinite(r.apr) ? `${r.apr.toFixed(2)}%` : "\u2014") : r.outcome,
-      negative: false,
+      negative: r.outcome.includes("-"),
     });
     const spreads = allPositions.flatMap((p): TableRow[] => {
       const view = spreadRowView(p, rfqMarketDescriptors);
