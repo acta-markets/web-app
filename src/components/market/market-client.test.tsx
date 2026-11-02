@@ -15,10 +15,6 @@ vi.mock("@/components/rfq/rfq-provider", () => ({ RFQ_TTL_SECONDS: 30, useRfqCon
 vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ selectedAccount: mocks.account, signMessage: mocks.signMessage }) }));
 vi.mock("@/components/wallet/wallet-sidebar", () => ({ useWalletSidebar: () => ({ openSidebar: mocks.openSidebar }) }));
 vi.mock("./rfq-flow-modal", () => ({ RfqFlowModal: (props: unknown) => { mocks.modal(props); return null; } }));
-vi.mock("./spread-market", () => ({ SpreadMarket: (props: { cashPut?: boolean; initialProduct?: string; initialMarketId?: string | null }) => {
-  mocks.spread(props);
-  return <div data-testid="spread-market">{props.cashPut ? "cash put" : props.initialProduct}</div>;
-} }));
 const now = 1_800_000_000;
 function snapshot(spot = 100, stale = false): TokenMarketsInfoData {
   return {
@@ -284,39 +280,9 @@ describe("RFQ sign-in and live caps", () => {
 });
 
 describe("market product policy", () => {
-  it("hides cash-settled entry points for physical-only markets and reacts to policy changes", () => {
-    const descriptor = (products: string[]) => ({ underlying_symbol: "SOL", products, market: { is_put: true, expiry_ts: now + 86400 } });
-    mocks.context.marketDescriptors = [descriptor(["cash_secured_put"])];
-    const view = render(<MarketClient asset="SOL" />);
+  it("offers only the physical market even where spreads are enabled", () => {
+    mocks.context.marketDescriptors = [{ underlying_symbol: "SOL", products: ["cash_secured_put", "put_spread", "cash_put"], market: { is_put: true, expiry_ts: now + 86400 } }];
+    render(<MarketClient asset="SOL" />);
     expect(screen.queryByRole("tab", { name: "Sell spreads" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Sell cash put" })).toBeNull();
-    mocks.context.marketDescriptors = [descriptor(["cash_secured_put", "put_spread", "cash_put"])];
-    view.rerender(<MarketClient asset="SOL" />);
-    expect(screen.getByRole("tab", { name: "Sell spreads" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Sell cash put" })).toBeTruthy();
-    mocks.context.marketDescriptors = [descriptor(["cash_secured_put"])];
-    view.rerender(<MarketClient asset="SOL" />);
-    expect(screen.queryByRole("tab", { name: "Sell spreads" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Sell cash put" })).toBeNull();
-  });
-
-  it("opens a product-qualified direct link and returns to the physical market when the URL changes", async () => {
-    const descriptor = (products: string[]) => ({
-      underlying_symbol: "SOL",
-      products,
-      market: { market_pda: "put-market", is_put: true, expiry_ts: now + 86400 },
-    });
-    mocks.params = "product=put_spread&market=put-market";
-    mocks.context.marketDescriptors = [descriptor(["cash_secured_put", "put_spread", "cash_put"])];
-    const view = render(<MarketClient asset="SOL" />);
-    await waitFor(() => expect(screen.getByTestId("spread-market").textContent).toBe("put_spread"));
-    expect(mocks.spread.mock.lastCall?.[0]).toMatchObject({ initialProduct: "put_spread", initialMarketId: "put-market" });
-
-    fireEvent.click(screen.getByRole("tab", { name: "Sell cash put" }));
-    expect(mocks.replace).toHaveBeenLastCalledWith("/market/SOL?product=cash_put");
-
-    mocks.params = "type=csp&market=physical-market";
-    view.rerender(<MarketClient asset="SOL" />);
-    await waitFor(() => expect(screen.queryByTestId("spread-market")).toBeNull());
   });
 });

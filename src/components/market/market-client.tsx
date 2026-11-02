@@ -8,14 +8,11 @@ import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppButton } from "@/components/app-ui/app-button";
-import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { AppPill } from "@/components/app-ui/app-pill";
 import { RfqFlowModal, type RfqOrderPreview } from "@/components/market/rfq-flow-modal";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getTokenMint, normalizeTokenSymbol } from "@/lib/tokens";
-import { descriptorSupportsCashProduct, type CashSettledProduct } from "@/lib/trade-products";
 import { useTokenBalance } from "./use-token-balance";
-import { SpreadMarket } from "./spread-market";
 import { RFQ_TTL_SECONDS, useRfqContext } from "@/components/rfq/rfq-provider";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
 import {
@@ -78,69 +75,6 @@ function formatInputValue(value: number, maxDecimals: number): string {
 }
 
 export function MarketClient({ asset }: { asset: string }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { cancelRfq, marketDescriptors } = useRfqContext();
-  const requestedProduct = searchParams.get("product") as CashSettledProduct | null;
-  const requestedGoal = requestedProduct === "call_spread" || requestedProduct === "put_spread"
-    ? "spreads"
-    : requestedProduct === "cash_put" ? "cash_put" : null;
-  const initialSpreadProduct = requestedProduct === "put_spread" ? "put_spread" : "call_spread";
-  const requestedMarketId = searchParams.get("market");
-  const descriptorForAsset = (descriptor: (typeof marketDescriptors)[number]) =>
-    normalizeTokenSymbol(descriptor.underlying_symbol) === normalizeTokenSymbol(asset);
-  const spreadsEnabled = marketDescriptors.some((descriptor) => descriptorForAsset(descriptor)
-    && (descriptorSupportsCashProduct(descriptor, "call_spread") || descriptorSupportsCashProduct(descriptor, "put_spread")));
-  const cashPutEnabled = marketDescriptors.some((descriptor) => descriptorForAsset(descriptor)
-    && descriptorSupportsCashProduct(descriptor, "cash_put"));
-  const [goal, setGoal] = useState<"yield" | "spreads" | "cash_put">("yield");
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (busy) return;
-    if (requestedGoal === "spreads" && spreadsEnabled) {
-      setGoal("spreads");
-      return;
-    }
-    if (requestedGoal === "cash_put" && cashPutEnabled) {
-      setGoal("cash_put");
-      return;
-    }
-    setGoal("yield");
-  }, [busy, cashPutEnabled, requestedGoal, spreadsEnabled]);
-
-  const changeGoal = (next: "yield" | "spreads" | "cash_put") => {
-    cancelRfq();
-    setGoal(next);
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === "yield") {
-      params.delete("product");
-      params.delete("market");
-    } else {
-      const product = next === "cash_put"
-        ? "cash_put"
-        : requestedProduct === "put_spread" ? "put_spread" : "call_spread";
-      params.set("product", product);
-      params.delete("market");
-    }
-    router.replace(`/market/${encodeURIComponent(asset)}${params.size ? `?${params}` : ""}`);
-  };
-
-  const spread = goal === "spreads" && (spreadsEnabled || busy);
-  return <>
-    {(spreadsEnabled || cashPutEnabled) && <div className="mx-auto mt-20 w-full max-w-[850px] max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-      <AppSegmented ariaLabel="Trading goal" value={goal} disabled={busy} onChange={changeGoal}
-        options={[{ value: "yield", label: "Earn yield" }, ...(spreadsEnabled ? [{ value: "spreads" as const, label: "Sell spreads" }] : []), ...(cashPutEnabled ? [{ value: "cash_put" as const, label: "Sell cash put" }] : [])]} />
-    </div>}
-    {goal === "cash_put" && (cashPutEnabled || busy)
-      ? <SpreadMarket key={`cash_put:${asset}`} asset={asset} cashPut initialMarketId={requestedMarketId} onBusyChange={setBusy} />
-      : spread
-        ? <SpreadMarket key={`spreads:${asset}`} asset={asset} initialProduct={initialSpreadProduct} initialMarketId={requestedMarketId} onBusyChange={setBusy} />
-        : <YieldMarketClient asset={asset} onBusyChange={setBusy} hasGoals={spreadsEnabled || cashPutEnabled} />}
-  </>;
-}
-
-function YieldMarketClient({ asset, onBusyChange, hasGoals }: { asset: string; onBusyChange: (busy: boolean) => void; hasGoals: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const typeParam = searchParams.get("type");
@@ -696,7 +630,6 @@ function YieldMarketClient({ asset, onBusyChange, hasGoals }: { asset: string; o
 
   const rfqModal = <RfqFlowModal
     key="rfq-order"
-    onBusyChange={onBusyChange}
     preview={orderPreview}
     open={rfqModalOpen}
     onClose={() => {
@@ -727,7 +660,7 @@ function YieldMarketClient({ asset, onBusyChange, hasGoals }: { asset: string; o
   if (!market || !isLiveMarketReady) {
     return (
       <div>
-        <header style={hasGoals ? { paddingTop: 32 } : undefined} className="mx-auto w-full max-w-[850px] space-y-6 pb-20 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pb-10 max-md:pt-16">
+        <header className="mx-auto w-full max-w-[850px] space-y-6 pb-20 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pb-10 max-md:pt-16">
           <div className="flex items-center gap-0.5 font-mono text-base leading-[1.2] tracking-[-0.32px]">
             <Link href="/trade" className="text-content-secondary hover:text-content-primary">
               Trade
@@ -790,7 +723,7 @@ function YieldMarketClient({ asset, onBusyChange, hasGoals }: { asset: string; o
   return (
     <div>
 
-      <header style={hasGoals ? { paddingTop: 32 } : undefined} className="mx-auto w-full max-w-[850px] space-y-6 pb-20 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pb-10 max-md:pt-16">
+      <header className="mx-auto w-full max-w-[850px] space-y-6 pb-20 pt-[104px] max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pb-10 max-md:pt-16">
 
         <div className="flex items-center gap-0.5 font-mono text-base leading-[1.2] tracking-[-0.32px]">
           <Link href="/trade" className="text-content-secondary hover:text-content-primary">
