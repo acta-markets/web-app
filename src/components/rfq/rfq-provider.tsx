@@ -26,7 +26,7 @@ import {
   type TakerFillRfq,
 } from "@/lib/rfq-client";
 import { ALL_POSITIONS } from "@acta-markets/ts-sdk/ws";
-import { isCashSettledTerms, isSpreadTerms, lowerStrike, quoteMatchesProduct, requireStrikeTick, spreadTerms, strikeTicksByMint, validSpreadPremium, type ProductTerms } from "@/lib/spreads";
+import { isCashSettledTerms, isSpreadTerms, lowerStrike, quoteMatchesProduct, requireStrikeTick, spreadTerms, strikeTicksByMint, validSpreadPremium, type ProductTerms, type TakerSide } from "@/lib/spreads";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { AppModal } from "@/components/app-ui/app-modal";
 import { ReferralGateModal } from "@/components/referral/referral-gate-modal";
@@ -84,6 +84,7 @@ interface RfqContextValue {
   submitRfq: (params: {
     market: string;
     terms: ProductTerms;
+    side?: TakerSide;
     quantity: number;
     timeoutSeconds?: number;
   }) => void;
@@ -175,6 +176,9 @@ function errorText(err: ActaWsClientError): string {
 }
 
 const quotePrice = (quote: QuoteReceivedMessage) => Number(isCashSettledTerms(quote.terms) ? quote.price : quote.net_price ?? quote.price);
+// A buyer pays the gross price, so net_price plays no part in ranking.
+const beatsQuote = (quote: QuoteReceivedMessage, best: QuoteReceivedMessage) =>
+  quote.side === "buy" ? Number(quote.price) < Number(best.price) : quotePrice(quote) > quotePrice(best);
 
 function isMissingMarketDescriptorError(message: string): boolean {
   const lower = message.toLowerCase();
@@ -294,7 +298,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         continue;
       }
       nextExpiry = Math.min(nextExpiry, validUntil);
-      if (!best || quotePrice(quote) > quotePrice(best)) best = quote;
+      if (!best || beatsQuote(quote, best)) best = quote;
     }
     setBestQuote(best);
     if (Number.isFinite(nextExpiry)) {
@@ -567,7 +571,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       });
       client.on("quoteReceived", (quote) => {
         const pending = pendingRfqRef.current;
-        if (!pending?.rfqId || quote.rfq_id !== pending.rfqId || !quoteMatchesProduct(quote, pending.identity) || (pending.spread && !validSpreadPremium(pending.spread, quote.price))) return;
+        if (!pending?.rfqId || quote.rfq_id !== pending.rfqId || !quoteMatchesProduct(quote, pending.identity, pending.rfq.side) || (pending.spread && !validSpreadPremium(pending.spread, quote.price))) return;
         quotesRef.current.set(quote.maker, quote);
         refreshBestQuote();
       });
@@ -576,7 +580,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         if (!pending?.rfqId || update.rfq_id !== pending.rfqId) return;
         quotesRef.current.clear();
         for (const quote of update.quotes) {
-          if (quoteMatchesProduct(quote, pending.identity) && (!pending.spread || validSpreadPremium(pending.spread, quote.price))) quotesRef.current.set(quote.maker, quote);
+          if (quoteMatchesProduct(quote, pending.identity, pending.rfq.side) && (!pending.spread || validSpreadPremium(pending.spread, quote.price))) quotesRef.current.set(quote.maker, quote);
         }
         refreshBestQuote();
       });
@@ -859,6 +863,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     (params: {
       market: string;
       terms: ProductTerms;
+      side?: TakerSide;
       quantity: number;
       timeoutSeconds?: number;
     }) => {
@@ -874,10 +879,11 @@ export function RfqProvider({ children }: RfqProviderProps) {
         setError(new Error("Invalid product or strike pair."));
         return;
       }
+      const side = params.side ?? "sell";
       const rfqRequest = {
         market: params.market as any,
         terms: params.terms,
-        side: "sell" as const,
+        side,
         quantity: params.quantity,
         timeoutSeconds: params.timeoutSeconds ?? RFQ_TTL_SECONDS,
       };
@@ -912,9 +918,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
         rfqId: null,
         rfq: isCashSettledTerms(params.terms) ? {
           market: { ...descriptor.market, collateral_mint: descriptor.market.quote_mint, settlement_mint: descriptor.market.quote_mint },
-          terms: params.terms, side: "sell", quantity: params.quantity, order_options: [params.terms],
+          terms: params.terms, side, quantity: params.quantity, order_options: [params.terms],
           underlying_decimals: descriptor.underlying_decimals, quote_decimals: descriptor.quote_decimals,
-        } : { market: descriptor.market, terms: params.terms, side: "sell", quantity: params.quantity, order_options: [params.terms] },
+        } : { market: descriptor.market, terms: params.terms, side, quantity: params.quantity, order_options: [params.terms] },
       };
       void client.createRfq({ ...rfqRequest, requestId }).catch((err) => {
         const pending = pendingRfqRef.current;

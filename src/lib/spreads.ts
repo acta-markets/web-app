@@ -6,6 +6,7 @@ export const isSpread = (type: string): type is SpreadProduct => type === "call_
 export const productLabel = (type: Product) => ({ cash_put: "Cash Put", covered_call: "Covered Call", cash_secured_put: "Cash-Secured Put", call_spread: "Sell Call Spread", put_spread: "Sell Put Spread" })[type];
 
 export type ProductTerms = import("@acta-markets/ts-sdk/ws").OptionTerms;
+export type TakerSide = import("@acta-markets/ts-sdk/ws").QuoteReceivedMessage["side"];
 export const isSpreadTerms = (terms: ProductTerms): terms is Extract<ProductTerms, { type: SpreadProduct }> => isSpread(terms.type);
 export const isCashSettled = (type: string) => isSpread(type) || type === "cash_put";
 export const isCashSettledTerms = (terms: ProductTerms): terms is Extract<ProductTerms, { type: SpreadProduct | "cash_put" }> => isCashSettled(terms.type);
@@ -20,8 +21,8 @@ export function spreadName(symbol: string | null, type: SpreadProduct, lower: nu
   return `${symbol ? `${symbol} ` : ""}${strikeText(lower)}/${strikeText(upper)} ${type === "call_spread" ? "call" : "put"}`;
 }
 
-export function quoteMatchesProduct(quote: { terms: ProductTerms; side: string }, request: ProductTerms): boolean {
-  if (quote.side !== "sell" || !quote.terms || quote.terms.type !== request.type) return false;
+export function quoteMatchesProduct(quote: { terms: ProductTerms; side: string }, request: ProductTerms, side: TakerSide = "sell"): boolean {
+  if (quote.side !== side || !quote.terms || quote.terms.type !== request.type) return false;
   if (!Number.isSafeInteger(lowerStrike(quote.terms)) || lowerStrike(quote.terms) !== lowerStrike(request)) return false;
   if (isSpreadTerms(request)) {
     return isSpreadTerms(quote.terms) && !("strike" in quote.terms) && Number.isSafeInteger(quote.terms.upper_strike)
