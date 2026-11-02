@@ -11,12 +11,6 @@ import { getTokenLogoSrc } from "@/lib/token-assets";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { normalizeTokenSymbol } from "@/lib/tokens";
 import type { EarnAssetSummary } from "@/lib/rfq-client";
-import {
-  CASH_SETTLED_PRODUCTS,
-  cashSettledMarketRows,
-  type CashSettledMarketRow,
-  type CashSettledProduct,
-} from "@/lib/trade-products";
 
 type EarnRow = {
   asset: string;
@@ -43,51 +37,11 @@ function summaryToRow(s: EarnAssetSummary): EarnRow {
   };
 }
 
-const CASH_TILES: Record<CashSettledProduct, { title: string; body: string }> = {
-  call_spread: {
-    title: "Call spread",
-    body: "Lock USDC and earn premium. If spot finishes above your lower price, you pay the difference, capped at your upper price",
-  },
-  put_spread: {
-    title: "Put spread",
-    body: "Lock USDC and earn premium. If spot finishes below your upper price, you pay the difference, capped at your lower price",
-  },
-  cash_put: {
-    title: "Cash put",
-    body: "Lock USDC and earn premium. If spot finishes below your price, you pay the difference in USDC",
-  },
-};
-
-function CashSettledTiles({ rows }: { rows: CashSettledMarketRow[] }) {
-  const tiles = CASH_SETTLED_PRODUCTS.flatMap((product) => {
-    const row = rows.find((candidate) => candidate.product === product);
-    return row ? [row] : [];
-  });
-  return (
-    <div className="flex w-full max-w-[850px] gap-2 max-xl:px-[71px] max-lg:px-6 max-md:flex-col">
-      {tiles.map((row) => (
-        <Link
-          key={row.product}
-          href={`/market/${encodeURIComponent(row.asset)}?product=${row.product}&market=${encodeURIComponent(row.marketPda)}`}
-          className="flex flex-1 flex-col items-center gap-1.5 border border-bg-border bg-[rgba(18,18,18,0.01)] px-6 py-5 backdrop-blur-[4px] transition-colors hover:border-[rgba(240,240,240,0.2)] hover:bg-[rgba(40,40,40,0.24)]"
-        >
-          <span className="text-xl font-bold leading-[1.2] tracking-[-0.4px] text-content-primary">
-            {CASH_TILES[row.product].title}
-          </span>
-          <p className="w-full text-center text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
-            {CASH_TILES[row.product].body}
-          </p>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
 export function TradeClient() {
   const [type, setType] = useState<MarketType>("call");
   const router = useRouter();
   const [howOpen, setHowOpen] = useState(false);
-  const { earnSummary, marketDescriptors, connectionState, getEarnSummary } = useRfqContext();
+  const { earnSummary, connectionState, getEarnSummary } = useRfqContext();
 
   const wsReady =
     connectionState !== "disconnected" && connectionState !== "error" && connectionState !== "connecting";
@@ -109,7 +63,6 @@ export function TradeClient() {
   }, [earnSummary]);
 
   // The descriptor feed does not tick at expiry, so evaluate its validity on each Trade render.
-  const cashRows = cashSettledMarketRows(marketDescriptors);
 
   const rows = useMemo(() => allRows.filter((r) => r.type === type), [allRows, type]);
 
@@ -181,7 +134,6 @@ export function TradeClient() {
             </button>
           ))}
         </div>
-        {cashRows.length > 0 ? <CashSettledTiles rows={cashRows} /> : null}
       </div>
 
       <div className="mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6">
