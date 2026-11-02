@@ -153,7 +153,7 @@ describe("Bought options", () => {
     await show([bought({})]);
     mocks.fetchPositions.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "Deposit" }));
-    await screen.findByText("Will exercise");
+    await screen.findByText("Deposited");
     expect(mocks.buildDeposit).toHaveBeenCalledWith(undefined, "wallet-a", expect.objectContaining({ pda: "bought", market: "m1" }));
     expect(mocks.sendTx).toHaveBeenCalledWith(expect.objectContaining({ feePayer: "wallet-a", instructions: ["ix"] }));
     expect(mocks.fetchPositions).toHaveBeenCalledOnce();
@@ -166,7 +166,7 @@ describe("Bought options", () => {
     fireEvent.click(screen.getByRole("button", { name: "Deposit" }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/Not enough balance/);
     expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
-    expect(screen.queryByText("Will exercise")).toBeNull();
+    expect(screen.queryByText("Deposited")).toBeNull();
   });
 
   it("shows the state after expiry from the market's finalized price", async () => {
@@ -176,9 +176,10 @@ describe("Bought options", () => {
     expect(screen.queryByRole("button", { name: "Deposit" })).toBeNull();
   });
 
-  it("shows Will exercise for a funded position", async () => {
+  it("stays neutral on a funded position until the price is known", async () => {
     await show([bought({ state: "funded" })]);
-    expect(screen.getByText("Will exercise")).toBeTruthy();
+    expect(screen.getByText("Deposited")).toBeTruthy();
+    expect(screen.queryByText("Will exercise")).toBeNull();
     expect(screen.queryByRole("button", { name: "Deposit" })).toBeNull();
   });
 

@@ -4,6 +4,7 @@ export type SpreadProduct = "call_spread" | "put_spread";
 export type Product = "covered_call" | "cash_secured_put" | "cash_put" | SpreadProduct;
 export const isSpread = (type: string): type is SpreadProduct => type === "call_spread" || type === "put_spread";
 export const productLabel = (type: Product) => ({ cash_put: "Cash Put", covered_call: "Covered Call", cash_secured_put: "Cash-Secured Put", call_spread: "Sell Call Spread", put_spread: "Sell Put Spread" })[type];
+export const BUY_PRODUCT_NAME: Record<Product, string> = { covered_call: "Buy a call", cash_secured_put: "Buy a put", call_spread: "Buy a call spread", put_spread: "Buy a put spread", cash_put: "Buy a cash put" };
 
 export type ProductTerms = import("@acta-markets/ts-sdk/ws").OptionTerms;
 export type TakerSide = import("@acta-markets/ts-sdk/ws").QuoteReceivedMessage["side"];

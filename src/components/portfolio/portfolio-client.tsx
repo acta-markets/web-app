@@ -155,7 +155,7 @@ function extractDescriptorUnderlyingSymbol(descriptor: unknown): string | undefi
 }
 
 function BuyStatusCell({ buy, nowSec, deposit }: { buy: BuyRow; nowSec: number; deposit: ReturnType<typeof useBuyDeposit> }) {
-  const status = deposit.funded.has(buy.pda) ? "will_exercise" : buyStatus(buy, nowSec);
+  const status = deposit.funded.has(buy.pda) ? "funded" : buyStatus(buy, nowSec);
   if (status !== "deposit") {
     return <span className={status === "not_exercised" ? "text-error" : undefined}>{BUY_STATUS_LABEL[status]}</span>;
   }

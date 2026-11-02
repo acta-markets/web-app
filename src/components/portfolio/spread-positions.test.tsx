@@ -13,6 +13,12 @@ describe("spread portfolio cash results", () => {
     expect(spreadPositionAmounts({ ...position, state: "settled", settlement: { type: "cash", settlement_price: 120e9, maker_payoff: 0, taker_return: 20_000_000 } }, descriptor)).toMatchObject({ payout: 0n, pnl: 1_980_000n });
     expect(spreadPositionAmounts({ ...position, state: "open" }, descriptor)?.payout).toBeNull();
   });
+  it("a bought spread costs the gross premium and pays the holder", () => {
+    const bought = { ...position, side: "buy", price: 2_000_000_000 } as PositionInfo;
+    expect(spreadPositionAmounts(bought, descriptor)).toMatchObject({ premium: 2_000_000n, payout: 10_000_000n, pnl: 8_000_000n, bought: true });
+    const worthless = { ...bought, settlement: { type: "cash", settlement_price: 130e9, maker_payoff: 0, taker_return: 20_000_000 } } as PositionInfo;
+    expect(spreadPositionAmounts(worthless, descriptor)?.pnl).toBe(-2_000_000n);
+  });
   it("uses row decimals without a descriptor and rejects incomplete terms", () => {
     expect(spreadPositionAmounts({ ...position, terms: { type: "put_spread", lower_strike: 100e9 } } as unknown as PositionInfo, descriptor)).toBeNull();
     expect(spreadPositionAmounts(position)).toMatchObject({ collateral: 20_000_000n, payout: 10_000_000n });
@@ -26,6 +32,11 @@ describe("spread positions table", () => {
     const amounts = spreadPositionAmounts(open, descriptor);
     const expected = (Number(amounts?.premium) / Number(amounts?.collateral)) * 100;
     expect(spreadRowView(open, [])?.apr).toBe(`${expected.toFixed(2)}%`);
+  });
+  it("a bought spread earns no APR and locks none of the buyer's capital", () => {
+    const open = { ...position, side: "buy", price: 2_000_000_000, pda: "a", market: "m", state: "open", created_at: 1_793_000_000, expiry_ts: 1_793_000_000 + 86_400 } as PositionInfo;
+    const view = spreadRowView(open, []);
+    expect([view?.apr, view?.aprPct, view?.collateralUsd, view?.premium]).toEqual(["\u2014", 0, 0, "$2"]);
   });
   it("never shows a mint address as the symbol", () => {
     const mint = "Mint111111111111111111111111111111111111111";

@@ -15,7 +15,7 @@ import { AppButton } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { cn } from "@/lib/cn";
-import type { TakerSide } from "@/lib/spreads";
+import { BUY_PRODUCT_NAME, type TakerSide } from "@/lib/spreads";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { formatPct, formatStrikePrice, formatUsdSmart } from "@/lib/markets";
@@ -42,9 +42,12 @@ import {
 } from "@/lib/trade/strikes";
 import {
   BUY_ITM_WARNING,
+  BUY_KIND_OPTIONS,
   SENTENCE,
+  SPREAD_SETTLEMENT_NOTE,
   amountSymbol,
   buyOutcomeCopy,
+  buySpreadTerms,
   buyZoneLabels,
   cushionText,
   directionInfo,
@@ -54,9 +57,14 @@ import {
   outcomeCopy,
   payoutTail,
   scenario as buildScenario,
+  spreadLegLabel,
+  spreadLegs,
+  spreadMaxGain,
+  spreadOutcomeCopy,
   strikeDistancePct,
   thesisText,
   zoneLabels,
+  type BuyKind,
   type Direction,
 } from "@/lib/trade/thesis";
 import { ThesisSentence } from "./thesis-sentence";
@@ -103,7 +111,7 @@ export function EasyTrade({
   modeSwitch?: React.ReactNode;
   howItWorks?: React.ReactNode;
 }) {
-  const { earnSummary, referralStatus, openReferralGate, isAuthenticated } = useRfqContext();
+  const { earnSummary, referralStatus, openReferralGate, isAuthenticated, marketDescriptors } = useRfqContext();
   const { rpc, selectedAccount, signTransaction } = useSolana();
   const { openSidebar } = useWalletSidebar();
   const walletAddress = selectedAccount?.address;
@@ -112,6 +120,8 @@ export function EasyTrade({
   const assets = useMemo(() => tradeAssets(earnSummary), [earnSummary]);
   const [assetChoice, setAssetChoice] = useState<string | null>(null);
   const [takerSide, setTakerSide] = useState<TakerSide>("sell");
+  const [buyKind, setBuyKind] = useState<BuyKind>("option");
+  const [legChoice, setLegChoice] = useState<number | null>(null);
   const [directionChoice, setDirectionChoice] = useState<Direction>("above");
   const [expiryChoice, setExpiryChoice] = useState<number | null>(null);
   const [strikeChoice, setStrikeChoice] = useState<number | null>(null);
@@ -154,6 +164,19 @@ export function EasyTrade({
   const strike = strikeChoice != null
     ? nearestStrike(strikeOptions, strikeChoice)
     : strikeOptions[defaultStrikeIndex(strikeOptions, spot, info.isPut)] ?? null;
+
+  const listedProducts = marketDescriptors.find((d) => d.market?.market_pda === expiry?.pda)?.products;
+  const spreadsListed = !!listedProducts?.includes(info.isPut ? "put_spread" : "call_spread");
+  const buyingSpread = buying && buyKind === "spread" && spreadsListed;
+  const legs = useMemo(
+    () => buyingSpread && strike
+      ? spreadLegs(strikeOptions.map((o) => o.strike1e9), strike.strike1e9, info.isPut)
+        .filter((l) => listedProducts?.includes(buySpreadTerms(info.isPut, strike.strike1e9, l).type))
+      : [],
+    [buyingSpread, strike, strikeOptions, info.isPut, listedProducts]
+  );
+  const leg = legChoice != null && legs.includes(legChoice) ? legChoice : legs[0] ?? null;
+  const spreadBuy = buyingSpread && strike && leg != null ? buySpreadTerms(info.isPut, strike.strike1e9, leg) : null;
 
   const symbol = asset ? amountSymbol(takerSide, direction, asset.symbol) : "USDC";
   const decimals = snapshot ? Number(snapshot.underlying_decimals) : getToken(asset?.symbol ?? "")?.decimals ?? 9;
@@ -252,7 +275,7 @@ export function EasyTrade({
     referralGated: referralStatus === "required",
     pricesLoading: !snapshot,
     hasMarkets: expiries.length > 0,
-    hasStrike: !!strike,
+    hasStrike: !!strike && (!buyingSpread || spreadBuy != null),
     priced: buying || aprPct != null,
     amountEntered: amount > 0,
     sizeViolation,
@@ -271,12 +294,19 @@ export function EasyTrade({
   function chooseSide(next: TakerSide) {
     setTakerSide(next);
     setStrikeChoice(null);
+    setLegChoice(null);
     setAmountInput(null);
+  }
+
+  function chooseBuyKind(next: BuyKind) {
+    setBuyKind(next);
+    setLegChoice(null);
   }
 
   function chooseDirection(next: Direction) {
     setDirectionChoice(next);
     setStrikeChoice(null);
+    setLegChoice(null);
     setAmountInput(null);
   }
 
@@ -285,7 +315,7 @@ export function EasyTrade({
     if (cta.action === "redeem") return openReferralGate();
     if (cta.action !== "quote" || !asset || !expiry || !strike || quantity == null || lockedDeposit == null) return;
     if (amountInput != null && lockedText != null && lockedText !== amountText) setAmountInput(lockedText);
-    const terms = { type: info.positionType, strike: strike.strike1e9 };
+    const terms = spreadBuy ?? { type: info.positionType, strike: strike.strike1e9 };
     request(
       { market: expiry.pda, terms, side: takerSide, quantity },
       {
@@ -352,7 +382,12 @@ export function EasyTrade({
   }
 
   const sizeText = quantity != null ? `${formatAmount(quantity / 10 ** decimals, inputDecimals)} ${asset.symbol}` : "—";
-  const outcomeText = buying
+  const maxGain = spreadBuy && strike && leg != null && quantity != null
+    ? formatUsdc(spreadMaxGain(quantity / 10 ** decimals, strike.strike1e9, leg))
+    : null;
+  const outcomeText = maxGain && strike && leg != null
+    ? spreadOutcomeCopy({ asset: asset.symbol, direction, strike1e9: strike.strike1e9, leg1e9: leg, maxGain })
+    : buying
     ? strike && quantity != null ? buyOutcomeCopy({ asset: asset.symbol, direction, strike: strike.strike, sizeText }) : null
     : outcome && strike
     ? outcomeCopy({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: info.isPut ? 4 : inputDecimals })
@@ -364,7 +399,9 @@ export function EasyTrade({
     : null;
 
   const termRows: BreakdownRow[] = [
-    { label: "Type", value: info.optionName, info: info.optionExplainer },
+    spreadBuy
+      ? { label: "Type", value: BUY_PRODUCT_NAME[spreadBuy.type], info: SPREAD_SETTLEMENT_NOTE }
+      : { label: "Type", value: info.optionName, info: info.optionExplainer },
     {
       label: "Strike",
       value: strike
@@ -382,13 +419,21 @@ export function EasyTrade({
       info: "Market makers price a buy when you request it. The premium, max loss and break-even are shown before you accept.",
     },
     { label: "Max loss", value: "The premium you pay" },
-    {
+    ...(spreadBuy ? [{
+      label: "Max gain",
+      value: maxGain ?? "—",
+      info: "The width of the spread, paid in USDC at expiry. The premium you pay comes out of it.",
+    }, {
+      label: "Deposit",
+      value: "None",
+      info: SPREAD_SETTLEMENT_NOTE,
+    }] : [{
       label: "To exercise",
       value: quantity != null && strike
         ? `Deposit ${exerciseDepositText(info.isPut, quantity / 10 ** decimals, strike.strike, asset.symbol, inputDecimals)} before expiry`
         : "—",
       info: BUY_ITM_WARNING,
-    },
+    }]),
   ] : [
     ...termRows,
     {
@@ -442,6 +487,26 @@ export function EasyTrade({
           disabled={isRequesting}
           className="self-start"
         />
+        {buying && spreadsListed ? (
+          <AppSegmented
+            ariaLabel="Option or spread"
+            value={buyKind}
+            onChange={chooseBuyKind}
+            options={[...BUY_KIND_OPTIONS]}
+            disabled={isRequesting}
+            className="self-start"
+          />
+        ) : null}
+        {buyingSpread && legs.length > 0 ? (
+          <AppSegmented
+            ariaLabel="Spread width"
+            value={String(leg)}
+            onChange={(value) => setLegChoice(Number(value))}
+            options={legs.map((l) => ({ value: String(l), label: spreadLegLabel(info.isPut, l) }))}
+            disabled={isRequesting}
+            className="self-start"
+          />
+        ) : null}
         <ThesisSentence
           side={takerSide}
           asset={asset.symbol}

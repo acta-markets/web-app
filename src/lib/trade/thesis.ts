@@ -8,10 +8,14 @@
  *   above → buy a call, in the money when the price ends > the strike
  *   below → buy a put, in the money when the price ends < the strike
  * The premium is paid upfront and only a deposit made before expiry can exercise.
+ * A bought spread caps the payoff at its width, settles in USDC and takes no deposit:
+ *   above → call spread from the strike up to a higher leg
+ *   below → put spread from the strike down to a lower leg, or a cash put down to zero
+ * A call has no such floor, so it is never offered without its upper leg.
  * All Easy copy lives here.
  */
 import { formatStrikePrice } from "@/lib/markets";
-import type { TakerSide } from "@/lib/spreads";
+import { isCashSettled, type ProductTerms, type TakerSide } from "@/lib/spreads";
 import { formatAmount, formatExpiryDay, formatPrice, formatUsdc } from "@/lib/trade/format";
 
 export type Direction = "above" | "below";
@@ -323,6 +327,87 @@ export function buyOutcomeCopy({
     wrong: {
       when: `If ${asset} ends at or ${above ? "below" : "above"} ${price}`,
       result: "The option expires unused. Any deposit comes back.",
+      note: "You lose the premium.",
+    },
+  };
+}
+
+export type BuyKind = "option" | "spread";
+
+export const BUY_KIND_OPTIONS: ReadonlyArray<{ value: BuyKind; label: string }> = [
+  { value: "option", label: "Option" },
+  { value: "spread", label: "Spread" },
+];
+
+const SPREAD_LEGS = 3;
+
+/**
+ * The other strike a bought spread can run to: the nearest listed strikes past the chosen
+ * one, and zero for a put, which makes it a cash put. Calls have no zero: nothing caps them.
+ */
+export function spreadLegs(strikes1e9: ReadonlyArray<number>, strike1e9: number, isPut: boolean): number[] {
+  const past = strikes1e9
+    .filter((s) => (isPut ? s < strike1e9 && s > 0 : s > strike1e9))
+    .sort((a, b) => (isPut ? b - a : a - b));
+  return isPut ? [...past.slice(0, SPREAD_LEGS - 1), 0] : past.slice(0, SPREAD_LEGS);
+}
+
+export function buySpreadTerms(isPut: boolean, strike1e9: number, leg1e9: number): ProductTerms {
+  if (!isPut) return { type: "call_spread", lower_strike: strike1e9, upper_strike: leg1e9 };
+  return leg1e9 === 0
+    ? { type: "cash_put", strike: strike1e9 }
+    : { type: "put_spread", lower_strike: leg1e9, upper_strike: strike1e9 };
+}
+
+export function spreadLegLabel(isPut: boolean, leg1e9: number): string {
+  return leg1e9 === 0 ? "To $0 (cash put)" : `${isPut ? "Down to" : "Up to"} ${formatStrikePrice(leg1e9 / 1e9)}`;
+}
+
+/** Width of a bought spread in strike units, and its payoff at full width for `quantity`. */
+export function spreadMaxGain(quantity: number, strike1e9: number, leg1e9: number): number {
+  return (quantity * Math.abs(strike1e9 - leg1e9)) / 1e9;
+}
+
+export function spreadBreakEven(isPut: boolean, strike: number, grossPerUnit: number): number {
+  return isPut ? strike - grossPerUnit : strike + grossPerUnit;
+}
+
+/** The (lower, upper) legs of a cash-settled product, 1e9-scaled. */
+export function spreadBounds(terms: ProductTerms): { lower: number; upper: number } | null {
+  if (!isCashSettled(terms.type)) return null;
+  return terms.type === "cash_put"
+    ? { lower: 0, upper: terms.strike }
+    : { lower: (terms as { lower_strike: number }).lower_strike, upper: (terms as { upper_strike: number }).upper_strike };
+}
+
+export const SPREAD_SETTLEMENT_NOTE = "Settles in USDC at expiry. No deposit.";
+
+/** Outcome cards for a bought spread: the payoff is the only thing that can come back. */
+export function spreadOutcomeCopy({
+  asset,
+  direction,
+  strike1e9,
+  leg1e9,
+  maxGain,
+}: {
+  asset: string;
+  direction: Direction;
+  strike1e9: number;
+  leg1e9: number;
+  maxGain: string;
+}): { right: OutcomeCopy; wrong: OutcomeCopy } {
+  const price = formatStrikePrice(strike1e9 / 1e9);
+  const above = direction === "above";
+  const full = formatStrikePrice(leg1e9 / 1e9);
+  return {
+    right: {
+      when: `If ${asset} ends ${above ? "above" : "below"} ${price}`,
+      result: `You receive up to ${maxGain} in USDC, the full amount at ${full} or ${above ? "above" : "below"}.`,
+      note: SPREAD_SETTLEMENT_NOTE,
+    },
+    wrong: {
+      when: `If ${asset} ends at or ${above ? "below" : "above"} ${price}`,
+      result: "The spread expires worthless.",
       note: "You lose the premium.",
     },
   };
