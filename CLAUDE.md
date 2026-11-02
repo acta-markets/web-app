@@ -64,7 +64,7 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
 
 **Next.js 14 App Router** with two route groups:
 - `(marketing)` - Landing page at `/`
-- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (option markets), `/portfolio`, `/market/[asset]`
+- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (Easy mode; `?mode=pro` is a placeholder), `/portfolio`, `/market/[asset]` (the previous market page, reached by direct URL)
 
 **Middleware** (`middleware.ts`) gates app routes based on `NEXT_PUBLIC_APP_ENABLED`. When disabled, app routes redirect to landing but `/api/whitelist` remains accessible.
 
@@ -74,6 +74,11 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
 - Supports Phantom, Solflare, and other Wallet Standard wallets
 
 **Market prices and APR**: The market page uses the configured RFQ backend’s `GetTokenMarketsInfo.reference_price` and indicative premiums, refreshed together every 30 seconds. APR uses the existing SDK formula and is unavailable for stale indicatives. The backend owns oracle access; the frontend has no direct Hermes integration.
+
+**Trade (Easy mode)**: `/trade` is one sentence the user fills in: "I believe [asset] will be [above/below] [price] on [date]. If I deposit [amount], I get paid ≈$X now." A price chart and the order details sit underneath. A taker can only sell options, so `above` sells a cash-secured put and `below` sells a covered call; right means the deposit comes back, wrong means it converts at the strike. `?asset=` preselects an asset.
+- `src/lib/trade/` - pure logic shared with the market page: `thesis.ts` (direction mapping, outcome math, all Easy copy), `strikes.ts` (expiries, strikes and APR from a snapshot), `sizing.ts` (size rule, deposit and quantity conversion), `assets.ts`, `format.ts`
+- `src/components/trade/easy/` - the sentence, the chart (CoinGecko history via `/api/market/history`) and the order details
+- `src/components/rfq/use-token-markets-snapshot.ts` and `use-quote-request.ts` - the 30s snapshot refresh and the quote request lifecycle, used by both trade pages
 
 **Markets**: Static market definitions in `src/lib/markets.ts` with call/CSP (cash-secured put) types, APR ranges, and price options.
 
@@ -92,16 +97,17 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
 
 **RFQ Infrastructure**: WebSocket client using `@acta-markets/ts-sdk` (see `package.json` for the pinned version):
 - `src/lib/rfq-client.ts` - Thin wrapper around SDK's `ActaWsClient`
-- `src/lib/use-rfq.ts` - React hook for component integration
+- `src/components/rfq/rfq-provider.tsx` - Shared React connection, discovery and RFQ request state; token metadata is bound to its underlying mint and request ID
+- `src/components/market/use-rfq-order.ts` - Persists selected order identity per wallet and RFQ backend through reload, and whether its signature was sent. After same-credential resume, `GetMyActiveRfqs` can authorize repeating `AcceptQuote` for the same pending order to retrieve its signing payload. Submitted transactions are never replayed; `GetOrderStatus` reconciles execution.
 - Connects via `NEXT_PUBLIC_RFQ_WS_URL` env variable
 - Auth flow: `connectAnonymous()` → user clicks connect → `authenticate(walletAuthProvider)`
 - Challenge is human-readable text signed as UTF-8 bytes
 
 ### Quote flow modes (for rollback)
 
-- **Current mode (fresh on Deposit)**:
-  - Market page shows indicative APR/premium only.
-  - RFQ quote is requested when `Deposit` is clicked.
+- **Current mode (fresh on click)**:
+  - Easy mode and the market page show indicative APR/premium only.
+  - RFQ quote is requested when `Get quote` (Easy) or `Deposit` (market page) is clicked.
   - While waiting, CTA shows `Getting quote...`.
   - Modal opens only after matching quote arrives.
 
@@ -109,7 +115,7 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
   - Quote requested automatically when price + size are selected.
   - Quote refreshed periodically (every 30s, faster when stale).
   - Deposit reused prefetched quote and opened modal immediately with locked values.
-  - If rollback needed, restore quote prefetch effects in `src/components/market/market-client.tsx`.
+  - If rollback needed, restore quote prefetch effects in `src/components/rfq/use-quote-request.ts`.
 
 ## Key Conventions
 

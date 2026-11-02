@@ -16,9 +16,13 @@ export type RfqOrderPreview = {
   asset: string;
   positionType: PositionType;
   strike: number;
+  /** underlying atomic units */
   quantity: number;
+  underlyingDecimals: number;
   strikeDisplay: string;
   quantityDisplay: string;
+  /** the user's view in words, e.g. "SOL will be above $150 on Nov 7" */
+  thesis?: string;
   lockedAprPct?: number | null;
   lockedPremiumUsd?: number | null;
 };
@@ -171,7 +175,7 @@ export function RfqFlowModal({
       maximumFractionDigits: 2,
     })} USDC`;
   };
-  const quoteQuantity = preview ? preview.quantity / 1_000_000_000 : 0;
+  const quoteQuantity = preview ? preview.quantity / 10 ** preview.underlyingDecimals : 0;
   const quoteUnitPremium = quote ? Number(quote.net_price ?? quote.price) / 1_000_000_000 : null;
   const totalPremiumUsd =
     preview?.lockedPremiumUsd != null
@@ -213,6 +217,11 @@ export function RfqFlowModal({
           </div>
         ) : preview ? <div className={panelClass}>
           <div className="font-mono text-sm font-medium text-content-secondary">Order</div>
+          {preview.thesis ? (
+            <p className="mt-2 font-space text-lg font-semibold leading-[1.2] text-content-primary">
+              &ldquo;{preview.thesis}&rdquo;
+            </p>
+          ) : null}
           <div className="mt-2 space-y-2 font-mono">
             <div className="flex justify-between">
               <span className="text-content-secondary">Asset</span>
