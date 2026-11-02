@@ -57,5 +57,6 @@
 
 * [WebSocket conventions](reference/ws-common.md)
 * [Public HTTP API](reference/http-api.md)
+* [Protocol changelog](reference/protocol-changelog.md)
 * [Endpoints and maker registration](reference/sandbox.md)
 * [Integration FAQ](reference/faq.md)
