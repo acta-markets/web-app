@@ -5,9 +5,9 @@ import { useQuoteRequest } from "./use-quote-request";
 const mocks = vi.hoisted(() => ({ context: {} as Record<string, unknown> }));
 vi.mock("@/components/rfq/rfq-provider", () => ({ RFQ_TTL_SECONDS: 30, useRfqContext: () => mocks.context }));
 
-const rfq = { market: "market", positionType: "cash_secured_put" as const, strike: 95e9, quantity: 1e9 };
+const rfq = { market: "market", terms: { type: "cash_secured_put" as const, strike: 95e9 }, quantity: 1e9 };
 const preview = {
-  asset: "SOL", positionType: "cash_secured_put" as const, strike: 95e9, quantity: 1e9, underlyingDecimals: 9,
+  asset: "SOL", terms: { type: "cash_secured_put" as const, strike: 95e9 }, quantity: 1e9, underlyingDecimals: 9,
   strikeDisplay: "$95", quantityDisplay: "95 USDC",
 };
 

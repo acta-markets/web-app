@@ -3,11 +3,12 @@ import type { EarnAssetSummary } from "@/lib/rfq-client";
 import { pickAsset, tradeAssets } from "./assets";
 
 function row(symbol: string, mint: string, positionType: string, maxApr: number | null): EarnAssetSummary {
+  const apr = maxApr == null ? { type: "unavailable" } : { type: "available", min: maxApr, max: maxApr };
   return {
     underlying_mint: mint, underlying_symbol: symbol, quote_mint: "usdc", quote_symbol: "USDC",
-    position_type: positionType, min_apr: null, max_apr: maxApr, cap_filled_pct: 0, cap_total: 0, cap_used: 0,
+    position_type: positionType, apr, cap_filled_pct: 0, cap_total: 0, cap_used: 0,
     strikes_count: 3, nearest_market_pda: "pda", markets_count: 1, nearest_expiry_ts: 0,
-  };
+  } as unknown as EarnAssetSummary;
 }
 
 describe("tradable assets", () => {

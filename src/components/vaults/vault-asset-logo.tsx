@@ -10,14 +10,11 @@ import { getToken } from "@/lib/tokens";
 export function VaultAssetLogo({
   symbol,
   size = 24,
-  ring = false,
   label,
   className,
 }: {
   symbol: string;
   size?: number;
-  /** the separating ring used where a logo overlaps the card band */
-  ring?: boolean;
   /** set where the logo is the only thing naming the asset; decorative otherwise */
   label?: string;
   className?: string;
@@ -26,9 +23,8 @@ export function VaultAssetLogo({
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-[rgba(240,240,240,0.1)]",
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-bg-border",
         logo ? "bg-content-primary" : "bg-action-primary",
-        ring && "shadow-[0_0_0_5px_var(--bg-primary)]",
         className,
       )}
       style={{ width: size, height: size }}

@@ -8,14 +8,7 @@ import { useCallback, useMemo, useState } from "react";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
 import { cn } from "@/lib/cn";
-import { formatUsd } from "@/lib/vaults/format";
-import {
-  VAULT_SORTS,
-  formatVaultEquity,
-  vaultTvlUsd,
-  type VaultModalTab,
-  type VaultSort,
-} from "@/lib/vaults/presentation";
+import { VAULT_SORTS, type VaultModalTab, type VaultSort } from "@/lib/vaults/presentation";
 import {
   VAULT_CATEGORIES,
   categoryHref,
@@ -25,13 +18,13 @@ import {
   type VaultCategory,
 } from "@/lib/vaults/registry";
 import type { Vault } from "@/lib/vaults/types";
-import { useNowSecs, useUsdPrices, useVaults } from "./use-vaults";
+import { useNowSecs, useVaults } from "./use-vaults";
 import { VaultCard, VaultCardSkeleton } from "./vault-card";
 import { LazyVaultDepositModal as VaultDepositModal, usePrefetchVaultModal } from "./vault-deposit-modal-lazy";
 
-type Entry = { vault: Vault; meta: ResolvedVaultMeta; tvlUsd: number | null };
+type Entry = { vault: Vault; meta: ResolvedVaultMeta };
 
-const CHIP = "flex h-10 items-center gap-2 whitespace-nowrap border px-4 py-2.5 font-mono text-sm leading-none tracking-tight backdrop-blur-[4px] transition-colors max-md:h-8 max-md:px-3";
+const CHIP = "flex h-10 items-center gap-2 whitespace-nowrap border px-4 py-2.5 font-mono text-sm leading-none tracking-tight transition-colors max-md:h-8 max-md:px-3";
 
 function CategoryChip({
   label,
@@ -53,11 +46,11 @@ function CategoryChip({
         CHIP,
         active
           ? "border-accent-primary/30 bg-accent-primary/20 text-content-primary"
-          : "border-bg-border bg-[rgba(18,18,18,0.01)] text-content-secondary hover:text-content-primary",
+          : "border-bg-border text-content-secondary hover:text-content-primary",
       )}
     >
       {label}
-      <span className={cn("tabular-nums", active ? "text-content-primary/60" : "text-content-secondary")}>{count}</span>
+      <span className="tabular-nums text-content-secondary">{count}</span>
     </button>
   );
 }
@@ -69,7 +62,7 @@ function SortSelect({ value, onChange }: { value: VaultSort; onChange: (next: Va
     <div
       className={cn(
         CHIP,
-        "relative border-bg-border bg-[rgba(18,18,18,0.01)] pr-3 text-content-secondary hover:text-content-primary has-[:focus-visible]:border-accent-primary max-md:ml-auto max-md:pr-2.5",
+        "relative border-bg-border pr-3 text-content-secondary hover:text-content-primary has-[:focus-visible]:border-accent-primary max-md:ml-auto max-md:pr-2.5",
       )}
     >
       <span aria-hidden="true">
@@ -96,25 +89,15 @@ export function VaultsClient({ initialCategory }: { initialCategory: CategoryFil
   const { data: vaults, error, loading, refresh } = useVaults();
   const nowSecs = useNowSecs();
   const [category, setCategory] = useState<CategoryFilter>(initialCategory);
-  const [sort, setSort] = useState<VaultSort>("apr");
+  const [sort, setSort] = useState<VaultSort>("apy");
   const [open, setOpen] = useState<{ pda: string; tab: VaultModalTab } | null>(null);
   usePrefetchVaultModal();
 
   const resolved = useMemo(() => vaults.map((vault) => ({ vault, meta: resolveVaultMeta(vault) })), [vaults]);
-  const symbols = useMemo(
-    () => [...new Set(resolved.filter((e) => e.meta.assetKnown).map((e) => e.meta.assetSymbol.toUpperCase()))],
-    [resolved],
-  );
-  const { data: prices, error: pricesError } = useUsdPrices(symbols);
-  // before the first price answer every TVL shows as loading, so cards never flash asset amounts
-  const pricesPending = prices === null && pricesError === null && symbols.length > 0;
-
   const entries = useMemo<Entry[]>(() => {
     const compare = (VAULT_SORTS.find((s) => s.value === sort) ?? VAULT_SORTS[0]).compare;
-    return resolved
-      .map((e) => ({ ...e, tvlUsd: vaultTvlUsd(e.vault, prices?.[e.meta.assetSymbol.toUpperCase()]) }))
-      .sort(compare);
-  }, [resolved, prices, sort]);
+    return [...resolved].sort(compare);
+  }, [resolved, sort]);
 
   const counts = useMemo(() => {
     const byCategory = new Map<VaultCategory, number>();
@@ -170,14 +153,11 @@ export function VaultsClient({ initialCategory }: { initialCategory: CategoryFil
   } else {
     content = (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {visible.map(({ vault, meta, tvlUsd }) => (
+        {visible.map(({ vault, meta }) => (
           <VaultCard
             key={vault.vault_pda}
             vault={vault}
             meta={meta}
-            tvl={
-              pricesPending ? null : tvlUsd !== null ? formatUsd(tvlUsd) : `${formatVaultEquity(vault)} ${meta.assetSymbol}`
-            }
             nowSecs={nowSecs}
             onOpen={(pda, tab) => setOpen({ pda, tab })}
           />
@@ -198,6 +178,7 @@ export function VaultsClient({ initialCategory }: { initialCategory: CategoryFil
               Curated vaults for the assets you already hold
             </p>
             <Link
+              prefetch={false}
               href="/docs/guide/vaults"
               className="inline-flex items-center gap-0.5 text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary"
             >

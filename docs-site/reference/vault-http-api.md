@@ -26,8 +26,11 @@ Closed vaults are left out of the list. Detail for a closed or unknown vault ret
 | `vault_pda`, `governance`, `fee_recipient`, `primary_delegate` | string | Vault and authority addresses. |
 | `vault_id` | string | 32-byte identifier encoded as 64 lowercase hex characters, without `0x`. |
 | `main_mint`, `second_mint`, `share_mint` | string | Asset and share-mint addresses. |
+| `second_leg_generation` | string | Increments when governance rolls the second mint. Reload cached leg addresses and plans. |
 | `main_decimals`, `second_decimals` | number | Token decimals. |
 | `main_token_program`, `second_token_program` | `legacy_spl` or `token_2022` | Token-program family. |
+| `staging` | object or null | Open intermediate-asset slot; fields below. `null` means no open slot. |
+| `staged_generation` | string | Open or last staging generation. The next stage uses this value plus one. |
 | `phase` | `idle`, `active`, `settling`, `processing_capital` | Trading/capital phase. |
 | `safety` | `normal`, `frozen`, `emergency_unwind`, `withdraw_only`, `closing` | Safety mode. |
 | `capabilities` | number | Strategy capability bitmask. |
@@ -40,26 +43,43 @@ Closed vaults are left out of the list. Detail for a closed or unknown vault ret
 | `pending_deposit_amount`, `pending_withdraw_shares` | string | Pending main-token amount and pending shares. |
 | `performance_fee_bps`, `management_fee_bps`, `manager_stake_min_bps` | number | Fee and stake settings. |
 | `last_hwm_update_ts`, `last_hwm_reset_ts`, `last_settlement_ts` | string | Recorded timestamps. |
-| `cap_limit`, `capital_fallback_delay_secs` | string | Deposit capacity and fallback delay. |
+| `capital_fallback_delay_secs` | string | Fallback delay. |
+| `capacity` | object | `{ "type": "unlimited" }`, or `{ "type": "limited", "cap_limit", "remaining" }` with `remaining = max(0, cap_limit − equity − pending_deposit_amount)` in main atoms. |
 | `deposit_window_set_ts` | string or null | Recorded intake-window timestamp. |
 | `main_balance`, `second_balance`, `live_share_supply`, `observed_manager_stake_shares` | string or null | Balances and supply read from chain separately from events. |
 | `balance_updated_at`, `balance_chain_slot` | string or null | When those balances were read, and at which chain slot. |
 | `policy` | object | Policy fields below. |
 | `projection` | object | Indexed event coordinate below. |
-| `performance` | object | Performance variant below. |
+| `created_at` | string or null | Chain time of the vault's creation; `null` until the stats snapshot loads. |
+| `tvl_usd_1e9`, `price_time` | string or null | Indicative: `equity` at the main mint's USD oracle price, 1e9 scale, and that price's time. Both `null` without a fresh price. |
+| `generation_started_at`, `premium`, `fees`, `depositors_in_generation` | see below, or null | Generation stats from the same snapshot as `performance`. |
+| `performance` | object or null | Generation metrics below. |
+| `metadata` | object, optional | Operator-curated display fields: `name`; optional `curator`, `strategy`, `description`, `website` and `logo_url` (`https://` URLs) and `twitter` (a bare handle, no `@`). Omitted when none are set. Display only; `governance` is the authority. |
+
+`staging` contains `mint` (base58), `from_leg` (`main` or `second`), and decimal-string `amount`, `staged_at` and `generation`. `amount` is in the intermediate mint’s atoms; `staged_at` is Unix seconds. The slot must be unstaged before equity processing or cycle finalization. It is separate from `main_balance` and `second_balance`.
 
 `policy` contains the numeric fields `max_open_positions`, `max_rebalance_drift_bps` and `min_main_liquidity_bps`.
 
 `projection` contains `version` and `slot` as strings, `transaction_index` and `event_index` as numbers, and `signature` as a string. Balances carry their own timestamps in `balance_updated_at` and `balance_chain_slot`.
 
-`performance` is one of:
+`generation_started_at`, `premium`, `fees`, `depositors_in_generation` and `performance` come from one stats snapshot, refreshed every 60 seconds. They are `null` unless the snapshot's generation equals `capital_generation`; the first four are also `null` when `performance.covered` is `false`.
 
-- `{ "status": "unavailable" }`
-- `{ "status": "no_track_record" }`
-- `status: "short_track_record"` with `cycles_completed`, `last_cycle_return_pct`, `cumulative_return_pct` as numbers and `track_record_secs` as a string.
-- `status: "annualized"` with the same fields plus numeric `annualized_return_pct`.
+- `premium`: per quote mint, `{ quote_mint, cycle, generation }`, each `{ received, paid }` in quote atoms. `received` is net premium of writer legs; `paid` is the gross premium of holder legs, `null` when a holder leg's market lacks decimals or its open price. `cycle` is the current `active_expiry`.
+- `fees`: `management_fee_assessed`, `performance_fee_assessed` and `realized_fee_value` of the generation, in main atoms.
+- `depositors_in_generation`: number of wallets with a processed deposit in the generation.
 
-Annualization needs at least 30 days of completed-cycle history. [Shares, equity and fees](../protocol/vault-accounting.md) explains boundary equity, share price and live share ownership.
+`performance` fields:
+
+| Field | JSON type | Meaning |
+| --- | --- | --- |
+| `capital_generation`, `computed_at` | string | The generation and time the snapshot describes. |
+| `covered` | boolean | `false` when the generation's history is incomplete; every metric below is then `null`. |
+| `returns` | object | `7d`, `30d`, `90d`, `all`: `{ return_pct, from_time, to_time }` or `null`. Booked share price return after fees, in percent, between the checkpoints it names; `null` when the generation is younger than the window. |
+| `apy_30d`, `apy_90d` | number or null | The 30- and 90-day returns annualized by compounding (APY), in percent. |
+| `max_drawdown_pct` | number or null | Largest peak-to-trough fall of the booked share price, as a non-negative percentage. |
+| `worst_cycle_return_pct`, `losing_cycles`, `cycles_completed` | number or null | Finished cycles of the generation. |
+
+The booked share price is a step function between checkpoints, so returns move only at cycle boundaries. [Shares, equity and fees](../protocol/vault-accounting.md) explains boundary equity, share price and live share ownership.
 
 ## Position memberships
 
@@ -87,6 +107,25 @@ The response is `{ "positions": VaultPosition[], "next_cursor": string | null }`
 
 A dual-vault position has one chain position and a role-specific membership for each participating vault.
 
+## Exposure
+
+`GET /vaults/{pda}/exposure`
+
+Open and funded positions at an indicative spot: `{ vault_pda, as_of, positions, totals }`. Positions are reloaded after 10 seconds and never served older than 15; `as_of` is when they were read, and a failed reload past that returns `503`. `spot` is read on every request. Without a database the route returns `503` `db_disabled`.
+
+| Position fields | JSON type | Meaning |
+| --- | --- | --- |
+| `position`, `market`, `underlying_mint`, `quote_mint` | string | Addresses. |
+| `position_type`, `role`, `status` | string | As in position memberships; only `open` and `funded`. |
+| `strike`, `quantity`, `expiry` | string | Strike in quote per underlying, 1e9 scale; quantity in underlying atoms. |
+| `underlying_decimals`, `quote_decimals` | number or null | `null` when market metadata is missing; `intrinsic` is then `null`. |
+| `spot`, `spot_time` | string or null | Underlying price in quote, 1e9 scale, from the oracle cache; `null` when the leg is stale or retired. |
+| `distance_pct` | number or null | Call `100 × (strike − spot) / spot`, put `100 × (spot − strike) / spot`. Positive is out of the money. |
+| `itm` | boolean or null | `spot` past the strike; equality is out of the money. |
+| `intrinsic` | string or null | Value moved if the position expired at `spot`, in quote atoms: `0` out of the money, positive for `holder`, negative for `writer`. Not a cash flow or fair value. |
+
+`totals` has one entry per quote mint: `notional_at_strike` and signed `outstanding_intrinsic` in quote atoms, each `null` when any position of that mint lacks the value.
+
 ## Cycles
 
 `GET /vaults/{pda}/cycles?limit=50&cursor=...`
@@ -96,6 +135,7 @@ A dual-vault position has one chain position and a role-specific membership for 
 | Cycle fields | JSON type |
 | --- | --- |
 | `cycle_number`, `expiry`, `started_at` | string |
+| `capital_generation` | string, or null when the cycle's opening event is not retained |
 | `share_price_start`, `equity_start` | string |
 | `performance_fee_assessed`, `management_fee_assessed` | string |
 | `finished_at`, `share_price_end`, `equity_end` | string or null |
@@ -151,6 +191,8 @@ Both accept `limit` (default 50, range 1–200) and an optional opaque `cursor`.
 
 A final redemption can pay out the second asset. `second_amount` records it apart from the main-asset `amount`.
 
+`@acta-markets/ts-sdk/http` `depositorPerformance({ history, shares, sharePrice, generationStart })` turns all pages of one vault's history into FIFO deposit lots of the current generation, each with its return since entry. Pass the wallet's share balance plus escrowed withdrawal shares, the vault's `share_price` and `generation_started_at`. It reports no money gain, because shares are transferable.
+
 ## Pagination example
 
 Fetch the first page, then pass the returned cursor back:
@@ -166,7 +208,7 @@ curl --get 'https://devnet-api.acta.markets/api/v1/vaults/<vault-pda>/cycles' \
 
 ## Errors and freshness
 
-List and detail are served from memory. Other routes read the database. List, detail, positions, cycles and pending queues can be cached for five seconds.
+List and detail are served from memory. Other routes read the database. List, detail, positions, cycles and pending queues can be cached for five seconds; exposure is `no-store`.
 
 Errors use `{ "error": "Human-readable message", "code": "error_code" }`.
 

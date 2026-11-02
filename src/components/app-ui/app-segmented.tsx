@@ -12,6 +12,7 @@ export function AppSegmented<T extends string>({
   options,
   className,
   size = "sm",
+  disabled = false,
   ariaLabel = "segmented"
 }: {
   value: T;
@@ -19,6 +20,7 @@ export function AppSegmented<T extends string>({
   options: Array<AppSegmentedOption<T>>;
   className?: string;
   size?: "sm" | "lg";
+  disabled?: boolean;
   ariaLabel?: string;
 }) {
   const btn = size === "lg"
@@ -39,9 +41,11 @@ export function AppSegmented<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
+            disabled={disabled}
             onClick={() => onChange(o.value)}
             className={cn(
               btn,
+              "disabled:cursor-not-allowed disabled:opacity-40",
               active
                 ? "bg-accent-primary/20 border-accent-primary/30 text-content-primary"
                 : "bg-[rgba(18,18,18,0.01)] border-bg-border text-content-secondary hover:text-content-primary"

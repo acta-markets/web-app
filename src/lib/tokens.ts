@@ -5,19 +5,9 @@
  * Use NEXT_PUBLIC_SOLANA_NETWORK env variable to switch networks.
  */
 
-export type Network = "mainnet" | "devnet";
+import { IS_MAINNET, type Network } from "./network";
+export { getNetwork, IS_MAINNET, type Network } from "./network";
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
-
-export function getNetwork(): Network {
-  const env = process.env.NEXT_PUBLIC_SOLANA_NETWORK?.trim().toLowerCase();
-  if (env === "devnet") return "devnet";
-  if (env === "mainnet" || env === "mainnet-beta") return "mainnet";
-
-  return process.env.NODE_ENV === "production" ? "mainnet" : "devnet";
-}
-
-export const IS_MAINNET = getNetwork() === "mainnet";
-
 
 export interface TokenConfig {
   symbol: string;
@@ -220,6 +210,17 @@ export function normalizeTokenSymbol(symbol: string): string {
   return symbol;
 }
 
+/** Mints the static list misses (e.g. PT terms), from the API's `/tokens`. */
+const referenceTokens = new Map<string, { symbol: string; decimals: number }>();
+
+export function rememberReferenceTokens(tokens: Iterable<{ mint: string; symbol: string; decimals: number }>) {
+  for (const { mint, symbol, decimals } of tokens) referenceTokens.set(mint, { symbol, decimals });
+}
+
+export function getReferenceToken(mint: string): { symbol: string; decimals: number } | undefined {
+  return referenceTokens.get(mint.trim());
+}
+
 export function getTokenSymbolByMint(mint: string): string | undefined {
   const normalizedMint = mint.trim();
   if (!normalizedMint) return undefined;
@@ -235,6 +236,10 @@ export function getTokenSymbolByMint(mint: string): string | undefined {
     }
   }
 
-  return undefined;
+  return referenceTokens.get(normalizedMint)?.symbol;
 }
 
+
+export function tokenDisplayName(mint: string): string {
+  return getTokenSymbolByMint(mint) ?? `Unknown token (${mint.slice(0, 4)}…${mint.slice(-4)})`;
+}

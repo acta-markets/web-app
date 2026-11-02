@@ -45,7 +45,7 @@ vi.mock("@/components/app-ui/toast", () => ({
   useToast: () => ({ show: env.show }),
 }));
 
-import { VaultDepositModal } from "./vault-deposit-modal";
+import { VaultDepositForm, VaultDepositModal } from "./vault-deposit-modal";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 
@@ -72,13 +72,6 @@ function position(overrides: Partial<VaultDepositorState> = {}): VaultDepositorS
     nativeLamports: 5n * SOL,
     ...overrides,
   };
-}
-
-function renderModal(vault = solVault(), initialTab: "deposit" | "withdraw" = "deposit") {
-  const meta = resolveVaultMeta(vault, { [vault.vault_pda]: { name: "SOL test vault", curator: "Acta" } });
-  const onTransaction = vi.fn();
-  render(<VaultDepositModal vault={vault} meta={meta} initialTab={initialTab} onClose={vi.fn()} onTransaction={onTransaction} />);
-  return { onTransaction };
 }
 
 const cta = (name: string | RegExp) => screen.getByRole("button", { name }) as HTMLButtonElement;
@@ -112,7 +105,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("VaultDepositModal", () => {
+describe.each(["modal", "inline"] as const)("Vault deposit flow (%s)", (presentation) => {
+function renderModal(vault = solVault(), initialTab: "deposit" | "withdraw" = "deposit") {
+  const meta = resolveVaultMeta(vault, { [vault.vault_pda]: { name: "SOL test vault", curator: "Acta" } });
+  const onTransaction = vi.fn();
+  render(presentation === "modal"
+    ? <VaultDepositModal vault={vault} meta={meta} initialTab={initialTab} onClose={vi.fn()} onTransaction={onTransaction} />
+    : <VaultDepositForm vault={vault} meta={meta} initialTab={initialTab} onTransaction={onTransaction} />);
+  return { onTransaction };
+}
+
+
   it("asks for a wallet before anything else", async () => {
     const user = userEvent.setup();
     env.wallet = null;
@@ -172,13 +175,15 @@ describe("VaultDepositModal", () => {
     await waitFor(() => expect(env.depositor.actions!.cancelDeposit).toHaveBeenCalled());
   });
 
-  it("blocks redeeming the vault's last shares", async () => {
+  it("allows requesting the vault's last live shares", async () => {
     const user = userEvent.setup();
-    env.depositor.data = position({ shareBalance: 1000n * SOL });
-    renderModal(solVault(), "withdraw");
+    env.depositor.data = position({ shareBalance: 900n * SOL });
+    renderModal(solVault({ live_share_supply: String(900n * SOL) }), "withdraw");
     await user.click(screen.getByRole("button", { name: "MAX" }));
     expect(screen.getByText(LAST_SHARES_COPY)).toBeTruthy();
-    expect(cta("Request withdrawal").disabled).toBe(true);
+    expect(cta("Request withdrawal").disabled).toBe(false);
+    await user.click(cta("Request withdrawal"));
+    expect(env.depositor.actions!.requestWithdraw).toHaveBeenCalledWith(900n * SOL);
   });
 
   it("explains why a closing vault takes no deposits", () => {

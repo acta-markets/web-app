@@ -6,8 +6,7 @@ import type { RfqOrderPreview } from "@/components/market/rfq-flow-modal";
 
 export type QuoteRfq = {
   market: string;
-  positionType: "covered_call" | "cash_secured_put";
-  strike: number;
+  terms: RfqOrderPreview["terms"];
   quantity: number;
 };
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { flows } from "@acta-markets/ts-sdk/chain";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { AppAmountInput } from "@/components/app-ui/app-amount-input";
@@ -12,20 +13,20 @@ import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
 import { isNativeVault, type VaultDepositorState } from "@/lib/vaults/depositor";
 import { formatSharePrice, formatTokenAmount, solscanUrl } from "@/lib/vaults/format";
-import { depositCapacity, formatUnits, mainToShares, parseUnits, sharesToMain } from "@/lib/vaults/math";
+import { formatUnits, mainToShares, parseUnits, sharesToMain } from "@/lib/vaults/math";
 import {
   LAST_SHARES_COPY,
   REQUEST_EXISTS_COPY,
   depositBlockMessage,
   isLastSharesWithdrawal,
+  depositCap,
   vaultApr,
   vaultStatus,
   withdrawBlockMessage,
   type VaultModalTab,
 } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
-import { requestDepositBlock, requestWithdrawBlock } from "@/lib/vaults/rules";
-import { VAULTS_SAMPLE_MODE, peekSampleData } from "@/lib/vaults/sample";
+import { SAMPLE_WALLET, VAULTS_SAMPLE_MODE, peekSampleData } from "@/lib/vaults/sample";
 import { describeVaultTxError } from "@/lib/vaults/tx-errors";
 import type { Vault } from "@/lib/vaults/types";
 import { useVaultDepositor, type VaultDepositorActions } from "./use-vault-depositor";
@@ -91,24 +92,32 @@ function maxOf(a: bigint, b: bigint): bigint {
   return a > b ? a : b;
 }
 
-/**
- * Allocation management for one vault: the wallet's position and open requests,
- * plus deposit and withdraw requests. Mount it only while open; it polls the
- * wallet's on-chain state for as long as it is mounted.
- */
-export function VaultDepositModal({
-  vault,
-  meta,
-  initialTab = "deposit",
-  onClose,
-  onTransaction,
-}: {
+type VaultDepositProps = {
   vault: Vault;
   meta: ResolvedVaultMeta;
   initialTab?: VaultModalTab;
-  onClose: () => void;
   onTransaction?: () => void;
-}) {
+};
+
+type Presentation = { presentation: "inline" } | { presentation: "modal"; onClose: () => void };
+
+/** The list page keeps its modal; both surfaces use the same form and transaction state. */
+export function VaultDepositModal(props: VaultDepositProps & { onClose: () => void }) {
+  return <VaultDepositFlow {...props} presentation="modal" />;
+}
+
+export function VaultDepositForm(props: VaultDepositProps) {
+  return <VaultDepositFlow {...props} presentation="inline" />;
+}
+
+/** Polls the connected wallet's on-chain position while mounted. */
+function VaultDepositFlow({
+  vault,
+  meta,
+  initialTab = "deposit",
+  onTransaction,
+  ...surface
+}: VaultDepositProps & Presentation) {
   const { selectedAccount } = useSolana();
   const { openSidebar } = useWalletSidebar();
   const { referralStatus, openReferralGate } = useRfqContext();
@@ -136,7 +145,7 @@ export function VaultDepositModal({
   const status = vaultStatus(vault, nowSecs);
   const pending = tx.kind === "pending";
 
-  const capacity = depositCapacity(vault);
+  const capacity = depositCap(vault.capacity)?.remaining ?? null;
   // native vaults wrap SOL on deposit, so plain SOL counts, less what fees and rent need
   const walletAvailable = useMemo(() => {
     if (!position) return 0n;
@@ -186,7 +195,7 @@ export function VaultDepositModal({
   // cannot open a vault that is closed to the request. Fixture vaults have no
   // wallet and no actions, so they run the same checks and stop at a disabled button.
   const depositCta = (): Cta => {
-    const block = requestDepositBlock(vault, nowSecs);
+    const block = flows.requestDepositBlock(vault, nowSecs);
     if (block) return { label: "Request deposit", disabled: true, notice: depositBlockMessage(block, vault) };
     if (!VAULTS_SAMPLE_MODE) {
       if (!walletAddress) return { label: "Connect wallet", onClick: openSidebar };
@@ -204,7 +213,7 @@ export function VaultDepositModal({
   };
 
   const withdrawCta = (): Cta => {
-    const block = requestWithdrawBlock(vault, nowSecs);
+    const block = flows.requestWithdrawBlock(vault, nowSecs);
     if (block) return { label: "Request withdrawal", disabled: true, notice: withdrawBlockMessage(block, vault) };
     if (!VAULTS_SAMPLE_MODE && !walletAddress) return { label: "Connect wallet", onClick: openSidebar };
     if (pending) return { label: "Submitting…", disabled: true };
@@ -213,43 +222,38 @@ export function VaultDepositModal({
     if (position.shareBalance === 0n) return { label: "No shares to withdraw", disabled: true };
     if (amount === null || amount === 0n) return { label: "Enter an amount", disabled: true };
     if (amount > position.shareBalance) return { label: "Not enough shares", disabled: true };
-    if (isLastSharesWithdrawal(vault, amount)) return { label: "Request withdrawal", disabled: true, notice: LAST_SHARES_COPY };
     if (!actions) return { label: "Request withdrawal", disabled: true };
-    return { label: "Request withdrawal", onClick: () => void run("withdraw", () => actions.requestWithdraw(amount)) };
+    return { label: "Request withdrawal", notice: isLastSharesWithdrawal(vault, amount) ? LAST_SHARES_COPY : undefined, onClick: () => void run("withdraw", () => actions.requestWithdraw(amount)) };
   };
 
   const cta = tab === "deposit" ? depositCta() : withdrawCta();
   const requested = tx.kind === "success" && (tx.action === "deposit" || tx.action === "withdraw") ? tx : null;
 
-  return (
-    <AppModal
-      open
-      onClose={onClose}
-      title={meta.name}
-      showHowItWorks={false}
-      dismissible={!pending}
-      className="max-h-[calc(100dvh-2rem)] max-w-[480px] overflow-y-auto max-md:p-4"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <VaultAssetLogo symbol={symbol} size={32} />
-          <div className="min-w-0">
-            <AprLabel apr={apr} className="font-mono text-sm leading-[1.2] text-content-secondary" />
-            <div
-              className={`font-mono text-base font-medium leading-[1.3] tabular-nums ${apr.muted ? "text-content-secondary" : "text-content-primary"}`}
-            >
-              {apr.value}
+  const content = (
+    <>
+      {surface.presentation === "modal" ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <VaultAssetLogo symbol={symbol} size={32} />
+            <div className="min-w-0">
+              <AprLabel apr={apr} className="font-mono text-sm leading-[1.2] text-content-secondary" />
+              <div
+                className={`font-mono text-base font-medium leading-[1.3] tabular-nums ${apr.muted ? "text-content-secondary" : "text-content-primary"}`}
+              >
+                {apr.value}
+              </div>
             </div>
           </div>
+          <VaultStatusLabel status={status} showDetail={false} />
         </div>
-        <VaultStatusLabel status={status} showDetail={false} />
-      </div>
+      ) : null}
 
       {connected ? (
         <VaultPositionPanel
           vault={vault}
           symbol={symbol}
           state={position}
+          wallet={VAULTS_SAMPLE_MODE ? SAMPLE_WALLET : walletAddress}
           error={VAULTS_SAMPLE_MODE ? null : live.error}
           nowSecs={nowSecs}
           actionsEnabled={actions !== null}
@@ -263,12 +267,12 @@ export function VaultDepositModal({
 
       {requested ? (
         <div className="flex flex-col gap-4">
-          <div className="border border-bg-border bg-[rgba(40,40,40,0.24)] p-4">
+          <div>
             <div className="font-mono text-base font-medium text-content-primary">{successCopy(requested.action, vault)}</div>
             <p className="mt-2 font-mono text-sm leading-[1.5] text-content-secondary">
               {requested.action === "deposit"
-                ? "Your deposit is pending and earns nothing until the vault completes it at the end of the cycle. It then converts to shares at the share price calculated at that point."
-                : `Your withdrawal is pending. When the vault completes it at the end of the cycle, your shares are paid out in ${symbol} at the share price calculated then.`}
+                ? "Pending until the cycle ends. It earns nothing until then and converts to shares at that cycle's price."
+                : "Pending until it can be processed. Final redemptions can pay out both vault assets."}
             </p>
             <a
               href={solscanUrl("tx", requested.signature)}
@@ -279,7 +283,7 @@ export function VaultDepositModal({
               View on Solscan ↗
             </a>
           </div>
-          <AppButton className="w-full" onClick={onClose}>
+          <AppButton className="w-full" onClick={() => surface.presentation === "modal" ? surface.onClose() : setTx({ kind: "idle" })}>
             Done
           </AppButton>
         </div>
@@ -342,12 +346,6 @@ export function VaultDepositModal({
                 </dd>
               </div>
             ) : null}
-            {tab === "deposit" && native ? (
-              <div className="flex justify-between gap-3">
-                <dt className="text-content-secondary">Kept for fees</dt>
-                <dd className="tabular-nums text-content-primary">{formatTokenAmount(NATIVE_FEE_RESERVE, decimals)} SOL</dd>
-              </div>
-            ) : null}
             {tab === "withdraw" && native ? (
               <div className="flex justify-between gap-3">
                 <dt className="text-content-secondary">Paid out as</dt>
@@ -357,7 +355,7 @@ export function VaultDepositModal({
           </dl>
 
           {cta.notice ? (
-            <p className="border border-bg-border bg-[rgba(40,40,40,0.24)] p-3 font-mono text-sm leading-[1.45] text-content-primary">
+            <p className="font-mono text-sm leading-[1.45] text-content-primary">
               {cta.notice}
             </p>
           ) : null}
@@ -393,7 +391,7 @@ export function VaultDepositModal({
           <p className="font-mono text-xs leading-[1.5] text-content-secondary">
             Requests complete at the end of the cycle, at the share price calculated then. The manager can make bad trades
             and you carry the losses.{" "}
-            <Link href="/docs/guide/returns-and-risks" className="text-accent-secondary hover:text-accent-primary">
+            <Link prefetch={false} href="/docs/guide/returns-and-risks" className="text-accent-secondary hover:text-accent-primary">
               Returns, fees and risks
             </Link>
           </p>
@@ -407,6 +405,23 @@ export function VaultDepositModal({
           </AppButton>
         </>
       )}
+    </>
+  );
+
+  if (surface.presentation === "inline") {
+    return <section aria-label="Deposit or withdraw" className="space-y-3">{content}</section>;
+  }
+
+  return (
+    <AppModal
+      open
+      onClose={surface.onClose}
+      title={meta.name}
+      showHowItWorks={false}
+      dismissible={!pending}
+      className="max-h-[calc(100dvh-2rem)] max-w-[480px] overflow-y-auto max-md:p-4"
+    >
+      {content}
     </AppModal>
   );
 }

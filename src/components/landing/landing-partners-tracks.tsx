@@ -64,7 +64,7 @@ export function LandingPartnersTracks() {
                   aria-hidden
                   className="absolute inset-0"
                   style={{
-                    backgroundImage: "url(/landing/ascii-mountain.png)",
+                    backgroundImage: "url(/landing/ascii-mountain.webp)",
                     backgroundSize: "180% 180%",
                     backgroundPosition: `${track.offset[0]}% ${track.offset[1]}%`,
                     mixBlendMode: "color-dodge",

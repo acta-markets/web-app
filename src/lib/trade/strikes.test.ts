@@ -28,7 +28,7 @@ function snapshot(): TokenMarketsInfoData {
       { market_pda: "put-expired", expiry_ts: now - 60, is_put: true, indicatives: [] },
       { market_pda: "call-soon", expiry_ts: now + year, is_put: false, indicatives: [indicatives("covered_call", [[120, 2], [110, 10]])] },
     ],
-  };
+  } as unknown as TokenMarketsInfoData;
 }
 
 describe("expiries", () => {

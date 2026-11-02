@@ -4,6 +4,7 @@
 
 * [Getting started](README.md)
 * [How Earn works](guide/options.md)
+* [Cash-settled spreads and puts](guide/cash-settled-options.md)
 
 ## Vaults
 
@@ -49,11 +50,13 @@
 * [Managing a vault](protocol/vault-owner.md)
 * [Roles and permissions](protocol/vault-permissions.md)
 * [Vault API, SDKs and swaps](protocol/vault-integration.md)
+* [Vault operator guide](quickstart/vault-operator-guide.md)
 * [Vault HTTP API](reference/vault-http-api.md)
 
 ## Reference
 
 * [WebSocket conventions](reference/ws-common.md)
 * [Public HTTP API](reference/http-api.md)
+* [Protocol changelog](reference/protocol-changelog.md)
 * [Endpoints and maker registration](reference/sandbox.md)
 * [Integration FAQ](reference/faq.md)
