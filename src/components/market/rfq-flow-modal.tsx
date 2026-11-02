@@ -11,6 +11,8 @@ import type { VersionedTransaction } from "@solana/web3.js";
 import { IS_MAINNET } from "@/lib/tokens";
 
 import { isCashSettled, isSpreadTerms, lowerStrike, productLabel, quoteMatchesProduct, spreadName, spreadPreview, type ProductTerms, type TakerSide } from "@/lib/spreads";
+import { formatPrice } from "@/lib/trade/format";
+import { BUY_DEPOSIT_REMINDER, BUY_ITM_WARNING, buyBreakEven, directionsFor, exerciseDepositText } from "@/lib/trade/thesis";
 import { formatDate } from "@/lib/vaults/format";
 import { SpreadPreview, type SpreadFees } from "./spread-preview";
 import type { SpreadTerms } from "@acta-markets/ts-sdk/chain";
@@ -58,6 +60,27 @@ interface RfqFlowModalProps {
   /** Sign transaction function from wallet */
   signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
   rpc: Parameters<typeof useRfqOrder>[0]["rpc"];
+}
+
+function BuyQuoteRows({ preview, quantity, grossPerUnit, maxLoss }: {
+  preview: RfqOrderPreview;
+  quantity: number;
+  grossPerUnit: number;
+  maxLoss: string;
+}) {
+  const isPut = preview.terms.type === "cash_secured_put";
+  const strike = lowerStrike(preview.terms) / 1_000_000_000;
+  const rows = [
+    ["Max loss", maxLoss],
+    ["Break-even", formatPrice(buyBreakEven(isPut, strike, grossPerUnit))],
+    ["Deposit to exercise", exerciseDepositText(isPut, quantity, strike, preview.asset)],
+  ];
+  return rows.map(([label, value]) => (
+    <div key={label} className="flex justify-between text-sm">
+      <span className="text-content-tertiary">{label}</span>
+      <span className="text-content-secondary">{value}</span>
+    </div>
+  ));
 }
 
 export function RfqFlowModal({
@@ -284,7 +307,7 @@ export function RfqFlowModal({
             <div className="flex justify-between">
               <span className="text-content-secondary">Type</span>
               <span className="font-semibold text-content-primary">
-                {productLabel(preview.terms.type)}
+                {isBuy ? directionsFor("buy").find((d) => d.positionType === preview.terms.type)?.optionName : productLabel(preview.terms.type)}
               </span>
             </div>
             <div className="flex justify-between">
@@ -297,7 +320,7 @@ export function RfqFlowModal({
             </div>
             {totalPremiumUsd != null && (
               <div className="flex justify-between">
-                <span className="text-content-secondary">Premium</span>
+                <span className="text-content-secondary">{isBuy ? "Premium you pay" : "Premium"}</span>
                 <span className="font-semibold text-content-primary">{formatUsdc(totalPremiumUsd)}</span>
               </div>
             )}
@@ -356,16 +379,26 @@ export function RfqFlowModal({
             </p>
             <div className="mt-3 space-y-2 font-mono">
               <div className="flex justify-between">
-                <span className="text-content-secondary">Total premium</span>
+                <span className="text-content-secondary">{isBuy ? "Premium you pay" : "Total premium"}</span>
                 <span className="text-lg font-bold text-accent-primary">
                   {totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : "—"}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-content-tertiary">APR</span>
-                <span className="text-content-secondary">{displayedAprPct != null ? `${displayedAprPct.toFixed(2)}%` : "—"}</span>
-              </div>
+              {isBuy && preview ? (
+                <BuyQuoteRows
+                  preview={preview}
+                  quantity={quoteQuantity}
+                  grossPerUnit={Number(quote.price) / 1_000_000_000}
+                  maxLoss={totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : "—"}
+                />
+              ) : (
+                <div className="flex justify-between text-sm">
+                  <span className="text-content-tertiary">APR</span>
+                  <span className="text-content-secondary">{displayedAprPct != null ? `${displayedAprPct.toFixed(2)}%` : "—"}</span>
+                </div>
+              )}
             </div>
+            {isBuy ? <p role="alert" className="mt-3 border border-error p-3 font-mono text-sm leading-[1.4] text-error">{BUY_ITM_WARNING}</p> : null}
           </div>
         )}
 
@@ -380,6 +413,7 @@ export function RfqFlowModal({
                 Position opened successfully.
               </div>
             )}
+            {isBuy ? <div className="mt-1 text-xs text-content-secondary">{BUY_DEPOSIT_REMINDER}</div> : null}
             {solscanLink}
           </div>
         )}

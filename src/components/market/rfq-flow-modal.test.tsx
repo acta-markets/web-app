@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WalletTransactionSigner } from "@acta-markets/ts-sdk/ws";
 import { ActaWsClient, type QuoteReceivedMessage, type TakerFillRfq } from "@/lib/rfq-client";
+import { BUY_ITM_WARNING } from "@/lib/trade/thesis";
 import { RfqFlowModal, type RfqOrderPreview } from "./rfq-flow-modal";
 
 const context = vi.hoisted(() => ({ read: vi.fn(), makerVault: vi.fn(async () => null) }));
@@ -33,7 +34,7 @@ const preview: RfqOrderPreview = {
   quantity: 1_000_000_000, underlyingDecimals: 9, strikeDisplay: "$1", quantityDisplay: "1 SOL",
 };
 
-function setup(previewOverrides: Partial<RfqOrderPreview> = {}) {
+function setup(previewOverrides: Partial<RfqOrderPreview> = {}, bestQuote: QuoteReceivedMessage = quote) {
   const client = new ActaWsClient({ url: "ws://localhost", role: "taker", onDisconnect: "keep_quotes", products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], clientName: "test", clientVersion: "0" });
   vi.spyOn(client, "isAuthenticated").mockReturnValue(true);
   vi.spyOn(client, "getSessionId").mockReturnValue("credential");
@@ -47,7 +48,7 @@ function setup(previewOverrides: Partial<RfqOrderPreview> = {}) {
   const sign = vi.fn().mockResolvedValue({ serialize: () => new Uint8Array([1]) });
   const cancel = vi.fn();
   context.read.mockReturnValue({
-    bestQuote: quote, quoteSecondsRemaining: (q: QuoteReceivedMessage) => Math.max(0, Math.ceil(Number(q.valid_until) - Date.now() / 1000)), isAuthenticated: true, error: null,
+    bestQuote, quoteSecondsRemaining: (q: QuoteReceivedMessage) => Math.max(0, Math.ceil(Number(q.valid_until) - Date.now() / 1000)), isAuthenticated: true, error: null,
     getClient: () => client, acceptQuote: accept, submitSignedTx: submit, cancelRfq: cancel,
     rfqTerms: () => ({ rfq_id: "rfq", terms: { type: "covered_call", strike: 1_000_000_000 }, side: "sell", quantity: 1_000_000_000 }) as TakerFillRfq,
   });
@@ -243,5 +244,46 @@ describe("spread quote preview isolation", () => {
     context.read.mockReturnValue({ ...context.read(), bestQuote: { ...context.read().bestQuote, price: 20e9 } });
     h.rerender(<RfqFlowModal {...props} />);
     expect((screen.getByRole("button", { name: /^Accept · \d+s$/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  describe("Buy", () => {
+    const buyPreview = { side: "buy" as const, terms: { type: "covered_call" as const, strike: 150e9 }, strikeDisplay: "$150", quantity: 2e9, quantityDisplay: "2 SOL" };
+    const buyQuote = { ...quote, side: "buy", terms: buyPreview.terms, price: 5e9, net_price: 4.5e9 } as QuoteReceivedMessage;
+    const row = (label: string) => screen.getByText(label).parentElement;
+
+    it("shows the gross premium, max loss, break-even and the ITM warning for a call", async () => {
+      setup(buyPreview, buyQuote);
+      await screen.findByRole("button", { name: "Accept Quote" });
+      expect(screen.getByText("Buy a call")).toBeTruthy();
+      expect(screen.getAllByText("10.00 USDC").length).toBeGreaterThan(0);
+      expect(screen.queryByText("9.00 USDC")).toBeNull();
+      expect(row("Max loss")?.textContent).toContain("10.00 USDC");
+      expect(row("Break-even")?.textContent).toContain("$155");
+      expect(row("Deposit to exercise")?.textContent).toContain("300");
+      expect(screen.queryByText("APR")).toBeNull();
+      expect(screen.getByRole("alert").textContent).toBe(BUY_ITM_WARNING);
+    });
+
+    it("mirrors break-even and the exercise deposit for a put", async () => {
+      const terms = { type: "cash_secured_put" as const, strike: 150e9 };
+      setup({ ...buyPreview, terms }, { ...buyQuote, terms });
+      await screen.findByRole("button", { name: "Accept Quote" });
+      expect(screen.getByText("Buy a put")).toBeTruthy();
+      expect(row("Break-even")?.textContent).toContain("$145");
+      expect(row("Deposit to exercise")?.textContent).toContain("2 SOL");
+    });
+
+    it("waits on a quote of the wrong side", () => {
+      setup(buyPreview, { ...buyQuote, side: "sell" });
+      expect(screen.queryByRole("button", { name: "Accept Quote" })).toBeNull();
+    });
+
+    it("leaves the sell panel without any buy terms", async () => {
+      setup();
+      await screen.findByRole("button", { name: "Accept Quote" });
+      expect(screen.queryByText("Max loss")).toBeNull();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByText("Total premium")).toBeTruthy();
+    });
   });
 });
