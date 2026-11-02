@@ -421,11 +421,11 @@ export function vaultStatus(vault: Vault, nowSecs: number): VaultStatusView {
 
 export type VaultModalTab = "deposit" | "withdraw";
 
-/** Vaults that will never take deposits again open straight on Withdraw. */
+/** A vault that takes no deposits right now opens straight on Withdraw. */
 export function primaryVaultAction(vault: Vault, nowSecs: number): { label: "Deposit" | "Manage"; tab: VaultModalTab } {
-  return flows.requestDepositBlock(vault, nowSecs) === "safety"
-    ? { label: "Manage", tab: "withdraw" }
-    : { label: "Deposit", tab: "deposit" };
+  return flows.requestDepositBlock(vault, nowSecs) === null
+    ? { label: "Deposit", tab: "deposit" }
+    : { label: "Manage", tab: "withdraw" };
 }
 
 type BlockContext = Pick<Vault, "safety" | "phase" | "equity_computed">;

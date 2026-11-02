@@ -361,9 +361,15 @@ describe("vaultStatus", () => {
 });
 
 describe("primaryVaultAction", () => {
-  it("opens closing vaults on Withdraw", () => {
-    expect(primaryVaultAction(makeVault({ safety: "closing" }), NOW)).toEqual({ label: "Manage", tab: "withdraw" });
-    expect(primaryVaultAction(makeVault({ phase: "settling" }), NOW)).toEqual({ label: "Deposit", tab: "deposit" });
+  it("offers Deposit only while the vault takes deposits", () => {
+    const manage = { label: "Manage", tab: "withdraw" };
+    expect(primaryVaultAction(makeVault({ safety: "closing" }), NOW)).toEqual(manage);
+    expect(primaryVaultAction(makeVault({ phase: "settling" }), NOW)).toEqual(manage);
+    expect(primaryVaultAction(makeVault({ phase: "idle", accepting_deposits: false }), NOW)).toEqual(manage);
+    expect(primaryVaultAction(makeVault({ phase: "idle", accepting_deposits: true }), NOW)).toEqual({
+      label: "Deposit",
+      tab: "deposit",
+    });
   });
 });
 
