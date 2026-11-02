@@ -13,7 +13,9 @@ import { useTokenMarketsSnapshot } from "@/components/rfq/use-token-markets-snap
 import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
+import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { cn } from "@/lib/cn";
+import type { TakerSide } from "@/lib/spreads";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { formatPct, formatStrikePrice, formatUsdSmart } from "@/lib/markets";
@@ -39,11 +41,16 @@ import {
   type StrikeOption,
 } from "@/lib/trade/strikes";
 import {
-  DIRECTIONS,
+  BUY_ITM_WARNING,
+  SENTENCE,
+  amountSymbol,
+  buyOutcomeCopy,
+  buyZoneLabels,
   cushionText,
-  depositSymbol,
   directionInfo,
+  directionsFor,
   easyCta,
+  exerciseDepositText,
   outcomeCopy,
   payoutTail,
   scenario as buildScenario,
@@ -57,6 +64,10 @@ import { ThesisChart } from "./thesis-chart";
 import { OrderBreakdown, type BreakdownRow } from "./order-breakdown";
 
 const PRICE_SCALE = 1_000_000_000;
+const SIDE_OPTIONS: Array<{ value: TakerSide; label: string }> = [
+  { value: "sell", label: "Sell" },
+  { value: "buy", label: "Buy" },
+];
 const CONTAINER = "mx-auto w-full max-w-[850px] pb-20 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-6";
 
 /** The chosen strike if still listed, else the closest one by price. */
@@ -100,6 +111,7 @@ export function EasyTrade({
 
   const assets = useMemo(() => tradeAssets(earnSummary), [earnSummary]);
   const [assetChoice, setAssetChoice] = useState<string | null>(null);
+  const [takerSide, setTakerSide] = useState<TakerSide>("sell");
   const [directionChoice, setDirectionChoice] = useState<Direction>("above");
   const [expiryChoice, setExpiryChoice] = useState<number | null>(null);
   const [strikeChoice, setStrikeChoice] = useState<number | null>(null);
@@ -113,13 +125,18 @@ export function EasyTrade({
 
   const putExpiries = useMemo(() => tradableExpiries(snapshot, true, "cash_secured_put", nowSec), [snapshot, nowSec]);
   const callExpiries = useMemo(() => tradableExpiries(snapshot, false, "covered_call", nowSec), [snapshot, nowSec]);
-  const available: Record<Direction, boolean> = snapshot
-    ? { above: putExpiries.length > 0, below: callExpiries.length > 0 }
-    : { above: asset?.hasPut ?? true, below: asset?.hasCall ?? true };
+  const hasMarkets = (d: Direction) => {
+    const { isPut } = directionInfo(d, takerSide);
+    return snapshot ? (isPut ? putExpiries : callExpiries).length > 0 : (isPut ? asset?.hasPut : asset?.hasCall) ?? true;
+  };
+  const available: Record<Direction, boolean> = { above: hasMarkets("above"), below: hasMarkets("below") };
   const direction: Direction = available[directionChoice]
     ? directionChoice
     : available.above ? "above" : available.below ? "below" : directionChoice;
-  const info = directionInfo(direction);
+  const info = directionInfo(direction, takerSide);
+  const buying = takerSide === "buy";
+  // a buy is sized in the asset; only a sold put is sized in USDC
+  const amountInQuote = !buying && info.isPut;
   const expiries = info.isPut ? putExpiries : callExpiries;
   const expiry = expiries.find((e) => e.expiryTs === expiryChoice) ?? expiries[0] ?? null;
 
@@ -138,17 +155,17 @@ export function EasyTrade({
     ? nearestStrike(strikeOptions, strikeChoice)
     : strikeOptions[defaultStrikeIndex(strikeOptions, spot, info.isPut)] ?? null;
 
-  const symbol = asset ? depositSymbol(direction, asset.symbol) : "USDC";
+  const symbol = asset ? amountSymbol(takerSide, direction, asset.symbol) : "USDC";
   const decimals = snapshot ? Number(snapshot.underlying_decimals) : getToken(asset?.symbol ?? "")?.decimals ?? 9;
   const sizeRule = snapshot?.size_rule ?? null;
-  const depositRule = depositRuleFor({ isPut: info.isPut, sizeRule, strike1e9: strike?.strike1e9 ?? 0, underlyingDecimals: decimals });
-  const inputDecimals = depositInputDecimals(depositRule, info.isPut, decimals);
-  const suggested = defaultAmount({ rule: depositRule, isPut: info.isPut, spot });
+  const depositRule = depositRuleFor({ isPut: amountInQuote, sizeRule, strike1e9: strike?.strike1e9 ?? 0, underlyingDecimals: decimals });
+  const inputDecimals = depositInputDecimals(depositRule, amountInQuote, decimals);
+  const suggested = defaultAmount({ rule: depositRule, isPut: amountInQuote, spot });
   const amountText = amountInput ?? (suggested != null ? formatInputValue(suggested, inputDecimals) : "");
   const amount = Number(amountText);
 
   const typedQuantity = sizeRule && strike
-    ? depositToQuantity({ amount, isPut: info.isPut, strike1e9: strike.strike1e9, underlyingDecimals: decimals })
+    ? depositToQuantity({ amount, isPut: amountInQuote, strike1e9: strike.strike1e9, underlyingDecimals: decimals })
     : null;
   const sizeViolation = typedQuantity == null || !sizeRule || !depositRule
     ? null
@@ -162,21 +179,23 @@ export function EasyTrade({
     ? alignQuantityToRule(typedQuantity, sizeRule, "floor")
     : null;
   const lockedDeposit = quantity != null && strike
-    ? quantityToDeposit({ quantity, isPut: info.isPut, strike1e9: strike.strike1e9, underlyingDecimals: decimals })
+    ? quantityToDeposit({ quantity, isPut: amountInQuote, strike1e9: strike.strike1e9, underlyingDecimals: decimals })
     : null;
   const lockedText = lockedDeposit != null ? formatInputValue(lockedDeposit, inputDecimals) : null;
 
-  const premiumPerUnit = strike?.bestPrice != null ? strike.bestPrice / PRICE_SCALE : null;
+  const premiumPerUnit = !buying && strike?.bestPrice != null ? strike.bestPrice / PRICE_SCALE : null;
   const outcome = quantity != null && strike && premiumPerUnit != null
     ? buildScenario({ direction, quantity: quantity / 10 ** decimals, strike: strike.strike, premiumPerUnit, spot })
     : null;
-  const aprPct = strike?.apr != null ? strike.apr * 100 : null;
+  const aprPct = !buying && strike?.apr != null ? strike.apr * 100 : null;
   const countdown = expiry ? formatCountdown(expiry.expiryTs * 1000, Date.now()) : null;
   const distance = strike ? strikeDistancePct(strike.strike, spot) : null;
 
-  const balance = useTokenBalance(walletAddress, symbol);
-  const presets = presetAmounts({ rule: depositRule, balance, isPut: info.isPut });
-  const insufficientBalance = balance != null && lockedDeposit != null && lockedDeposit > balance + 1e-9;
+  // a buy pays USDC and its amount is the option's size, so the balance cannot bound it before the quote
+  const balanceSymbol = buying ? "USDC" : symbol;
+  const balance = useTokenBalance(walletAddress, balanceSymbol);
+  const presets = presetAmounts({ rule: depositRule, balance, isPut: amountInQuote });
+  const insufficientBalance = !buying && balance != null && lockedDeposit != null && lockedDeposit > balance + 1e-9;
 
   // Everything the sentence could show for this asset in either direction, on any date,
   // at any price: each part keeps its widest value's width, so no pick reflows the sentence.
@@ -186,8 +205,9 @@ export function EasyTrade({
     const amounts = new Map<string, { key: string; number: string; symbol: string }>();
     const tails = new Set<string>();
     if (snapshot && asset) {
-      for (const side of DIRECTIONS) {
-        const sideSymbol = depositSymbol(side.value, asset.symbol);
+      for (const side of directionsFor(takerSide)) {
+        const sideSymbol = amountSymbol(takerSide, side.value, asset.symbol);
+        const sideInQuote = !buying && side.isPut;
         // switching direction clears a typed amount, so the other side shows its suggestion
         const typed = side.value === direction ? amountInput : null;
         for (const e of tradableExpiries(snapshot, side.isPut, side.positionType, nowSec)) {
@@ -200,13 +220,13 @@ export function EasyTrade({
           for (const o of options) {
             strikes.set(o.strike1e9, { key: String(o.strike1e9), label: formatStrikePrice(o.strike) });
             if (!sizeRule) continue;
-            const rule = depositRuleFor({ isPut: side.isPut, sizeRule, strike1e9: o.strike1e9, underlyingDecimals: decimals });
-            const fallback = defaultAmount({ rule, isPut: side.isPut, spot });
-            const text = typed ?? (fallback != null ? formatInputValue(fallback, depositInputDecimals(rule, side.isPut, decimals)) : "");
+            const rule = depositRuleFor({ isPut: sideInQuote, sizeRule, strike1e9: o.strike1e9, underlyingDecimals: decimals });
+            const fallback = defaultAmount({ rule, isPut: sideInQuote, spot });
+            const text = typed ?? (fallback != null ? formatInputValue(fallback, depositInputDecimals(rule, sideInQuote, decimals)) : "");
             if (!text) continue;
             amounts.set(`${text} ${sideSymbol}`, { key: `${text} ${sideSymbol}`, number: text, symbol: sideSymbol });
-            const q = depositToQuantity({ amount: Number(text), isPut: side.isPut, strike1e9: o.strike1e9, underlyingDecimals: decimals });
-            if (q != null && o.bestPrice != null && q >= sizeRule.min_size && q <= sizeRule.max_size) {
+            const q = depositToQuantity({ amount: Number(text), isPut: sideInQuote, strike1e9: o.strike1e9, underlyingDecimals: decimals });
+            if (!buying && q != null && o.bestPrice != null && q >= sizeRule.min_size && q <= sizeRule.max_size) {
               const units = alignQuantityToRule(q, sizeRule, "floor") / 10 ** decimals;
               tails.add(payoutTail(
                 `≈${formatUsdAmount((units * o.bestPrice) / PRICE_SCALE)}`,
@@ -216,6 +236,7 @@ export function EasyTrade({
           }
         }
       }
+      if (buying) tails.add(payoutTail(SENTENCE.quotedPremium, null));
     }
     return {
       assets: assets.map((a) => a.symbol),
@@ -224,7 +245,7 @@ export function EasyTrade({
       amounts: [...amounts.values()],
       tails: [...tails],
     };
-  }, [snapshot, asset, assets, direction, amountInput, sizeRule, nowSec, decimals, spot]);
+  }, [snapshot, asset, assets, takerSide, buying, direction, amountInput, sizeRule, nowSec, decimals, spot]);
 
   const cta = easyCta({
     walletConnected: !!walletAddress,
@@ -232,7 +253,7 @@ export function EasyTrade({
     pricesLoading: !snapshot,
     hasMarkets: expiries.length > 0,
     hasStrike: !!strike,
-    priced: aprPct != null,
+    priced: buying || aprPct != null,
     amountEntered: amount > 0,
     sizeViolation,
     insufficientBalance,
@@ -243,6 +264,12 @@ export function EasyTrade({
   function chooseAsset(next: string) {
     setAssetChoice(next);
     setExpiryChoice(null);
+    setStrikeChoice(null);
+    setAmountInput(null);
+  }
+
+  function chooseSide(next: TakerSide) {
+    setTakerSide(next);
     setStrikeChoice(null);
     setAmountInput(null);
   }
@@ -260,10 +287,11 @@ export function EasyTrade({
     if (amountInput != null && lockedText != null && lockedText !== amountText) setAmountInput(lockedText);
     const terms = { type: info.positionType, strike: strike.strike1e9 };
     request(
-      { market: expiry.pda, terms, quantity },
+      { market: expiry.pda, terms, side: takerSide, quantity },
       {
         asset: asset.symbol,
         terms,
+        side: takerSide,
         quantity,
         underlyingDecimals: decimals,
         strikeDisplay: formatStrikePrice(strike.strike),
@@ -323,14 +351,19 @@ export function EasyTrade({
     );
   }
 
-  const outcomeText = outcome && strike
+  const sizeText = quantity != null ? `${formatAmount(quantity / 10 ** decimals, inputDecimals)} ${asset.symbol}` : "—";
+  const outcomeText = buying
+    ? strike && quantity != null ? buyOutcomeCopy({ asset: asset.symbol, direction, strike: strike.strike, sizeText }) : null
+    : outcome && strike
     ? outcomeCopy({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: info.isPut ? 4 : inputDecimals })
     : null;
-  const labels = strike
+  const labels = strike && buying
+    ? buyZoneLabels({ asset: asset.symbol, direction, strike: strike.strike })
+    : strike
     ? zoneLabels({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: info.isPut ? 4 : inputDecimals })
     : null;
 
-  const rows: BreakdownRow[] = [
+  const termRows: BreakdownRow[] = [
     { label: "Type", value: info.optionName, info: info.optionExplainer },
     {
       label: "Strike",
@@ -339,6 +372,25 @@ export function EasyTrade({
         : "—",
     },
     { label: "Expiry", value: expiry ? `${formatExpiryUtc(expiry.expiryTs * 1000)} · in ${countdown}` : "—" },
+  ];
+  const rows: BreakdownRow[] = buying ? [
+    ...termRows,
+    { label: "You buy", value: sizeText },
+    {
+      label: "You pay",
+      value: "Set by the quote",
+      info: "Market makers price a buy when you request it. The premium, max loss and break-even are shown before you accept.",
+    },
+    { label: "Max loss", value: "The premium you pay" },
+    {
+      label: "To exercise",
+      value: quantity != null && strike
+        ? `Deposit ${exerciseDepositText(info.isPut, quantity / 10 ** decimals, strike.strike, asset.symbol, inputDecimals)} before expiry`
+        : "—",
+      info: BUY_ITM_WARNING,
+    },
+  ] : [
+    ...termRows,
     {
       label: "You deposit",
       value: outcome
@@ -370,11 +422,11 @@ export function EasyTrade({
   ];
 
   const unavailable = (Object.keys(available) as Direction[]).filter((d) => !available[d]);
-  const earnings = !snapshot ? null : outcome ? `≈${formatUsdAmount(outcome.premium)}` : "—";
+  const earnings = !snapshot ? null : buying ? SENTENCE.quotedPremium : outcome ? `≈${formatUsdAmount(outcome.premium)}` : "—";
   const amountHint = sizeViolation
     ? { text: sizeViolation, error: true }
     : lockedText != null && amountInput != null && lockedText !== amountText
-      ? { text: `Locks ${lockedText} ${symbol} (size steps of ${formatInputValue(depositRule?.step ?? 0, inputDecimals)})`, error: false }
+      ? { text: `${buying ? "Buys" : "Locks"} ${lockedText} ${symbol} (size steps of ${formatInputValue(depositRule?.step ?? 0, inputDecimals)})`, error: false }
       : null;
 
   return (
@@ -382,7 +434,16 @@ export function EasyTrade({
       {topBar(true)}
 
       <section aria-label="Your trade" className="mt-8 flex flex-col gap-5 max-md:mt-6">
+        <AppSegmented
+          ariaLabel="Buy or sell"
+          value={takerSide}
+          onChange={chooseSide}
+          options={SIDE_OPTIONS}
+          disabled={isRequesting}
+          className="self-start"
+        />
         <ThesisSentence
+          side={takerSide}
           asset={asset.symbol}
           direction={direction}
           strikeValue={strike ? String(strike.strike1e9) : ""}
@@ -410,7 +471,7 @@ export function EasyTrade({
                   className="h-4 w-4 shrink-0 rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
                 />
               ),
-              detail: a.maxApr != null ? `up to ${formatPct(a.maxApr * 100)} APR` : undefined,
+              detail: !buying && a.maxApr != null ? `up to ${formatPct(a.maxApr * 100)} APR` : undefined,
             })),
             strikes: strikeOptions.map((o) => {
               const pct = strikeDistancePct(o.strike, spot);
@@ -419,7 +480,7 @@ export function EasyTrade({
                 label: formatStrikePrice(o.strike),
                 detail: [
                   ...(pct != null ? [signedPct(pct)] : []),
-                  o.apr != null ? `${formatPct(o.apr * 100)} APR` : "no price",
+                  ...(buying ? [] : [o.apr != null ? `${formatPct(o.apr * 100)} APR` : "no price"]),
                 ].join(" · "),
               };
             }),
@@ -443,24 +504,28 @@ export function EasyTrade({
             <span className="flex items-center gap-2 text-content-secondary">
               Balance{" "}
               <span className="tabular-nums text-content-primary">
-                {balance != null ? `${formatAmount(balance, info.isPut ? 2 : 4)} ${symbol}` : "—"}
+                {balance != null ? `${formatAmount(balance, buying || info.isPut ? 2 : 4)} ${balanceSymbol}` : "—"}
               </span>
-              <button
-                type="button"
-                disabled={isRequesting}
-                onClick={() => setAmountInput(formatInputValue(presets.half, inputDecimals))}
-                className="border border-[rgba(240,240,240,0.1)] px-2 py-0.5 text-xs font-medium text-content-primary transition-colors hover:border-[rgba(240,240,240,0.25)] disabled:opacity-40"
-              >
-                HALF
-              </button>
-              <button
-                type="button"
-                disabled={isRequesting}
-                onClick={() => setAmountInput(formatInputValue(presets.max, inputDecimals))}
-                className="border border-[rgba(240,240,240,0.1)] px-2 py-0.5 text-xs font-medium text-content-primary transition-colors hover:border-[rgba(240,240,240,0.25)] disabled:opacity-40"
-              >
-                MAX
-              </button>
+              {buying ? null : (
+                <>
+                  <button
+                    type="button"
+                    disabled={isRequesting}
+                    onClick={() => setAmountInput(formatInputValue(presets.half, inputDecimals))}
+                    className="border border-[rgba(240,240,240,0.1)] px-2 py-0.5 text-xs font-medium text-content-primary transition-colors hover:border-[rgba(240,240,240,0.25)] disabled:opacity-40"
+                  >
+                    HALF
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isRequesting}
+                    onClick={() => setAmountInput(formatInputValue(presets.max, inputDecimals))}
+                    className="border border-[rgba(240,240,240,0.1)] px-2 py-0.5 text-xs font-medium text-content-primary transition-colors hover:border-[rgba(240,240,240,0.25)] disabled:opacity-40"
+                  >
+                    MAX
+                  </button>
+                </>
+              )}
             </span>
           ) : null}
           {amountHint ? (

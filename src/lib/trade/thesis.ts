@@ -1,12 +1,17 @@
 /**
- * Easy mode's thesis: "I believe SOL will be above $150 on Nov 7". A taker can only
- * sell options, so the view maps onto the option that pays when it holds:
+ * Easy mode's thesis: "I believe SOL will be above $150 on Nov 7". The view maps onto the
+ * option that pays when it holds. Selling:
  *   above → sell a cash-secured put (deposit USDC), right when the price ends ≥ the strike
  *   below → sell a covered call (deposit the asset), right when the price ends ≤ the strike
  * Right means the deposit comes back; wrong means it converts at the strike. The premium
- * is paid upfront and kept either way. All Easy copy lives here.
+ * is paid upfront and kept either way. Buying:
+ *   above → buy a call, in the money when the price ends > the strike
+ *   below → buy a put, in the money when the price ends < the strike
+ * The premium is paid upfront and only a deposit made before expiry can exercise.
+ * All Easy copy lives here.
  */
 import { formatStrikePrice } from "@/lib/markets";
+import type { TakerSide } from "@/lib/spreads";
 import { formatAmount, formatExpiryDay, formatPrice, formatUsdc } from "@/lib/trade/format";
 
 export type Direction = "above" | "below";
@@ -17,7 +22,7 @@ export type DirectionInfo = {
   arrow: string;
   positionType: PositionType;
   isPut: boolean;
-  /** order-details name of the option the user sells */
+  /** order-details name of the option the user trades */
   optionName: string;
   optionExplainer: string;
 };
@@ -43,12 +48,43 @@ export const DIRECTIONS: ReadonlyArray<DirectionInfo> = [
   },
 ];
 
-export function directionInfo(direction: Direction): DirectionInfo {
-  return direction === "above" ? DIRECTIONS[0] : DIRECTIONS[1];
+const BUY_DIRECTIONS: ReadonlyArray<DirectionInfo> = [
+  {
+    value: "above",
+    arrow: "↗",
+    positionType: "covered_call",
+    isPut: false,
+    optionName: "Buy a call",
+    optionExplainer:
+      "You pay a premium now for the right to buy the asset at your price. To use that right, deposit USDC before expiry.",
+  },
+  {
+    value: "below",
+    arrow: "↘",
+    positionType: "cash_secured_put",
+    isPut: true,
+    optionName: "Buy a put",
+    optionExplainer:
+      "You pay a premium now for the right to sell the asset at your price. To use that right, deposit the asset before expiry.",
+  },
+];
+
+export function directionsFor(side: TakerSide): ReadonlyArray<DirectionInfo> {
+  return side === "buy" ? BUY_DIRECTIONS : DIRECTIONS;
+}
+
+export function directionInfo(direction: Direction, side: TakerSide = "sell"): DirectionInfo {
+  const [above, below] = directionsFor(side);
+  return direction === "above" ? above : below;
 }
 
 export function depositSymbol(direction: Direction, asset: string): string {
   return direction === "above" ? "USDC" : asset;
+}
+
+/** What the sentence's amount is counted in: the deposit when selling, the asset when buying. */
+export function amountSymbol(side: TakerSide, direction: Direction, asset: string): string {
+  return side === "buy" ? asset : depositSymbol(direction, asset);
 }
 
 /** The sentence's fixed words, in reading order around the pills. */
@@ -58,6 +94,10 @@ export const SENTENCE = {
   on: "on",
   deposit: "If I deposit",
   paid: "I get paid",
+  buy: "If I buy",
+  pay: "I pay",
+  /** a buy has no indicative price: the premium is only known from the quote */
+  quotedPremium: "the quoted premium",
   now: "now",
 } as const;
 
@@ -242,6 +282,65 @@ export function zoneLabels({
   return {
     right: { title: `Keep ${formatAmount(s.deposit, assetDecimals)} ${asset}`, premium },
     wrong: { title: `Sold for ${formatUsdc(s.converted)}`, premium },
+  };
+}
+
+export const BUY_ITM_WARNING =
+  "If the option ends in the money and you did not deposit before expiry, it is not exercised. You lose its value, and the premium is not refunded.";
+
+export const BUY_DEPOSIT_REMINDER = "To exercise, deposit from Portfolio before expiry.";
+
+export function buyBreakEven(isPut: boolean, strike: number, grossPerUnit: number): number {
+  return isPut ? strike - grossPerUnit : strike + grossPerUnit;
+}
+
+/** What a deposit must cover to exercise: USDC for a call, the asset for a put. */
+export function exerciseDepositText(isPut: boolean, quantity: number, strike: number, asset: string, assetDecimals = 4): string {
+  return isPut ? `${formatAmount(quantity, assetDecimals)} ${asset}` : formatUsdc(quantity * strike);
+}
+
+/** Outcome cards for a bought option; the amount lost is the quote's, so the copy names no figure. */
+export function buyOutcomeCopy({
+  asset,
+  direction,
+  strike,
+  sizeText,
+}: {
+  asset: string;
+  direction: Direction;
+  strike: number;
+  /** e.g. "1.5 SOL" */
+  sizeText: string;
+}): { right: OutcomeCopy; wrong: OutcomeCopy } {
+  const price = formatStrikePrice(strike);
+  const above = direction === "above";
+  return {
+    right: {
+      when: `If ${asset} ends ${above ? "above" : "below"} ${price}`,
+      result: `If you deposited before expiry, you ${above ? "buy" : "sell"} ${sizeText} at ${price}.`,
+      note: "With no deposit it is not exercised and you lose its value.",
+    },
+    wrong: {
+      when: `If ${asset} ends at or ${above ? "below" : "above"} ${price}`,
+      result: "The option expires unused. Any deposit comes back.",
+      note: "You lose the premium.",
+    },
+  };
+}
+
+export function buyZoneLabels({
+  asset,
+  direction,
+  strike,
+}: {
+  asset: string;
+  direction: Direction;
+  strike: number;
+}): { right: ZoneLabel; wrong: ZoneLabel } {
+  const verb = direction === "above" ? "Buy" : "Sell";
+  return {
+    right: { title: `${verb} ${asset} at ${formatStrikePrice(strike)}`, premium: null },
+    wrong: { title: "Premium lost", premium: null },
   };
 }
 

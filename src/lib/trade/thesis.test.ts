@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { formatUsdc } from "@/lib/trade/format";
 import {
+  amountSymbol,
+  buyBreakEven,
+  buyOutcomeCopy,
+  buyZoneLabels,
   depositSymbol,
   directionInfo,
   easyCta,
+  exerciseDepositText,
   isRight,
   cushionText,
   outcomeCopy,
@@ -145,5 +151,48 @@ describe("call to action", () => {
 
   it("asks for a wallet before anything else", () => {
     expect(easyCta({ ...ready, walletConnected: false, pricesLoading: true, priced: false }).label).toBe("Connect wallet");
+  });
+});
+
+describe("buying", () => {
+  it("maps a view onto the option that pays when it holds", () => {
+    expect(directionInfo("above", "buy")).toMatchObject({ positionType: "covered_call", isPut: false });
+    expect(directionInfo("below", "buy")).toMatchObject({ positionType: "cash_secured_put", isPut: true });
+    expect(directionInfo("above")).toMatchObject({ positionType: "cash_secured_put", isPut: true });
+    expect(directionInfo("below", "sell")).toMatchObject({ positionType: "covered_call", isPut: false });
+  });
+
+  it("counts the amount in the asset when buying, in the deposit when selling", () => {
+    expect(amountSymbol("buy", "above", "SOL")).toBe("SOL");
+    expect(amountSymbol("buy", "below", "SOL")).toBe("SOL");
+    expect(amountSymbol("sell", "above", "SOL")).toBe("USDC");
+    expect(amountSymbol("sell", "below", "SOL")).toBe("SOL");
+  });
+
+  it("moves break-even past the strike by the gross premium", () => {
+    expect(buyBreakEven(false, 150, 5)).toBe(155);
+    expect(buyBreakEven(true, 150, 5)).toBe(145);
+  });
+
+  it("asks for USDC to exercise a call and the asset for a put", () => {
+    expect(exerciseDepositText(false, 2, 150, "SOL")).toBe(formatUsdc(300));
+    expect(exerciseDepositText(true, 2, 150, "SOL")).toBe("2 SOL");
+  });
+
+  it("puts a tie on the expiring side, as settlement does", () => {
+    const above = buyOutcomeCopy({ asset: "SOL", direction: "above", strike: 150, sizeText: "1 SOL" });
+    expect(above.right.when).toBe("If SOL ends above $150");
+    expect(above.wrong.when).toBe("If SOL ends at or below $150");
+    expect(above.right.result).toContain("buy 1 SOL at $150");
+    const below = buyOutcomeCopy({ asset: "SOL", direction: "below", strike: 150, sizeText: "1 SOL" });
+    expect(below.right.when).toBe("If SOL ends below $150");
+    expect(below.wrong.when).toBe("If SOL ends at or above $150");
+    expect(below.right.result).toContain("sell 1 SOL at $150");
+  });
+
+  it("labels the chart zones without a kept premium", () => {
+    expect(buyZoneLabels({ asset: "SOL", direction: "above", strike: 150 }).right).toEqual({ title: "Buy SOL at $150", premium: null });
+    expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).right.title).toBe("Sell SOL at $150");
+    expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).wrong.premium).toBeNull();
   });
 });
