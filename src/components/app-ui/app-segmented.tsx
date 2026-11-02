@@ -11,13 +11,15 @@ export function AppSegmented<T extends string>({
   onChange,
   options,
   className,
-  size = "sm"
+  size = "sm",
+  ariaLabel = "segmented"
 }: {
   value: T;
   onChange: (value: T) => void;
   options: Array<AppSegmentedOption<T>>;
   className?: string;
   size?: "sm" | "lg";
+  ariaLabel?: string;
 }) {
   const btn = size === "lg"
     ? "relative min-w-0 flex flex-1 items-center justify-center whitespace-nowrap backdrop-blur-[4px] border px-4 py-2.5 text-base font-normal leading-none tracking-tight transition-colors"
@@ -27,7 +29,7 @@ export function AppSegmented<T extends string>({
     <div
       className={cn("inline-flex select-none items-center gap-2", className)}
       role="tablist"
-      aria-label="segmented"
+      aria-label={ariaLabel}
     >
       {options.map((o) => {
         const active = o.value === value;

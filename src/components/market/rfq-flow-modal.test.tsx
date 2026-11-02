@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WalletTransactionSigner } from "@acta-markets/ts-sdk/ws";
 import { ActaWsClient, type QuoteReceivedMessage, type TakerFillRfq } from "@/lib/rfq-client";
-import { RfqFlowModal } from "./rfq-flow-modal";
+import { RfqFlowModal, type RfqOrderPreview } from "./rfq-flow-modal";
 
 const context = vi.hoisted(() => ({ read: vi.fn(), makerVault: vi.fn(async () => null) }));
 vi.mock("@/components/rfq/rfq-provider", () => ({ useRfqContext: context.read }));
@@ -23,12 +23,12 @@ const quote = {
   rfq_id: "rfq", order_id: "order", maker: "maker", strike: 1_000_000_000,
   price: 1_000_000_000, valid_until: 9999999999, nonce: 1n,
 } as QuoteReceivedMessage;
-const preview = {
+const preview: RfqOrderPreview = {
   asset: "SOL", positionType: "covered_call" as const, strike: 1_000_000_000,
-  quantity: 1_000_000_000, strikeDisplay: "$1", quantityDisplay: "1 SOL",
+  quantity: 1_000_000_000, underlyingDecimals: 9, strikeDisplay: "$1", quantityDisplay: "1 SOL",
 };
 
-function setup() {
+function setup(previewOverrides: Partial<RfqOrderPreview> = {}) {
   const client = new ActaWsClient({ url: "ws://localhost", role: "taker" });
   vi.spyOn(client, "isAuthenticated").mockReturnValue(true);
   vi.spyOn(client, "getSessionId").mockReturnValue("credential");
@@ -47,7 +47,7 @@ function setup() {
     rfqTerms: () => ({ position_type: "covered_call", quantity: 1_000_000_000 }) as TakerFillRfq,
   });
   const props = {
-    preview, open: true, onClose: vi.fn(), requestNonce: 1,
+    preview: { ...preview, ...previewOverrides }, open: true, onClose: vi.fn(), requestNonce: 1,
     walletAddress: "So11111111111111111111111111111111111111112", backendUrl: "ws://localhost", signTransaction: sign,
     rpc: {} as Parameters<typeof RfqFlowModal>[0]["rpc"],
   };
@@ -80,6 +80,20 @@ describe("RFQ order modal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(h.cancel).toHaveBeenCalledOnce();
     expect(h.props.onClose).toHaveBeenCalledOnce();
+  });
+
+  it("prices the premium with the underlying's own decimals", async () => {
+    // 2 JLP (6 decimals) at a 1 USDC premium each
+    setup({ asset: "JLP", quantity: 2_000_000, underlyingDecimals: 6, quantityDisplay: "2 JLP" });
+    await screen.findByRole("button", { name: "Accept Quote" });
+    expect(screen.getAllByText("2.00 USDC").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("0.00 USDC")).toHaveLength(0);
+  });
+
+  it("shows the thesis the order expresses", async () => {
+    setup({ thesis: "SOL will be above $1 on Nov 7" });
+    await screen.findByRole("button", { name: "Accept Quote" });
+    expect(screen.getByText("“SOL will be above $1 on Nov 7”")).toBeTruthy();
   });
 
   it("keeps the accepted quote displayed while its maker is looked up", async () => {
