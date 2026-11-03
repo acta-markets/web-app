@@ -350,7 +350,7 @@ export function ThesisChart({
                       + {label.premium}
                       <span className="max-md:hidden"> premium</span>
                     </>
-                  ) : (
+                  ) : label.kept === false ? null : (
                     "+ the premium"
                   )}
                 </span>

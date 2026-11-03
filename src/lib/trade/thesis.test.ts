@@ -17,6 +17,7 @@ import {
   spreadLegs,
   spreadMaxGain,
   spreadOutcomeCopy,
+  spreadZoneLabels,
   cushionText,
   outcomeCopy,
   scenario,
@@ -198,7 +199,7 @@ describe("buying", () => {
   });
 
   it("labels the chart zones without a kept premium", () => {
-    expect(buyZoneLabels({ asset: "SOL", direction: "above", strike: 150 }).right).toEqual({ title: "Buy SOL at $150", premium: null });
+    expect(buyZoneLabels({ asset: "SOL", direction: "above", strike: 150 }).right).toEqual({ title: "Buy SOL at $150", premium: null, kept: false });
     expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).right.title).toBe("Sell SOL at $150");
     expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).wrong.premium).toBeNull();
   });
@@ -235,6 +236,12 @@ describe("bought spreads", () => {
     expect(spreadMaxGain(2, 100e9, 0)).toBe(200);
     expect(spreadBreakEven(false, 100, 3)).toBe(103);
     expect(spreadBreakEven(true, 100, 3)).toBe(97);
+  });
+
+  it("labels the chart with cash, never with the asset", () => {
+    expect(spreadZoneLabels("20.00 USDC").right).toEqual({ title: "Up to 20.00 USDC", premium: null, kept: false });
+    expect(spreadZoneLabels(null).right.title).toBe("Cash payoff");
+    expect(spreadZoneLabels(null).wrong.title).toBe("Premium lost");
   });
 
   it("names the leg and says what can come back", () => {

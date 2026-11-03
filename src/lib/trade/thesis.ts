@@ -254,7 +254,7 @@ export function outcomeCopy({
 }
 
 /** `premium` is the kept premium in USDC, null until an amount is set. */
-export type ZoneLabel = { title: string; premium: string | null };
+export type ZoneLabel = { title: string; premium: string | null; kept?: boolean };
 
 /** Short outcome labels for the chart's right and wrong zones; generic until an amount is set. */
 export function zoneLabels({
@@ -402,7 +402,7 @@ export function spreadOutcomeCopy({
   return {
     right: {
       when: `If ${asset} ends ${above ? "above" : "below"} ${price}`,
-      result: `You receive up to ${maxGain} in USDC, the full amount at ${full} or ${above ? "above" : "below"}.`,
+      result: `You receive up to ${maxGain}, the full amount at ${full} or ${above ? "above" : "below"}.`,
       note: SPREAD_SETTLEMENT_NOTE,
     },
     wrong: {
@@ -410,6 +410,13 @@ export function spreadOutcomeCopy({
       result: "The spread expires worthless.",
       note: "You lose the premium.",
     },
+  };
+}
+
+export function spreadZoneLabels(maxGain: string | null): { right: ZoneLabel; wrong: ZoneLabel } {
+  return {
+    right: { title: maxGain ? `Up to ${maxGain}` : "Cash payoff", premium: null, kept: false },
+    wrong: { title: "Premium lost", premium: null, kept: false },
   };
 }
 
@@ -424,8 +431,8 @@ export function buyZoneLabels({
 }): { right: ZoneLabel; wrong: ZoneLabel } {
   const verb = direction === "above" ? "Buy" : "Sell";
   return {
-    right: { title: `${verb} ${asset} at ${formatStrikePrice(strike)}`, premium: null },
-    wrong: { title: "Premium lost", premium: null },
+    right: { title: `${verb} ${asset} at ${formatStrikePrice(strike)}`, premium: null, kept: false },
+    wrong: { title: "Premium lost", premium: null, kept: false },
   };
 }
 
