@@ -79,6 +79,7 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Optional browser-accessible RP
 - `src/lib/trade/` - pure logic shared with the market page: `thesis.ts` (direction mapping, outcome math, all Easy copy), `strikes.ts` (expiries, strikes and APR from a snapshot), `sizing.ts` (size rule, deposit and quantity conversion), `assets.ts`, `format.ts`
 - `src/components/trade/easy/` - the sentence, the chart (CoinGecko history via `/api/market/history`) and the order details
 - `src/components/rfq/use-token-markets-snapshot.ts` and `use-quote-request.ts` - the 30s snapshot refresh and the quote request lifecycle, used by both trade pages
+- `docs/taker-buy-integration.md` - buy flow end to end: side, quote ranking, signing, wallet-paid deposit, portfolio states, backend contract, where to add things
 
 **Markets**: Assets and per-strategy cap utilization come from the RFQ backend's earn summary. The market page reads live strikes, indicative premiums and reference prices through `GetTokenMarketsInfo`. `src/lib/markets.ts` contains shared display formatting only.
 
