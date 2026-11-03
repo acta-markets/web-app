@@ -175,8 +175,31 @@ For covered calls and cash-secured puts, `physical_premium(price, strike, quanti
 Constraints:
 
 - `now + min_quote_validity_seconds ≤ valid_until ≤ market.expiry_ts`, with `min_quote_validity_seconds` from `GET /api/v1/venue`. `QuoteBuilder` checks both bounds before signing (`ValidUntilTooSoon`, `ValidUntilAfterMarketExpiry`). The trailing `settlement_buffer_seconds` is reserved for settlement; the effective trading window ends at `valid_until − settlement_buffer_seconds`. Size it as `rfq.expires_at + min_quote_validity_seconds` plus a little slack, capped at market expiry.
-- The taker side is `sell`: the taker is always the option writer.
+- The quote's side is the RFQ's side. On `sell` the taker writes the option; on `buy` you write it from Maker PDA custody, see [Writing taker buys](#writing-taker-buys).
 - Use a fresh nonce and order ID for a new quote; the server validates the hash-bound order ID, not independent nonce uniqueness. `AtomicNonceGenerator` is safe to declare as a `static`.
+
+## Writing taker buys
+
+A buy RFQ (`side: buy`) asks you to write the option the taker holds: the taker is
+the holder, you are the writer. Subscribe to `WsChannel::TakerBuyRfqs`; the channel
+is separate from `Rfqs`, so a maker that only sells never receives buys.
+
+- **Custody.** The collateral leaves your Maker PDA custody at open, not your
+  wallet: the underlying for a call, the quote mint for a put, a spread or a cash
+  put. The net premium lands in custody in the same transaction. Fund custody with
+  `ChainClient::maker_deposit` (`MakerDeposit`) from your wallet ATA; a wSOL
+  underlying must already be wrapped in that ATA.
+- **Admission.** The server checks custody before it sends you the RFQ. A short
+  custody turns into `RfqSkipped` with `maker_insufficient_balance` and the RFQ never
+  reaches quoting, so top up when you see the skip, after every fill, or on a timer.
+- **Price.** The taker pays your price; quote an ask. The order id signs the side,
+  so a buy quote cannot fill a sell.
+- **Settlement.** The holder deposits strictly before expiry to exercise a physical
+  buy. An unfunded in-the-money buy returns all collateral to you and settles as
+  `not_exercised`; spreads and cash puts settle in cash with no deposit. `PositionInfo`
+  names the roles `writer` (you) and `holder` (the buyer).
+
+See [`examples/taker_buy_quote.rs`](https://github.com/acta-markets/rust-maker-sdk/blob/main/examples/taker_buy_quote.rs).
 
 ---
 
