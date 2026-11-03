@@ -79,6 +79,13 @@ describe("RFQ request ownership", () => {
     h.emit("rfqClosed", { rfq_id: "ours" }); expect(h.result.current.bestQuote).toBeNull();
     expect(h.result.current.error).toBeNull();
   });
+  it("reports no makers at once when its own RFQ closes as no_eligible_makers", async () => {
+    const h = await setup(); const id = h.submit();
+    h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
+    h.emit("rfqClosed", { rfq_id: "other", reason: "no_eligible_makers" }); expect(h.result.current.error).toBeNull();
+    h.emit("rfqClosed", { rfq_id: "ours", reason: "no_eligible_makers" });
+    expect(h.result.current.error?.message).toBe("No makers are quoting this right now.");
+  });
   it("does not turn an unrelated order failure into a global RFQ error", async () => {
     const h = await setup();
     const requestId = h.submit();

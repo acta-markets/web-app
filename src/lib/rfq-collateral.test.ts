@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ActaWsRequestError, type WsErrorCode } from "@acta-markets/ts-sdk/ws";
-import { collateralShortfallMessage, requiredCollateralAtoms, rfqRequestErrorMessage, RFQ_REQUEST_FAILED } from "./rfq-collateral";
+import { collateralShortfallMessage, requiredCollateralAtoms, rfqRequestErrorMessage, RfqNoMakersError, RFQ_NO_MAKERS, RFQ_REQUEST_FAILED } from "./rfq-collateral";
 
 const sol = { symbol: "SOL", decimals: 9 };
 const usdc = { symbol: "USDC", decimals: 6 };
@@ -14,6 +14,9 @@ describe("RFQ rejection copy", () => {
     [usdc, "Not enough USDC to post collateral: need 100, have 0.000001"],
   ])("formats server atoms using $symbol decimals", (token, expected) => {
     expect(rfqRequestErrorMessage(rejection("insufficient_collateral", "insufficient collateral: required=100000000, available=1 (collateral atoms)"), token)).toBe(expected);
+  });
+  it("says no makers are quoting when no maker could receive the RFQ", () => {
+    expect(rfqRequestErrorMessage(new RfqNoMakersError(), sol)).toBe(RFQ_NO_MAKERS);
   });
   it.each(["time_overflow", "market_expired"] as const)("uses generic copy for %s", code => {
     expect(rfqRequestErrorMessage(rejection(code, "internal server detail"), sol)).toBe(RFQ_REQUEST_FAILED);

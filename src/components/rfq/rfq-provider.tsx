@@ -27,6 +27,7 @@ import {
 } from "@/lib/rfq-client";
 import { ALL_POSITIONS } from "@acta-markets/ts-sdk/ws";
 import { isCashSettledTerms, isSpreadTerms, lowerStrike, quoteMatchesProduct, requireStrikeTick, spreadTerms, strikeTicksByMint, validSpreadPremium, type ProductTerms, type TakerSide } from "@/lib/spreads";
+import { RfqNoMakersError } from "@/lib/rfq-collateral";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { AppModal } from "@/components/app-ui/app-modal";
 import { ReferralGateModal } from "@/components/referral/referral-gate-modal";
@@ -586,7 +587,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
       });
       client.on("rfqClosed", (msg) => {
         const pending = pendingRfqRef.current;
-        if (pending?.rfqId && msg.rfq_id === pending.rfqId) dropRfq();
+        if (!pending?.rfqId || msg.rfq_id !== pending.rfqId) return;
+        dropRfq();
+        if (msg.reason === "no_eligible_makers") setError(new RfqNoMakersError());
       });
 
       client.on("orderSubmitted", (orderId, sig) => {
