@@ -363,7 +363,7 @@ export function spreadLegLabel(isPut: boolean, leg1e9: number): string {
   return leg1e9 === 0 ? "To $0 (cash put)" : `${isPut ? "Down to" : "Up to"} ${formatStrikePrice(leg1e9 / 1e9)}`;
 }
 
-/** Width of a bought spread in strike units, and its payoff at full width for `quantity`. */
+/** A bought spread's payoff at full width for `quantity`, before the premium. */
 export function spreadMaxGain(quantity: number, strike1e9: number, leg1e9: number): number {
   return (quantity * Math.abs(strike1e9 - leg1e9)) / 1e9;
 }
@@ -388,13 +388,13 @@ export function spreadOutcomeCopy({
   direction,
   strike1e9,
   leg1e9,
-  maxGain,
+  maxPayout,
 }: {
   asset: string;
   direction: Direction;
   strike1e9: number;
   leg1e9: number;
-  maxGain: string;
+  maxPayout: string;
 }): { right: OutcomeCopy; wrong: OutcomeCopy } {
   const price = formatStrikePrice(strike1e9 / 1e9);
   const above = direction === "above";
@@ -402,7 +402,7 @@ export function spreadOutcomeCopy({
   return {
     right: {
       when: `If ${asset} ends ${above ? "above" : "below"} ${price}`,
-      result: `You receive up to ${maxGain}, the full amount at ${full} or ${above ? "above" : "below"}.`,
+      result: `You receive up to ${maxPayout}, the full amount at ${full} or ${above ? "above" : "below"}.`,
       note: SPREAD_SETTLEMENT_NOTE,
     },
     wrong: {
@@ -413,9 +413,9 @@ export function spreadOutcomeCopy({
   };
 }
 
-export function spreadZoneLabels(maxGain: string | null): { right: ZoneLabel; wrong: ZoneLabel } {
+export function spreadZoneLabels(maxPayout: string | null): { right: ZoneLabel; wrong: ZoneLabel } {
   return {
-    right: { title: maxGain ? `Up to ${maxGain}` : "Cash payoff", premium: null, kept: false },
+    right: { title: maxPayout ? `Up to ${maxPayout}` : "Cash payoff", premium: null, kept: false },
     wrong: { title: "Premium lost", premium: null, kept: false },
   };
 }

@@ -261,7 +261,7 @@ describe("Easy mode", () => {
         chooseBuy();
         chooseSpread();
         expect(screen.getByText("Buy a call spread")).toBeTruthy();
-        expect(screen.getByText("Max gain")).toBeTruthy();
+        expect(screen.getByText("Max payout before premium")).toBeTruthy();
         expect(screen.getByText("The premium you pay")).toBeTruthy();
         expect(screen.queryByText("To exercise")).toBeNull();
         expect(screen.getByRole("tab", { name: "Up to $110" })).toBeTruthy();

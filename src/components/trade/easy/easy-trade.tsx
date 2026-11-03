@@ -383,18 +383,18 @@ export function EasyTrade({
   }
 
   const sizeText = quantity != null ? `${formatAmount(quantity / 10 ** decimals, inputDecimals)} ${asset.symbol}` : "—";
-  const maxGain = spreadBuy && strike && leg != null && quantity != null
+  const maxPayout = spreadBuy && strike && leg != null && quantity != null
     ? formatUsdc(spreadMaxGain(quantity / 10 ** decimals, strike.strike1e9, leg))
     : null;
-  const outcomeText = maxGain && strike && leg != null
-    ? spreadOutcomeCopy({ asset: asset.symbol, direction, strike1e9: strike.strike1e9, leg1e9: leg, maxGain })
+  const outcomeText = maxPayout && strike && leg != null
+    ? spreadOutcomeCopy({ asset: asset.symbol, direction, strike1e9: strike.strike1e9, leg1e9: leg, maxPayout })
     : buying
     ? strike && quantity != null ? buyOutcomeCopy({ asset: asset.symbol, direction, strike: strike.strike, sizeText }) : null
     : outcome && strike
     ? outcomeCopy({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: info.isPut ? 4 : inputDecimals })
     : null;
   const labels = spreadBuy
-    ? spreadZoneLabels(maxGain)
+    ? spreadZoneLabels(maxPayout)
     : strike && buying
     ? buyZoneLabels({ asset: asset.symbol, direction, strike: strike.strike })
     : strike
@@ -423,9 +423,9 @@ export function EasyTrade({
     },
     { label: "Max loss", value: "The premium you pay" },
     ...(spreadBuy ? [{
-      label: "Max gain",
-      value: maxGain ?? "—",
-      info: "The width of the spread, paid in USDC at expiry. The premium you pay comes out of it.",
+      label: "Max payout before premium",
+      value: maxPayout ?? "—",
+      info: "The width of the spread, paid in USDC at expiry. Your max gain is this minus the premium, shown with the quote.",
     }, {
       label: "Deposit",
       value: "None",

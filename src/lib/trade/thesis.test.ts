@@ -248,7 +248,7 @@ describe("bought spreads", () => {
     expect(spreadLegLabel(false, 110e9)).toBe("Up to $110");
     expect(spreadLegLabel(true, 90e9)).toBe("Down to $90");
     expect(spreadLegLabel(true, 0)).toBe("To $0 (cash put)");
-    const copy = spreadOutcomeCopy({ asset: "SOL", direction: "above", strike1e9: 100e9, leg1e9: 110e9, maxGain: "$20" });
+    const copy = spreadOutcomeCopy({ asset: "SOL", direction: "above", strike1e9: 100e9, leg1e9: 110e9, maxPayout: "$20" });
     expect(copy.right.result).toContain("up to $20");
     expect(copy.right.note).toContain("No deposit");
     expect(copy.wrong.note).toBe("You lose the premium.");

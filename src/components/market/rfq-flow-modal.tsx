@@ -74,7 +74,7 @@ function BuyQuoteRows({ preview, quantity, grossPerUnit, maxLoss, formatQuote }:
   const bounds = spreadBounds(preview.terms);
   const rows = bounds ? [
     ["Max loss", maxLoss],
-    ["Max gain", formatQuote(spreadMaxGain(quantity, bounds.upper, bounds.lower))],
+    ["Max gain", formatQuote(spreadMaxGain(quantity, bounds.upper, bounds.lower) - grossPerUnit * quantity)],
     ["Break-even", formatPrice(preview.terms.type === "call_spread"
       ? spreadBreakEven(false, bounds.lower / 1e9, grossPerUnit)
       : spreadBreakEven(true, bounds.upper / 1e9, grossPerUnit))],
