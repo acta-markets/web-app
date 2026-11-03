@@ -84,8 +84,8 @@ type PortfolioRow = {
   asset: string;
   type: "call" | "put";
   outcome: string;
-  status: "open" | "funded" | "liquidated" | "settled";
-  userStatus: "Open" | "Closed";
+  status: PositionInfo["state"];
+  userStatus: "Open" | "Settling" | "Closed";
   createdTs: number;
   expiryTs: number | null;
   quantity: number;
@@ -101,9 +101,7 @@ type PortfolioRow = {
 function physicalOutcome(position: PositionInfo, premiumUsd: number, strike: number, quantity: number): string {
   if (position.state === "liquidated") return "Liquidated";
   if (position.state !== "settled") return "\u2014";
-  // the listener's projection of an unfunded ITM buy; the published wire type does not carry it yet
-  const wire: { type: string } = position.settlement;
-  if (wire.type === "not_exercised") return `Not exercised -${formatUsdSmart(premiumUsd)}`;
+  if (position.settlement.type === "not_exercised") return `Not exercised -${formatUsdSmart(premiumUsd)}`;
   if (position.settlement.type !== "physical") return "\u2014";
   const earned = position.side === "buy" ? -premiumUsd : premiumUsd;
   const signed = (value: number) => `${value < 0 ? "-" : "+"}${formatUsdSmart(Math.abs(value))}`;
@@ -113,9 +111,9 @@ function physicalOutcome(position: PositionInfo, premiumUsd: number, strike: num
   return `ITM ${signed(position.side === "buy" ? earned + moved : earned - moved)}`;
 }
 
-function toUserStatus(status: string): "Open" | "Closed" {
-  const s = status.toLowerCase();
-  if (s === "open" || s === "funded") return "Open";
+function toUserStatus(state: PositionInfo["state"]): PortfolioRow["userStatus"] {
+  if (state === "open" || state === "funded") return "Open";
+  if (state === "terminal_pending") return "Settling";
   return "Closed";
 }
 
@@ -353,7 +351,7 @@ export function PortfolioClient() {
     [rows]
   );
   const historyRows = useMemo(
-    () => rows.filter((r) => r.userStatus === "Closed").sort((a, b) => b.createdTs - a.createdTs),
+    () => rows.filter((r) => r.userStatus !== "Open").sort((a, b) => b.createdTs - a.createdTs),
     [rows]
   );
 
