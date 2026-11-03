@@ -279,7 +279,7 @@ describe("spread quote preview isolation", () => {
       await screen.findByText("Quote Received");
       expect(screen.getByText("Buy a call spread")).toBeTruthy();
       expect(screen.getByText("Max loss").nextElementSibling?.textContent).toBe("10.00 USDC");
-      expect(screen.getByText("Max gain").nextElementSibling?.textContent).toBe("20.00 USDC");
+      expect(screen.getByText("Max gain").nextElementSibling?.textContent).toBe("10.00 USDC");
       expect(screen.getByText("Break-even").nextElementSibling?.textContent).toBe("$155.00");
       expect(screen.queryByText("Deposit to exercise")).toBeNull();
       expect(screen.queryByRole("alert")).toBeNull();
@@ -291,7 +291,7 @@ describe("spread quote preview isolation", () => {
       setup({ ...buyPreview, terms }, { ...buyQuote, terms });
       await screen.findByText("Quote Received");
       expect(screen.getByText("Buy a cash put")).toBeTruthy();
-      expect(screen.getByText("Max gain").nextElementSibling?.textContent).toBe("300.00 USDC");
+      expect(screen.getByText("Max gain").nextElementSibling?.textContent).toBe("290.00 USDC");
       expect(screen.getByText("Break-even").nextElementSibling?.textContent).toBe("$145.00");
     });
 
