@@ -76,7 +76,7 @@ Every RFQ, quote, position and trade carries `terms` and `side`.
 | `call_spread`, `put_spread` | `lower_strike`, `upper_strike` | cash, in the quote mint |
 | `cash_put` | `strike` | cash, in the quote mint |
 
-- `side` is `sell` or `buy`. Only `sell` is executable. `buy` is rejected with `taker_buy_unsupported`.
+- `side` is `sell` or `buy`. `buy` RFQs arrive only after subscribing to `taker_buy_rfqs`, and the collateral comes from Maker PDA custody.
 - `cash_put` executes on chain as a put spread with legs `(0, K)`.
 - Strikes are 1e9-scaled. Spread strikes and `cash_put` strikes must be multiples of the underlying mint's `strike_tick` from `GetTokens`.
 - A market's `products` lists only the pair's products on that market's side. Call markets list `covered_call` and `call_spread`. Put markets list `cash_secured_put`, `put_spread` and `cash_put`.
@@ -137,7 +137,7 @@ When an RFQ permits several strikes, each strike requires a distinct quote. Pref
 
 Use `ReplaceQuote` for repricing: the swap is atomic and single-RTT. `CancelQuote` followed by `Quote` introduces a gap in the book during the cancellation window and incurs an additional round-trip.
 
-`is_taker_buy` in the order-id preimage is `0` for side `sell`; the taker is always the option writer. Side `buy` sets it to `1` and is rejected. Implementations whose preimage builders default this field to `true` must override it explicitly.
+`is_taker_buy` in the order-id preimage is `0` for side `sell`, where the taker writes, and `1` for side `buy`, where the maker writes. Implementations whose preimage builders default this field to `true` must override it explicitly.
 
 `QuoteRejected` carries `reason` and a `message`. Fix the cause before retrying; the same payload will fail again. Two reasons are not about the payload: `rate_limited` (the connection's quote bucket is empty; back off and re-sign with a fresh nonce) and `trading_paused` (the venue is paused; wait for it to resume).
 

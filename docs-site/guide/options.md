@@ -24,6 +24,10 @@ SOL is $160. You want to buy at $150. You lock 150 USDC for a week and get $3 no
 
 Payout and fee rules for integrators: [Options and settlement](../reference/protocol-flow.md).
 
+## Buying options
+
+You can also buy calls and puts for a premium. See [Buying options](buying-options.md).
+
 ## Cash-settled trades
 
 Calls and puts above can sell your SOL or leave you holding it. Call spreads, put spreads and cash puts only pay in USDC. See [Cash-settled spreads and puts](cash-settled-options.md).

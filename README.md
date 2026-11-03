@@ -65,3 +65,4 @@ See `ENV_SETUP.md` to set `MONGODB_URI` / `MONGODB_DB` and `NEXT_PUBLIC_PRIVY_AP
   - `Navbar`, `Hero`, `Marquee`, `Architecture`, `Solution`, `Whitelist`, `Team`, `Footer`
 - **Global styles**: `src/app/globals.css`
 - **Vaults**: data layer in `src/lib/vaults/`, hooks in `src/components/vaults/` (see `docs/vaults-integration.md`)
+- **Taker buy**: buy flow, deposit and portfolio states (see `docs/taker-buy-integration.md`)

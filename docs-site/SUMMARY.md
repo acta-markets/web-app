@@ -5,6 +5,7 @@
 * [Getting started](README.md)
 * [How Earn works](guide/options.md)
 * [Cash-settled spreads and puts](guide/cash-settled-options.md)
+* [Buying options](guide/buying-options.md)
 
 ## Vaults
 
