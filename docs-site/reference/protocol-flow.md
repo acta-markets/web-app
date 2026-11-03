@@ -168,7 +168,7 @@ On a successful open:
 | Call spread, put spread | `C = scaled_quote_amount_ceil(width, quantity)` quote atomic units | None |
 | Cash put | `C = scaled_quote_amount_ceil(strike, quantity)` quote atomic units | None |
 
-Taker collateral is fully locked at open. For physical products the maker settlement leg is **not** locked at open: the maker pays the premium and may deposit the settlement asset later with `DepositFundsToPosition` (`open` → `funded`). Spreads and cash puts have no maker leg. The maker needs a deposited program quote balance (via `DepositPremium`) for the premium debit; idle balance is retrieved with `WithdrawPremium`.
+Taker collateral is fully locked at open. For physical products the maker settlement leg is **not** locked at open: the maker pays the premium and may deposit the settlement asset later with `DepositFundsToPosition` (`open` → `funded`). Spreads and cash puts have no maker leg. The maker needs a deposited program quote balance (via `MakerDeposit`) for the premium debit; idle balance is retrieved with `MakerWithdraw`.
 
 ### Fees
 
@@ -332,7 +332,7 @@ Events worth tracking end to end:
 | `ChainEvent(position_settled)` | Assets distributed. |
 | `ChainEvent(position_liquidated)` | Unfunded ITM physical position liquidated. |
 
-`RegisterMaker`, `DepositPremium`, `WithdrawPremium`, and `DepositFundsToPosition` are Solana on-chain instructions, not WebSocket messages; build and submit them as transactions signed by the relevant owner wallet. The layouts of the maker's deposit instructions are in [Sandbox](sandbox.md#on-chain-maker-instructions). The full IDL ships in `@acta-markets/ts-sdk` as `ACTA_IDL`.
+`RegisterMaker`, `MakerDeposit`, `MakerWithdraw`, and `DepositFundsToPosition` are Solana on-chain instructions, not WebSocket messages; build and submit them as transactions signed by the relevant owner wallet. The layouts of the maker's deposit instructions are in [Sandbox](sandbox.md#on-chain-maker-instructions). The full IDL ships in `@acta-markets/ts-sdk` as `ACTA_IDL`.
 
 ## Related docs
 
