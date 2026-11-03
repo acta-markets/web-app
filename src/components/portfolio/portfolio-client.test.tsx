@@ -19,7 +19,7 @@ function position(pda: string, created_at: number, spread = false): PositionInfo
   return { pda, market: "market", underlying_mint: TOKENS.SOL.mint[getNetwork()], quote_mint: TOKENS.USDC.mint[getNetwork()], underlying_decimals: 9, quote_decimals: 6,
     terms: spread ? { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 } : { type: "covered_call", strike: 150e9 },
     state: "settled", created_at, expiry_ts: created_at + 86400, quantity: 1e9, price: 1e9, total_premium: 2e6,
-    settlement: spread ? { type: "cash", settlement_price: 110e9, maker_payoff: 10e6, taker_return: 10e6 } : { type: "physical", is_otm: true },
+    settlement: spread ? { type: "cash", settlement_price: 110e9, holder_payoff: 10e6, writer_return: 10e6 } : { type: "physical", is_otm: true },
   } as PositionInfo;
 }
 const summary = [{ quote_mint: TOKENS.USDC.mint[getNetwork()], quote_decimals: 6, premium_all_time: "123000000", premium_30d: "23000000", open_positions: 7, daily: [{ day: "2026-11-01", premium: "23000000" }] }];
