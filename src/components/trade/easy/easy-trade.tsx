@@ -61,6 +61,7 @@ import {
   spreadLegs,
   spreadMaxGain,
   spreadOutcomeCopy,
+  spreadZoneLabels,
   strikeDistancePct,
   thesisText,
   zoneLabels,
@@ -392,7 +393,9 @@ export function EasyTrade({
     : outcome && strike
     ? outcomeCopy({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: info.isPut ? 4 : inputDecimals })
     : null;
-  const labels = strike && buying
+  const labels = spreadBuy
+    ? spreadZoneLabels(maxGain)
+    : strike && buying
     ? buyZoneLabels({ asset: asset.symbol, direction, strike: strike.strike })
     : strike
     ? zoneLabels({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: info.isPut ? 4 : inputDecimals })
