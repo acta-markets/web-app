@@ -19,7 +19,7 @@ The TypeScript SDK exports `chain.flows.VaultManagerPlanner` to build vault inst
 | Deposit window and valuation | `setAcceptingDeposits()`, `processEquity()` |
 | Capital queues and next cycle | `processDeposits()`, `processWithdrawals()`, `processFinalWithdrawal()`, `finalizeCycle()` |
 | Delegate and policy | `governance.rotateDelegate()`, `governance.disableDelegate()`, `governance.proposeUpdate()`, `governance.applyUpdate()` |
-| Options and funding | `trading.openPositionAsTaker()`, `trading.openPositionAsMaker()`, `trading.fundMakerPosition()` |
+| Options and funding | `trading.openPositionAsWriter()`, `trading.openPositionAsHolder()`, `trading.fundHolderPosition()` |
 | Normal rebalance and staging | `swaps.spotRebalance()`, `swaps.stagingSwap()` |
 | Second-leg rollover | `governance.proposeUpdate()`, `governance.applySecondLeg()` |
 
@@ -29,9 +29,9 @@ A bought option must be funded before expiry, or liquidators take its intrinsic 
 
 ## Permissions
 
-Delegate permissions cover option trading (`OPEN_TAKER`, `SIGN_MAKER_QUOTES`, `FUND_MAKER`), swaps (`REBALANCE`) and capital processing (`PROCESS_CAPITAL`). Strategy capabilities and policy limit which trades the vault can open.
+Delegate permissions cover option trading (`OPEN_AS_WRITER`, `SIGN_HOLDER_QUOTES`, `SIGN_WRITER_QUOTES`, `FUND_HOLDER`), swaps (`REBALANCE`) and capital processing (`PROCESS_CAPITAL`). Strategy capabilities and policy limit which trades the vault can open.
 
-[Roles and permissions](vault-permissions.md) lists all six permission bits and the shared governance/delegate case. The delegate loses its permissions when its grant expires or is revoked.
+[Roles and permissions](vault-permissions.md) lists all seven permission bits and the shared governance/delegate case. The delegate loses its permissions when its grant expires or is revoked.
 
 ## Run the strategy
 

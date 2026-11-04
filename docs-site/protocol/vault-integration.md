@@ -47,7 +47,7 @@ After `Hello` and `Welcome`, send:
 
 The `AuthRequest` challenge is the taker challenge with `Wallet:` set to the operator, followed by `\nVault: <vault_pda>` with no trailing newline (see [signing conventions](../reference/ws-common.md#what-to-sign)). Check it with `assertVaultAuthChallenge(challenge, operator, vault)` (TypeScript) or `validate_vault_auth_challenge(challenge, operator, vault)` (Rust); `validateAuthChallenge` rejects it. Then sign its original bytes and reply with `AuthChallenge`. `VaultAuthSuccess` returns `vault_pda`, `operator`, `operator_kind` (`governance` or `delegate`) and `permissions`.
 
-A vault writing an option uses the taker RFQ flow. A vault buying an option acts as maker and signs holder quotes under its active primary-delegate grant. `is_taker_buy` is fixed at zero in the RFQ order.
+A vault writing an option for a maker uses the taker RFQ flow (`OPEN_AS_WRITER`). A vault buying an option acts as maker and signs holder quotes on sell RFQs (`SIGN_HOLDER_QUOTES`). A vault writing what a wallet buys also acts as maker: it asks on buy RFQs (`SIGN_WRITER_QUOTES`), the wallet signs `OpenPositionForVaultWriter` or `OpenSpreadForVaultWriter` with holder byte `1`, and the operator signs only the order id. Both sides arrive on the `vaults` channel: any expiry while Idle, only the cycle expiry while Active. A vault cannot request a buy as taker (`taker_buy_unsupported`).
 
 A permission change can close an open session. Reconnect and authenticate again.
 
@@ -55,7 +55,7 @@ The session is subscribed to the `vaults` channel by default and receives `Vault
 
 ### Funding bought options
 
-An option the vault bought (as maker) is not funded at open. To exercise it in the money, the vault must fund it with `FUND_MAKER` (or governance): strike × quantity in the quote asset for a call, or the quantity in the underlying for a put, paid from the matching leg. The vault then receives the collateral at settlement. Builders: TypeScript `planner.trading.fundMakerPosition(position)`, Rust `VaultManager::fund_maker_position` (feature `chain`).
+An option the vault bought (as maker) is not funded at open. To exercise it in the money, the vault must fund it with `FUND_HOLDER` (or governance): strike × quantity in the quote asset for a call, or the quantity in the underlying for a put, paid from the matching leg. The vault then receives the collateral at settlement. Builders: TypeScript `planner.trading.fundHolderPosition(position)`, Rust `VaultManager::fund_holder_position` (feature `chain`).
 
 **Fund before expiry.** Once the market is finalized, anyone can liquidate an unfunded in-the-money position: the liquidator pays the writer and takes the collateral, and the vault loses the intrinsic value. Funding is still accepted after finalization until a settlement or liquidation lands, but then you are racing liquidators. Keep enough of the funding asset for every holder position you may need to exercise. The same applies to any maker that bought an option.
 
