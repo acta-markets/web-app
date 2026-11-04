@@ -134,6 +134,8 @@ export function ThesisChart({
   direction,
   right,
   wrong,
+  strikeOptions1e9 = [],
+  onStrikeChange,
 }: {
   symbol: string;
   spot: number;
@@ -142,11 +144,26 @@ export function ThesisChart({
   direction: Direction;
   right: ZoneLabel;
   wrong: ZoneLabel;
+  /** tradable strikes as 1e9 wire values; the dragged tag snaps to the nearest one */
+  strikeOptions1e9?: number[];
+  onStrikeChange?: (strike1e9: number) => void;
 }) {
   const [range, setRange] = useState<Range>("1w");
   const { points, loading } = usePriceHistory(symbol, range);
   const [frameRef, width] = useElementWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
+  const [draggingStrike, setDraggingStrike] = useState(false);
+  /** set synchronously on grab, so a pointermove landing before React commits the pointerdown still counts as a drag */
+  const draggingRef = useRef(false);
+  /** the y-domain as it was when the tag was grabbed, held until release so the tag tracks the pointer instead of re-anchoring its own axis */
+  const [dragDomain, setDragDomain] = useState<[number, number] | null>(null);
+  /** where the pointer grabbed inside the tag, so grabbing near its edge doesn't snap the tag to the pointer */
+  const grabOffsetY = useRef(0);
+  /** for one series the axis only ever grows, so ending a drag or picking a nearer strike never re-anchors it */
+  const heldDomain = useRef<{ symbol: string; points: Point[]; lo: number; hi: number } | null>(null);
+  const lastEmittedStrike = useRef<number | null>(null);
+  const strikeOptionsSorted = useMemo(() => [...strikeOptions1e9].sort((a, b) => a - b), [strikeOptions1e9]);
+  const strikeDraggable = !!onStrikeChange && strikeOptionsSorted.length > 0;
 
   const plotHeight = width > 0 && width < 640 ? 190 : 210;
   const plotBottom = plotHeight - PLOT_BOTTOM_PAD;
@@ -164,8 +181,20 @@ export function ThesisChart({
         ? ((t - tStart) / Math.max(1, nowSec - tStart)) * xNow
         : xNow + ((t - nowSec) / Math.max(1, expirySec - nowSec)) * projectionWidth;
 
-    const [lo, hi] = priceDomain([...history.map((p) => p.v), spot], strike);
+    const [reqLo, reqHi] = priceDomain([...history.map((p) => p.v), spot], strike);
+    const held = heldDomain.current;
+    const sameSeries = !!held && held.symbol === symbol && held.points === points;
+    let lo = sameSeries ? Math.min(held!.lo, reqLo) : reqLo;
+    let hi = sameSeries ? Math.max(held!.hi, reqHi) : reqHi;
+    if (dragDomain) {
+      // keep exactly the domain that was on screen when the tag was grabbed
+      lo = dragDomain[0];
+      hi = dragDomain[1];
+    } else {
+      heldDomain.current = { symbol, points, lo, hi };
+    }
     const y = (v: number) => PLOT_TOP + (1 - (v - lo) / (hi - lo)) * (plotBottom - PLOT_TOP);
+    const invY = (py: number) => lo + (1 - (py - PLOT_TOP) / (plotBottom - PLOT_TOP)) * (hi - lo);
 
     const step = niceStep(hi - lo, 3);
     const ticks: number[] = [];
@@ -178,8 +207,8 @@ export function ThesisChart({
       ? `${line} L${linePoints[linePoints.length - 1].x.toFixed(1)},${plotBottom} L${linePoints[0].x.toFixed(1)},${plotBottom} Z`
       : "";
     const yStrike = Math.max(PLOT_TOP, Math.min(plotBottom, y(strike)));
-    return { history, x, y, xNow, projectionWidth, ticks, step, line, area, yStrike, tStart };
-  }, [width, points, spot, strike, expiryMs, plotBottom]);
+    return { history, x, y, invY, lo, hi, xNow, projectionWidth, ticks, step, line, area, yStrike, tStart };
+  }, [width, points, spot, strike, expiryMs, plotBottom, dragDomain, symbol]);
 
   // above wins over the strike, below wins under it
   const rightOnTop = direction === "above";
@@ -215,6 +244,64 @@ export function ThesisChart({
     setHover(Math.max(0, Math.min(last, next)));
   }
 
+  function nearestStrikeIndex(strike1e9: number) {
+    let best = 0;
+    strikeOptionsSorted.forEach((s, i) => {
+      if (Math.abs(s - strike1e9) < Math.abs(strikeOptionsSorted[best] - strike1e9)) best = i;
+    });
+    return best;
+  }
+
+  function emitStrikeFromClientY(clientY: number) {
+    const frame = frameRef.current;
+    if (!frame || !geo || !onStrikeChange || strikeOptionsSorted.length === 0) return;
+    const py = Math.max(PLOT_TOP, Math.min(plotBottom, clientY - frame.getBoundingClientRect().top));
+    const price1e9 = geo.invY(py) * 1e9;
+    const next = strikeOptionsSorted[nearestStrikeIndex(price1e9)];
+    if (next === lastEmittedStrike.current) return;
+    lastEmittedStrike.current = next;
+    onStrikeChange(next);
+  }
+
+  function onTagPointerDown(e: React.PointerEvent) {
+    if (!strikeDraggable || (e.pointerType === "mouse" && e.button !== 0)) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const frame = frameRef.current;
+    if (frame && geo) grabOffsetY.current = geo.yStrike + frame.getBoundingClientRect().top - e.clientY;
+    lastEmittedStrike.current = null;
+    draggingRef.current = true;
+    setDragDomain(geo ? [geo.lo, geo.hi] : null);
+    setDraggingStrike(true);
+    setHover(null);
+  }
+
+  function onTagPointerMove(e: React.PointerEvent) {
+    if (!draggingRef.current) return;
+    emitStrikeFromClientY(e.clientY + grabOffsetY.current);
+  }
+
+  function endStrikeDrag() {
+    draggingRef.current = false;
+    setDraggingStrike(false);
+    setDragDomain(null);
+    lastEmittedStrike.current = null;
+  }
+
+  function onTagKeyDown(e: React.KeyboardEvent) {
+    if (!strikeDraggable) return;
+    const current = nearestStrikeIndex(strike * 1e9);
+    const next =
+      e.key === "ArrowUp" ? strikeOptionsSorted[Math.min(strikeOptionsSorted.length - 1, current + 1)]
+      : e.key === "ArrowDown" ? strikeOptionsSorted[Math.max(0, current - 1)]
+      : e.key === "Home" ? strikeOptionsSorted[0]
+      : e.key === "End" ? strikeOptionsSorted[strikeOptionsSorted.length - 1]
+      : null;
+    if (next == null) return;
+    e.preventDefault();
+    onStrikeChange?.(next);
+  }
+
   const low = points.length ? Math.min(...points.map((p) => p.v)) : null;
   const high = points.length ? Math.max(...points.map((p) => p.v)) : null;
 
@@ -222,8 +309,8 @@ export function ThesisChart({
     <AppCard className="p-4 max-md:p-3">
       <div className="flex items-center justify-between gap-3">
         <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px]">
-          <span className="text-content-primary">{symbol} price</span>{" "}
-          <span className="text-content-secondary">{RANGE_NAMES[range]}</span>
+          <span className="text-content-primary">{symbol} {formatUsdSmart(spot)}</span>{" "}
+          <span className="text-content-secondary">· {RANGE_NAMES[range]}</span>
         </div>
         <AppSegmented ariaLabel="Price history range" value={range} onChange={setRange} options={RANGES} />
       </div>
@@ -358,8 +445,32 @@ export function ThesisChart({
             ))}
 
             <span
-              className="pointer-events-none absolute right-2 -translate-y-1/2 whitespace-nowrap border border-bg-border bg-bg-primary px-2 py-1 font-mono text-xs leading-none text-content-primary max-md:right-1 max-md:px-1.5 max-md:text-[11px]"
+              {...(strikeDraggable
+                ? {
+                    role: "slider",
+                    tabIndex: 0,
+                    "aria-label": "Your price",
+                    "aria-valuemin": strikeOptionsSorted[0],
+                    "aria-valuemax": strikeOptionsSorted[strikeOptionsSorted.length - 1],
+                    "aria-valuenow": Math.round(strike * 1e9),
+                    "aria-valuetext": formatStrikePrice(strike),
+                    "aria-orientation": "vertical",
+                  }
+                : {})}
+              className={cn(
+                "absolute right-2 -translate-y-1/2 whitespace-nowrap border border-bg-border bg-bg-primary px-2 py-1 font-mono text-xs leading-none text-content-primary max-md:right-1 max-md:px-1.5 max-md:text-[11px]",
+                strikeDraggable
+                  ? "z-10 cursor-grab touch-none select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-primary"
+                  : "pointer-events-none",
+                draggingStrike && "cursor-grabbing"
+              )}
               style={{ top: geo.yStrike }}
+              onPointerDown={strikeDraggable ? onTagPointerDown : undefined}
+              onPointerMove={strikeDraggable ? onTagPointerMove : undefined}
+              onPointerUp={strikeDraggable ? endStrikeDrag : undefined}
+              onPointerCancel={strikeDraggable ? endStrikeDrag : undefined}
+              onLostPointerCapture={strikeDraggable ? endStrikeDrag : undefined}
+              onKeyDown={strikeDraggable ? onTagKeyDown : undefined}
             >
               Your price {formatStrikePrice(strike)}
             </span>

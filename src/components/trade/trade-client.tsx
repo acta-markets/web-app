@@ -12,8 +12,8 @@ import { ProPlaceholder } from "@/components/trade/pro-placeholder";
 type Mode = "easy" | "pro";
 
 const MODES: Array<{ value: Mode; label: string }> = [
-  { value: "easy", label: "Easy" },
-  { value: "pro", label: "Pro" },
+  { value: "easy", label: "Make Yield" },
+  { value: "pro", label: "Make Profit" },
 ];
 
 const HOW_IT_WORKS = [

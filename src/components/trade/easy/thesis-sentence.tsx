@@ -1,5 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import * as React from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown } from "lucide-react";
 import { AppInlineSelect, type AppInlineSelectOption } from "@/components/app-ui/app-inline-select";
 import { cn } from "@/lib/cn";
 import { getTokenLogoSrc } from "@/lib/token-assets";
@@ -41,12 +43,17 @@ function LineEnd({ reserve, children }: { reserve: ReadonlyArray<string>; childr
   );
 }
 
-/** The one typed value in the sentence, so it is the only field drawn as a box; its unit reads as plain text after it. */
+/**
+ * The sentence's one typed value, drawn as a box; its unit reads as plain text after it.
+ * A chevron opens the balance's quick amounts (half, max) as a small menu; typing covers
+ * everything else. `presets` empty (no balance yet) leaves a plain input.
+ */
 function AmountPill({
   value,
   reserve,
   symbol,
   maxDecimals,
+  presets,
   onChange,
   disabled,
   invalid,
@@ -56,6 +63,7 @@ function AmountPill({
   reserve: ReadonlyArray<string>;
   symbol: string;
   maxDecimals: number;
+  presets: ReadonlyArray<{ text: string; hint: string }>;
   onChange: (value: string) => void;
   disabled?: boolean;
   invalid?: boolean;
@@ -64,8 +72,54 @@ function AmountPill({
     () => (maxDecimals > 0 ? new RegExp(`^\\d*(\\.\\d{0,${maxDecimals}})?$`) : /^\d*$/),
     [maxDecimals]
   );
+  const [open, setOpen] = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const pillRef = React.useRef<HTMLLabelElement>(null);
+  const listRef = React.useRef<HTMLUListElement>(null);
+  const [position, setPosition] = React.useState<{ left: number; top: number; minWidth: number } | null>(null);
+
+  // the menu opens only on a click, so placing it is purely client-side; it sits under the pill, inside the viewport
+  React.useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
+    }
+    const place = () => {
+      const pill = pillRef.current?.getBoundingClientRect();
+      const list = listRef.current;
+      if (!pill || !list) return;
+      const left = Math.min(Math.max(6, pill.left), window.innerWidth - list.offsetWidth - 6);
+      setPosition({ left, top: pill.bottom + 6, minWidth: pill.width });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (pillRef.current?.contains(target) || listRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    return () => document.removeEventListener("pointerdown", onPointer);
+  }, [open]);
+
+  function pick(text: string) {
+    setOpen(false);
+    onChange(text);
+    inputRef.current?.focus();
+  }
+
   return (
     <label
+      ref={pillRef}
       data-pill="Amount"
       className={cn(
         "relative inline-flex cursor-text items-center whitespace-nowrap border px-[0.25em] py-[0.06em] leading-[1.15] transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent-primary",
@@ -81,6 +135,7 @@ function AmountPill({
           </span>
         ))}
         <input
+          ref={inputRef}
           aria-label={`Amount in ${symbol}`}
           size={1}
           inputMode="decimal"
@@ -94,9 +149,55 @@ function AmountPill({
             const next = e.target.value.replace(",", ".");
             if (pattern.test(next)) onChange(next);
           }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && open) setOpen(false);
+          }}
           className="absolute inset-0 h-full w-full min-w-0 bg-transparent p-0 text-content-primary outline-none placeholder:text-content-secondary disabled:cursor-not-allowed"
         />
       </span>
+      {presets.length > 0 ? (
+        <>
+          <button
+            type="button"
+            aria-label="Quick amounts"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            disabled={disabled}
+            onClick={() => setOpen((o) => !o)}
+            className="ml-[0.2em] inline-flex items-center transition-transform disabled:cursor-not-allowed"
+          >
+            <ChevronDown aria-hidden="true" className="h-[0.45em] w-[0.45em] opacity-50" />
+          </button>
+          {open
+            ? createPortal(
+                <ul
+                  ref={listRef}
+                  role="menu"
+                  aria-label="Quick amounts"
+                  style={{ left: position?.left ?? 0, top: position?.top ?? 0, minWidth: position?.minWidth, visibility: position ? "visible" : "hidden" }}
+                  className="fixed z-[80] border border-bg-border bg-bg-primary py-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
+                >
+                  {presets.map((p) => (
+                    <li key={p.text} role="none">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        // keep focus off the menu until picked, so the pill keeps its focus ring
+                        onPointerDown={(e) => e.preventDefault()}
+                        onClick={() => pick(p.text)}
+                        className="flex w-full cursor-pointer items-baseline gap-3 whitespace-nowrap px-3 py-2 text-left hover:bg-action-primary"
+                      >
+                        <span className="tabular-nums text-content-primary">{p.text}</span>
+                        <span className="text-content-secondary">{p.hint}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>,
+                document.body
+              )
+            : null}
+        </>
+      ) : null}
     </label>
   );
 }
@@ -163,6 +264,7 @@ export function ThesisSentence({
   amountSymbol,
   amountDecimals,
   amountInvalid,
+  amountPresets,
   earnings,
   apr,
   options,
@@ -187,6 +289,8 @@ export function ThesisSentence({
   amountSymbol: string;
   amountDecimals: number;
   amountInvalid: boolean;
+  /** half and max of the balance, one click away in the amount pill; empty with no balance */
+  amountPresets: ReadonlyArray<{ text: string; hint: string }>;
   /** the premium as it reads in the sentence, e.g. "≈$8.20"; null while unknown */
   earnings: string | null;
   /** annualized yield, e.g. "126%"; null when unpriced */
@@ -212,7 +316,10 @@ export function ThesisSentence({
       disabled: unavailable,
     };
   });
-  const amountNumbers = Array.from(new Set(reserve.amounts.map((a) => a.number)));
+  // the pill also holds the presets' width, so picking one never moves the sentence
+  const amountNumbers = Array.from(
+    new Set([...reserve.amounts.map((a) => a.number), ...amountPresets.map((p) => p.text)])
+  );
   const amountUnits = Array.from(new Set([amountSymbol, ...reserve.amounts.map((a) => a.symbol)]));
 
   // The belief leads; the deposit and payout follow on their own line, a size down.
@@ -288,6 +395,7 @@ export function ThesisSentence({
             reserve={amountNumbers}
             symbol={amountSymbol}
             maxDecimals={amountDecimals}
+            presets={amountPresets}
             onChange={onAmount}
             disabled={disabled}
             invalid={amountInvalid}

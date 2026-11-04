@@ -28,27 +28,27 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Trade page modes", () => {
-  it("opens Easy by default and fetches the earn summary", () => {
+  it("opens Make Yield by default and fetches the earn summary", () => {
     render(<TradeClient />);
     expect(screen.getByText("Easy for default")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Easy" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Make Yield" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tablist", { name: "Trading mode" })).toBeTruthy();
     expect(mocks.getEarnSummary).toHaveBeenCalled();
   });
 
-  it("shows the Pro placeholder and switches back to Easy", () => {
+  it("shows the Make Profit placeholder and switches back to Make Yield", () => {
     mocks.search = "mode=pro&asset=JLP";
     render(<TradeClient />);
-    expect(screen.getByRole("heading", { name: "Pro mode is coming soon" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Switch to Easy" }));
+    expect(screen.getByRole("heading", { name: "Make Profit is coming soon" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Make Yield" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP", { scroll: false });
   });
 
-  it("keeps the other params when switching to Pro", () => {
+  it("keeps the other params when switching to Make Profit", () => {
     mocks.search = "asset=JLP";
     render(<TradeClient />);
     expect(screen.getByText("Easy for JLP")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Pro" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Make Profit" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP&mode=pro", { scroll: false });
   });
 

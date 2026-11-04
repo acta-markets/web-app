@@ -19,12 +19,12 @@ export function ProPlaceholder({
       </div>
       <AppCard className="mt-8 flex flex-col items-start gap-4 p-8 max-md:mt-6 max-md:p-5">
         <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
-          Pro mode is coming soon
+          Make Profit is coming soon
         </h2>
         <p className="font-mono text-base leading-[1.4] text-content-secondary">
-          Easy mode trades the same markets.
+          Make Yield trades the same markets.
         </p>
-        <AppButton onClick={onEasy}>Switch to Easy</AppButton>
+        <AppButton onClick={onEasy}>Switch to Make Yield</AppButton>
       </AppCard>
     </div>
   );

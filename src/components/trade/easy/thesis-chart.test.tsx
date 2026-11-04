@@ -1,4 +1,5 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { priceDomain, ThesisChart } from "./thesis-chart";
 
@@ -43,6 +44,70 @@ describe("thesis chart", () => {
     await waitFor(() => expect(screen.getByText("Price history unavailable")).toBeTruthy());
     expect(screen.getByText("Keep 104.50 USDC")).toBeTruthy();
     expect(screen.getByText("Your price $95")).toBeTruthy();
+  });
+
+  /** feeds the chosen strike back in like EasyTrade does, so a drag or keypress moves the tag for real */
+  function DraggableChart() {
+    const [strikeChoice, setStrikeChoice] = useState(95e9);
+    return (
+      <ThesisChart
+        {...props}
+        direction="above"
+        strike={strikeChoice / 1e9}
+        strikeOptions1e9={[90e9, 95e9, 100e9]}
+        onStrikeChange={setStrikeChoice}
+      />
+    );
+  }
+
+  it("drags the your-price tag to the nearest listed strike", async () => {
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    render(<DraggableChart />);
+    const tag = await waitFor(() => screen.getByRole("slider", { name: "Your price" }));
+    expect(tag.getAttribute("aria-valuenow")).toBe("95000000000");
+
+    // jsdom frames sit at 0,0 with the 640px fallback width, so clientY maps straight to plot y
+    fireEvent.pointerDown(tag, { pointerId: 1, button: 0, clientY: 100 });
+    fireEvent.pointerMove(tag, { clientY: 200 });
+    expect(tag.getAttribute("aria-valuenow")).toBe("90000000000");
+    expect(screen.getByText("Your price $90")).toBeTruthy();
+    fireEvent.pointerMove(tag, { clientY: 20 });
+    expect(tag.getAttribute("aria-valuenow")).toBe("100000000000");
+    fireEvent.pointerUp(tag, { pointerId: 1 });
+    expect(screen.getByText("Your price $100")).toBeTruthy();
+  });
+
+  it("steps the your-price tag with the arrow keys", async () => {
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    render(<DraggableChart />);
+    const tag = await waitFor(() => screen.getByRole("slider", { name: "Your price" }));
+
+    fireEvent.keyDown(tag, { key: "ArrowUp" });
+    expect(tag.getAttribute("aria-valuenow")).toBe("100000000000");
+    fireEvent.keyDown(tag, { key: "ArrowDown" });
+    expect(tag.getAttribute("aria-valuenow")).toBe("95000000000");
+    fireEvent.keyDown(tag, { key: "ArrowDown" });
+    expect(tag.getAttribute("aria-valuenow")).toBe("90000000000");
+  });
+
+  it("keeps the axis stable once a far drag widened it", async () => {
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    render(<DraggableChart />);
+    const tag = await waitFor(() => screen.getByRole("slider", { name: "Your price" }));
+    const axisTicks = () =>
+      screen.getAllByText(/^\$[\d,.]+$/).map((el) => `${el.textContent}@${(el as HTMLElement).style.top}`);
+
+    // drag to the bottom strike and release: the axis widens once to make room for it
+    fireEvent.pointerDown(tag, { pointerId: 1, button: 0, clientY: 130 });
+    fireEvent.pointerMove(tag, { clientY: 400 });
+    fireEvent.pointerUp(tag, { pointerId: 1 });
+    expect(screen.getByText("Your price $90")).toBeTruthy();
+    const widened = axisTicks();
+
+    // stepping back to a nearer strike must not re-anchor the axis
+    fireEvent.keyDown(tag, { key: "ArrowUp" });
+    expect(screen.getByText("Your price $95")).toBeTruthy();
+    expect(axisTicks()).toEqual(widened);
   });
 });
 
