@@ -7,6 +7,14 @@ export interface CollateralToken {
 
 export const RFQ_REQUEST_FAILED = "Could not request a quote. Please try again.";
 export const RFQ_NO_QUOTES = "No quotes arrived within 30 seconds. Try another strike or size.";
+export const RFQ_NO_MAKERS = "No makers are quoting this right now.";
+
+/** The server closed the RFQ as `no_eligible_makers`: no maker could receive it. */
+export class RfqNoMakersError extends Error {
+  constructor() {
+    super(RFQ_NO_MAKERS);
+  }
+}
 
 function formatAtoms(atoms: bigint, decimals: number): string {
   const digits = atoms.toString().padStart(decimals + 1, "0");
@@ -35,6 +43,7 @@ export function requiredCollateralAtoms(
 }
 
 export function rfqRequestErrorMessage(error: unknown, token: CollateralToken): string {
+  if (error instanceof RfqNoMakersError) return RFQ_NO_MAKERS;
   const detail = error instanceof Error && error.cause ? error.cause : error;
   const serverError = detail instanceof ActaWsRequestError ? detail.error : detail;
   if (serverError && typeof serverError === "object" && "type" in serverError &&

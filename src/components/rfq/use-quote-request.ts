@@ -7,6 +7,7 @@ import type { RfqOrderPreview } from "@/components/market/rfq-flow-modal";
 export type QuoteRfq = {
   market: string;
   terms: RfqOrderPreview["terms"];
+  side?: RfqOrderPreview["side"];
   quantity: number;
 };
 

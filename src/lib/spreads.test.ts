@@ -75,6 +75,12 @@ describe("product and pair identity", () => {
     expect(quoteMatchesProduct(extraLeg, physical)).toBe(false);
     expect(quoteMatchesProduct({ side: "sell", terms: { type: "cash_secured_put", strike: 100e9 } }, physical)).toBe(false);
   });
+  it("matches the requested side both ways", () => {
+    const physical = { type: "covered_call" as const, strike: 100e9 };
+    expect(quoteMatchesProduct({ side: "buy", terms: physical }, physical, "buy")).toBe(true);
+    expect(quoteMatchesProduct({ side: "sell", terms: physical }, physical, "buy")).toBe(false);
+    expect(quoteMatchesProduct({ side: "buy", terms: physical }, physical, "sell")).toBe(false);
+  });
 });
 
 describe("spread names", () => {

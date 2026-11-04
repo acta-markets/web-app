@@ -149,7 +149,7 @@ RfqRequest -> RfqCreated -> QuoteReceived (0..N) -> AcceptQuote
 
 ### 1. Open the RFQ
 
-`terms` is a tagged union that names the product and its strikes. `side` is the taker's side and must be `sell`; `buy` fails with `taker_buy_unsupported`.
+`terms` is a tagged union that names the product and its strikes. `side` is the taker's side: `sell` writes the product and pays you the premium, `buy` buys it for the premium. A bought covered call or cash-secured put needs a deposit before expiry to exercise; a bought spread or cash put needs none.
 
 | Product | `terms` |
 |---|---|
@@ -321,12 +321,14 @@ The open instruction depends on the product and the maker:
 |---|---|---|
 | Covered call or cash-secured put, ordinary maker | `OpenPosition` | `7` |
 | Spread or cash put, ordinary maker | `OpenSpread` | `77` |
-| Covered call or cash-secured put, vault maker | `OpenPositionForVaultAsMaker` | `42` |
-| Spread or cash put, vault maker | `OpenSpreadForVaultAsMaker` | `79` |
+| Covered call or cash-secured put, vault maker, you sell | `OpenPositionForVaultHolder` | `42` |
+| Spread or cash put, vault maker, you sell | `OpenSpreadForVaultHolder` | `79` |
+| Covered call or cash-secured put, vault maker, you buy | `OpenPositionForVaultWriter`, holder byte `1` | `41` |
+| Spread or cash put, vault maker, you buy | `OpenSpreadForVaultWriter`, holder byte `1` | `78` |
 
-A vault maker's transaction has no steps 3 to 5.
+A vault maker's transaction has no steps 3 to 5. When you buy from a vault it has only steps 1, 2, 7, 8 and 9: you sign slot 1, pay the gross premium from your quote ATA, and the vault's delegate key signs the order id in step 8.
 
-The data of `OpenPosition` is the discriminant, `position_type` (`u8`), then `strike`, `quantity`, `price`, `valid_until` and `nonce` (each `u64`, little-endian), then `order_id` (32 bytes). `OpenSpread` adds `upper_strike` (`u64`) at the end, and its `strike` is the lower strike; a cash put has `position_type` `3` and `strike` `0`. Compare these fields with the order. The accounts are in the IDL, `ACTA_IDL` in `@acta-markets/ts-sdk`.
+The data of `OpenPosition` is the discriminant, `position_type` (`u8`), then `strike`, `quantity`, `price`, `valid_until` and `nonce` (each `u64`, little-endian), then `order_id` (32 bytes), then `side` (`u8`, `1` for a buy). `OpenSpread` puts `upper_strike` (`u64`) before `side`, and its `strike` is the lower strike. The vault writer instructions end with the holder byte instead of `side`, with the same meaning; a cash put has `position_type` `3` and `strike` `0`. Compare these fields with the order. The accounts are in the IDL, `ACTA_IDL` in `@acta-markets/ts-sdk`.
 
 ### 4. Track the order
 
@@ -371,7 +373,7 @@ Once open, the position's collateral is locked in its own escrow. There is no ma
 
 For a covered call or cash-secured put that is in the money, the maker supplies the settlement asset. If it remains unfunded, a permissionless liquidator can supply that asset and receive the corresponding collateral. Locked collateral does not guarantee a liquidation deadline: completion depends on someone providing the funding.
 
-A call spread, put spread or cash put goes from `open` straight to `settled`. Its `settlement` is `{ "type": "cash", "settlement_price", "maker_payoff", "taker_return" }` with amounts in quote atoms. A settled physical position has `{ "type": "physical", "settlement_price", "is_otm" }`.
+A call spread, put spread or cash put goes from `open` straight to `settled`. Its `settlement` is `{ "type": "cash", "settlement_price", "holder_payoff", "writer_return" }` with amounts in quote atoms. A settled physical position has `{ "type": "physical", "settlement_price", "is_otm" }`.
 
 Every position row carries `revision { slot, transaction_index, instruction_index }`, both decimals and `total_premium`, the net premium in quote atoms after the protocol fee. Track positions in two ways:
 

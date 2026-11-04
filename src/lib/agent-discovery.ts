@@ -93,7 +93,7 @@ export function getDiscoveryLinkHeader(): string {
 export function getHomeMarkdown(context: DeploymentContext): string {
   return `# Acta
 
-Acta is a structured-yield and European-style options protocol on Solana. Takers sell covered calls or cash-secured puts through a competitive RFQ process and receive premium upfront. Positions settle on-chain at maturity.
+Acta is a structured-yield and European-style options protocol on Solana. Takers sell covered calls or cash-secured puts and receive premium upfront, or buy options and cash spreads for a premium, through a competitive RFQ process. Positions settle on-chain at maturity.
 
 ## Current environment
 

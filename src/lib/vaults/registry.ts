@@ -82,7 +82,8 @@ export function resolveVaultMeta(
   const legs = [knownSymbol ?? tokenDisplayName(vault.main_mint)];
   if (vault.second_mint && vault.second_mint !== vault.main_mint) legs.push(tokenDisplayName(vault.second_mint));
   return {
-    name: served?.name ?? meta?.name ?? `${legs.join(" / ")} vault · ${shortAddress(vault.vault_pda)}`,
+    name: [served?.name ?? meta?.name ?? `${legs.join(" / ")} vault · ${shortAddress(vault.vault_pda)}`, served?.description]
+      .filter(Boolean).join(" · "),
     curator: curator ?? shortAddress(vault.governance),
     curatorIsAddress: curator === undefined,
     legs,
@@ -91,7 +92,7 @@ export function resolveVaultMeta(
     assetKnown: knownSymbol !== undefined,
     registered: served !== null || meta !== undefined,
     strategy: served?.strategy ?? undefined,
-    description: served?.description ?? meta?.description,
+    description: meta?.description,
     website: httpsUrl(served?.website ?? undefined),
     twitter: served?.twitter && X_HANDLE.test(served.twitter) ? served.twitter : undefined,
     logoUrl: httpsUrl(served?.logo_url ?? undefined),

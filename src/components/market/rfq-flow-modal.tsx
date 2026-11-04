@@ -10,7 +10,9 @@ import { useRfqOrder } from "./use-rfq-order";
 import type { VersionedTransaction } from "@solana/web3.js";
 import { IS_MAINNET } from "@/lib/tokens";
 
-import { isCashSettled, isSpreadTerms, productLabel, quoteMatchesProduct, spreadName, spreadPreview, type ProductTerms } from "@/lib/spreads";
+import { BUY_PRODUCT_NAME, isCashSettled, isSpreadTerms, lowerStrike, productLabel, quoteMatchesProduct, spreadName, spreadPreview, type ProductTerms, type TakerSide } from "@/lib/spreads";
+import { formatPrice } from "@/lib/trade/format";
+import { BUY_DEPOSIT_REMINDER, BUY_ITM_WARNING, SPREAD_SETTLEMENT_NOTE, buyBreakEven, exerciseDepositText, spreadBounds, spreadBreakEven, spreadMaxGain } from "@/lib/trade/thesis";
 import { formatDate } from "@/lib/vaults/format";
 import { SpreadPreview, type SpreadFees } from "./spread-preview";
 import type { SpreadTerms } from "@acta-markets/ts-sdk/chain";
@@ -18,6 +20,7 @@ import type { SpreadTerms } from "@acta-markets/ts-sdk/chain";
 export type RfqOrderPreview = {
   asset: string;
   terms: ProductTerms;
+  side?: TakerSide;
   spread?: { terms: SpreadTerms; fees: SpreadFees; quoteSymbol?: string };
   /** underlying atomic units */
   quantity: number;
@@ -57,6 +60,35 @@ interface RfqFlowModalProps {
   /** Sign transaction function from wallet */
   signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
   rpc: Parameters<typeof useRfqOrder>[0]["rpc"];
+}
+
+function BuyQuoteRows({ preview, quantity, grossPerUnit, maxLoss, formatQuote }: {
+  preview: RfqOrderPreview;
+  quantity: number;
+  grossPerUnit: number;
+  maxLoss: string;
+  formatQuote: (value: number) => string;
+}) {
+  const isPut = preview.terms.type === "cash_secured_put";
+  const strike = lowerStrike(preview.terms) / 1_000_000_000;
+  const bounds = spreadBounds(preview.terms);
+  const rows = bounds ? [
+    ["Max loss", maxLoss],
+    ["Max gain", formatQuote(spreadMaxGain(quantity, bounds.upper, bounds.lower) - grossPerUnit * quantity)],
+    ["Break-even", formatPrice(preview.terms.type === "call_spread"
+      ? spreadBreakEven(false, bounds.lower / 1e9, grossPerUnit)
+      : spreadBreakEven(true, bounds.upper / 1e9, grossPerUnit))],
+  ] : [
+    ["Max loss", maxLoss],
+    ["Break-even", formatPrice(buyBreakEven(isPut, strike, grossPerUnit))],
+    ["Deposit to exercise", exerciseDepositText(isPut, quantity, strike, preview.asset)],
+  ];
+  return rows.map(([label, value]) => (
+    <div key={label} className="flex justify-between text-sm">
+      <span className="text-content-tertiary">{label}</span>
+      <span className="text-content-secondary">{value}</span>
+    </div>
+  ));
 }
 
 export function RfqFlowModal({
@@ -121,7 +153,7 @@ export function RfqFlowModal({
 
   useEffect(() => {
     if (!preview || accepting || flow.type !== "idle" || (quoteStep !== "requesting_quote" && quoteStep !== "quote_received")) return;
-    if (bestQuote && quoteMatchesProduct(bestQuote, preview.terms)) {
+    if (bestQuote && quoteMatchesProduct(bestQuote, preview.terms, preview.side)) {
       setQuote(bestQuote);
       setStep("quote_received");
     } else if (!bestQuote && quote && quoteSecondsRemaining(quote) === 0) {
@@ -207,8 +239,11 @@ export function RfqFlowModal({
     })} ${preview?.spread?.quoteSymbol ?? "USDC"}`;
   };
   const quoteQuantity = preview ? preview.quantity / 10 ** preview.underlyingDecimals : 0;
-  const quoteUnitPremium = quote ? Number(quote.net_price ?? quote.price) / 1_000_000_000 : null;
-  let spreadQuoteValid = !preview || !isCashSettled(preview.terms.type);
+  const isBuy = preview?.side === "buy";
+  // a bought spread pays its premium and owes nothing else
+  const exercisable = isBuy && !isCashSettled(preview.terms.type);
+  const quoteUnitPremium = quote ? Number(isBuy ? quote.price : quote.net_price ?? quote.price) / 1_000_000_000 : null;
+  let spreadQuoteValid = !preview || isBuy || !isCashSettled(preview.terms.type);
   let spreadNetPremium: number | null = null;
   if (preview?.spread && quote) {
     try {
@@ -218,7 +253,7 @@ export function RfqFlowModal({
       spreadNetPremium = Number(result.netPremium) / 10 ** terms.quoteDecimals;
     } catch { spreadQuoteValid = false; }
   }
-  const totalPremiumUsd = preview && isCashSettled(preview.terms.type) ? spreadNetPremium :
+  const totalPremiumUsd = preview && !isBuy && isCashSettled(preview.terms.type) ? spreadNetPremium :
     preview?.lockedPremiumUsd != null
       ? preview.lockedPremiumUsd
       : quoteUnitPremium != null
@@ -282,7 +317,7 @@ export function RfqFlowModal({
             <div className="flex justify-between">
               <span className="text-content-secondary">Type</span>
               <span className="font-semibold text-content-primary">
-                {productLabel(preview.terms.type)}
+                {isBuy ? BUY_PRODUCT_NAME[preview.terms.type] : productLabel(preview.terms.type)}
               </span>
             </div>
             <div className="flex justify-between">
@@ -295,7 +330,7 @@ export function RfqFlowModal({
             </div>
             {totalPremiumUsd != null && (
               <div className="flex justify-between">
-                <span className="text-content-secondary">Premium</span>
+                <span className="text-content-secondary">{isBuy ? "Premium you pay" : "Premium"}</span>
                 <span className="font-semibold text-content-primary">{formatUsdc(totalPremiumUsd)}</span>
               </div>
             )}
@@ -354,16 +389,28 @@ export function RfqFlowModal({
             </p>
             <div className="mt-3 space-y-2 font-mono">
               <div className="flex justify-between">
-                <span className="text-content-secondary">Total premium</span>
+                <span className="text-content-secondary">{isBuy ? "Premium you pay" : "Total premium"}</span>
                 <span className="text-lg font-bold text-accent-primary">
                   {totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : "—"}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-content-tertiary">APR</span>
-                <span className="text-content-secondary">{displayedAprPct != null ? `${displayedAprPct.toFixed(2)}%` : "—"}</span>
-              </div>
+              {isBuy && preview && quoteUnitPremium != null ? (
+                <BuyQuoteRows
+                  preview={preview}
+                  quantity={quoteQuantity}
+                  grossPerUnit={quoteUnitPremium}
+                  maxLoss={totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : "—"}
+                  formatQuote={formatUsdc}
+                />
+              ) : (
+                <div className="flex justify-between text-sm">
+                  <span className="text-content-tertiary">APR</span>
+                  <span className="text-content-secondary">{displayedAprPct != null ? `${displayedAprPct.toFixed(2)}%` : "—"}</span>
+                </div>
+              )}
             </div>
+            {exercisable ? <p role="alert" className="mt-3 border border-error p-3 font-mono text-sm leading-[1.4] text-error">{BUY_ITM_WARNING}</p> : null}
+            {isBuy && !exercisable ? <p className="mt-3 font-mono text-sm leading-[1.4] text-content-secondary">{SPREAD_SETTLEMENT_NOTE}</p> : null}
           </div>
         )}
 
@@ -378,6 +425,7 @@ export function RfqFlowModal({
                 Position opened successfully.
               </div>
             )}
+            {exercisable ? <div className="mt-1 text-xs text-content-secondary">{BUY_DEPOSIT_REMINDER}</div> : null}
             {solscanLink}
           </div>
         )}

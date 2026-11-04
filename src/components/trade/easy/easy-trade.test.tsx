@@ -82,6 +82,7 @@ beforeEach(() => {
     getTokenMarketsInfo: mocks.refresh,
     connectionState: "connected", isAuthenticated: false, referralStatus: "unknown",
     bestQuote: null, error: null, submitRfq: vi.fn(), cancelRfq: vi.fn(), openReferralGate: vi.fn(),
+    marketDescriptors: [],
   };
 });
 afterEach(() => {
@@ -164,7 +165,7 @@ describe("Easy mode", () => {
     expect(screen.getByText("Locks 997.5 USDC (size steps of 9.5)")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Get quote" }));
     expect(mocks.context.submitRfq).toHaveBeenCalledWith({
-      market: "put-soon", terms: { type: "cash_secured_put", strike: 95e9 }, quantity: 10_500_000_000, timeoutSeconds: 30,
+      market: "put-soon", side: "sell", terms: { type: "cash_secured_put", strike: 95e9 }, quantity: 10_500_000_000, timeoutSeconds: 30,
     });
     const preview = (mocks.modal.mock.lastCall?.[0] as { preview: Record<string, unknown> }).preview;
     expect(preview).toMatchObject({
@@ -222,5 +223,148 @@ describe("Easy mode", () => {
     render(<EasyTrade />);
     fireEvent.click(screen.getByRole("button", { name: "Redeem invite to trade" }));
     expect(mocks.context.openReferralGate).toHaveBeenCalledOnce();
+  });
+
+  describe("Buy", () => {
+    const chooseBuy = () => fireEvent.click(screen.getByRole("tab", { name: "Buy" }));
+
+    it("maps above to a bought call, sized in the asset, with no indicative price or APR", () => {
+      connectWallet();
+      mocks.balance = 500;
+      render(<EasyTrade />);
+      chooseBuy();
+      expect(screen.getByText("If I buy")).toBeTruthy();
+      expect(screen.getByText("I pay")).toBeTruthy();
+      expect(screen.getByLabelText("Amount in SOL")).toBeTruthy();
+      expect(screen.queryByText("HALF")).toBeNull();
+      expect(screen.getByText("Buy a call")).toBeTruthy();
+      expect(screen.queryByText("Paid to you now")).toBeNull();
+      expect(screen.queryByText(/APR/)).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: /Get quote/ }));
+      const submit = mocks.context.submitRfq as ReturnType<typeof vi.fn>;
+      expect(submit).toHaveBeenCalledWith(expect.objectContaining({
+        market: "call-soon", side: "buy", terms: { type: "covered_call", strike: 105e9 }, quantity: 1e9,
+      }));
+    });
+
+    describe("spreads", () => {
+      const list = (products: string[]) => {
+        mocks.context.marketDescriptors = ["call-soon", "put-soon", "call-later", "put-later"].map((market_pda) => ({
+          market: { market_pda }, products,
+        }));
+      };
+      const chooseSpread = () => fireEvent.click(screen.getByRole("tab", { name: "Spread" }));
+
+      it("offers no spread where the market does not list one", () => {
+        list(["covered_call", "cash_secured_put"]);
+        render(<EasyTrade />);
+        chooseBuy();
+        expect(screen.queryByRole("tab", { name: "Spread" })).toBeNull();
+        expect(screen.getByText("Buy a call")).toBeTruthy();
+      });
+
+      it("buys a call spread with the chosen upper leg and no deposit", () => {
+        connectWallet();
+        list(["covered_call", "call_spread"]);
+        render(<EasyTrade />);
+        chooseBuy();
+        chooseSpread();
+        expect(screen.getByText("Buy a call spread")).toBeTruthy();
+        expect(screen.getByText("Max payout before premium")).toBeTruthy();
+        expect(screen.getByText("The premium you pay")).toBeTruthy();
+        expect(screen.queryByText("To exercise")).toBeNull();
+        expect(screen.getByRole("tab", { name: "Up to $110" })).toBeTruthy();
+
+        fireEvent.click(screen.getByRole("button", { name: /Get quote/ }));
+        const submit = mocks.context.submitRfq as ReturnType<typeof vi.fn>;
+        expect(submit).toHaveBeenCalledWith(expect.objectContaining({
+          market: "call-soon", side: "buy", quantity: 1e9,
+          terms: { type: "call_spread", lower_strike: 105e9, upper_strike: 110e9 },
+        }));
+      });
+
+      it("never offers a call without an upper leg", () => {
+        connectWallet();
+        list(["covered_call", "call_spread"]);
+        render(<EasyTrade />);
+        chooseBuy();
+        chooseSpread();
+        fireEvent.change(select("Price"), { target: { value: String(110e9) } });
+        expect(screen.queryByRole("tablist", { name: "Spread width" })).toBeNull();
+        expect(screen.getByRole("button", { name: "Choose a price" })).toBeTruthy();
+      });
+
+      it("buys a cash put through its zero leg on a put market", () => {
+        connectWallet();
+        list(["cash_secured_put", "put_spread", "cash_put"]);
+        render(<EasyTrade />);
+        chooseBuy();
+        fireEvent.change(select("Direction"), { target: { value: "below" } });
+        chooseSpread();
+        fireEvent.click(screen.getByRole("tab", { name: "To $0 (cash put)" }));
+        expect(screen.getByText("Buy a cash put")).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: /Get quote/ }));
+        const submit = mocks.context.submitRfq as ReturnType<typeof vi.fn>;
+        expect(submit).toHaveBeenCalledWith(expect.objectContaining({
+          side: "buy", terms: { type: "cash_put", strike: expect.any(Number) },
+        }));
+      });
+
+      it("hides the cash put where the market does not list it", () => {
+        list(["cash_secured_put", "put_spread"]);
+        render(<EasyTrade />);
+        chooseBuy();
+        fireEvent.change(select("Direction"), { target: { value: "below" } });
+        chooseSpread();
+        expect(screen.queryByRole("tab", { name: "To $0 (cash put)" })).toBeNull();
+      });
+    });
+
+    it("maps below to a bought put on the put market", () => {
+      connectWallet();
+      render(<EasyTrade />);
+      chooseBuy();
+      fireEvent.change(select("Direction"), { target: { value: "below" } });
+      expect(screen.getByText("Buy a put")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: /Get quote/ }));
+      expect(mocks.context.submitRfq).toHaveBeenCalledWith(expect.objectContaining({
+        market: "put-soon", side: "buy", terms: { type: "cash_secured_put", strike: 95e9 },
+      }));
+    });
+
+    it("quotes a strike whose indicative is missing or stale, and an empty USDC balance does not block it", () => {
+      connectWallet();
+      mocks.balance = 0;
+      mocks.context = { ...mocks.context, tokenMarketsInfo: { underlyingMint: SOL, data: snapshot({ stale: true }) } };
+      render(<EasyTrade />);
+      chooseBuy();
+      expect((screen.getByRole("button", { name: /Get quote/ }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("still enforces the size rule, in the asset", () => {
+      connectWallet();
+      render(<EasyTrade />);
+      chooseBuy();
+      fireEvent.change(screen.getByLabelText("Amount in SOL"), { target: { value: "101" } });
+      expect((screen.getByRole("button", { name: /Above max/ }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it("drops a typed amount and strike when switching side and goes back to the selling sentence", () => {
+      render(<EasyTrade />);
+      chooseBuy();
+      fireEvent.change(screen.getByLabelText("Amount in SOL"), { target: { value: "2" } });
+      fireEvent.click(screen.getByRole("tab", { name: "Sell" }));
+      expect(screen.getByText("If I deposit")).toBeTruthy();
+      expect(screen.getByLabelText("Amount in USDC")).toBeTruthy();
+    });
+
+    it("falls to the direction whose option has markets, which flips against selling", () => {
+      const data = snapshot();
+      mocks.context = { ...mocks.context, tokenMarketsInfo: { underlyingMint: SOL, data: { ...data, markets: data.markets.filter((m) => m.is_put) } } };
+      render(<EasyTrade />);
+      chooseBuy();
+      expect(screen.getByText("Buy a put")).toBeTruthy();
+    });
   });
 });

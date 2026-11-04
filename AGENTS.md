@@ -75,10 +75,11 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Optional browser-accessible RP
 
 **Market prices and APR**: The market page uses the configured RFQ backend’s `GetTokenMarketsInfo.reference_price` and indicative premiums, refreshed together every 30 seconds. APR uses the existing SDK formula and is unavailable for stale indicatives. The backend owns oracle access; the frontend has no direct Hermes integration.
 
-**Trade (Easy mode)**: `/trade` is one sentence the user fills in: "I believe [asset] will be [above/below] [price] on [date]. If I deposit [amount], I get paid ≈$X now." A price chart and the order details sit underneath. A taker can only sell options, so `above` sells a cash-secured put and `below` sells a covered call; right means the deposit comes back, wrong means it converts at the strike. `?asset=` preselects an asset.
+**Trade (Easy mode)**: `/trade` is one sentence the user fills in: "I believe [asset] will be [above/below] [price] on [date]. If I deposit [amount], I get paid ≈$X now." A price chart and the order details sit underneath. Selling: `above` sells a cash-secured put and `below` sells a covered call; right means the deposit comes back, wrong means it converts at the strike. Buying: `above` buys a call and `below` a put, exercised only by a deposit before expiry; or a spread, which takes no deposit, loses at most the premium and pays at most its width: `above` is a call spread, `below` a put spread or a cash put down to zero. A call is never offered without its upper leg. `?asset=` preselects an asset.
 - `src/lib/trade/` - pure logic shared with the market page: `thesis.ts` (direction mapping, outcome math, all Easy copy), `strikes.ts` (expiries, strikes and APR from a snapshot), `sizing.ts` (size rule, deposit and quantity conversion), `assets.ts`, `format.ts`
 - `src/components/trade/easy/` - the sentence, the chart (CoinGecko history via `/api/market/history`) and the order details
 - `src/components/rfq/use-token-markets-snapshot.ts` and `use-quote-request.ts` - the 30s snapshot refresh and the quote request lifecycle, used by both trade pages
+- `docs/taker-buy-integration.md` - buy flow end to end: side, quote ranking, signing, wallet-paid deposit, portfolio states, backend contract, where to add things
 
 **Markets**: Assets and per-strategy cap utilization come from the RFQ backend's earn summary. The market page reads live strikes, indicative premiums and reference prices through `GetTokenMarketsInfo`. `src/lib/markets.ts` contains shared display formatting only.
 

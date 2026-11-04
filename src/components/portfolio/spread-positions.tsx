@@ -20,10 +20,17 @@ export function spreadPositionAmounts(position: PositionInfo, descriptor?: Marke
   let collateral: bigint;
   try { collateral = spreadCollateral({ positionType: position.terms.type === "call_spread" ? 2 : 3,
     lowerStrike: BigInt(terms.lower_strike), upperStrike: BigInt(terms.upper_strike!), quantity: BigInt(position.quantity), underlyingDecimals, quoteDecimals }); } catch { return null; }
-  const payout = position.state === "settled" && position.settlement.type === "cash" ? BigInt(position.settlement.maker_payoff) : null;
-  const returned = position.state === "settled" && position.settlement.type === "cash" ? BigInt(position.settlement.taker_return) : null;
-  const premium = Number.isSafeInteger(position.total_premium) ? BigInt(position.total_premium) : null;
-  return { collateral, payout, returned, premium, pnl: premium != null && payout != null ? premium - payout : null,
+  const payout = position.state === "settled" && position.settlement.type === "cash" ? BigInt(position.settlement.holder_payoff) : null;
+  const returned = position.state === "settled" && position.settlement.type === "cash" ? BigInt(position.settlement.writer_return) : null;
+  const bought = position.side === "buy";
+  // a buyer's cost is the gross premium; the position only stores the writer's net
+  const paid = Number.isSafeInteger(position.price)
+    ? BigInt(position.price) * BigInt(position.quantity) * 10n ** BigInt(quoteDecimals) / (10n ** 9n * 10n ** BigInt(underlyingDecimals))
+    : null;
+  const net = Number.isSafeInteger(position.total_premium) ? BigInt(position.total_premium) : null;
+  const premium = bought ? paid : net;
+  const pnl = premium == null || payout == null ? null : bought ? payout - premium : premium - payout;
+  return { collateral, payout, returned, premium, bought, pnl,
     quantity: Number(position.quantity) / 10 ** underlyingDecimals, quoteDecimals,
     // never a mint address in place of a symbol
     quoteSymbol: descriptor?.quote_symbol ?? quote?.symbol ?? null,
@@ -31,7 +38,7 @@ export function spreadPositionAmounts(position: PositionInfo, descriptor?: Marke
 }
 
 const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
-const STATUS: Record<string, string> = { open: "Open", funded: "Open", liquidated: "Liquidated", settled: "Settled" };
+const STATUS: Record<string, string> = { open: "Open", funded: "Open", liquidated: "Liquidated", settled: "Settled", terminal_pending: "Settling" };
 
 export type SpreadRowView = {
   label: string;
@@ -58,7 +65,7 @@ export function spreadRowView(position: PositionInfo, descriptors: MarketDescrip
   const expiry = Number(position.expiry_ts);
   const settled = position.state === "settled" && pnl != null;
   const secondsToExpiry = expiry - Number(position.created_at);
-  const aprPct = amounts?.premium != null && amounts.collateral > 0n && secondsToExpiry > 0
+  const aprPct = !amounts?.bought && amounts?.premium != null && amounts.collateral > 0n && secondsToExpiry > 0
     ? (Number(amounts.premium) / Number(amounts.collateral)) * (SECONDS_PER_YEAR / secondsToExpiry) * 100
     : 0;
   return {
@@ -71,7 +78,7 @@ export function spreadRowView(position: PositionInfo, descriptors: MarketDescrip
     premium: cash(amounts?.premium ?? null),
     apr: aprPct > 0 ? `${aprPct.toFixed(2)}%` : NONE,
     aprPct,
-    collateralUsd: amounts ? Number(amounts.collateral) / 10 ** amounts.quoteDecimals : 0,
+    collateralUsd: amounts && !amounts.bought ? Number(amounts.collateral) / 10 ** amounts.quoteDecimals : 0,
     result: settled ? cash(pnl, true) : NONE,
     negative: settled && pnl < 0n,
   };

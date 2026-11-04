@@ -17,6 +17,9 @@ import { cn } from "@/lib/cn";
 import { AppButton } from "@/components/app-ui/app-button";
 import { isCashSettled, lowerStrike } from "@/lib/spreads";
 import { formatPortfolioPremium, portfolioIncomeSeries } from "@/lib/portfolio-api";
+import { BUY_STATUS_LABEL, buyStatus, type BuyFacts } from "@/lib/trade/buy-position";
+import { exerciseDepositText } from "@/lib/trade/thesis";
+import { useBuyDeposit } from "./use-buy-deposit";
 import { useWalletHistory } from "./use-wallet-history";
 import { spreadRowView } from "./spread-positions";
 import { PortfolioEarningsChart } from "@/components/portfolio/portfolio-earnings-chart";
@@ -71,15 +74,18 @@ type TableRow = {
   premium: string;
   last: string;
   negative: boolean;
+  buy?: BuyRow;
 };
+
+type BuyRow = BuyFacts & { pda: string; market: string; exercise: string };
 
 type PortfolioRow = {
   id: string;
   asset: string;
   type: "call" | "put";
   outcome: string;
-  status: "open" | "funded" | "liquidated" | "settled";
-  userStatus: "Open" | "Closed";
+  status: PositionInfo["state"];
+  userStatus: "Open" | "Settling" | "Closed";
   createdTs: number;
   expiryTs: number | null;
   quantity: number;
@@ -87,12 +93,16 @@ type PortfolioRow = {
   premiumUsd: number;
   notionalUsd: number;
   apr: number;
+  bought: boolean;
+  buy?: BuyRow;
 };
 
 /** Result of a closed covered call or cash-secured put: premium, less the move past the strike. */
 function physicalOutcome(position: PositionInfo, premiumUsd: number, strike: number, quantity: number): string {
   if (position.state === "liquidated") return "Liquidated";
-  if (position.state !== "settled" || position.settlement.type !== "physical") return "\u2014";
+  if (position.state !== "settled") return "\u2014";
+  if (position.settlement.type === "not_exercised") return `Not exercised -${formatUsdSmart(premiumUsd)}`;
+  if (position.settlement.type !== "physical") return "\u2014";
   const earned = position.side === "buy" ? -premiumUsd : premiumUsd;
   const signed = (value: number) => `${value < 0 ? "-" : "+"}${formatUsdSmart(Math.abs(value))}`;
   if (position.settlement.is_otm) return signed(earned);
@@ -101,9 +111,9 @@ function physicalOutcome(position: PositionInfo, premiumUsd: number, strike: num
   return `ITM ${signed(position.side === "buy" ? earned + moved : earned - moved)}`;
 }
 
-function toUserStatus(status: string): "Open" | "Closed" {
-  const s = status.toLowerCase();
-  if (s === "open" || s === "funded") return "Open";
+function toUserStatus(state: PositionInfo["state"]): PortfolioRow["userStatus"] {
+  if (state === "open" || state === "funded") return "Open";
+  if (state === "terminal_pending") return "Settling";
   return "Closed";
 }
 
@@ -142,6 +152,21 @@ function extractDescriptorUnderlyingSymbol(descriptor: unknown): string | undefi
   );
 }
 
+function BuyStatusCell({ buy, nowSec, deposit }: { buy: BuyRow; nowSec: number; deposit: ReturnType<typeof useBuyDeposit> }) {
+  const status = deposit.funded.has(buy.pda) ? "funded" : buyStatus(buy, nowSec);
+  if (status !== "deposit") {
+    return <span className={status === "not_exercised" ? "text-error" : undefined}>{BUY_STATUS_LABEL[status]}</span>;
+  }
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <AppButton size="sm" disabled={deposit.pending != null} onClick={() => void deposit.deposit(buy)}>
+        {deposit.pending === buy.pda ? "Depositing..." : "Deposit"}
+      </AppButton>
+      <span className="text-xs text-content-secondary/60">{buy.exercise} to exercise</span>
+    </div>
+  );
+}
+
 export function PortfolioClient() {
   const [chartRange, setChartRange] = useState<"24h" | "7d" | "30d">("30d");
   const [positionsTab, setPositionsTab] = useState<PositionsTab>("positions");
@@ -174,6 +199,8 @@ export function PortfolioClient() {
     if (!rfqAuthenticated) return;
     fetchRfqPositions();
   }, [rfqAuthenticated, fetchRfqPositions]);
+
+  const buyDeposit = useBuyDeposit(fetchRfqPositions);
 
   const now = Math.floor(nowMs / 1000);
   const currentNetwork = getNetwork();
@@ -271,10 +298,15 @@ export function PortfolioClient() {
       const assetSymbol = normalizeTokenSymbol(rawSymbol);
       const strike = Number(lowerStrike(p.terms)) / strikeScale;
       const quantity = Number(p.quantity) / 10 ** p.underlying_decimals;
+      const bought = p.side === "buy";
+      const isPut = p.terms.type === "cash_secured_put";
+      // total_premium is what the writer received; a buyer spent the gross price
       const premiumUsd =
-        Number.isFinite(px.total_premium)
-          ? Number(px.total_premium) / 10 ** p.quote_decimals
-          : Number(p.price) / strikeScale;
+        bought
+          ? (Number(p.price) / strikeScale) * quantity
+          : Number.isFinite(px.total_premium)
+            ? Number(px.total_premium) / 10 ** p.quote_decimals
+            : Number(p.price) / strikeScale;
       const notionalUsd = quantity * strike;
       const createdTs = Number(p.created_at);
       const expiryTs = Number(p.expiry_ts) > 0 ? Number(p.expiry_ts) : null;
@@ -284,10 +316,11 @@ export function PortfolioClient() {
           ? (premiumUsd / notionalUsd) * (365 * 24 * 60 * 60 / durationSec) * 100
           : 0;
 
+      const settlementPrice = market?.settlement_price;
       return {
         id: p.pda,
         asset: assetSymbol,
-        type: p.terms.type === "cash_secured_put" ? "put" : "call",
+        type: isPut ? "put" : "call",
         outcome: physicalOutcome(p, premiumUsd, strike, quantity),
         status: p.state,
         userStatus: toUserStatus(p.state),
@@ -298,6 +331,17 @@ export function PortfolioClient() {
         premiumUsd,
         notionalUsd,
         apr,
+        bought,
+        buy: bought && (p.state === "open" || p.state === "funded") ? {
+          pda: p.pda,
+          market: p.market,
+          state: p.state,
+          expiryTs: Number(p.expiry_ts),
+          isPut,
+          strike1e9: Number(lowerStrike(p.terms)),
+          settlementPrice1e9: settlementPrice != null ? Number(settlementPrice) : null,
+          exercise: exerciseDepositText(isPut, quantity, strike, assetSymbol),
+        } : undefined,
       };
     });
   }, [allPositions, marketByPda, rfqMarketDescriptors, resolvedUnderlyingByMarket, mintToSymbol]);
@@ -307,9 +351,11 @@ export function PortfolioClient() {
     [rows]
   );
   const historyRows = useMemo(
-    () => rows.filter((r) => r.userStatus === "Closed").sort((a, b) => b.createdTs - a.createdTs),
+    () => rows.filter((r) => r.userStatus !== "Open").sort((a, b) => b.createdTs - a.createdTs),
     [rows]
   );
+
+  const incomeRows = useMemo(() => openRows.filter((r) => !r.bought), [openRows]);
 
   const openSpreads = useMemo(
     () => allPositions.flatMap((p) => {
@@ -319,15 +365,15 @@ export function PortfolioClient() {
     [allPositions, rfqMarketDescriptors]
   );
   const totalNotionalUsd = useMemo(
-    () => openRows.reduce((sum, r) => sum + (Number.isFinite(r.notionalUsd) ? r.notionalUsd : 0), 0)
+    () => incomeRows.reduce((sum, r) => sum + (Number.isFinite(r.notionalUsd) ? r.notionalUsd : 0), 0)
       + openSpreads.reduce((sum, r) => sum + r.collateralUsd, 0),
-    [openRows, openSpreads]
+    [incomeRows, openSpreads]
   );
   const weightedApr = useMemo(() => {
     if (totalNotionalUsd <= 0) return 0;
-    const physical = openRows.reduce((sum, r) => sum + r.apr * r.notionalUsd, 0);
+    const physical = incomeRows.reduce((sum, r) => sum + r.apr * r.notionalUsd, 0);
     return (physical + openSpreads.reduce((sum, r) => sum + r.aprPct * r.collateralUsd, 0)) / totalNotionalUsd;
-  }, [openRows, openSpreads, totalNotionalUsd]);
+  }, [incomeRows, openSpreads, totalNotionalUsd]);
 
   const nextMaturity = useMemo(() => {
     const expiries = [...openRows, ...openSpreads]
@@ -343,14 +389,15 @@ export function PortfolioClient() {
   const { openTable, closedTable } = useMemo(() => {
     const physical = (r: PortfolioRow): TableRow => ({
       id: r.id,
-      label: `${r.asset} ${formatStrikePrice(r.strike)} ${r.type}`,
+      label: `${r.bought ? "Bought " : ""}${r.asset} ${formatStrikePrice(r.strike)} ${r.type}`,
       status: r.userStatus,
       expiryTs: r.expiryTs ?? r.createdTs,
       createdTs: r.createdTs,
       size: `${fmtNumber(r.quantity, 4)} ${r.asset}`,
-      premium: formatUsdSmart(r.premiumUsd),
+      premium: r.bought ? `${formatUsdSmart(r.premiumUsd)} paid` : formatUsdSmart(r.premiumUsd),
       last: r.userStatus === "Open" ? (Number.isFinite(r.apr) ? `${r.apr.toFixed(2)}%` : "\u2014") : r.outcome,
       negative: r.outcome.includes("-"),
+      buy: r.buy,
     });
     const spreads = allPositions.flatMap((p): TableRow[] => {
       const view = spreadRowView(p, rfqMarketDescriptors);
@@ -405,6 +452,7 @@ export function PortfolioClient() {
     },
   ];
   const tableRows = positionsTab === "history" ? closedTable : openTable;
+  const openColumn = openTable.some((r) => r.buy) ? "APR / Status" : "APR";
 
   return (
     <div className="mx-auto w-full max-w-[850px] pb-16 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-8">
@@ -468,6 +516,7 @@ export function PortfolioClient() {
       </section>
 
       <section className="mt-8 flex flex-col gap-4">
+        {buyDeposit.error ? <p role="alert" className="font-mono text-sm text-error">{buyDeposit.error}</p> : null}
         <div className="flex items-center justify-between">
           <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
             {positionsTab === "positions" ? `Positions: ${openTable.length}` : "Transactions"}
@@ -484,7 +533,7 @@ export function PortfolioClient() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-bg-border">
-                  {["Position", "Maturity", "Size", "Premium", positionsTab === "history" ? "Result" : "APR"].map((title, index) => (
+                  {["Position", "Maturity", "Size", "Premium", positionsTab === "history" ? "Result" : openColumn].map((title, index) => (
                     <AppTh key={title} className={cn("sticky top-0 z-10 bg-bg-primary", index > 1 && "text-right")}>{title}</AppTh>
                   ))}
                 </tr>
@@ -510,7 +559,9 @@ export function PortfolioClient() {
                       </AppTd>
                       <AppTd className="text-right tabular-nums text-content-secondary">{row.size}</AppTd>
                       <AppTd className="text-right tabular-nums text-content-secondary">{row.premium}</AppTd>
-                      <AppTd className={row.negative ? "text-right tabular-nums text-error" : "text-right tabular-nums text-content-secondary"}>{row.last}</AppTd>
+                      <AppTd className={row.negative ? "text-right tabular-nums text-error" : "text-right tabular-nums text-content-secondary"}>
+                        {row.buy ? <BuyStatusCell buy={row.buy} nowSec={now} deposit={buyDeposit} /> : row.last}
+                      </AppTd>
                     </tr>
                   ))
                 )}

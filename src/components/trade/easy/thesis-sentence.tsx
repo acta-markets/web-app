@@ -5,7 +5,8 @@ import { ChevronDown } from "lucide-react";
 import { AppInlineSelect, type AppInlineSelectOption } from "@/components/app-ui/app-inline-select";
 import { cn } from "@/lib/cn";
 import { getTokenLogoSrc } from "@/lib/token-assets";
-import { DIRECTIONS, SENTENCE, type Direction } from "@/lib/trade/thesis";
+import type { TakerSide } from "@/lib/spreads";
+import { DIRECTIONS, SENTENCE, directionsFor, type Direction } from "@/lib/trade/thesis";
 
 // Pill text stays in the sentence's own ink so the sentence reads as one line of text;
 // the tint (and the direction arrow) carries the meaning.
@@ -253,6 +254,7 @@ function StrikeFace({ label }: { label: string | null }) {
 }
 
 export function ThesisSentence({
+  side,
   asset,
   direction,
   strikeValue,
@@ -277,6 +279,7 @@ export function ThesisSentence({
   onExpiry,
   onAmount,
 }: {
+  side: TakerSide;
   asset: string;
   direction: Direction;
   strikeValue: string;
@@ -306,13 +309,14 @@ export function ThesisSentence({
   onExpiry: (expiryTs: string) => void;
   onAmount: (value: string) => void;
 }) {
-  const directionOptions = DIRECTIONS.map((d) => {
+  const buying = side === "buy";
+  const directionOptions = directionsFor(side).map((d) => {
     const unavailable = options.unavailable.includes(d.value);
     return {
       value: d.value,
       label: d.value,
       icon: <span aria-hidden="true" className={cn("w-3 text-center", ARROW[d.value])}>{d.arrow}</span>,
-      detail: unavailable ? "no markets" : `you deposit ${d.isPut ? "USDC" : asset}`,
+      detail: unavailable ? "no markets" : buying ? d.optionName.toLowerCase() : `you deposit ${d.isPut ? "USDC" : asset}`,
       disabled: unavailable,
     };
   });
@@ -389,7 +393,7 @@ export function ThesisSentence({
       </p>
       <p className="text-[28px] leading-[1.45] max-lg:text-[24px] max-md:text-[20px] max-md:leading-[1.6]">
         <span className="whitespace-nowrap">
-          {SENTENCE.deposit}{" "}
+          {buying ? SENTENCE.buy : SENTENCE.deposit}{" "}
           <AmountPill
             value={amount}
             reserve={amountNumbers}
@@ -412,7 +416,7 @@ export function ThesisSentence({
         </span>{" "}
         {/* from md up the payout stays one phrase; on phones it may break after "I get paid" */}
         <span className="md:whitespace-nowrap">
-          <span className="whitespace-nowrap">{SENTENCE.paid}</span>{" "}
+          <span className="whitespace-nowrap">{buying ? SENTENCE.pay : SENTENCE.paid}</span>{" "}
           {/* renders exactly payoutTail(earnings, apr), so it matches its reserve */}
           <LineEnd reserve={reserve.tails}>
             <span className="text-accent-secondary">{earnings ?? "…"}</span>

@@ -19,6 +19,10 @@ A vault can charge a management fee and a performance fee. Both are paid by mint
 - Asset valuations use configured price feeds and rates. A term token’s valuation can differ from its sale price.
 - A swap split across two transactions leaves an intermediate asset in the vault until the second transaction completes. Prices can change during that wait, and withdrawals can be delayed.
 
+## Buying risks
+
+A bought option can expire worthless and you lose the premium. A bought call or put in the money pays only if you deposit before expiry; without a deposit it is not exercised and the premium is lost. See [Buying options](buying-options.md).
+
 ## Cash-settled trade risks
 
 Call spreads, put spreads and cash puts lock USDC until expiry, and you cannot close them early. The premium can be much smaller than what you pay out. A cash put can lose most of its lock if the price falls far enough, and you do not get SOL in return. See [Cash-settled spreads and puts](cash-settled-options.md).

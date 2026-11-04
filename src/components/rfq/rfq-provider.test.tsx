@@ -36,8 +36,8 @@ async function setup() {
   });
   emit("marketDescriptors", [{ products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], market: { market_pda: "market", underlying_mint: "underlying", is_put: false }, underlying_decimals: 6, quote_decimals: 6 }]);
   emit("tokens", [{ mint: "underlying", symbol: "U", decimals: 6, role: { type: "underlying", strike_tick: 1_000_000_000, size_rule: { min_size: 1, max_size: 1e9, step: 1 }, quote_mints: [] } }]);
-  const submit = () => {
-    act(() => hook.result.current.submitRfq({ market: "market", terms: { type: "covered_call", strike: 1 }, quantity: 10 }));
+  const submit = (side?: "buy" | "sell") => {
+    act(() => hook.result.current.submitRfq({ market: "market", terms: { type: "covered_call", strike: 1 }, side, quantity: 10 }));
     return create.mock.lastCall![0].requestId!;
   };
   const quote = (rfq: string, maker = "maker", price = 1, valid_until = 9999999999) =>
@@ -79,6 +79,13 @@ describe("RFQ request ownership", () => {
     h.emit("rfqClosed", { rfq_id: "ours" }); expect(h.result.current.bestQuote).toBeNull();
     expect(h.result.current.error).toBeNull();
   });
+  it("reports no makers at once when its own RFQ closes as no_eligible_makers", async () => {
+    const h = await setup(); const id = h.submit();
+    h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
+    h.emit("rfqClosed", { rfq_id: "other", reason: "no_eligible_makers" }); expect(h.result.current.error).toBeNull();
+    h.emit("rfqClosed", { rfq_id: "ours", reason: "no_eligible_makers" });
+    expect(h.result.current.error?.message).toBe("No makers are quoting this right now.");
+  });
   it("does not turn an unrelated order failure into a global RFQ error", async () => {
     const h = await setup();
     const requestId = h.submit();
@@ -93,6 +100,30 @@ describe("RFQ request ownership", () => {
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id }); h.emit("quoteReceived", h.quote("ours"));
     h.emit("disconnected", 1006, "lost"); h.emit("quoteReceived", h.quote("ours"));
     expect(h.result.current.bestQuote).toBeNull();
+  });
+  it("sends a Buy RFQ, keeps its side for fill verification and takes only Buy quotes", async () => {
+    const h = await setup(); const id = h.submit("buy");
+    expect(h.create.mock.lastCall![0].side).toBe("buy");
+    h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
+    expect(h.result.current.rfqTerms("ours")?.side).toBe("buy");
+    h.emit("quoteReceived", h.quote("ours"));
+    expect(h.result.current.bestQuote).toBeNull();
+    h.emit("quotesUpdate", { rfq_id: "ours", quotes: [h.quote("ours")] });
+    expect(h.result.current.bestQuote).toBeNull();
+    h.emit("quotesUpdate", { rfq_id: "ours", quotes: [{ ...h.quote("ours"), side: "buy" }] });
+    expect(h.result.current.bestQuote?.side).toBe("buy");
+  });
+  it("ranks Buy quotes by the lowest gross price, whatever their net price", async () => {
+    const h = await setup(); const id = h.submit("buy");
+    h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
+    const buy = (maker: string, price: number, net_price: number) => ({ ...h.quote("ours", maker, price), side: "buy", net_price });
+    h.emit("quoteReceived", buy("a", 5, 1));
+    h.emit("quoteReceived", buy("b", 3, 2));
+    expect(h.result.current.bestQuote?.maker).toBe("b");
+    h.emit("quoteReceived", buy("c", 4, 0));
+    expect(h.result.current.bestQuote?.maker).toBe("b");
+    h.emit("quoteReceived", buy("b", 6, 0));
+    expect(h.result.current.bestQuote?.maker).toBe("c");
   });
   it("shows the best quote, replaces a maker's quote and follows QuotesUpdate snapshots", async () => {
     const h = await setup(); const id = h.submit();
