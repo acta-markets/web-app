@@ -19,12 +19,13 @@ Governance can use the same wallet as the primary delegate.
 
 | Permission | Bit | Operation |
 | --- | --- | --- |
-| `OPEN_TAKER` | 1 | Write an option from vault collateral. |
-| `SIGN_MAKER_QUOTES` | 2 | Sign holder-side quotes on behalf of the vault. |
-| `FUND_MAKER` | 4 | Deposit settlement funds for a bought option. |
+| `OPEN_AS_WRITER` | 1 | Write an option from vault collateral, requesting the RFQ as taker. |
+| `SIGN_HOLDER_QUOTES` | 2 | Sign holder-side quotes on sell RFQs on behalf of the vault. |
+| `FUND_HOLDER` | 4 | Deposit settlement funds for a bought option. |
 | `REBALANCE` | 8 | Rebalance vault assets. |
 | `PROCESS_CAPITAL` | 16 | Process capital requests. |
 | `SET_DEPOSIT_WINDOW` | 32 | Open or close the deposit window. |
+| `SIGN_WRITER_QUOTES` | 64 | Sign writer-side quotes on buy RFQs: the signature alone commits vault collateral to a wallet's buy. |
 
 Opening positions and rebalancing also check strategy capabilities and policy. Under the fallback rules, anyone can process capital. Governance, or a delegate with `SET_DEPOSIT_WINDOW`, can change the deposit window. Phase and safety mode apply to both.
 
@@ -36,7 +37,7 @@ A rebalance actor can drain staged tokens into main while safety is `normal`. Af
 
 ## Shared governance and delegate key
 
-Holder quotes need an active primary-delegate grant with `SIGN_MAKER_QUOTES` that matches the signer, even when the signer is governance. Revoking or expiring the grant stops quotes. Governance keeps its other powers.
+Quotes need an active primary-delegate grant with the matching quote bit (`SIGN_HOLDER_QUOTES` on sells, `SIGN_WRITER_QUOTES` on buys) that matches the signer, even when the signer is governance. Revoking or expiring the grant stops quotes. Governance keeps its other powers.
 
 Operator auth can return `operator_kind: "governance"` with maker permission. The backend and the contract check authorization again on every execution.
 
