@@ -16,11 +16,12 @@ import {
 
 const GOVERNANCE = "9amKA1ezPyPoYik7N1QCBE4N3d9mm2fQfmFfLNbSSbUf";
 const SOL_MINT = "So11111111111111111111111111111111111111112";
+const UNSET = { kind: "unset" } as const;
 
 describe("resolveVaultMeta", () => {
   it("uses the registry entry when there is one", () => {
     const meta = resolveVaultMeta(
-      { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE, metadata: null },
+      { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE, description: UNSET, metadata: null },
       { "pda-1": { name: "SOL desk", curator: "Acta", description: "Weekly calls" } },
     );
     expect(meta).toMatchObject({
@@ -34,8 +35,18 @@ describe("resolveVaultMeta", () => {
     });
   });
 
+  it("appends the operator description to the name", () => {
+    const vault = { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE, metadata: null };
+    const set = { kind: "set", text: "Weekly calls" } as const;
+    const registry = { "pda-1": { name: "SOL desk", curator: "Acta" } };
+    expect(resolveVaultMeta({ ...vault, description: set }, registry).name).toBe("SOL desk · Weekly calls");
+    expect(resolveVaultMeta({ ...vault, metadata: md({ name: "SOL income" }), description: set }, registry).name).toBe("SOL income · Weekly calls");
+    expect(resolveVaultMeta({ ...vault, description: set }, {}).name).toBe("Weekly calls");
+    expect(resolveVaultMeta({ ...vault, description: UNSET }, registry).name).toBe("SOL desk");
+  });
+
   it("prefers the backend's metadata and keeps the governance address when it names no curator", () => {
-    const vault = { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE };
+    const vault = { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE, description: UNSET };
     const fixture = { "pda-1": { name: "SOL desk", curator: "Acta", description: "Weekly calls" } };
     expect(resolveVaultMeta({ ...vault, metadata: md({ name: "SOL income", curator: "Desk" }) }, fixture)).toMatchObject({
       name: "SOL income",
@@ -53,7 +64,7 @@ describe("resolveVaultMeta", () => {
   });
 
   it("passes curator links only when they are https URLs and a bare handle", () => {
-    const vault = { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE };
+    const vault = { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE, description: UNSET };
     const good = resolveVaultMeta({ ...vault, metadata: md({
       name: "SOL income", strategy: "Weekly calls", website: "https://acta.markets",
       twitter: "acta_markets", logo_url: "https://acta.markets/logo.png",
@@ -71,7 +82,7 @@ describe("resolveVaultMeta", () => {
   });
 
   it("falls back to the asset and the governance address without inventing a curator", () => {
-    const meta = resolveVaultMeta({ vault_pda: "pda-2", main_mint: SOL_MINT, governance: GOVERNANCE, metadata: null }, {});
+    const meta = resolveVaultMeta({ vault_pda: "pda-2", main_mint: SOL_MINT, governance: GOVERNANCE, description: UNSET, metadata: null }, {});
     expect(meta).toMatchObject({
       name: "SOL vault · pda-2",
       curator: "9amK…SbUf",
@@ -84,12 +95,12 @@ describe("resolveVaultMeta", () => {
 
   it("files a stablecoin vault under Stables", () => {
     const usdc = getTokenMint("USDC")!;
-    expect(resolveVaultMeta({ vault_pda: "pda-3", main_mint: usdc, governance: GOVERNANCE, metadata: null }, {}).category).toBe("Stables");
+    expect(resolveVaultMeta({ vault_pda: "pda-3", main_mint: usdc, governance: GOVERNANCE, description: UNSET, metadata: null }, {}).category).toBe("Stables");
   });
 
   it("treats an unknown deposit asset as crypto and names the vault by address", () => {
     const meta = resolveVaultMeta(
-      { vault_pda: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", main_mint: "Unknown1111111111111111111111111111111111111", governance: GOVERNANCE, metadata: null },
+      { vault_pda: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", main_mint: "Unknown1111111111111111111111111111111111111", governance: GOVERNANCE, description: UNSET, metadata: null },
       {},
     );
     expect(meta).toMatchObject({
@@ -102,7 +113,7 @@ describe("resolveVaultMeta", () => {
 
   it("knows the NVIDIA xStock mint as a stock", () => {
     const meta = resolveVaultMeta(
-      { vault_pda: "pda-4", main_mint: "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh", governance: GOVERNANCE, metadata: null },
+      { vault_pda: "pda-4", main_mint: "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh", governance: GOVERNANCE, description: UNSET, metadata: null },
       {},
     );
     expect(meta).toMatchObject({ assetSymbol: "NVDAx", assetKnown: true, category: "Stocks", name: "NVDAx vault · pda-4" });
@@ -115,7 +126,7 @@ describe("resolveVaultMeta", () => {
     ["XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W", "SPYx", "Stocks", "/tokens/spyx.png"],
     ["SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb", "SPCX", "Stocks", "/tokens/spcx.svg"],
   ] as const)("knows %s as %s", (mint, symbol, category, logo) => {
-    expect(resolveVaultMeta({ vault_pda: "pda-5", main_mint: mint, governance: GOVERNANCE, metadata: null }, {})).toMatchObject({
+    expect(resolveVaultMeta({ vault_pda: "pda-5", main_mint: mint, governance: GOVERNANCE, description: UNSET, metadata: null }, {})).toMatchObject({
       assetSymbol: symbol,
       assetKnown: true,
       category,

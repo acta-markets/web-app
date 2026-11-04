@@ -12,6 +12,7 @@
         "stakingAprPct": 5
       },
       "vault": {
+        "description": { "kind": "unset" },
         "vault_pda": "BBYt9VSPf118Kt2kGhgyH9rapBqiNoQhHvWqtXvdiKAc",
         "vault_id": "0000000000000000000000000000000000000000000000000000000000000000",
         "governance": "BWKhmQ5886puiBzFDFCHqqi8NWHvbZ4waNWNUcMTXnto",
@@ -341,6 +342,7 @@
         "assetSymbol": "NVDAx"
       },
       "vault": {
+        "description": { "kind": "unset" },
         "vault_pda": "8oDdcWSv5QtSfEE51K7guQL4uy3xbmisoqrjawqmY3Vm",
         "vault_id": "0000000000000000000000000000000000000000000000000000000000000000",
         "governance": "BWKhmQ5886puiBzFDFCHqqi8NWHvbZ4waNWNUcMTXnto",
@@ -711,6 +713,7 @@
         "description": "Sells weekly puts secured by deposited USDC."
       },
       "vault": {
+        "description": { "kind": "unset" },
         "vault_pda": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
         "vault_id": "0000000000000000000000000000000000000000000000000000000000000000",
         "governance": "BWKhmQ5886puiBzFDFCHqqi8NWHvbZ4waNWNUcMTXnto",
@@ -1164,6 +1167,7 @@
         "assetSymbol": "HYPE"
       },
       "vault": {
+        "description": { "kind": "unset" },
         "vault_pda": "HcD4rgK6J34wtyQ6NiJXSE8ByTvfy4eVS4kUcCuZQmhn",
         "vault_id": "0000000000000000000000000000000000000000000000000000000000000000",
         "governance": "BWKhmQ5886puiBzFDFCHqqi8NWHvbZ4waNWNUcMTXnto",
@@ -1538,6 +1542,7 @@
         "assetSymbol": "ZEC"
       },
       "vault": {
+        "description": { "kind": "unset" },
         "vault_pda": "3DBzpSMK2X4b7WmreYy2ut2JNrCQ4yZUnmuq5UHSPuaX",
         "vault_id": "0000000000000000000000000000000000000000000000000000000000000000",
         "governance": "BWKhmQ5886puiBzFDFCHqqi8NWHvbZ4waNWNUcMTXnto",
@@ -1807,6 +1812,7 @@
         "assetSymbol": "SPYx"
       },
       "vault": {
+        "description": { "kind": "unset" },
         "vault_pda": "Cqk7VamfWvUDzwRttsHi6qy7Dm8ApQndyRcGqLWQiWk4",
         "vault_id": "0000000000000000000000000000000000000000000000000000000000000000",
         "governance": "BWKhmQ5886puiBzFDFCHqqi8NWHvbZ4waNWNUcMTXnto",
@@ -2178,6 +2184,7 @@
         "assetSymbol": "SPCX"
       },
       "vault": {
+        "description": { "kind": "unset" },
         "vault_pda": "4mAkhhMBtkkw3r2ML4sVfuMQD95u8zP4gkwP32RJpDcW",
         "vault_id": "0000000000000000000000000000000000000000000000000000000000000000",
         "governance": "BWKhmQ5886puiBzFDFCHqqi8NWHvbZ4waNWNUcMTXnto",
