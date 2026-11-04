@@ -38,6 +38,17 @@ function toChartData(points: readonly SeriesPoint[]) {
   return out;
 }
 
+function fitRange(chart: IChartApi, data: ReturnType<typeof toChartData>, rangeStart: number | null) {
+  if (data.length < 2) {
+    chart.timeScale().fitContent();
+    return;
+  }
+  const from = Math.max(data[0].time, rangeStart ?? data[0].time) as UTCTimestamp;
+  const to = data[data.length - 1].time;
+  if (from >= to) chart.timeScale().fitContent();
+  else chart.timeScale().setVisibleRange({ from, to });
+}
+
 /** Vault history chart, themed like the Portfolio income chart. Remount (key) when `kind` changes. */
 export function VaultPerformanceChart({
   points,
@@ -53,6 +64,8 @@ export function VaultPerformanceChart({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const data = useMemo(() => toChartData(points), [points]);
+  const rangeRef = useRef({ data, rangeStart });
+  rangeRef.current = { data, rangeStart };
 
   useEffect(() => {
     const el = containerRef.current;
@@ -111,7 +124,10 @@ export function VaultPerformanceChart({
     chartRef.current = chart;
     seriesRef.current = series;
 
-    const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }));
+    const ro = new ResizeObserver(() => {
+      chart.applyOptions({ width: el.clientWidth });
+      fitRange(chart, rangeRef.current.data, rangeRef.current.rangeStart);
+    });
     ro.observe(el);
 
     return () => {
@@ -128,19 +144,7 @@ export function VaultPerformanceChart({
     if (!chart || !series) return;
 
     series.setData(data);
-    if (data.length < 2) {
-      chart.timeScale().fitContent();
-      return;
-    }
-    const first = data[0]!.time;
-    const last = data[data.length - 1]!.time;
-    const from = Math.max(first, rangeStart ?? first) as UTCTimestamp;
-    // setVisibleRange throws on an empty range
-    if (from >= last) {
-      chart.timeScale().fitContent();
-      return;
-    }
-    chart.timeScale().setVisibleRange({ from, to: last });
+    fitRange(chart, data, rangeStart);
   }, [data, rangeStart]);
 
   return <div ref={containerRef} className="w-full" />;

@@ -2,9 +2,10 @@
 
 On Acta you choose a price at which you want to buy or sell an asset, and earn yield while you wait. Market makers pay you that yield up front. On the chosen date, if the market has reached your price, the trade happens at your price; if not, you get your funds back. The yield is yours either way.
 
-There are three ways to use it:
+There are four ways to use it:
 
 - **Earn.** Pick an asset, the price you want to buy or sell at, and a date. A market maker pays you yield right away. [How Earn works](guide/options.md).
+- **Spreads and cash puts.** Lock USDC, get paid up front, settle in USDC. [Cash-settled spreads and puts](guide/cash-settled-options.md).
 - **Deposit into a vault.** A manager trades pooled funds on Acta; you hold shares. [How vaults work](guide/vaults.md).
 - **Make markets.** Market makers connect over WebSocket and quote the yield on incoming requests. [How the maker works](protocol/maker.md).
 

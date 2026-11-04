@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VersionedTransaction } from "@solana/web3.js";
-import { address } from "@solana/kit";
+import { address, type Address } from "@solana/kit";
 import type { Vault } from "@acta-markets/ts-sdk";
 import { fetchMakerVault, flows } from "@acta-markets/ts-sdk/chain";
 import {
@@ -13,6 +13,7 @@ import {
   type QuoteReceivedMessage,
   type TakerFillRfq,
 } from "@/lib/rfq-client";
+import { resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
 
 type OrderSubmission = "unsigned" | "sent";
 type SelectedOrder = {
@@ -126,9 +127,12 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
     rfq: TakerFillRfq;
     taker: string;
     makerVault: Vault | null;
+    keeper: Address;
   } | null>(null);
   const walletSigning = useRef<Promise<VersionedTransaction> | null>(null);
   useEffect(() => { signer.current = signTransaction; }, [signTransaction]);
+  const chain = useRef(rpc);
+  useEffect(() => { chain.current = rpc; }, [rpc]);
   const connection = useRef(0);
   const statusRequest = useRef<string | null>(null);
   const loadedScope = useRef<string | null>(storageKey);
@@ -231,9 +235,18 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
     void (async () => {
       let awaitingSignature = false;
       if (submission === "unsigned") {
-        const snapshot = pushed ?? await client.getMyActiveRfqsAsync();
+        let snapshot = pushed ?? await client.getMyActiveRfqsAsync();
         if (!isCurrent()) return;
-        const rfq = snapshot.rfqs.find(rfq => rfq.rfq_id === order.rfqId);
+        let rfq = snapshot.rfqs.find(rfq => rfq.rfq_id === order.rfqId);
+        const seen = new Set<string>();
+        while (!rfq && snapshot.next_cursor !== null) {
+          const cursor = snapshot.next_cursor;
+          if (seen.has(cursor)) throw new Error("Active RFQ cursor did not advance");
+          seen.add(cursor);
+          snapshot = await client.getMyActiveRfqsAsync(undefined, { limit: 200, cursor: { type: "after", id: cursor } });
+          if (!isCurrent()) return;
+          rfq = snapshot.rfqs.find(row => row.rfq_id === order.rfqId);
+        }
         if (rfq?.locked_order_id === order.orderId) {
           if (rfq.state === "enqueued") {
             promoteSent(order);
@@ -376,7 +389,10 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
         if (!fill || fill.quote.order_id !== id) {
           throw new flows.VaultIntentError({ kind: "intent", reason: "the accepted quote is not available in this session" });
         }
-        const { VersionedTransaction } = await import("@solana/web3.js");
+        const [{ VersionedTransaction }, tables] = await Promise.all([
+          import("@solana/web3.js"),
+          resolveLookupTables(chain.current, txBase64),
+        ]);
         if (!live()) return;
         if (walletSigning.current) await walletSigning.current.catch(() => {});
         if (!live()) return;
@@ -385,8 +401,9 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
           txBase64,
           quote: fill.quote,
           rfq: fill.rfq,
+          keeper: fill.keeper,
           taker: address(fill.taker),
-          tables: {},
+          tables,
           bounds: FILL_BOUNDS,
           makerVault: fill.makerVault,
           signer: {
@@ -480,16 +497,23 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
       stopPreparing();
       return connection.current === epoch && current.current.type === "idle";
     };
+    const unreadable = (what: string) => (error: unknown): never => {
+      throw new Error(`Unable to read ${what}: ${error instanceof Error ? error.message : String(error)}`);
+    };
     let makerVault: Vault | null;
+    let keeper: Address;
     try {
-      makerVault = await fetchMakerVault(rpc, quote.maker);
+      [makerVault, keeper] = await Promise.all([
+        fetchMakerVault(rpc, quote.maker).catch(unreadable("the quote's maker")),
+        resolveKeeper(rpc).catch(unreadable("the sponsoring keeper")),
+      ]);
     } catch (error) {
       if (!settle()) return;
-      update({ type: "failed", orderId: quote.order_id, message: `Unable to read the quote's maker: ${error instanceof Error ? error.message : String(error)}` });
+      update({ type: "failed", orderId: quote.order_id, message: error instanceof Error ? error.message : String(error) });
       return;
     }
     if (!settle()) return;
-    accepted.current = { quote, rfq, taker, makerVault };
+    accepted.current = { quote, rfq, taker, makerVault, keeper };
     await sendAccept({
       orderId: quote.order_id,
       rfqId: quote.rfq_id,

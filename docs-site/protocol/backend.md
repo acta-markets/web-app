@@ -19,6 +19,10 @@ Solana accounts are the source of truth. HTTP data lags them by listener indexin
 
 Live RFQs, quotes and capacity reservations exist only in the RFQ server. If indexed history falls behind, new trades are rejected with `history_projection_incomplete` until the listener catches up.
 
+## Cash-settled products
+
+The RFQ server accepts a call spread, put spread or cash put only if the descriptor enables it and its strikes, tick, size and collateral pass. At open the contract locks the taker's maximum payoff and credits the net premium. After finalization `SettlePosition` splits the escrow into maker payoff and taker return. These positions go straight from open to settled.
+
 ## Prices
 
 Option settlement uses prices published to Acta oracle accounts after expiry. In attested mode, publication also requires the configured attestor's signature. Vault equity and swaps use on-chain Pyth price-update accounts.

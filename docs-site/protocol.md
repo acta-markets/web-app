@@ -4,10 +4,15 @@ Acta is a request-for-quote (RFQ) options venue on Solana. Takers request quotes
 
 ## Options
 
-The taker writes the option and posts collateral: the underlying for a call, the quote asset for a put. The maker buys it and pays the premium when the position opens. If the option ends in the money, the maker delivers the asset the taker is owed. If the maker does not, a permissionless liquidator can.
+The taker writes the product and the maker pays the premium at open.
+
+Covered calls lock the underlying and cash-secured puts lock the quote asset. In the money, the two sides swap assets at the strike. If the maker does not fund that swap, a permissionless liquidator can.
+
+Call spreads, put spreads and cash puts lock their maximum payout in the quote asset. After finalization the maker takes its payoff from that escrow and the taker gets the rest. There is nothing to fund and nothing to liquidate.
 
 - [Taker](protocol/taker.md): request quotes and sign the trade.
-- [Maker](protocol/maker.md): quote, pay premiums and fund settlement.
+- [Maker](protocol/maker.md): quote, pay premiums and fund physical settlement.
+- [Cash-settled spreads and puts](guide/cash-settled-options.md): user examples and risks.
 - [Options and settlement](reference/protocol-flow.md): execution, transfers and fees.
 
 ## Vaults

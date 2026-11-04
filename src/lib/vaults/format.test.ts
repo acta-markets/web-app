@@ -73,6 +73,13 @@ describe("other formatters", () => {
     expect(formatDate(Date.UTC(2026, 9, 16, 12) / 1000, { year: true })).toBe("Oct 16, 2026");
   });
 
+  it("includes the local zone whenever it displays a time", () => {
+    const secs = Date.UTC(2026, 9, 16, 12) / 1000;
+    const zone = new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
+      .formatToParts(new Date(secs * 1000)).find(part => part.type === "timeZoneName")!.value;
+    expect(formatDate(secs, { time: true })).toContain(zone);
+  });
+
   it("shortens addresses and links the right cluster", () => {
     expect(shortAddress("9amKA1ezPyPoYik7N1QCBE4N3d9mm2fQfmFfLNbSSbUf")).toBe("9amK…SbUf");
     expect(shortAddress("short")).toBe("short");

@@ -1,5 +1,7 @@
 "use client";
 
+import { address } from "@solana/kit";
+
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import {
   ActaWsClient,
@@ -23,6 +25,8 @@ import {
   type ClaimErrorReason,
   type TakerFillRfq,
 } from "@/lib/rfq-client";
+import { ALL_POSITIONS } from "@acta-markets/ts-sdk/ws";
+import { isCashSettledTerms, isSpreadTerms, lowerStrike, quoteMatchesProduct, requireStrikeTick, spreadTerms, strikeTicksByMint, validSpreadPremium, type ProductTerms } from "@/lib/spreads";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { AppModal } from "@/components/app-ui/app-modal";
 import { ReferralGateModal } from "@/components/referral/referral-gate-modal";
@@ -40,6 +44,8 @@ interface RfqContextValue {
   markets: MarketInfo[];
   /** Token OI caps by underlying token */
   tokenCaps: TokenCapInfo[];
+  /** Server strike tick (1e9 scale) by underlying mint; spreads require one. */
+  strikeTicks: ReadonlyMap<string, bigint>;
   /** Server-computed earn summary (APR + caps per asset/type) */
   earnSummary: EarnAssetSummary[] | null;
   /** Market descriptors (includes underlying/quote metadata) */
@@ -48,6 +54,7 @@ interface RfqContextValue {
   positions: PositionInfo[];
   /** Best live quote for our open RFQ */
   bestQuote: QuoteReceivedMessage | null;
+  quoteSecondsRemaining: (quote: QuoteReceivedMessage) => number;
   /** Indicative prices */
   indicativePrices: IndicativePricesMessage | null;
   /** Returns cached indicatives for specific market + position type */
@@ -69,13 +76,14 @@ interface RfqContextValue {
   disconnect: () => void;
   /** Fetch positions (requires auth) */
   fetchPositions: () => void;
+  /** the last positions request came back with an error */
+  positionsFailed: boolean;
   /** Get indicative prices for a market */
   getIndicativePrices: (market: string, positionType: "covered_call" | "cash_secured_put") => void;
   /** Submit RFQ request */
   submitRfq: (params: {
     market: string;
-    positionType: "covered_call" | "cash_secured_put";
-    strike: number;
+    terms: ProductTerms;
     quantity: number;
     timeoutSeconds?: number;
   }) => void;
@@ -135,6 +143,8 @@ function referralCodeErrorMessage(err: ReferralCodeError): string {
   return "Use only letters A–Z and digits 0–9.";
 }
 
+type RfqBeforeCreation<T = TakerFillRfq> = T extends unknown ? Omit<T, "rfq_id"> : never;
+
 const RfqContext = createContext<RfqContextValue | null>(null);
 
 export function useRfqContext(): RfqContextValue {
@@ -164,7 +174,7 @@ function errorText(err: ActaWsClientError): string {
   return err.type === "client_generic" || err.type === "Generic" ? err.data.message : err.type;
 }
 
-const quotePrice = (quote: QuoteReceivedMessage) => Number(quote.net_price ?? quote.price);
+const quotePrice = (quote: QuoteReceivedMessage) => Number(isCashSettledTerms(quote.terms) ? quote.price : quote.net_price ?? quote.price);
 
 function isMissingMarketDescriptorError(message: string): boolean {
   const lower = message.toLowerCase();
@@ -172,13 +182,6 @@ function isMissingMarketDescriptorError(message: string): boolean {
     lower.includes("missing market descriptor") ||
     lower.includes("call getmarketdescriptors() before createrfq")
   );
-}
-
-function resetToAnonymous(client: ActaWsClient) {
-  client.disconnect();
-  window.setTimeout(() => {
-    client.connectAnonymous();
-  }, 250);
 }
 
 function loadStoredSessionId(walletAddress: string): string | null {
@@ -218,13 +221,18 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const { selectedAccount, isConnected: walletConnected, signMessage, disconnectWallet } = useSolana();
   const clientRef = useRef<ActaWsClient | null>(null);
   const walletAddressRef = useRef<string | null>(null);
+  const [protocolFailure, setProtocolFailure] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [markets, setMarkets] = useState<MarketInfo[]>([]);
   const [tokenCaps, setTokenCaps] = useState<TokenCapInfo[]>([]);
+  const [strikeTicks, setStrikeTicks] = useState<ReadonlyMap<string, bigint>>(new Map());
   const [earnSummary, setEarnSummary] = useState<EarnAssetSummary[] | null>(null);
   const [marketDescriptors, setMarketDescriptors] = useState<MarketDescriptorInfo[]>([]);
   const [positions, setPositions] = useState<PositionInfo[]>([]);
-  const pendingRfqRef = useRef<{ requestId: string; strike: number; rfqId: string | null; rfq: TakerFillRfq } | null>(null);
+  const [positionsFailed, setPositionsFailed] = useState(false);
+  const positionsRequestRef = useRef<string | null>(null);
+  const activeRfqsRequestRef = useRef<string | null>(null);
+  const pendingRfqRef = useRef<{ requestId: string; identity: ProductTerms; spread: ReturnType<typeof spreadTerms> | null; rfqId: string | null; rfq: RfqBeforeCreation } | null>(null);
   const abandonedRequestsRef = useRef(new Set<string>());
   const quotesRef = useRef(new Map<string, QuoteReceivedMessage>());
   const quoteExpiryTimerRef = useRef<number | null>(null);
@@ -236,7 +244,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const tokenMarketsRequest = useRef<{ requestId: string; underlyingMint: string } | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const pendingRfqAuthWalletRef = useRef<string | null>(null);
-  const authInFlightRef = useRef(false);
+  const authInFlightRef = useRef<{ wallet: string; promise: Promise<void>; controller: AbortController } | null>(null);
+  const authWalletRef = useRef<string | null>(null);
   const authWarmupTimerRef = useRef<number | null>(null);
   const [authWarmupDone, setAuthWarmupDone] = useState(false);
   const prefetchedIndicativeKeysRef = useRef<Set<string>>(new Set());
@@ -257,6 +266,20 @@ export function RfqProvider({ children }: RfqProviderProps) {
     (market: string, positionType: "covered_call" | "cash_secured_put") => `${market}:${positionType}`,
     []
   );
+
+  const anonymousReconnectTimer = useRef<number | null>(null);
+  const resetToAnonymous = useCallback((client: ActaWsClient) => {
+    if (anonymousReconnectTimer.current !== null) window.clearTimeout(anonymousReconnectTimer.current);
+    client.disconnect();
+    setConnectionState("disconnected");
+    anonymousReconnectTimer.current = window.setTimeout(() => {
+      anonymousReconnectTimer.current = null;
+      client.connectAnonymous();
+    }, 250);
+  }, []);
+
+  const quoteSecondsRemaining = useCallback((quote: QuoteReceivedMessage) =>
+    Math.max(0, Math.ceil(Number(quote.valid_until) - (Date.now() + serverClockOffsetMsRef.current) / 1000)), []);
 
   const refreshBestQuote = useCallback(() => {
     if (quoteExpiryTimerRef.current != null) window.clearTimeout(quoteExpiryTimerRef.current);
@@ -288,302 +311,414 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const fetchPortfolioPrereqs = useCallback(() => {
     const client = clientRef.current;
     if (!client) return;
-    client.getPositions();
+    positionsRequestRef.current = client.getPositions({ ...ALL_POSITIONS, status: ["open", "funded"] });
   }, []);
 
-  useEffect(() => {
-    walletAddressRef.current = selectedAccount?.address ?? null;
-  }, [selectedAccount?.address]);
+  walletAddressRef.current = selectedAccount?.address ?? null;
 
   useEffect(() => {
-    console.log("[RfqProvider] Initializing...");
-    const client = createRfqClient({ debug: true });
-    clientRef.current = client;
+    let disposed = false;
+    let retryTimer: number | null = null;
+    let cleanup = () => {};
+    const initialize = async () => {
+      const client = await createRfqClient({ debug: true });
+      if (disposed) { client.disconnect(); return; }
+      clientRef.current = client;
 
-    client.on("connecting", () => {
-      console.log("[RfqProvider] Connecting...");
-      setConnectionState("connecting");
-    });
+      client.on("connecting", () => {
+        console.log("[RfqProvider] Connecting...");
+        setConnectionState("connecting");
+      });
 
-    client.on("welcome", (welcome) => {
-      serverClockOffsetMsRef.current = Number(welcome.server_time_unix_ms) - Date.now();
-    });
+      const rejectProtocol = () => {
+        if (disposed || clientRef.current !== client) return;
+        setProtocolFailure(true);
+        client.disconnect();
+        setConnectionState("error");
+      };
+      client.on("versionMismatch", rejectProtocol);
 
-    client.on("connected", () => {
-      console.log("[RfqProvider] Connected (anonymous)");
-      setConnectionState("connected");
-      setError(null);
-      client.getEarnSummary();
-    });
+      client.on("welcome", (welcome) => {
+        serverClockOffsetMsRef.current = Number(welcome.server_time_unix_ms) - Date.now();
+      });
 
-    client.on("stateChange", (state) => {
-      console.log("[RfqProvider] State change:", state);
-      setConnectionState(state);
-      if (state === "disconnected") {
+      client.on("connected", () => {
+        console.log("[RfqProvider] Connected (anonymous)");
+        setConnectionState("connected");
+        setError(null);
+        client.getEarnSummary();
+        client.getMarketDescriptors();
+        client.getTokens();
+      });
+
+      client.on("stateChange", (state) => {
+        console.log("[RfqProvider] State change:", state);
+        setConnectionState(state);
+        if (state === "disconnected" || state === "connecting" || state === "error") {
+          dropRfq();
+          tokenMarketsRequest.current = null;
+          setTokenMarketsInfo(null);
+          setMarketDescriptors([]);
+          setStrikeTicks(new Map());
+        }
+      });
+
+      client.on("authenticated", (sessionId, expiresAt) => {
+        if (!walletAddressRef.current || authWalletRef.current !== walletAddressRef.current) {
+          resetToAnonymous(client);
+          return;
+        }
+        console.log("[RfqProvider] Authenticated, session:", sessionId);
+        setConnectionState("authenticated");
+        if (walletAddressRef.current) {
+          persistSession(walletAddressRef.current, sessionId, expiresAt);
+        }
+        activeRfqsRequestRef.current = client.getMyActiveRfqs();
+        fetchPortfolioPrereqs();
+        client.getMarketDescriptors();
+        client.getTokenCaps(false);
+        client.getTokens();
+        client.getMyReferralInfo();
+      });
+
+      client.on("disconnected", (code, reason) => {
+        console.log("[RfqProvider] Disconnected:", code, reason);
+        setConnectionState("disconnected");
+        prefetchedIndicativeKeysRef.current.clear();
         tokenMarketsRequest.current = null;
         setTokenMarketsInfo(null);
-      }
-    });
+        abandonedRequestsRef.current.clear();
+        dropRfq();
+        pendingReferralReqsRef.current.clear();
+      });
 
-    client.on("authenticated", (sessionId, expiresAt) => {
-      console.log("[RfqProvider] Authenticated, session:", sessionId);
-      setConnectionState("authenticated");
-      if (walletAddressRef.current) {
-        persistSession(walletAddressRef.current, sessionId, expiresAt);
-      }
-      client.getMarketDescriptors();
-      client.getTokenCaps({ include_markets: false });
-      client.getMyReferralInfo();
-    });
-
-    client.on("disconnected", (code, reason) => {
-      console.log("[RfqProvider] Disconnected:", code, reason);
-      setConnectionState("disconnected");
-      prefetchedIndicativeKeysRef.current.clear();
-      tokenMarketsRequest.current = null;
-      setTokenMarketsInfo(null);
-      abandonedRequestsRef.current.clear();
-      dropRfq();
-      pendingReferralReqsRef.current.clear();
-    });
-
-    client.on("error", (serverErr) => {
-      console.error("[RfqProvider] Error:", serverErr);
-
-      if (serverErr.type === "Generic" && serverErr.data.code === "session_replaced") {
-        console.warn("[RfqProvider] Session replaced by newer connection, disconnecting.");
-        client.disconnect();
-        return;
-      }
-
-      if (serverErr.type === "InviteRequired") {
-        setReferralStatus("required");
-        return;
-      }
-
-      if (isAuthFailureError(serverErr)) {
-        resetToAnonymous(client);
-      }
-      setError(new Error(errorText(serverErr)));
-    });
-
-    client.on("requireInvite", () => {
-      console.log("[RfqProvider] requireInvite received");
-      setReferralStatus("required");
-    });
-
-    client.on("inviteRedeemed", (data) => {
-      console.log("[RfqProvider] inviteRedeemed:", data.referral_code);
-      setReferralStatus("redeemed");
-      setReferralError(null);
-      clearPendingRefCode();
-      pendingReferralReqsRef.current.delete(data.request_id);
-      client.getMyReferralInfo();
-      showToastRef.current("Invite redeemed — welcome to Acta.", "success");
-    });
-
-    client.on("referralCodeClaimed", (data) => {
-      console.log("[RfqProvider] referralCodeClaimed:", data.referral_code);
-      setReferralError(null);
-      pendingReferralReqsRef.current.delete(data.request_id);
-      client.getMyReferralInfo();
-      showToastRef.current(`Custom code "${data.referral_code}" is yours.`, "success");
-    });
-
-    client.on("myReferralInfo", (data) => {
-      console.log("[RfqProvider] myReferralInfo:", data.status, data.referral_code);
-      const hasCode = typeof data.referral_code === "string" && data.referral_code.length > 0;
-      const derived: ReferralStatus = hasCode || data.status === "active" ? "redeemed" : "required";
-      setReferralInfo(hasCode ? data : null);
-      setReferralStatus((prev) => (prev === "unknown" ? derived : prev));
-    });
-
-    client.on("requestError", ({ request_id, error }) => {
-      const kind = pendingReferralReqsRef.current.get(request_id);
-      if (!kind) return;
-      pendingReferralReqsRef.current.delete(request_id);
-      if (kind === "invite" && error.type === "Invite") {
-        setReferralError(INVITE_COPY[error.data] ?? "Invite failed, please try again.");
-      } else if (kind === "claim" && error.type === "Claim") {
-        setReferralError(CLAIM_COPY[error.data] ?? "Claim failed, please try again.");
-      } else {
-        setReferralError("Something went wrong, please try again.");
-      }
-    });
-
-    client.on("tokenCaps", (data) => setTokenCaps(data.tokens));
-
-    client.on("earnSummary", (data) => {
-      console.log("[RfqProvider] Earn summary received:", data.assets?.length ?? 0, "assets");
-      setEarnSummary(data.assets ?? []);
-    });
-
-    client.on("snapshot", (snap) => {
-      console.log("[RfqProvider] Snapshot received, markets:", snap.markets?.length ?? 0);
-      if (snap.markets) {
-        setMarkets(snap.markets);
-      }
-    });
-
-    client.on("markets", (m) => {
-      console.log(`[RfqProvider] Markets received: ${m.length}`);
-      setMarkets(m);
-    });
-
-    client.on("marketDescriptors", (m) => {
-      console.log("[RfqProvider] Market descriptors received:", m.length);
-      setMarketDescriptors(m);
-    });
-
-    client.on("positions", (p) => {
-      console.log("[RfqProvider] Positions:", p);
-      setPositions(p);
-    });
-
-    client.on("tokenMarketsInfo", (data: TokenMarketsInfoData) => {
-      console.log("[RfqProvider] TokenMarketsInfo received:", data.markets?.length ?? 0, "markets");
-      const pending = tokenMarketsRequest.current;
-      if (!pending || pending.requestId !== data.request_id) return;
-      tokenMarketsRequest.current = null;
-      setTokenMarketsInfo({ underlyingMint: pending.underlyingMint, data });
-      const updates: Record<string, IndicativePricesMessage> = {};
-      for (const mkt of data.markets ?? []) {
-        for (const ind of mkt.indicatives ?? []) {
-          const pt = ind.position_type as "covered_call" | "cash_secured_put";
-          const key = getIndicativeKey(mkt.market_pda, pt);
-          updates[key] = {
-            request_id: data.request_id,
-            market: mkt.market_pda as IndicativePricesMessage["market"],
-            position_type: pt,
-            strikes: ind.strikes,
-            updated_at: ind.updated_at,
-            is_stale: ind.is_stale,
-          };
+      client.on("error", (serverErr) => {
+        if (disposed || clientRef.current !== client) return;
+        console.error("[RfqProvider] Error:", serverErr);
+        if (serverErr.type === "invalid_frame" || serverErr.type === "unsupported_protocol_version") {
+          rejectProtocol();
+          return;
         }
-      }
-      if (Object.keys(updates).length > 0) {
-        setIndicativePricesByKey((prev) => ({ ...prev, ...updates }));
-      }
-    });
 
-    client.on("indicativePrices", (msg) => {
-      setIndicativePrices(msg);
-      const key = getIndicativeKey(String(msg.market), msg.position_type as "covered_call" | "cash_secured_put");
-      setIndicativePricesByKey((prev) => ({ ...prev, [key]: msg }));
-    });
 
-    client.on("rfqCreated", (msg) => {
-      if (msg.request_id && abandonedRequestsRef.current.delete(msg.request_id)) {
-        client.cancelRfq(msg.rfq_id);
-        return;
-      }
-      const pending = pendingRfqRef.current;
-      if (pending && msg.request_id === pending.requestId) pending.rfqId = msg.rfq_id;
-    });
-    client.on("quoteReceived", (quote) => {
-      const pending = pendingRfqRef.current;
-      if (!pending?.rfqId || quote.rfq_id !== pending.rfqId || Number(quote.strike) !== pending.strike) return;
-      quotesRef.current.set(quote.maker, quote);
-      refreshBestQuote();
-    });
-    client.on("quotesUpdate", (update) => {
-      const pending = pendingRfqRef.current;
-      if (!pending?.rfqId || update.rfq_id !== pending.rfqId) return;
-      quotesRef.current.clear();
-      for (const quote of update.quotes) {
-        if (Number(quote.strike) === pending.strike) quotesRef.current.set(quote.maker, quote);
-      }
-      refreshBestQuote();
-    });
-    client.on("rfqClosed", (msg) => {
-      const pending = pendingRfqRef.current;
-      if (pending?.rfqId && msg.rfq_id === pending.rfqId) dropRfq();
-    });
 
-    client.on("orderSubmitted", (orderId, sig) => {
-      console.log("[RfqProvider] Order submitted:", orderId, sig);
-    });
+        if (serverErr.type === "Generic" && serverErr.data.code === "session_replaced") {
+          console.warn("[RfqProvider] Session replaced by newer connection, disconnecting.");
+          client.disconnect();
+          return;
+        }
 
-    client.on("orderConfirmed", (orderId, positionPda) => {
-      console.log("[RfqProvider] Order confirmed:", orderId, positionPda);
-      client.getMyReferralInfo();
-    });
+        if (serverErr.type === "InviteRequired") {
+          setReferralStatus("required");
+          return;
+        }
 
-    console.log("[RfqProvider] Connecting...");
-    client.connectAnonymous();
-
-    return () => {
-      console.log("[RfqProvider] Cleaning up...");
-      client.disconnect();
-      clientRef.current = null;
-      if (quoteExpiryTimerRef.current != null) window.clearTimeout(quoteExpiryTimerRef.current);
-    };
-  }, [getIndicativeKey, refreshBestQuote, dropRfq]);
-
-  const authenticate = useCallback(
-    async (walletAddress: string, signMessage: (msg: Uint8Array) => Promise<Uint8Array>) => {
-      const client = clientRef.current;
-      if (!client) {
-        console.error("[RfqProvider] Client not initialized");
-        return;
-      }
-
-      const authProvider = createWalletAuthProvider({
-        address: walletAddress,
-        signMessage,
-      });
-
-      const maybeSessionId = loadStoredSessionId(walletAddress);
-      console.log("[RfqProvider] Authenticating wallet:", walletAddress, {
-        resumeSession: !!maybeSessionId,
-      });
-      setConnectionState("authenticating");
-
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const timeoutId = window.setTimeout(() => {
-            client.off("authenticated", onAuthenticated);
-            client.off("error", onError);
-            reject(new Error("RFQ auth timeout"));
-          }, 20000);
-
-          const cleanup = () => {
-            window.clearTimeout(timeoutId);
-            client.off("authenticated", onAuthenticated);
-            client.off("error", onError);
-          };
-
-          const onAuthenticated = () => {
-            cleanup();
-            resolve();
-          };
-
-          const onError = (serverErr: ActaWsClientError) => {
-            cleanup();
-            reject(serverErr);
-          };
-
-          client.on("authenticated", onAuthenticated);
-          client.on("error", onError);
-          client.connectAndAuthenticate(authProvider, maybeSessionId ? { sessionId: maybeSessionId } : undefined);
-        });
-      } catch (err) {
-        console.error("[RfqProvider] Authentication failed:", err);
-        const serverErr = err as ActaWsClientError;
         if (isAuthFailureError(serverErr)) {
           resetToAnonymous(client);
         }
-        setError(new Error(serverErr?.type ? errorText(serverErr) : String(err)));
-        throw err;
+        setError(new Error(errorText(serverErr), { cause: serverErr }));
+      });
+
+      client.on("requireInvite", () => {
+        console.log("[RfqProvider] requireInvite received");
+        setReferralStatus("required");
+      });
+
+      client.on("inviteRedeemed", (data) => {
+        console.log("[RfqProvider] inviteRedeemed:", data.referral_code);
+        setReferralStatus("redeemed");
+        setReferralError(null);
+        clearPendingRefCode();
+        pendingReferralReqsRef.current.delete(data.request_id);
+        client.getMyReferralInfo();
+        showToastRef.current("Invite redeemed. Welcome to Acta.", "success");
+      });
+
+      client.on("referralCodeClaimed", (data) => {
+        console.log("[RfqProvider] referralCodeClaimed:", data.referral_code);
+        setReferralError(null);
+        pendingReferralReqsRef.current.delete(data.request_id);
+        client.getMyReferralInfo();
+        showToastRef.current(`Custom code "${data.referral_code}" is yours.`, "success");
+      });
+
+      client.on("myReferralInfo", (data) => {
+        console.log("[RfqProvider] myReferralInfo:", data.status, data.referral_code);
+        const hasCode = typeof data.referral_code === "string" && data.referral_code.length > 0;
+        const derived: ReferralStatus = hasCode || data.status === "active" ? "redeemed" : "required";
+        setReferralInfo(hasCode ? data : null);
+        setReferralStatus((prev) => (prev === "unknown" ? derived : prev));
+      });
+
+      client.on("requestError", ({ request_id, error }) => {
+        if (request_id === positionsRequestRef.current) setPositionsFailed(true);
+        const kind = pendingReferralReqsRef.current.get(request_id);
+        if (!kind) return;
+        pendingReferralReqsRef.current.delete(request_id);
+        if (kind === "invite" && error.type === "Invite") {
+          setReferralError(INVITE_COPY[error.data] ?? "Invite failed, please try again.");
+        } else if (kind === "claim" && error.type === "Claim") {
+          setReferralError(CLAIM_COPY[error.data] ?? "Claim failed, please try again.");
+        } else {
+          setReferralError("Something went wrong, please try again.");
+        }
+      });
+
+      client.on("tokenCaps", (data) => setTokenCaps(data.tokens));
+      client.on("tokens", (tokens) => setStrikeTicks(strikeTicksByMint(tokens)));
+
+      client.on("earnSummary", (data) => {
+        // SDK 0.3.0 can emit legacy summaries before descriptor validation fails.
+        // Reject their old APR shape regardless of response ordering.
+        if (!Array.isArray(data.assets) || data.assets.some(asset => !asset.apr ||
+          (asset.apr.type !== "available" && asset.apr.type !== "unavailable") ||
+          (asset.apr.type === "available" && (!Number.isFinite(asset.apr.min) || !Number.isFinite(asset.apr.max))))) {
+          rejectProtocol();
+          return;
+        }
+        console.log("[RfqProvider] Earn summary received:", data.assets?.length ?? 0, "assets");
+        setEarnSummary(data.assets ?? []);
+      });
+
+      client.on("snapshot", (snap) => {
+        console.log("[RfqProvider] Snapshot received, markets:", snap.markets?.length ?? 0);
+        if (snap.markets) {
+          setMarkets(snap.markets);
+        }
+      });
+
+      client.on("markets", (m) => {
+        console.log(`[RfqProvider] Markets received: ${m.length}`);
+        setMarkets(m);
+      });
+
+      client.on("referenceChanged", () => {
+        dropRfq();
+        setMarketDescriptors([]);
+        setStrikeTicks(new Map());
+        client.getMarketDescriptors();
+        client.getTokens();
+        client.getEarnSummary();
+      });
+
+      client.on("marketDescriptors", (m) => {
+        console.log("[RfqProvider] Market descriptors received:", m.length);
+        setMarketDescriptors(m);
+      });
+
+      client.on("message", (message) => {
+        if (message.type === "MyActiveRfqs" && message.data.request_id === activeRfqsRequestRef.current) {
+          if (message.data.next_cursor === null) activeRfqsRequestRef.current = null;
+          return;
+        }
+        if (message.type === "Positions" && message.data.request_id === positionsRequestRef.current
+          && message.data.next_cursor === null) positionsRequestRef.current = null;
+      });
+
+      client.on("positions", (p) => {
+        console.log("[RfqProvider] Positions:", p);
+        setPositions(p);
+        setPositionsFailed(false);
+      });
+      client.on("positionUpdated", () => {
+        setPositions([...client.state.positions.values()]);
+      });
+
+      client.on("tokenMarketsInfo", (data: TokenMarketsInfoData) => {
+        console.log("[RfqProvider] TokenMarketsInfo received:", data.markets?.length ?? 0, "markets");
+        const pending = tokenMarketsRequest.current;
+        if (!pending || pending.requestId !== data.request_id) return;
+        tokenMarketsRequest.current = null;
+        setTokenMarketsInfo({ underlyingMint: pending.underlyingMint, data });
+        const updates: Record<string, IndicativePricesMessage> = {};
+        for (const mkt of data.markets ?? []) {
+          for (const ind of mkt.indicatives ?? []) {
+            const pt = ind.position_type as "covered_call" | "cash_secured_put";
+            const key = getIndicativeKey(mkt.market_pda, pt);
+            updates[key] = {
+              next_cursor: null,
+              request_id: data.request_id,
+              market: mkt.market_pda as IndicativePricesMessage["market"],
+              position_type: pt,
+              strikes: ind.strikes,
+              updated_at: ind.updated_at,
+              is_stale: ind.is_stale,
+            };
+          }
+        }
+        if (Object.keys(updates).length > 0) {
+          setIndicativePricesByKey((prev) => ({ ...prev, ...updates }));
+        }
+      });
+
+      client.on("indicativePrices", (msg) => {
+        setIndicativePrices(msg);
+        const key = getIndicativeKey(String(msg.market), msg.position_type as "covered_call" | "cash_secured_put");
+        setIndicativePricesByKey((prev) => ({ ...prev, [key]: msg }));
+      });
+
+      client.on("rfqCreated", (msg) => {
+        if (msg.request_id && abandonedRequestsRef.current.delete(msg.request_id)) {
+          client.cancelRfq(msg.rfq_id);
+          return;
+        }
+        const pending = pendingRfqRef.current;
+        if (pending && msg.request_id === pending.requestId) pending.rfqId = msg.rfq_id;
+      });
+      client.on("quoteReceived", (quote) => {
+        const pending = pendingRfqRef.current;
+        if (!pending?.rfqId || quote.rfq_id !== pending.rfqId || !quoteMatchesProduct(quote, pending.identity) || (pending.spread && !validSpreadPremium(pending.spread, quote.price))) return;
+        quotesRef.current.set(quote.maker, quote);
+        refreshBestQuote();
+      });
+      client.on("quotesUpdate", (update) => {
+        const pending = pendingRfqRef.current;
+        if (!pending?.rfqId || update.rfq_id !== pending.rfqId) return;
+        quotesRef.current.clear();
+        for (const quote of update.quotes) {
+          if (quoteMatchesProduct(quote, pending.identity) && (!pending.spread || validSpreadPremium(pending.spread, quote.price))) quotesRef.current.set(quote.maker, quote);
+        }
+        refreshBestQuote();
+      });
+      client.on("rfqClosed", (msg) => {
+        const pending = pendingRfqRef.current;
+        if (pending?.rfqId && msg.rfq_id === pending.rfqId) dropRfq();
+      });
+
+      client.on("orderSubmitted", (orderId, sig) => {
+        console.log("[RfqProvider] Order submitted:", orderId, sig);
+      });
+
+      client.on("orderConfirmed", (orderId, positionPda) => {
+        console.log("[RfqProvider] Order confirmed:", orderId, positionPda);
+        client.getMyReferralInfo();
+      });
+
+      cleanup = () => {
+        console.log("[RfqProvider] Cleaning up...");
+        clientRef.current = null;
+        authInFlightRef.current?.controller.abort();
+        authInFlightRef.current = null;
+        client.disconnect();
+        if (anonymousReconnectTimer.current !== null) window.clearTimeout(anonymousReconnectTimer.current);
+        clientRef.current = null;
+        if (quoteExpiryTimerRef.current != null) window.clearTimeout(quoteExpiryTimerRef.current);
+      };
+      client.connectAnonymous();
+    };
+    const start = () => {
+      void initialize().catch(error => {
+        if (disposed) return;
+        cleanup();
+        setError(new Error(`Could not load venue capabilities: ${wsErrorMessage(error)}`));
+        setConnectionState("error");
+        retryTimer = window.setTimeout(start, 3_000);
+      });
+    };
+    start();
+    return () => {
+      disposed = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      cleanup();
+    };
+  }, [getIndicativeKey, refreshBestQuote, dropRfq, resetToAnonymous, fetchPortfolioPrereqs]);
+
+  const authenticate = useCallback(
+    (walletAddress: string, signMessage: (msg: Uint8Array) => Promise<Uint8Array>) => {
+      const previous = authInFlightRef.current;
+      if (previous?.wallet === walletAddress) return previous.promise;
+      if (previous) {
+        previous.controller.abort();
+        if (clientRef.current) resetToAnonymous(clientRef.current);
       }
+      pendingRfqAuthWalletRef.current = null;
+      if (anonymousReconnectTimer.current !== null) {
+        window.clearTimeout(anonymousReconnectTimer.current);
+        anonymousReconnectTimer.current = null;
+      }
+      const controller = new AbortController();
+      const attempt = Promise.resolve().then(async () => {
+        if (controller.signal.aborted || walletAddressRef.current !== walletAddress) throw new Error("Wallet changed during sign-in");
+        authWalletRef.current = walletAddress;
+        const client = clientRef.current;
+        if (!client) {
+          throw new Error("RFQ connection is unavailable");
+        }
+
+        const authProvider = createWalletAuthProvider({
+          address: walletAddress,
+          signMessage,
+        });
+
+        const maybeSessionId = loadStoredSessionId(walletAddress);
+        console.log("[RfqProvider] Authenticating wallet:", walletAddress, {
+          resumeSession: !!maybeSessionId,
+        });
+        setConnectionState("authenticating");
+
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const timeoutId = window.setTimeout(() => {
+              cleanup();
+              reject(new Error("RFQ auth timeout"));
+            }, 20000);
+
+            const cleanup = () => {
+              window.clearTimeout(timeoutId);
+              client.off("authenticated", onAuthenticated);
+              client.off("error", onError);
+              controller.signal.removeEventListener("abort", onAbort);
+            };
+
+            const onAbort = () => {
+              cleanup();
+              reject(new Error("Wallet changed during sign-in"));
+            };
+            const onAuthenticated = () => {
+              cleanup();
+              if (walletAddressRef.current !== walletAddress) reject(new Error("Wallet changed during sign-in"));
+              else resolve();
+            };
+
+            const onError = (serverErr: ActaWsClientError) => {
+              cleanup();
+              reject(serverErr);
+            };
+
+            controller.signal.addEventListener("abort", onAbort, { once: true });
+            client.on("authenticated", onAuthenticated);
+            client.on("error", onError);
+            client.connectAndAuthenticate(authProvider, maybeSessionId ? { sessionId: maybeSessionId } : undefined);
+          });
+        } catch (err) {
+          console.error("[RfqProvider] Authentication failed:", err);
+          const serverErr = err as ActaWsClientError;
+          if (clientRef.current === client && authInFlightRef.current?.controller === controller) {
+            resetToAnonymous(client);
+            setError(new Error(serverErr?.type ? errorText(serverErr) : String(err)));
+          }
+          throw err;
+        }
+      }).finally(() => {
+        if (authInFlightRef.current?.controller === controller) authInFlightRef.current = null;
+      });
+      authInFlightRef.current = { wallet: walletAddress, promise: attempt, controller };
+      return attempt;
     },
-    []
+    [resetToAnonymous]
   );
 
   const walletAddress = selectedAccount?.address;
   const rfqConnected = connectionState !== "disconnected" && connectionState !== "error";
 
   useEffect(() => {
+    const attempt = authInFlightRef.current;
+    if ((attempt && attempt.wallet !== walletAddress) || (authWalletRef.current && authWalletRef.current !== walletAddress)) {
+      authInFlightRef.current = null;
+      attempt?.controller.abort();
+      authWalletRef.current = null;
+      if (clientRef.current) resetToAnonymous(clientRef.current);
+    }
     if (!walletConnected || !walletAddress || !selectedAccount) {
       pendingRfqAuthWalletRef.current = null;
       setAuthWarmupDone(false);
@@ -611,7 +746,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         authWarmupTimerRef.current = null;
       }
     };
-  }, [walletConnected, walletAddress, selectedAccount]);
+  }, [walletConnected, walletAddress, selectedAccount, resetToAnonymous]);
 
   useEffect(() => {
     if (!walletConnected || !walletAddress || !rfqConnected || authInFlightRef.current || !authWarmupDone) {
@@ -621,18 +756,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
       return;
     }
 
-    authInFlightRef.current = true;
-    void authenticate(walletAddress, signMessage)
-      .then(() => {
-        pendingRfqAuthWalletRef.current = null;
-      })
-      .catch((err) => {
-        console.error("[RfqProvider] RFQ auth after wallet connect failed:", err);
-        pendingRfqAuthWalletRef.current = null;
-      })
-      .finally(() => {
-        authInFlightRef.current = false;
-      });
+    void authenticate(walletAddress, signMessage).catch((err) => {
+      console.error("[RfqProvider] RFQ auth after wallet connect failed:", err);
+    });
   }, [walletConnected, walletAddress, rfqConnected, authWarmupDone, authenticate, signMessage]);
 
   useEffect(() => {
@@ -657,7 +783,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
     const client = clientRef.current;
     if (client) resetToAnonymous(client);
-  }, [walletConnected, dropRfq]);
+  }, [walletConnected, dropRfq, resetToAnonymous]);
 
   useEffect(() => {
     if (connectionState !== "authenticating") {
@@ -698,8 +824,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
     const requestId = crypto.randomUUID();
     tokenMarketsRequest.current = { requestId, underlyingMint };
     setTokenMarketsInfo(previous => previous?.underlyingMint === underlyingMint ? previous : null);
-    void client.request("TokenMarketsInfo", {
-      type: "GetTokenMarketsInfo", data: { request_id: requestId, underlying_mint: underlyingMint },
+    void client.requestAll("TokenMarketsInfo", {
+      type: "GetTokenMarketsInfo", data: { request_id: requestId, underlying_mint: address(underlyingMint), limit: 200, cursor: { type: "start" } },
     }).catch(() => {
       if (tokenMarketsRequest.current?.requestId !== requestId) return;
       tokenMarketsRequest.current = null;
@@ -732,21 +858,26 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const submitRfq = useCallback(
     (params: {
       market: string;
-      positionType: "covered_call" | "cash_secured_put";
-      strike: number;
+      terms: ProductTerms;
       quantity: number;
       timeoutSeconds?: number;
     }) => {
       const client = clientRef.current;
       if (!client) {
-        console.error("[RfqProvider] submitRfq: no client");
+        setError(new Error("RFQ connection is unavailable"));
         return;
       }
 
+
+      if (!Number.isSafeInteger(lowerStrike(params.terms)) || !Number.isSafeInteger(params.quantity)
+        || (isSpreadTerms(params.terms) ? !Number.isSafeInteger(params.terms.upper_strike) || params.terms.upper_strike <= params.terms.lower_strike : false)) {
+        setError(new Error("Invalid product or strike pair."));
+        return;
+      }
       const rfqRequest = {
         market: params.market as any,
-        position_type: params.positionType,
-        strike: params.strike,
+        terms: params.terms,
+        side: "sell" as const,
         quantity: params.quantity,
         timeoutSeconds: params.timeoutSeconds ?? RFQ_TTL_SECONDS,
       };
@@ -760,13 +891,30 @@ export function RfqProvider({ children }: RfqProviderProps) {
         setError(new Error("Market metadata is still loading. Please retry in a moment."));
         return;
       }
+      if (!descriptor.products.includes(params.terms.type) || descriptor.market.is_put !== (params.terms.type === "cash_secured_put" || params.terms.type === "put_spread" || params.terms.type === "cash_put")) {
+        setError(new Error("This product is not allowed for the selected market."));
+        return;
+      }
+      let spread: ReturnType<typeof spreadTerms> | null = null;
+      try {
+        if (params.terms.type === "cash_put") spread = spreadTerms("put_spread", 0, params.terms.strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market.underlying_mint));
+        if (isSpreadTerms(params.terms)) spread = spreadTerms(params.terms.type, params.terms.lower_strike, params.terms.upper_strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market.underlying_mint));
+      } catch (err) {
+        setError(new Error(wsErrorMessage(err)));
+        return;
+      }
       cancelRfq();
       const requestId = crypto.randomUUID();
       pendingRfqRef.current = {
         requestId,
-        strike: params.strike,
+        spread,
+        identity: params.terms,
         rfqId: null,
-        rfq: { market: descriptor.market, position_type: params.positionType, quantity: params.quantity },
+        rfq: isCashSettledTerms(params.terms) ? {
+          market: { ...descriptor.market, collateral_mint: descriptor.market.quote_mint, settlement_mint: descriptor.market.quote_mint },
+          terms: params.terms, side: "sell", quantity: params.quantity, order_options: [params.terms],
+          underlying_decimals: descriptor.underlying_decimals, quote_decimals: descriptor.quote_decimals,
+        } : { market: descriptor.market, terms: params.terms, side: "sell", quantity: params.quantity, order_options: [params.terms] },
       };
       void client.createRfq({ ...rfqRequest, requestId }).catch((err) => {
         const pending = pendingRfqRef.current;
@@ -781,10 +929,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
           setError(new Error("Market metadata refreshed. Please retry quote request."));
           return;
         }
-        setError(new Error(message));
+        setError(new Error(message, { cause: err }));
       });
     },
-    [marketDescriptors, cancelRfq, dropRfq]
+    [marketDescriptors, strikeTicks, cancelRfq, dropRfq]
   );
 
   const acceptQuote = useCallback(async (rfqId: string, maker: string, orderIdHex: string) => {
@@ -861,19 +1009,21 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const getClient = useCallback(() => clientRef.current, []);
   const rfqTerms = useCallback((rfqId: string) => {
     const pending = pendingRfqRef.current;
-    return pending?.rfqId === rfqId ? pending.rfq : null;
+    return pending?.rfqId === rfqId ? { ...pending.rfq, rfq_id: rfqId } : null;
   }, []);
 
   const value: RfqContextValue = {
     connectionState,
     isConnected: connectionState !== "disconnected" && connectionState !== "error",
-    isAuthenticated: connectionState === "authenticated",
+    isAuthenticated: connectionState === "authenticated" && authWalletRef.current === selectedAccount?.address,
     markets,
     tokenCaps,
+    strikeTicks,
     earnSummary,
     marketDescriptors,
     positions,
     bestQuote,
+    quoteSecondsRemaining,
     indicativePrices,
     getIndicativePricesCached,
     tokenMarketsInfo,
@@ -883,6 +1033,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     authenticate,
     disconnect,
     fetchPositions,
+    positionsFailed,
     getIndicativePrices,
     submitRfq,
     acceptQuote,
@@ -902,7 +1053,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
   return (
     <RfqContext.Provider value={value}>
-      {children}
+      {protocolFailure ? <main role="alert" className="mx-auto max-w-2xl px-6 py-24 font-mono text-content-primary">
+        <h1 className="mb-4 font-space text-3xl">Trading temporarily unavailable</h1>
+        <p>This app requires the WS 1.0.0 API. The connected backend returned an incompatible response. Please reload after the backend maintenance window.</p>
+      </main> : children}
       {showDebugBadge ? (
         <div className="fixed bottom-3 right-3 z-[120] rounded-lg border border-white/20 bg-black/80 px-3 py-2 text-[11px] font-semibold text-white shadow-lg backdrop-blur">
           <div className="text-white/70">state: {connectionState}</div>

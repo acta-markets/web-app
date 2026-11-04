@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { flows } from "@acta-markets/ts-sdk/chain";
+import type { DepositorPerformance } from "@acta-markets/ts-sdk/http";
+import { getTokenMint } from "@/lib/tokens";
 import {
   LAST_SHARES_COPY,
   REQUEST_EXISTS_COPY,
@@ -6,76 +9,119 @@ import {
   VAULT_SORTS,
   compareVaultsByTvl,
   compareVaultsByYield,
+  cyclePhaseLabel,
   depositBlockMessage,
   depositSelfProcessView,
+  entryReturnPct,
+  exposurePnlTotals,
+  exposureRows,
+  exposureSpots,
+  managerScope,
+  formatPremium,
   formatVaultEquity,
+  formatVaultTvl,
   isLastSharesWithdrawal,
+  mintUnits,
   primaryVaultAction,
   vaultApr,
+  vaultReturn,
   vaultStatus,
-  vaultTvlUsd,
   withdrawBlockMessage,
   withdrawSelfProcessView,
   type VaultSortEntry,
 } from "./presentation";
-import type { VaultActionBlock } from "./rules";
-import { makeVault } from "./sample";
-import type { Vault, VaultPerformance } from "./types";
+import { makePerformance, makeVault } from "./sample";
+import type { Vault, VaultExposure, VaultExposurePosition, VaultPerformance, VaultPosition } from "./types";
 
 const NOW = 1_800_000_000;
-const track = { cycles_completed: 3, last_cycle_return_pct: 0.4, cumulative_return_pct: 1.2, track_record_secs: "1814400" };
+// the test build runs on devnet, so take the mint the token list knows
+const USDC = getTokenMint("USDC")!;
+const SOL = "So11111111111111111111111111111111111111112";
+const win = (pct: number, from = "1700000000") => ({ return_pct: pct, from_time: from, to_time: "1800000000" });
 
 describe("vaultApr", () => {
-  it("shows a figure only once the backend annualizes, and New before that", () => {
-    expect(vaultApr({ status: "annualized", annualized_return_pct: 12.3, ...track })).toMatchObject({
+  it("shows the backend's 30-day APY, New before it exists and nothing for an uncovered vault", () => {
+    expect(vaultApr(makePerformance({ apy_30d: 12.3 }))).toMatchObject({
       value: "12.30%",
       muted: false,
       sources: [{ label: "Premium", pct: 12.3 }],
     });
-    expect(vaultApr({ status: "short_track_record", ...track })).toMatchObject({ value: "New", muted: true, sources: [] });
-    expect(vaultApr({ status: "no_track_record" })).toMatchObject({ value: "New", muted: true });
-    expect(vaultApr({ status: "unavailable" })).toMatchObject({ value: "—", muted: true, sources: [] });
+    const firstDay = { ...win(1.2), to_time: "1700086400" };
+    expect(vaultApr(makePerformance({ returns: { "7d": win(0.4), "30d": null, "90d": null, all: firstDay } })))
+      .toMatchObject({ value: "New", muted: true, sources: [] });
+    expect(vaultApr(null)).toMatchObject({ value: "—", muted: true });
+    const mature = { "7d": null, "30d": null, "90d": null, all: win(1.2, "1700000000") };
+    expect(vaultApr(makePerformance({ computed_at: "1800000000", returns: mature }))).toMatchObject({ value: "—" });
+    expect(vaultApr(makePerformance({ covered: false }))).toMatchObject({ value: "—", muted: true, sources: [] });
+  });
+
+  it("projects a young vault from its history once it has 20 days of it", () => {
+    const twentyFiveDays = {
+      return_pct: 2.83,
+      from_time: "1792219565",
+      to_time: String(1792219565 + 25 * 86_400),
+    };
+    const apr = vaultApr(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: twentyFiveDays } }));
+    expect(apr.value).toBe("50.30%");
+    expect(apr.muted).toBe(true);
+    expect(apr.note).toContain("25 days");
+    const nineteenDays = { ...twentyFiveDays, to_time: String(1792219565 + 19 * 86_400) };
+    const young = vaultApr(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: nineteenDays } }));
+    expect(young).toMatchObject({ value: "New" });
   });
 
   it("adds the deposit asset's staking yield to the premium, so the parts sum to the headline", () => {
-    const apr = vaultApr({ status: "annualized", annualized_return_pct: 10, ...track }, 5);
+    const apr = vaultApr(makePerformance({ apy_30d: 10 }), 5);
     expect(apr.value).toBe("15.00%");
     expect(apr.sources).toEqual([
       { label: "Staking", pct: 5 },
       { label: "Premium", pct: 10 },
     ]);
     // before the premium has history, the staking part is still known
-    expect(vaultApr({ status: "no_track_record" }, 5)).toMatchObject({ value: "New", sources: [{ label: "Staking", pct: 5 }] });
+    expect(vaultApr(makePerformance(), 5)).toMatchObject({ value: "New", sources: [{ label: "Staking", pct: 5 }] });
+  });
+});
+
+describe("vaultReturn", () => {
+  it("is the generation's return with its start, or empty without one", () => {
+    const all = win(-1.25, "1790000000");
+    expect(vaultReturn(makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all } }))).toEqual({
+      value: "-1.25%",
+      since: 1_790_000_000,
+    });
+    expect(vaultReturn(makePerformance())).toEqual({ value: "—", since: null });
+    expect(vaultReturn(makePerformance({ covered: false }))).toEqual({ value: "—", since: null });
+    expect(vaultReturn(null)).toEqual({ value: "—", since: null });
   });
 });
 
 describe("vault sorts", () => {
-  const annualized = (pct: number): VaultPerformance => ({ status: "annualized", annualized_return_pct: pct, ...track });
+  const apr = (pct: number) => makePerformance({ apy_30d: pct, returns: { "7d": null, "30d": win(pct / 12), "90d": null, all: win(pct / 6) } });
+  const young = (all: number) => makePerformance({ returns: { "7d": null, "30d": null, "90d": null, all: win(all) } });
   const entry = (
     name: string,
-    performance: VaultPerformance,
-    opts: { vault?: Partial<Vault>; stakingAprPct?: number; tvlUsd?: number | null } = {},
+    performance: VaultPerformance | null,
+    opts: { vault?: Partial<Vault>; stakingAprPct?: number } = {},
   ): VaultSortEntry => ({
     vault: makeVault({ performance, ...opts.vault }),
     meta: { name, stakingAprPct: opts.stakingAprPct ?? 0 },
-    tvlUsd: opts.tvlUsd ?? null,
   });
   const sorted = (entries: VaultSortEntry[], compare: (a: VaultSortEntry, b: VaultSortEntry) => number) =>
     [...entries].sort(compare).map((e) => e.meta.name);
 
   it("ranks proven yield first and puts vaults winding down last", () => {
     const entries = [
-      entry("new", { status: "no_track_record" }),
-      entry("short-high", { status: "short_track_record", ...track, cumulative_return_pct: 3 }),
-      entry("closing", annualized(40), { vault: { safety: "closing" } }),
-      entry("annualized-low", annualized(8)),
-      entry("unknown", { status: "unavailable" }),
-      entry("annualized-high", annualized(15)),
-      entry("short-low", { status: "short_track_record", ...track, cumulative_return_pct: 1 }),
+      entry("new", makePerformance()),
+      entry("short-high", young(3)),
+      entry("closing", apr(40), { vault: { safety: "closing" } }),
+      entry("apr-low", apr(8)),
+      entry("unknown", makePerformance({ covered: false })),
+      entry("apr-high", apr(15)),
+      entry("short-low", young(1)),
     ];
     expect(sorted(entries, compareVaultsByYield)).toEqual([
-      "annualized-high",
-      "annualized-low",
+      "apr-high",
+      "apr-low",
       "short-high",
       "short-low",
       "new",
@@ -84,35 +130,36 @@ describe("vault sorts", () => {
     ]);
   });
 
-  it("orders by the APR the cards show, staking included", () => {
-    const entries = [entry("premium 12", annualized(12)), entry("staked 8 + 5", annualized(8), { stakingAprPct: 5 })];
+  it("orders by the APY the cards show, staking included", () => {
+    const entries = [entry("premium 12", apr(12)), entry("staked 8 + 5", apr(8), { stakingAprPct: 5 })];
     expect(sorted(entries, compareVaultsByYield)).toEqual(["staked 8 + 5", "premium 12"]);
   });
 
-  it("puts the largest TVL first and vaults without a price last, by name", () => {
+  it("puts the largest dollar TVL first and vaults without one last, by name", () => {
+    const usd = (dollars: number) => ({ vault: { tvl_usd_1e9: String(dollars * 1e9) } });
     const entries = [
-      entry("b-unpriced", annualized(9)),
-      entry("small", annualized(9), { tvlUsd: 1_000 }),
-      entry("a-unpriced", annualized(9)),
-      entry("large", annualized(9), { tvlUsd: 2_000_000 }),
-      entry("empty", annualized(9), { tvlUsd: 0 }),
+      entry("b-unpriced", apr(9)),
+      entry("small", apr(9), usd(1_000)),
+      entry("a-unpriced", apr(9)),
+      entry("large", apr(9), usd(2_000_000)),
+      entry("empty", apr(9), usd(0)),
     ];
     expect(sorted(entries, compareVaultsByTvl)).toEqual(["large", "small", "empty", "a-unpriced", "b-unpriced"]);
   });
 
-  it("offers APR first, then TVL and name, with name ignoring case", () => {
-    expect(VAULT_SORTS.map((s) => s.label)).toEqual(["APR", "TVL", "Name"]);
+  it("offers APY first, then TVL and name, with name ignoring case", () => {
+    expect(VAULT_SORTS.map((s) => s.label)).toEqual(["Projected APY", "TVL", "Name"]);
     const byName = VAULT_SORTS.find((s) => s.value === "name")!.compare;
-    const entries = ["USDC", "jitoSOL", "HYPE", "ZEC"].map((name) => entry(name, annualized(9)));
+    const entries = ["USDC", "jitoSOL", "HYPE", "ZEC"].map((name) => entry(name, apr(9)));
     expect(sorted(entries, byName)).toEqual(["HYPE", "jitoSOL", "USDC", "ZEC"]);
   });
 });
 
 describe("TVL", () => {
-  it("is in dollars only when the deposit asset has a price", () => {
+  it("is the backend's dollar figure when it has a price, else the deposit asset", () => {
     const vault = makeVault({ equity: "2500000000", main_decimals: 6 });
-    expect(vaultTvlUsd(vault, 1.5)).toBe(3750);
-    expect(vaultTvlUsd(vault, undefined)).toBeNull();
+    expect(formatVaultTvl({ ...vault, tvl_usd_1e9: "3750000000000" }, "SOL")).toBe("$3.75K");
+    expect(formatVaultTvl(vault, "SOL")).toBe("2,500 SOL");
   });
 
   it("in the asset itself stays short: whole units from a thousand, two decimals from one", () => {
@@ -121,6 +168,172 @@ describe("TVL", () => {
     expect(equity("2500999999", 6)).toBe("2,500");
     expect(equity("707856612345", 9)).toBe("707.85");
     expect(equity("1234", 6)).toBe("0.001234");
+  });
+});
+
+describe("current cycle", () => {
+  it("labels the phase, with safety modes first", () => {
+    expect(cyclePhaseLabel({ phase: "active", safety: "normal" })).toBe("Trading");
+    expect(cyclePhaseLabel({ phase: "processing_capital", safety: "normal" })).toBe("Processing requests");
+    expect(cyclePhaseLabel({ phase: "active", safety: "emergency_unwind" })).toBe("Unwinding");
+  });
+
+  it("formats premium in the quote mint's units, adding paid only when it is known and not zero", () => {
+    const vault = makeVault({ main_mint: SOL, main_decimals: 9, second_mint: USDC, second_decimals: 6 });
+    const units = mintUnits(vault, USDC)!;
+    expect(units).toEqual({ symbol: "USDC", decimals: 6 });
+    expect(formatPremium({ received: "2842000000", paid: "310500000" }, units)).toBe("2,842 USDC · paid 310.5");
+    expect(formatPremium({ received: "2842000000", paid: null }, units)).toBe("2,842 USDC");
+    expect(formatPremium({ received: "2842000000", paid: "0" }, units)).toBe("2,842 USDC");
+    expect(mintUnits(vault, "Unknown1111111111111111111111111111111111111")).toBeNull();
+  });
+});
+
+describe("exposure", () => {
+  const leg = (overrides: Partial<VaultExposurePosition>): VaultExposurePosition => ({
+    position: "p1",
+    market: "m1",
+    position_type: "cash_secured_put",
+    role: "writer",
+    status: "funded",
+    strike: "160000000000",
+    quantity: "4000000000000",
+    expiry: "1800000000",
+    underlying_mint: SOL,
+    quote_mint: USDC,
+    underlying_decimals: 9,
+    quote_decimals: 6,
+    spot: "172400000000",
+    spot_time: "1799999990",
+    distance_pct: 7.19,
+    itm: false,
+    intrinsic: "0",
+    ...overrides,
+  });
+  const exposure = (positions: VaultExposurePosition[], outstanding: string | null): VaultExposure => ({
+    vault_pda: "v",
+    as_of: "1800000000",
+    positions,
+    totals: [{ quote_mint: USDC, notional_at_strike: "1000", outstanding_intrinsic: outstanding }],
+  });
+
+  it("shows strike, type, side and distance from spot", () => {
+    const rows = exposureRows(
+      exposure(
+        [
+          leg({}),
+          leg({ position: "p2", position_type: "covered_call", role: "holder", strike: "180500000000", distance_pct: -4.41, itm: true }),
+          leg({ position: "p3", spot: null, distance_pct: null, itm: null, intrinsic: null }),
+          leg({ position: "p4", strike: "5000000" }),
+        ],
+        null,
+      ),
+    );
+    expect(rows.map((r) => [r.strike, r.type, r.role, r.distance])).toEqual([
+      ["160", "Put", "Sold", "7.2% OTM"],
+      ["180.5", "Call", "Bought", "4.4% ITM"],
+      ["160", "Put", "Sold", "—"],
+      ["0.005", "Put", "Sold", "7.2% OTM"],
+    ]);
+  });
+
+  describe("cash products", () => {
+    const detail = (overrides: Partial<VaultPosition>): VaultPosition => ({
+      position: "p1",
+      role: "writer",
+      position_type: "call_spread",
+      strike: "100000000000",
+      quantity: "2000000000",
+      net_premium: "1000000",
+      product: { kind: "spread", upper_strike: "110000000000", collateral: "20000000" },
+      ...overrides,
+    } as VaultPosition);
+    const cash = (overrides: Partial<VaultExposurePosition>) => leg({
+      position_type: "call_spread", strike: "100000000000", quantity: "2000000000", spot: "95000000000",
+      distance_pct: null, itm: null, intrinsic: null, ...overrides,
+    });
+
+    it("prices an out-of-the-money spread at its premium", () => {
+      const [row] = exposureRows(exposure([cash({})], null), [detail({})]);
+      expect([row.strike, row.size, row.distance, row.itm, row.pnl]).toEqual(["100 / 110", "2 SOL", "5.3% OTM", false, "+1 USDC"]);
+    });
+
+    it("caps an in-the-money spread at its width and reverses the sign for the holder", () => {
+      const writer = exposureRows(exposure([cash({ spot: "120000000000" })], null), [detail({})]);
+      expect([writer[0].distance, writer[0].pnl]).toEqual(["16.7% ITM", "-19 USDC"]);
+      const holder = exposureRows(exposure([cash({ role: "holder", spot: "105000000000" })], null), [detail({ role: "holder" })]);
+      expect(holder[0].pnl).toBe("+9 USDC");
+    });
+
+    it("measures a put spread from its upper strike", () => {
+      const [row] = exposureRows(
+        exposure([cash({ position_type: "put_spread", spot: "105000000000" })], null),
+        [detail({ position_type: "put_spread" })],
+      );
+      expect([row.distance, row.itm, row.pnl]).toEqual(["4.8% ITM", true, "-9 USDC"]);
+    });
+
+    it("pays a cash put in full below its strike", () => {
+      const [row] = exposureRows(
+        exposure([cash({ position_type: "cash_put", strike: "94000000000", spot: "90000000000" })], null),
+        [detail({ position_type: "cash_put", strike: "94000000000", product: { kind: "spread", upper_strike: "94000000000", collateral: "1" } })],
+      );
+      expect([row.type, row.strike, row.distance, row.pnl]).toEqual(["Put spread", "0 / 94", "4.4% ITM", "-7 USDC"]);
+    });
+
+    it("leaves a row unpriced until its spot and premium arrive", () => {
+      expect(exposureRows(exposure([cash({})], null))[0].pnl).toBe("—");
+      expect(exposureRows(exposure([cash({ spot: null })], null), [detail({})])[0].distance).toBe("—");
+    });
+
+    it("totals P&L per quote mint and drops a mint with an unpriced row", () => {
+      const rows = exposureRows(exposure([cash({}), cash({ position: "p2", role: "holder" })], null), [
+        detail({ net_premium: "3000000" }),
+        detail({ position: "p2", role: "holder" }),
+      ]);
+      expect(exposurePnlTotals(rows)).toEqual([{ quoteMint: USDC, value: "+2 USDC" }]);
+      expect(exposurePnlTotals(exposureRows(exposure([cash({})], null)))).toEqual([]);
+    });
+
+    it("reads spot once per underlying", () => {
+      expect(exposureSpots(exposure([cash({}), cash({ position: "p2" }), cash({ spot: null })], null))).toEqual([{ symbol: "SOL", price: "$95" }]);
+    });
+  });
+});
+
+describe("managerScope", () => {
+  const policy = { max_open_positions: 64, max_rebalance_drift_bps: 100, min_main_liquidity_bps: 0 };
+
+  it("lists what the capabilities and policy allow", () => {
+    const scope = managerScope({ capabilities: 7, policy, manager_stake_min_bps: 500 }, "SOL", "USDC");
+    expect(scope.allowed).toContain("Sell and buy options.");
+    expect(scope.allowed).toContain("Trade with USDC as well as SOL.");
+    expect(scope.blocked.join(" ")).toContain("under 5%");
+  });
+
+  it("moves a missing capability to the blocked list and shows a liquidity floor", () => {
+    const scope = managerScope({ capabilities: 1, policy: { ...policy, min_main_liquidity_bps: 1000 }, manager_stake_min_bps: 0 }, "SOL", "USDC");
+    expect(scope.allowed).toContain("Sell options.");
+    expect(scope.blocked).toContain("Buy options.");
+    expect(scope.blocked.join(" ")).toContain("Leave under 10%");
+  });
+});
+
+describe("entryReturnPct", () => {
+  const lot = (shares: bigint, pct: number | null) => ({
+    shares,
+    entryPrice: 1_000_000_000n,
+    eventTime: 0n,
+    transactionSignature: "s",
+    returnSinceEntryPct: pct,
+  });
+  const perf = (lots: DepositorPerformance["lots"]): DepositorPerformance => ({ lots, value: 0n, secondRedeemed: 0n });
+
+  it("weights lots by shares only when priced lots hold every share", () => {
+    expect(entryReturnPct(perf([lot(300n, 4), lot(100n, -4)]), 400n)).toBeCloseTo(2, 10);
+    expect(entryReturnPct(perf([lot(300n, 4), lot(100n, -4), lot(50n, null)]), 450n)).toBeNull();
+    expect(entryReturnPct(perf([lot(100n, 4)]), 150n)).toBeNull();
+    expect(entryReturnPct(perf([]), 0n)).toBeNull();
   });
 });
 
@@ -148,14 +361,20 @@ describe("vaultStatus", () => {
 });
 
 describe("primaryVaultAction", () => {
-  it("opens closing vaults on Withdraw", () => {
-    expect(primaryVaultAction(makeVault({ safety: "closing" }), NOW)).toEqual({ label: "Manage", tab: "withdraw" });
-    expect(primaryVaultAction(makeVault({ phase: "settling" }), NOW)).toEqual({ label: "Deposit", tab: "deposit" });
+  it("offers Deposit only while the vault takes deposits", () => {
+    const manage = { label: "Manage", tab: "withdraw" };
+    expect(primaryVaultAction(makeVault({ safety: "closing" }), NOW)).toEqual(manage);
+    expect(primaryVaultAction(makeVault({ phase: "settling" }), NOW)).toEqual(manage);
+    expect(primaryVaultAction(makeVault({ phase: "idle", accepting_deposits: false }), NOW)).toEqual(manage);
+    expect(primaryVaultAction(makeVault({ phase: "idle", accepting_deposits: true }), NOW)).toEqual({
+      label: "Deposit",
+      tab: "deposit",
+    });
   });
 });
 
 describe("block copy", () => {
-  const blocks: VaultActionBlock[] = [
+  const blocks: flows.VaultActionBlock[] = [
     "safety",
     "phase",
     "window_closed",
@@ -167,6 +386,7 @@ describe("block copy", () => {
     "pending",
     "supply",
     "authority",
+    "staged",
   ];
   const contexts: Vault[] = [
     makeVault(),
@@ -228,6 +448,12 @@ describe("self-processing", () => {
     expect(withdrawSelfProcessView(idle, createdAt, NOW + delay)).toEqual({ kind: "available", label: "Process my withdrawal" });
   });
 
+  it("does not offer idle valuation while a staging slot is open", () => {
+    const staging = { mint: USDC, from_leg: "second" as const, amount: "5", staged_at: String(NOW), generation: "1" };
+    const idle = makeVault({ pending_withdraw_count: 1, capital_fallback_delay_secs: String(delay), staging });
+    expect(withdrawSelfProcessView(idle, createdAt, NOW + delay)).toEqual({ kind: "hidden" });
+  });
+
   it("counts processing-capital requests from expiry", () => {
     const processing = makeVault({
       phase: "processing_capital",
@@ -250,5 +476,25 @@ describe("isLastSharesWithdrawal", () => {
     expect(isLastSharesWithdrawal(vault, 899n)).toBe(false);
     expect(isLastSharesWithdrawal(makeVault({ total_shares: "1000", live_share_supply: null }), 1000n)).toBe(true);
     expect(isLastSharesWithdrawal(vault, 0n)).toBe(false);
+  });
+});
+
+describe("vault spread exposure labels", () => {
+  it("labels both spread products instead of folding them into calls or puts", async () => {
+    const { exposureRows } = await import("./presentation");
+    const base = {
+      position: "p", market: "m", role: "writer", status: "open", strike: "100000000000",
+      quantity: "1", expiry: "1", underlying_mint: "u", quote_mint: "q", underlying_decimals: 9,
+      quote_decimals: 6, spot: null, spot_time: null, distance_pct: null, itm: null, intrinsic: null,
+    };
+    const rows = exposureRows({
+      vault_pda: "v",
+      positions: [
+        { ...base, position_type: "call_spread" },
+        { ...base, position: "p2", position_type: "put_spread", role: "holder" },
+      ],
+      totals: [],
+    } as never);
+    expect(rows.map((row) => [row.type, row.role])).toEqual([["Call spread", "Sold"], ["Put spread", "Bought"]]);
   });
 });

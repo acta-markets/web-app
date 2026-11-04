@@ -53,9 +53,9 @@ MONGODB_URI="<connection_string>"
 MONGODB_DB="acta"
 NEXT_PUBLIC_PRIVY_APP_ID="<privy_app_id>"
 NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
-NEXT_PUBLIC_RFQ_WS_URL="wss://beta-api.acta.markets"  # RFQ infrastructure WebSocket (mainnet)
-NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "mainnet" or "devnet" - controls token mints
-NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied through /api/rpc
+NEXT_PUBLIC_RFQ_WS_URL="wss://beta-api.acta.markets"  # Optional override; defaults to devnet-api on devnet, beta-api on mainnet
+NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "devnet" (default), "mainnet" or "mainnet-beta"; controls mints, RPC, wallet, explorer and backend defaults
+NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Optional browser-accessible RPC endpoint; called directly
 # NEXT_PUBLIC_API_URL="https://beta-api.acta.markets"  # Optional: vault HTTP API; defaults to the RFQ WebSocket host
 # NEXT_PUBLIC_VAULTS_SAMPLE="1"  # Dev only: sample vaults on /earn; ignored by production builds
 ```
@@ -64,7 +64,7 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
 
 **Next.js 14 App Router** with two route groups:
 - `(marketing)` - Landing page at `/`
-- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (option markets), `/portfolio`, `/market/[asset]`
+- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (Easy mode; `?mode=pro` is a placeholder), `/portfolio`, `/market/[asset]` (the previous market page, reached by direct URL)
 
 **Middleware** (`middleware.ts`) gates app routes based on `NEXT_PUBLIC_APP_ENABLED`. When disabled, app routes redirect to landing but `/api/whitelist` remains accessible.
 
@@ -75,10 +75,15 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
 
 **Market prices and APR**: The market page uses the configured RFQ backend’s `GetTokenMarketsInfo.reference_price` and indicative premiums, refreshed together every 30 seconds. APR uses the existing SDK formula and is unavailable for stale indicatives. The backend owns oracle access; the frontend has no direct Hermes integration.
 
-**Markets**: Static market definitions in `src/lib/markets.ts` with call/CSP (cash-secured put) types, APR ranges, and price options.
+**Trade (Easy mode)**: `/trade` is one sentence the user fills in: "I believe [asset] will be [above/below] [price] on [date]. If I deposit [amount], I get paid ≈$X now." A price chart and the order details sit underneath. A taker can only sell options, so `above` sells a cash-secured put and `below` sells a covered call; right means the deposit comes back, wrong means it converts at the strike. `?asset=` preselects an asset.
+- `src/lib/trade/` - pure logic shared with the market page: `thesis.ts` (direction mapping, outcome math, all Easy copy), `strikes.ts` (expiries, strikes and APR from a snapshot), `sizing.ts` (size rule, deposit and quantity conversion), `assets.ts`, `format.ts`
+- `src/components/trade/easy/` - the sentence, the chart (CoinGecko history via `/api/market/history`) and the order details
+- `src/components/rfq/use-token-markets-snapshot.ts` and `use-quote-request.ts` - the 30s snapshot refresh and the quote request lifecycle, used by both trade pages
 
-**Vaults**: `/earn` lists vaults by category and `/earn/[vault]` shows one, read from the vault HTTP API (`/api/v1/vaults`, `/vaults/{pda}`, `/cycles`) through `@acta-markets/ts-sdk/http`:
-- `src/lib/vaults/` - API client, contract rules, depositor transactions, plus `registry.ts` (name, curator and category by vault PDA, which the backend does not serve), `metrics.ts` (30d avg APR, Sharpe ratio, drawdown, from completed cycles only) and `presentation.ts` (status, sort order, block copy)
+**Markets**: Assets and per-strategy cap utilization come from the RFQ backend's earn summary. The market page reads live strikes, indicative premiums and reference prices through `GetTokenMarketsInfo`. `src/lib/markets.ts` contains shared display formatting only.
+
+**Vaults**: `/earn` lists vaults by category and `/earn/[vault]` shows one, read from the vault HTTP API (`/api/v1/vaults`, `/vaults/{pda}`, `/cycles`, `/exposure`) through `@acta-markets/ts-sdk/http`:
+- `src/lib/vaults/` - API client, depositor transactions (contract rules come from the SDK's `flows`), plus `registry.ts` (display metadata from the backend, sample-mode fixtures, fallbacks), `metrics.ts` (return and TVL chart series from completed cycles; headline metrics are the backend's `performance`) and `presentation.ts` (APR, status, sort order, exposure, block copy)
 - `src/components/vaults/` - polling hooks (`use-vaults.ts`), the grid, the vault page and the deposit/withdraw modal
 - `docs/vaults-integration.md` - data sources, polling budget and UI rules
 - `NEXT_PUBLIC_VAULTS_SAMPLE=1` swaps in fixture vaults from `src/lib/vaults/sample-data.json` in development (loaded on demand by `sample.ts`); production builds ignore it
@@ -100,9 +105,9 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
 
 ### Quote flow modes (for rollback)
 
-- **Current mode (fresh on Deposit)**:
-  - Market page shows indicative APR/premium only.
-  - RFQ quote is requested when `Deposit` is clicked.
+- **Current mode (fresh on click)**:
+  - Easy mode and the market page show indicative APR/premium only.
+  - RFQ quote is requested when `Get quote` (Easy) or `Deposit` (market page) is clicked.
   - While waiting, CTA shows `Getting quote...`.
   - Modal opens only after matching quote arrives.
 
@@ -110,7 +115,7 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Helius / RPC endpoint, proxied
   - Quote requested automatically when price + size are selected.
   - Quote refreshed periodically (every 30s, faster when stale).
   - Deposit reused prefetched quote and opened modal immediately with locked values.
-  - If rollback needed, restore quote prefetch effects in `src/components/market/market-client.tsx`.
+  - If rollback needed, restore quote prefetch effects in `src/components/rfq/use-quote-request.ts`.
 
 ## Key Conventions
 

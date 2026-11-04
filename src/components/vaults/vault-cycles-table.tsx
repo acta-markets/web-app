@@ -23,15 +23,9 @@ export function VaultCyclesTable({
   if (rows.length === 0) return null;
 
   return (
-    <section aria-labelledby="cycle-history-heading" className="flex flex-col gap-4">
-      <h2
-        id="cycle-history-heading"
-        className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary"
-      >
-        Cycle history
-      </h2>
-      <AppTable>
-        <thead className="border-b border-bg-border bg-bg-primary">
+    <section aria-label="Cycle history" className="flex flex-col gap-4">
+      <AppTable className="border-0">
+        <thead className="border-b border-bg-border">
           <tr>
             <AppTh>Cycle</AppTh>
             <AppTh>Started</AppTh>
@@ -47,7 +41,7 @@ export function VaultCyclesTable({
             // a running cycle can already carry end values; they are not final
             const running = cycle.finished_at == null;
             return (
-              <tr key={`${cycle.cycle_number}:${cycle.started_at}`} className="border-b border-bg-border bg-bg-primary last:border-b-0">
+              <tr key={`${cycle.cycle_number}:${cycle.started_at}`} className="border-b border-bg-border last:border-b-0">
                 {/* cycle numbers start at 0 on chain; people count from 1 */}
                 <AppTd className="tabular-nums">{Number(cycle.cycle_number) + 1}</AppTd>
                 <AppTd>{formatDate(Number(cycle.started_at))}</AppTd>

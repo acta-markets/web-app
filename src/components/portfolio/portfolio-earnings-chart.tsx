@@ -60,12 +60,16 @@ function toStepData(points: Point[]) {
 export function PortfolioEarningsChart({
   points,
   now,
-  range
+  range,
+  formatValue = formatUsdSmart
 }: {
   points: Point[];
   now: number;
   range: Range;
+  formatValue?: (value: number) => string;
 }) {
+  const formatRef = useRef(formatValue);
+  formatRef.current = formatValue;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
@@ -130,7 +134,7 @@ export function PortfolioEarningsChart({
       priceFormat: {
         type: "custom",
         minMove: 0.01,
-        formatter: (p: number) => formatUsdSmart(p)
+        formatter: (p: number) => formatRef.current(p)
       }
     });
 

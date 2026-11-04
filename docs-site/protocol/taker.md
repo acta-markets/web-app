@@ -1,16 +1,22 @@
 # How the taker works
 
-The taker sells an option. For a call, the taker deposits the underlying asset. For a put, the taker deposits the funds needed to buy that asset at the strike. The premium, minus fees, is paid when the position opens.
+The taker sells the product and locks collateral: the underlying for a covered call, the cash to buy at the strike for a cash-secured put, the maximum payoff in the quote asset for a spread or cash put. The premium, minus fees, is paid when the position opens.
+
+## Cash-settled terms
+
+These products are sell-only. Check the descriptor first: the product must be enabled and the strikes must match its tick. Quantity is still in underlying atomic units.
+
+A spread sends an exact pair, `lower_strike < upper_strike`, both positive. Collateral is the width times quantity, rounded up in quote atoms. A `cash_put` sends one positive strike and executes as a put spread from zero. Collateral is strike times quantity, rounded up.
 
 ## Before requesting a quote
 
 Connect to `/taker`. Markets can be read before authentication. Trading needs a wallet signature and, while invites are enabled, a redeemed invite code.
 
-Read the market descriptor for the market PDA, expiry, asset pair, decimals and size rules. RFQ quantity is measured in underlying atomic units for both calls and puts. For a SOL put, request the quantity in SOL atoms, not the USDC deposit amount.
+Read the market descriptor for the market PDA, expiry, asset pair, decimals and size rules. RFQ quantity is measured in underlying atomic units for every product. For a SOL put or cash product, request the quantity in SOL atoms, not the USDC deposit amount.
 
 ## From request to position
 
-1. Send `RfqRequest` with the market, quantity and requested strike or strike options.
+1. Send `RfqRequest` with the market, quantity and requested terms. Spreads and cash puts use the exact selected terms; physical products can use strike options.
 2. Receive quotes.
 3. Send `AcceptQuote` for the selected `order_id` and maker.
 4. Receive `SponsoredTxToSign`. Verify the transaction against the accepted order, then sign the taker's slot.
@@ -25,7 +31,7 @@ A timed-out or failed transaction may still have landed. Resume or re-authentica
 
 ## At expiry
 
-After expiry and oracle finalization, the taker receives the original collateral or exchanges it at the strike, depending on the settlement price. For an in-the-money settlement, the maker supplies the asset paid to the taker.
+After expiry and oracle finalization, a covered call or cash-secured put returns the collateral or exchanges it at the strike, with the maker supplying the settlement asset. A spread or cash put splits the escrow: the maker gets the capped payoff and the taker gets the rest.
 
 See [Options and settlement](../reference/protocol-flow.md) for funded, unfunded and liquidation outcomes.
 
