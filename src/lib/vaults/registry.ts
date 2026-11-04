@@ -72,7 +72,7 @@ export type ResolvedVaultMeta = {
 };
 
 export function resolveVaultMeta(
-  vault: Pick<Vault, "vault_pda" | "main_mint" | "governance" | "metadata"> & Partial<Pick<Vault, "second_mint">>,
+  vault: Pick<Vault, "vault_pda" | "main_mint" | "governance" | "metadata" | "description"> & Partial<Pick<Vault, "second_mint">>,
   registry: Readonly<Record<string, VaultMeta>> = activeRegistry(),
 ): ResolvedVaultMeta {
   const meta = registry[vault.vault_pda];
@@ -81,8 +81,11 @@ export function resolveVaultMeta(
   const knownSymbol = meta?.assetSymbol ?? getTokenSymbolByMint(vault.main_mint);
   const legs = [knownSymbol ?? tokenDisplayName(vault.main_mint)];
   if (vault.second_mint && vault.second_mint !== vault.main_mint) legs.push(tokenDisplayName(vault.second_mint));
+  const registryName = served?.name ?? meta?.name;
+  const operatorText = vault.description.kind === "set" ? vault.description.text : undefined;
   return {
-    name: served?.name ?? meta?.name ?? `${legs.join(" / ")} vault · ${shortAddress(vault.vault_pda)}`,
+    name: registryName && operatorText ? `${registryName} · ${operatorText}`
+      : registryName ?? operatorText ?? `${legs.join(" / ")} vault · ${shortAddress(vault.vault_pda)}`,
     curator: curator ?? shortAddress(vault.governance),
     curatorIsAddress: curator === undefined,
     legs,
