@@ -29,7 +29,6 @@ export function makeVault(overrides: Partial<Vault> = {}): Vault {
   return {
     vault_pda: PLACEHOLDER_ADDRESS,
     vault_id: "00".repeat(32),
-    description: { kind: "unset" },
     governance: PLACEHOLDER_ADDRESS,
     fee_recipient: PLACEHOLDER_ADDRESS,
     primary_delegate: PLACEHOLDER_ADDRESS,
