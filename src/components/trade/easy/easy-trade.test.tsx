@@ -186,6 +186,17 @@ describe("Easy mode", () => {
     expect(screen.getByRole("button", { name: "Below min 9.5 USDC" })).toBeTruthy();
   });
 
+  it("offers half and all of the balance from the amount pill's menu", () => {
+    connectWallet();
+    mocks.balance = 50;
+    render(<EasyTrade />);
+    // the balance's quick amounts sit behind the pill's chevron, on the 9.5 step grid
+    fireEvent.click(screen.getByRole("button", { name: "Quick amounts" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /47\.5/ }));
+    expect((screen.getByLabelText("Amount in USDC") as HTMLInputElement).value).toBe("47.5");
+    expect(screen.getByRole("button", { name: "Get quote" })).toBeTruthy();
+  });
+
   it("cancels the RFQ when no quote arrives within the TTL", () => {
     vi.useFakeTimers();
     vi.setSystemTime(now * 1000);
@@ -228,7 +239,6 @@ describe("Easy mode", () => {
       expect(screen.queryByText("HALF")).toBeNull();
       expect(screen.getByText("Buy a call")).toBeTruthy();
       expect(screen.queryByText("Paid to you now")).toBeNull();
-      expect(screen.getByText(/500 USDC/)).toBeTruthy();
       expect(screen.queryByText(/APR/)).toBeNull();
 
       fireEvent.click(screen.getByRole("button", { name: /Get quote/ }));

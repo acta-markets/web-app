@@ -14,7 +14,6 @@ import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
-import { cn } from "@/lib/cn";
 import { BUY_PRODUCT_NAME, type TakerSide } from "@/lib/spreads";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
 import { getTokenLogoSrc } from "@/lib/token-assets";
@@ -108,7 +107,7 @@ export function EasyTrade({
   howItWorks,
 }: {
   initialAsset?: string | null;
-  /** Easy | Pro, first on the left so it holds its place across modes */
+  /** Make Yield | Make Profit switch, first on the left so it holds its place across modes */
   modeSwitch?: React.ReactNode;
   howItWorks?: React.ReactNode;
 }) {
@@ -218,7 +217,6 @@ export function EasyTrade({
   // a buy pays USDC and its amount is the option's size, so the balance cannot bound it before the quote
   const balanceSymbol = buying ? "USDC" : symbol;
   const balance = useTokenBalance(walletAddress, balanceSymbol);
-  const presets = presetAmounts({ rule: depositRule, balance, isPut: amountInQuote });
   const insufficientBalance = !buying && balance != null && lockedDeposit != null && lockedDeposit > balance + 1e-9;
 
   // Everything the sentence could show for this asset in either direction, on any date,
@@ -344,22 +342,9 @@ export function EasyTrade({
     />
   );
 
-  // phones: the switch and How it works share the first row, the price chip drops below them
-  const topBar = (withChip: boolean) => (
+  const topBar = (
     <div className="flex flex-wrap items-center gap-3">
       {modeSwitch}
-      {withChip ? (
-        <div className="max-md:order-last max-md:w-full">
-          {/* plain text: only things you can change are drawn as boxes */}
-          <div className="inline-flex items-center gap-2 py-2 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
-            <span aria-hidden="true" className={cn("h-2 w-2 shrink-0", snapshot ? "bg-accent-primary" : "bg-content-secondary")} />
-            <span className="text-content-primary">
-              {asset?.symbol ?? "…"} {spot != null ? formatUsdSmart(spot) : "…"}
-            </span>
-            <span className="text-content-secondary">Reference price</span>
-          </div>
-        </div>
-      ) : null}
       <div className="ml-auto">{howItWorks}</div>
     </div>
   );
@@ -367,7 +352,7 @@ export function EasyTrade({
   if (!earnSummary || !asset) {
     return (
       <div className={CONTAINER}>
-        {topBar(!earnSummary)}
+        {topBar}
         <div className="mt-8 max-md:mt-6">
           {earnSummary ? (
             <AppCard className="p-6 font-mono text-base text-content-secondary">
@@ -471,6 +456,19 @@ export function EasyTrade({
 
   const unavailable = (Object.keys(available) as Direction[]).filter((d) => !available[d]);
   const earnings = !snapshot ? null : buying ? SENTENCE.quotedPremium : outcome ? `≈${formatUsdAmount(outcome.premium)}` : "—";
+  // the pill's quick amounts: half and all of the balance; none on a buy, whose size is not paid from this balance, snapped onto the step grid; typing covers anything else
+  const { half, max } = presetAmounts({ rule: depositRule, balance, isPut: amountInQuote });
+  const halfText = balance != null ? formatInputValue(half, inputDecimals) : null;
+  const maxText = balance != null ? formatInputValue(max, inputDecimals) : null;
+  const amountPresets =
+    buying || maxText == null || Number(maxText) <= 0
+      ? []
+      : [
+          ...(halfText != null && halfText !== maxText && Number(halfText) > 0
+            ? [{ text: halfText, hint: "half of balance" }]
+            : []),
+          { text: maxText, hint: depositRule != null && balance != null && balance > depositRule.max ? "rule max" : "your balance" },
+        ];
   const amountHint = sizeViolation
     ? { text: sizeViolation, error: true }
     : lockedText != null && amountInput != null && lockedText !== amountText
@@ -479,7 +477,7 @@ export function EasyTrade({
 
   return (
     <div className={CONTAINER}>
-      {topBar(true)}
+      {topBar}
 
       <section aria-label="Your trade" className="mt-8 flex flex-col gap-5 max-md:mt-6">
         <AppSegmented
@@ -523,6 +521,7 @@ export function EasyTrade({
           amountSymbol={symbol}
           amountDecimals={inputDecimals}
           amountInvalid={!!sizeViolation || insufficientBalance}
+          amountPresets={amountPresets}
           earnings={earnings}
           apr={aprPct != null ? formatPct(aprPct) : null}
           reserve={sentenceReserve}
@@ -566,40 +565,10 @@ export function EasyTrade({
           onAmount={setAmountInput}
         />
 
-        {walletAddress || amountHint ? (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
-          {walletAddress ? (
-            <span className="flex items-center gap-2 text-content-secondary">
-              Balance{" "}
-              <span className="tabular-nums text-content-primary">
-                {balance != null ? `${formatAmount(balance, buying || info.isPut ? 2 : 4)} ${balanceSymbol}` : "—"}
-              </span>
-              {buying ? null : (
-                <>
-                  <button
-                    type="button"
-                    disabled={isRequesting}
-                    onClick={() => setAmountInput(formatInputValue(presets.half, inputDecimals))}
-                    className="border border-[rgba(240,240,240,0.1)] px-2 py-0.5 text-xs font-medium text-content-primary transition-colors hover:border-[rgba(240,240,240,0.25)] disabled:opacity-40"
-                  >
-                    HALF
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isRequesting}
-                    onClick={() => setAmountInput(formatInputValue(presets.max, inputDecimals))}
-                    className="border border-[rgba(240,240,240,0.1)] px-2 py-0.5 text-xs font-medium text-content-primary transition-colors hover:border-[rgba(240,240,240,0.25)] disabled:opacity-40"
-                  >
-                    MAX
-                  </button>
-                </>
-              )}
-            </span>
-          ) : null}
-          {amountHint ? (
-            <span className={amountHint.error ? "text-error" : "text-content-secondary"}>{amountHint.text}</span>
-          ) : null}
-        </div>
+        {amountHint ? (
+          <p className={amountHint.error ? "font-mono text-sm text-error" : "font-mono text-sm text-content-secondary"}>
+            {amountHint.text}
+          </p>
         ) : null}
 
         {failure ? (
@@ -624,6 +593,8 @@ export function EasyTrade({
             direction={direction}
             right={labels.right}
             wrong={labels.wrong}
+            strikeOptions1e9={strikeOptions.map((o) => o.strike1e9)}
+            onStrikeChange={setStrikeChoice}
           />
         ) : !snapshot ? (
           <div aria-hidden="true" className="h-[290px] animate-pulse border border-bg-border bg-action-primary/40" />
