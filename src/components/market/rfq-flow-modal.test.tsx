@@ -217,36 +217,7 @@ it("counts down the server-adjusted validity, disables expiry, and refreshes for
   expect((screen.getByRole("button", { name: "Accept Quote" }) as HTMLButtonElement).disabled).toBe(false);
 });
 
-describe("spread quote preview isolation", () => {
-  const spread = { ...preview, terms: { type: "call_spread" as const, lower_strike: 100e9, upper_strike: 120e9 }, strikeDisplay: "100 / 120 USDC", quantity: 1_000_000,
-    spread: { terms: { positionType: 2 as const, lowerStrike: 100_000_000_000n, upperStrike: 120_000_000_000n, quantity: 1_000_000n, underlyingDecimals: 6, quoteDecimals: 6 }, fees: { premiumBps: 100, volumeBps: 100 } } };
-  it("never displays a physical quote or another pair for a spread preview", () => {
-    const h = setup();
-    const props = { ...h.props, preview: spread, requestNonce: 2 };
-    for (const candidate of [
-      { ...quote, terms: { type: "covered_call", strike: 100e9 } },
-      { ...quote, side: "sell", terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 130e9 } },
-      { ...quote, side: "buy", terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 120e9 } },
-    ]) {
-      context.read.mockReturnValue({ ...context.read(), bestQuote: candidate });
-      h.rerender(<RfqFlowModal {...props} />);
-      expect(screen.queryByRole("button", { name: /^Accept/ })).toBeNull();
-    }
-    context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, side: "sell", terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 120e9 }, price: 2e9 } });
-    h.rerender(<RfqFlowModal {...props} />);
-    expect((screen.getByRole("button", { name: /^Accept · \d+s$/ }) as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.getByText("Sell SOL 100/120 call spread · 1 SOL")).toBeTruthy();
-    expect(screen.getAllByText("1.98 USDC")).toHaveLength(1);
-    expect(screen.getByText("18.02 USDC")).toBeTruthy();
-    expect(screen.getByText("101.98 USDC")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toBe("Quote received");
-    expect(screen.queryByRole("img")).toBeNull();
-    context.read.mockReturnValue({ ...context.read(), bestQuote: { ...context.read().bestQuote, price: 20e9 } });
-    h.rerender(<RfqFlowModal {...props} />);
-    expect((screen.getByRole("button", { name: /^Accept · \d+s$/ }) as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  describe("Buy", () => {
+describe("Buy", () => {
     const buyPreview = { side: "buy" as const, terms: { type: "covered_call" as const, strike: 150e9 }, strikeDisplay: "$150", quantity: 2e9, quantityDisplay: "2 SOL" };
     const buyQuote = { ...quote, side: "buy", terms: buyPreview.terms, price: 5e9, net_price: 4.5e9 } as QuoteReceivedMessage;
     const row = (label: string) => screen.getByText(label).parentElement;
@@ -307,5 +278,4 @@ describe("spread quote preview isolation", () => {
       expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.getByText("Total premium")).toBeTruthy();
     });
-  });
 });

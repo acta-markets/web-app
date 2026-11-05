@@ -18,6 +18,8 @@ import {
   spreadMaxGain,
   spreadOutcomeCopy,
   spreadZoneLabels,
+  STRATEGIES,
+  strategyInfo,
   cushionText,
   outcomeCopy,
   scenario,
@@ -199,8 +201,9 @@ describe("buying", () => {
   });
 
   it("labels the chart zones without a kept premium", () => {
-    expect(buyZoneLabels({ asset: "SOL", direction: "above", strike: 150 }).right).toEqual({ title: "Buy SOL at $150", premium: null, kept: false });
-    expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).right.title).toBe("Sell SOL at $150");
+    expect(buyZoneLabels({ asset: "SOL", direction: "above", strike: 150 }).right).toEqual({ title: "SOL above $150 — profit", premium: null, kept: false });
+    expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).right.title).toBe("SOL below $150 — profit");
+    expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).wrong.title).toBe("SOL above $150 — premium lost");
     expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).wrong.premium).toBeNull();
   });
 });
@@ -252,5 +255,45 @@ describe("bought spreads", () => {
     expect(copy.right.result).toContain("up to $20");
     expect(copy.right.note).toContain("No deposit");
     expect(copy.wrong.note).toBe("You lose the premium.");
+  });
+});
+
+describe("strategies", () => {
+  it("maps each side and direction to exactly one strategy", () => {
+    const pairs = STRATEGIES.map((s) => {
+      const i = strategyInfo(s);
+      return `${i.side}:${i.direction}`;
+    });
+    expect(new Set(pairs).size).toBe(STRATEGIES.length);
+    expect(pairs).toContain("buy:above");
+    expect(pairs).toContain("buy:below");
+    expect(pairs).toContain("sell:above");
+    expect(pairs).toContain("sell:below");
+  });
+
+  it("trades the physical market each strategy names", () => {
+    expect(strategyInfo("buy_call")).toMatchObject({ side: "buy", direction: "above", positionType: "covered_call", isPut: false });
+    expect(strategyInfo("buy_put")).toMatchObject({ side: "buy", direction: "below", positionType: "cash_secured_put", isPut: true });
+    expect(strategyInfo("sell_put")).toMatchObject({ side: "sell", direction: "above", positionType: "cash_secured_put", isPut: true });
+    expect(strategyInfo("sell_call")).toMatchObject({ side: "sell", direction: "below", positionType: "covered_call", isPut: false });
+  });
+
+  it("labels every tile and its descriptor", () => {
+    for (const s of STRATEGIES) {
+      const i = strategyInfo(s);
+      expect(i.label).toMatch(/^(Buy|Sell) a (call|put)$/);
+      expect(i.short.length).toBeGreaterThan(0);
+      expect(i.arrow).toMatch(/^[↗↘]$/);
+    }
+  });
+
+  it("carries the strategy label onto the actionable CTA", () => {
+    const base = {
+      walletConnected: true, referralGated: false, pricesLoading: false, hasMarkets: true, hasStrike: true,
+      priced: true, amountEntered: true, sizeViolation: null, insufficientBalance: false,
+      connecting: false, requesting: false,
+    } as const;
+    expect(easyCta({ ...base, ctaLabel: "Buy a call" })).toEqual({ label: "Buy a call", action: "quote" });
+    expect(easyCta(base)).toEqual({ label: "Get quote", action: "quote" });
   });
 });

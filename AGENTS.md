@@ -64,7 +64,7 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Optional browser-accessible RP
 
 **Next.js 14 App Router** with two route groups:
 - `(marketing)` - Landing page at `/`
-- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (Easy mode; `?mode=pro` is a placeholder), `/portfolio`, `/market/[asset]` (the previous market page, reached by direct URL)
+- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (Earn | Profit modes), `/trade2` (UI experiments; `/market/[asset]` redirects to `/trade?asset=…` — the old market page retired into the trade page), `/portfolio`
 
 **Middleware** (`middleware.ts`) gates app routes based on `NEXT_PUBLIC_APP_ENABLED`. When disabled, app routes redirect to landing but `/api/whitelist` remains accessible.
 
@@ -73,15 +73,15 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Optional browser-accessible RP
 - `src/components/solana/solana-connect-button.tsx` - Connect button component
 - Supports Phantom, Solflare, and other Wallet Standard wallets
 
-**Market prices and APR**: The market page uses the configured RFQ backend’s `GetTokenMarketsInfo.reference_price` and indicative premiums, refreshed together every 30 seconds. APR uses the existing SDK formula and is unavailable for stale indicatives. The backend owns oracle access; the frontend has no direct Hermes integration.
+**Market prices and APR**: The trade page uses the configured RFQ backend’s `GetTokenMarketsInfo.reference_price` and indicative premiums, refreshed together every 30 seconds. APR uses the existing SDK formula and is unavailable for stale indicatives; indicatives price the sell side only — buys say "the quoted premium" until an RFQ returns. The backend owns oracle access; the frontend has no direct Hermes integration.
 
-**Trade (Easy mode)**: `/trade` is one sentence the user fills in: "I believe [asset] will be [above/below] [price] on [date]. If I deposit [amount], I get paid ≈$X now." A price chart and the order details sit underneath. Selling: `above` sells a cash-secured put and `below` sells a covered call; right means the deposit comes back, wrong means it converts at the strike. Buying: `above` buys a call and `below` a put, exercised only by a deposit before expiry; or a spread, which takes no deposit, loses at most the premium and pays at most its width: `above` is a call spread, `below` a put spread or a cash put down to zero. A call is never offered without its upper leg. `?asset=` preselects an asset.
-- `src/lib/trade/` - pure logic shared with the market page: `thesis.ts` (direction mapping, outcome math, all Easy copy), `strikes.ts` (expiries, strikes and APR from a snapshot), `sizing.ts` (size rule, deposit and quantity conversion), `assets.ts`, `format.ts`
-- `src/components/trade/easy/` - the sentence, the chart (CoinGecko history via `/api/market/history`) and the order details
-- `src/components/rfq/use-token-markets-snapshot.ts` and `use-quote-request.ts` - the 30s snapshot refresh and the quote request lifecycle, used by both trade pages
+**Trade (Earn | Profit)**: `/trade` is sentence-first: one editable belief — "I believe [asset] will be [above/below] [price] on [date]." — drives everything. As the sentence changes, the thesis chart highlights that strike. Below the sentence: an amount field with balance, a one-line summary (Earn: "You earn ≈$X now · risk $Y"; Profit: "You pay the quoted premium · max loss: the premium"), and a single Trade button that requests the RFQ quote. **Earn** (default, no param) sells the belief — above is a cash-secured put, below a covered call; right means the deposit comes back, wrong converts at the strike. **Profit** (`?mode=profit`) pays the premium — above buys a call, below buys a put; exercised only by a deposit before expiry. No greeks, no strike tables, no spread pickers: view → amount → confirm. `?asset=` preselects an asset; legacy `?mode=pro|easy` fall through to Earn.
+- `src/lib/trade/` - pure trade logic: `thesis.ts` (strategies, direction mapping, outcome math, all copy), `strikes.ts` (expiries, strikes and APR from a snapshot), `sizing.ts` (size rule, deposit and quantity conversion), `assets.ts`, `format.ts`
+- `src/components/trade/sentence/` - `sentence-trade.tsx` (the one sentence UI for both modes), `thesis-sentence.tsx` (the belief line), `thesis-chart.tsx` (the chart; CoinGecko history via `/api/market/history`)
+- `src/components/rfq/use-token-markets-snapshot.ts` and `use-quote-request.ts` - the 30s snapshot refresh and the quote request lifecycle
 - `docs/taker-buy-integration.md` - buy flow end to end: side, quote ranking, signing, wallet-paid deposit, portfolio states, backend contract, where to add things
 
-**Markets**: Assets and per-strategy cap utilization come from the RFQ backend's earn summary. The market page reads live strikes, indicative premiums and reference prices through `GetTokenMarketsInfo`. `src/lib/markets.ts` contains shared display formatting only.
+**Markets**: Assets and per-strategy cap utilization come from the RFQ backend's earn summary. Live strikes, indicative premiums and reference prices come through `GetTokenMarketsInfo`. `src/lib/markets.ts` contains shared display formatting only.
 
 **Vaults**: `/earn` lists vaults by category and `/earn/[vault]` shows one, read from the vault HTTP API (`/api/v1/vaults`, `/vaults/{pda}`, `/cycles`, `/exposure`) through `@acta-markets/ts-sdk/http`:
 - `src/lib/vaults/` - API client, depositor transactions (contract rules come from the SDK's `flows`), plus `registry.ts` (display metadata from the backend, sample-mode fixtures, fallbacks), `metrics.ts` (return and TVL chart series from completed cycles; headline metrics are the backend's `performance`) and `presentation.ts` (APR, status, sort order, exposure, block copy)

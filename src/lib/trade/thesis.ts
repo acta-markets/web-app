@@ -82,6 +82,71 @@ export function directionInfo(direction: Direction, side: TakerSide = "sell"): D
   return direction === "above" ? above : below;
 }
 
+/**
+ * The four Easy strategies: one choice instead of a side plus a direction. A bullish
+ * belief (above) is a bought call or a sold put; a bearish one (below) is a bought put
+ * or a sold call.
+ */
+export type Strategy = "buy_call" | "buy_put" | "sell_call" | "sell_put";
+
+export type StrategyInfo = Omit<DirectionInfo, "value" | "arrow"> & {
+  strategy: Strategy;
+  side: TakerSide;
+  direction: Direction;
+  arrow: string;
+  /** the tile's title, e.g. "Buy a call" */
+  label: string;
+  /** the tile's one-line descriptor */
+  short: string;
+};
+
+const STRATEGY_DEFS: Record<Strategy, { side: TakerSide; direction: Direction; label: string; short: string }> = {
+  buy_call: {
+    side: "buy",
+    direction: "above",
+    label: "Buy a call",
+    short: "Pay a premium to profit from a rise",
+  },
+  buy_put: {
+    side: "buy",
+    direction: "below",
+    label: "Buy a put",
+    short: "Pay a premium to profit from a fall",
+  },
+  sell_put: {
+    side: "sell",
+    direction: "above",
+    label: "Sell a put",
+    short: "Earn a premium on deposited USDC",
+  },
+  sell_call: {
+    side: "sell",
+    direction: "below",
+    label: "Sell a call",
+    short: "Earn a premium on your asset",
+  },
+};
+
+/** Tile order: the two buys, then the two sells. */
+export const STRATEGIES: ReadonlyArray<Strategy> = ["buy_call", "buy_put", "sell_put", "sell_call"];
+
+export function strategyInfo(strategy: Strategy): StrategyInfo {
+  const { side, direction, label, short } = STRATEGY_DEFS[strategy];
+  const info = directionInfo(direction, side);
+  return {
+    strategy,
+    side,
+    direction,
+    label,
+    short,
+    arrow: info.arrow,
+    positionType: info.positionType,
+    isPut: info.isPut,
+    optionName: info.optionName,
+    optionExplainer: info.optionExplainer,
+  };
+}
+
 export function depositSymbol(direction: Direction, asset: string): string {
   return direction === "above" ? "USDC" : asset;
 }
@@ -93,9 +158,9 @@ export function amountSymbol(side: TakerSide, direction: Direction, asset: strin
 
 /** The sentence's fixed words, in reading order around the pills. */
 export const SENTENCE = {
-  lead: "I believe",
-  willBe: "will be",
-  on: "on",
+  lead: "I think",
+  willBe: "ends",
+  on: "by",
   deposit: "If I deposit",
   paid: "I get paid",
   buy: "If I buy",
@@ -429,10 +494,12 @@ export function buyZoneLabels({
   direction: Direction;
   strike: number;
 }): { right: ZoneLabel; wrong: ZoneLabel } {
-  const verb = direction === "above" ? "Buy" : "Sell";
+  const price = formatStrikePrice(strike);
+  const winSide = direction === "above" ? "above" : "below";
+  const loseSide = direction === "above" ? "below" : "above";
   return {
-    right: { title: `${verb} ${asset} at ${formatStrikePrice(strike)}`, premium: null, kept: false },
-    wrong: { title: "Premium lost", premium: null, kept: false },
+    right: { title: `${asset} ${winSide} ${price} \u2014 profit`, premium: null, kept: false },
+    wrong: { title: `${asset} ${loseSide} ${price} \u2014 premium lost`, premium: null, kept: false },
   };
 }
 
@@ -448,6 +515,8 @@ export type EasyCtaState = {
   insufficientBalance: boolean;
   connecting: boolean;
   requesting: boolean;
+  /** the actionable button's label, e.g. "Buy a call"; defaults to "Get quote" */
+  ctaLabel?: string;
 };
 
 export type EasyCta = { label: string; action: "connect" | "redeem" | "quote" | null };
@@ -465,5 +534,5 @@ export function easyCta(s: EasyCtaState): EasyCta {
   if (s.insufficientBalance) return { label: "Insufficient balance", action: null };
   if (s.connecting) return { label: "Connecting...", action: null };
   if (s.requesting) return { label: "Getting quote...", action: null };
-  return { label: "Get quote", action: "quote" };
+  return { label: s.ctaLabel ?? "Get quote", action: "quote" };
 }

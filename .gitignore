@@ -21,3 +21,8 @@ pnpm-debug.log*
 .figma-specs/
 
 *.tsbuildinfo
+
+# agent tool config
+.claude/
+.codex/
+.zcode/

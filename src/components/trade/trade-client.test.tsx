@@ -11,11 +11,11 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/rfq/rfq-provider", () => ({
   useRfqContext: () => ({ connectionState: "connected", getEarnSummary: mocks.getEarnSummary }),
 }));
-vi.mock("@/components/trade/easy/easy-trade", () => ({
-  EasyTrade: ({ initialAsset, modeSwitch, howItWorks }: { initialAsset?: string | null; modeSwitch: ReactNode; howItWorks: ReactNode }) => (
+vi.mock("@/components/trade/sentence/sentence-trade", () => ({
+  SentenceTrade: ({ mode, initialAsset, modeSwitch, howItWorks }: { mode: string; initialAsset?: string | null; modeSwitch: ReactNode; howItWorks: ReactNode }) => (
     <div>
       {modeSwitch}
-      <p>Easy for {initialAsset ?? "default"}</p>
+      <p>{mode === "profit" ? "Profit" : "Earn"} for {initialAsset ?? "default"}</p>
       {howItWorks}
     </div>
   ),
@@ -28,34 +28,49 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Trade page modes", () => {
-  it("opens Easy by default and fetches the earn summary", () => {
+  it("opens Earn by default and fetches the earn summary", () => {
     render(<TradeClient />);
-    expect(screen.getByText("Easy for default")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Easy" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("Earn for default")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Earn" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tablist", { name: "Trading mode" })).toBeTruthy();
     expect(mocks.getEarnSummary).toHaveBeenCalled();
   });
 
-  it("shows the Pro placeholder and switches back to Easy", () => {
-    mocks.search = "mode=pro&asset=JLP";
+  it("shows Profit for ?mode=profit and switches back to Earn", () => {
+    mocks.search = "mode=profit&asset=JLP";
     render(<TradeClient />);
-    expect(screen.getByRole("heading", { name: "Pro mode is coming soon" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Switch to Easy" }));
+    expect(screen.getByText("Profit for JLP")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Earn" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP", { scroll: false });
   });
 
-  it("keeps the other params when switching to Pro", () => {
+  it("keeps the other params when switching to Profit", () => {
     mocks.search = "asset=JLP";
     render(<TradeClient />);
-    expect(screen.getByText("Easy for JLP")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Pro" }));
-    expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP&mode=pro", { scroll: false });
+    expect(screen.getByText("Earn for JLP")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Profit" }));
+    expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP&mode=profit", { scroll: false });
   });
 
-  it("explains the thesis in How it works", () => {
+  it("treats legacy mode links as Earn", () => {
+    mocks.search = "mode=pro";
+    render(<TradeClient />);
+    expect(screen.getByText("Earn for default")).toBeTruthy();
+  });
+
+  it("explains the side it is on in How it works", () => {
     render(<TradeClient />);
     fireEvent.click(screen.getByRole("button", { name: "How it works" }));
-    expect(screen.getByText("1) Say what you believe")).toBeTruthy();
+    expect(screen.getByText("2) Get paid now")).toBeTruthy();
+    expect(screen.queryByText("2) Pay the premium")).toBeNull();
     expect(screen.getByRole("link", { name: "Read the options guide" }).getAttribute("href")).toBe("/docs/guide/options");
+  });
+
+  it("explains the premium paid in Profit's How it works", () => {
+    mocks.search = "mode=profit";
+    render(<TradeClient />);
+    fireEvent.click(screen.getByRole("button", { name: "How it works" }));
+    expect(screen.getByText("2) Pay the premium")).toBeTruthy();
+    expect(screen.queryByText("2) Get paid now")).toBeNull();
   });
 });

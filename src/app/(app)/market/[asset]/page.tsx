@@ -1,15 +1,7 @@
-import { Metadata } from "next";
-import { MarketClient } from "@/components/market/market-client";
+import { redirect } from "next/navigation";
 
-export function generateMetadata({ params }: { params: { asset: string } }): Metadata {
-  return {
-    title: `${params.asset.toUpperCase()} Market`
-  };
-}
-
+// The market page retired into /trade: its sell-only flow is one of the four
+// strategies there now, and /trade preselects the asset from ?asset=.
 export default function MarketPage({ params }: { params: { asset: string } }) {
-  return <MarketClient asset={params.asset} />;
+  redirect(`/trade?asset=${encodeURIComponent(params.asset)}`);
 }
-
-
-

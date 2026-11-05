@@ -15,7 +15,7 @@ function isAppEnabled() {
   return !(v === "false" || v === "0");
 }
 
-const BLOCKED_PAGE_PREFIXES = ["/earn", "/trade", "/portfolio", "/market"];
+const BLOCKED_PAGE_PREFIXES = ["/earn", "/trade", "/trade2", "/portfolio", "/market"];
 const MARKDOWN_PATHS = new Set(["/", "/earn", "/trade"]);
 const DOCS_HOSTNAME = "docs.acta.markets";
 const DOCS_RESERVED_PATHS = [

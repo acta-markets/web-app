@@ -2,6 +2,21 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { priceDomain, ThesisChart } from "./thesis-chart";
 
+vi.mock("lightweight-charts", () => {
+  const noop = () => {};
+  return {
+    createChart: () => ({
+      addSeries: () => ({ setData: noop, createPriceLine: () => ({}), removePriceLine: noop, priceToCoordinate: () => null }),
+      remove: noop,
+      applyOptions: noop,
+      timeScale: () => ({ fitContent: noop, setVisibleRange: noop, setVisibleLogicalRange: noop, getVisibleLogicalRange: () => null, timeToCoordinate: () => null }),
+    }),
+    AreaSeries: class {},
+    ColorType: { Solid: "solid" },
+    LineStyle: { Dashed: 0 },
+  };
+});
+
 const now = 1_800_000_000;
 
 beforeEach(() => {
@@ -26,10 +41,10 @@ const props = {
 };
 
 describe("thesis chart", () => {
-  it("labels the strike and both outcomes over a week of history", async () => {
+  it("labels the strike and both outcomes over a day of history", async () => {
     const fetch = mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
     render(<ThesisChart {...props} direction="above" />);
-    expect(fetch).toHaveBeenCalledWith("/api/market/history?symbol=SOL&range=1w");
+    expect(fetch).toHaveBeenCalledWith("/api/market/history?symbol=SOL&range=1d");
     expect(screen.getByText("Your price $95")).toBeTruthy();
     expect(screen.getByText("Keep 104.50 USDC")).toBeTruthy();
     expect(screen.getByText("Buy 1.1 SOL at $95")).toBeTruthy();
