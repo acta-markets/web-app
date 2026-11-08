@@ -15,7 +15,7 @@ vi.mock("@/components/trade/sentence/sentence-trade", () => ({
   SentenceTrade: ({ mode, initialAsset, modeSwitch, howItWorks }: { mode: string; initialAsset?: string | null; modeSwitch: ReactNode; howItWorks: ReactNode }) => (
     <div>
       {modeSwitch}
-      <p>{mode === "profit" ? "Profit" : "Earn"} for {initialAsset ?? "default"}</p>
+      <p>{mode === "profit" ? "Profit" : "Yield"} for {initialAsset ?? "default"}</p>
       {howItWorks}
     </div>
   ),
@@ -28,34 +28,43 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Trade page modes", () => {
-  it("opens Earn by default and fetches the earn summary", () => {
+  it("opens Yield by default and fetches the earn summary", () => {
     render(<TradeClient />);
-    expect(screen.getByText("Earn for default")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Earn" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("Yield for default")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Yield" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tablist", { name: "Trading mode" })).toBeTruthy();
     expect(mocks.getEarnSummary).toHaveBeenCalled();
   });
 
-  it("shows Profit for ?mode=profit and switches back to Earn", () => {
+  it("shows Profit for ?mode=profit and switches back to Yield", () => {
     mocks.search = "mode=profit&asset=JLP";
     render(<TradeClient />);
     expect(screen.getByText("Profit for JLP")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Earn" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Yield" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP", { scroll: false });
   });
 
   it("keeps the other params when switching to Profit", () => {
     mocks.search = "asset=JLP";
     render(<TradeClient />);
-    expect(screen.getByText("Earn for JLP")).toBeTruthy();
+    expect(screen.getByText("Yield for JLP")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Profit" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP&mode=profit", { scroll: false });
   });
 
-  it("treats legacy mode links as Earn", () => {
+  it("treats legacy mode links as Yield", () => {
     mocks.search = "mode=pro";
     render(<TradeClient />);
-    expect(screen.getByText("Earn for default")).toBeTruthy();
+    expect(screen.getByText("Yield for default")).toBeTruthy();
+  });
+
+  it("teaches the shared mechanics and the risk in How it works", () => {
+    render(<TradeClient />);
+    fireEvent.click(screen.getByRole("button", { name: "How it works" }));
+    expect(screen.getByText("Strike")).toBeTruthy();
+    expect(screen.getByText("Expiry")).toBeTruthy();
+    expect(screen.getByText("Max gain")).toBeTruthy();
+    expect(screen.getByText("Max loss")).toBeTruthy();
   });
 
   it("explains the side it is on in How it works", () => {

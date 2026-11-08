@@ -5,7 +5,6 @@ import type React from "react";
 import { Check, Grab, MoveVertical, X } from "lucide-react";
 import { AreaSeries, createChart, ColorType, LineStyle, type IChartApi, type ISeriesApi, type UTCTimestamp } from "lightweight-charts";
 import { AppCard } from "@/components/app-ui/app-card";
-import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { cn } from "@/lib/cn";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
@@ -26,6 +25,19 @@ const RANGE_NAMES: Record<Range, string> = { "1d": "last 24 hours", "1w": "last 
     never the wild √-growth that made longer horizons read as scrawled noise. */
 export const RANGE_WIGGLE: Record<Range, number> = { "1d": 30, "1w": 36, "1m": 42, "3m": 50 };
 const MAX_POINTS = 200;
+
+const DAY_MS = 86_400_000;
+
+/** The price-history range a strike date deserves: near expiries (a day or two out) look at a
+    day/week, a week out a week, a month out a month, and anything past that three months. The
+    chart always looks back at least as far as the trade has left to run. */
+export function rangeForExpiry(expiryMs: number, nowMs: number): Range {
+  const days = (expiryMs - nowMs) / DAY_MS;
+  if (days <= 1) return "1d";
+  if (days <= 7) return "1w";
+  if (days <= 30) return "1m";
+  return "3m";
+}
 
 const CHART_HEIGHT = 280;
 /** Slim column on the right that pairs each price tick with the return at that price. */
@@ -380,7 +392,13 @@ export function ThesisChart({
   /** Optional header title (the thesis sentence); falls back to "SYMBOL price last N". */
   title?: React.ReactNode;
 }) {
-  const [range, setRange] = useState<Range>("1d");
+  /** Manual price-history pick from the 1D/1W/1M/3M buttons, scoped to the expiry it was made
+      for. A date change drops it, so the scale follows the new date again. */
+  const [manual, setManual] = useState<{ expiryMs: number; range: Range } | null>(null);
+
+  // The expiry drives the default range (nearby dates show a day/week, month-out show a month);
+  // a manual pick overrides it only for the date it was chosen on.
+  const range: Range = manual && manual.expiryMs === expiryMs ? manual.range : rangeForExpiry(expiryMs, Date.now());
   const { points, loading } = usePriceHistory(symbol, range);
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -582,14 +600,14 @@ export function ThesisChart({
     const data = points.map((p) => ({ time: p.t as UTCTimestamp, value: p.v }));
     series.setData(data);
     if (data.length > 0) {
-      // Idempotent 62% history / 38% future split, derived from the bar count so
-      // repeated runs can't compound. (fitContent + readback applies asynchronously,
-      // so reading the visible range right after it returned a stale, already-extended
-      // range that grew on every re-run.)
+      // Idempotent 50/50 history/future split: the "now" boundary sits at the pane's
+      // visual centre, derived from the bar count so repeated runs can't compound.
+      // (fitContent + readback applies asynchronously, so reading the visible range
+      // right after it returned a stale, already-extended range that grew on every re-run.)
       const from = 0;
       const to = data.length - 1;
       const span = to - from;
-      chart.timeScale().setVisibleLogicalRange({ from, to: to + span * 0.62 });
+      chart.timeScale().setVisibleLogicalRange({ from, to: to + span });
     }
   }, [points]);
 
@@ -645,7 +663,7 @@ export function ThesisChart({
   const leftSectionCenterX = geometry
     ? nowX != null
       ? nowX / 2
-      : geometry.paneWidth * 0.31 // no history → the 62/38 split's left-half centre
+      : geometry.paneWidth * 0.25 // no history → the 50/50 split's left-half centre
     : 0;
 
   // The zone labels belong to the FUTURE outcome region, not the history side: they sit just
@@ -654,7 +672,7 @@ export function ThesisChart({
   const futureCenterX = geometry
     ? nowX != null
       ? nowX + (geometry.paneWidth - nowX) / 2
-      : geometry.paneWidth * 0.81 // no history → same 62/38 spot the "now" line would occupy
+      : geometry.paneWidth * 0.75 // no history → same 50/50 spot the "now" line would occupy
     : 0;
   const topZoneCenterY = strikeY != null ? strikeY / 2 : 0;
   const bottomZoneCenterY = strikeY != null ? strikeY + (CHART_HEIGHT - strikeY) / 2 : 0;
@@ -747,16 +765,13 @@ export function ThesisChart({
   const body = (
     <>
       <style>{`@keyframes strike-pulse{0%{box-shadow:0 2px 14px rgba(0,0,0,0.55),0 0 0 0 rgba(42,162,134,0.55)}70%{box-shadow:0 2px 14px rgba(0,0,0,0.55),0 0 0 10px rgba(42,162,134,0)}100%{box-shadow:0 2px 14px rgba(0,0,0,0.55),0 0 0 0 rgba(42,162,134,0)}}`}</style>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          {title ?? (
-            <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px]">
-              <span className="text-content-primary">{symbol} price</span>{" "}
-              <span className="text-content-secondary">{RANGE_NAMES[range]}</span>
-            </div>
-          )}
-        </div>
-        <AppSegmented ariaLabel="Price history range" value={range} onChange={setRange} options={RANGES} className="shrink-0" />
+      <div className="min-w-0">
+        {title ?? (
+          <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px]">
+            <span className="text-content-primary">{symbol} price</span>{" "}
+            <span className="text-content-secondary">{RANGE_NAMES[range]}</span>
+          </div>
+        )}
       </div>
 
       <p className="sr-only">
@@ -767,6 +782,34 @@ export function ThesisChart({
 
       <div className="relative isolate mt-3 flex" style={{ height: CHART_HEIGHT }}>
         <div className="relative isolate min-w-0 flex-1">
+        {/* The history window is a secondary, price-only control: the expiry sets the default
+            range, and these buttons override just the scale without touching the date. Kept as a
+            small overlay in the chart's top-left. */}
+        <div
+          role="tablist"
+          aria-label="Price history range"
+          className="absolute left-1.5 top-1.5 z-20 flex items-center gap-0.5 rounded-md border border-bg-border bg-bg-primary/80 p-0.5 font-mono backdrop-blur-[4px]"
+        >
+          {RANGES.map((o) => {
+            const active = o.value === range;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setManual({ expiryMs, range: o.value })}
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[10px] leading-none tracking-[-0.28px] transition-colors",
+                  active ? "bg-accent-primary/20 text-content-primary" : "text-content-secondary hover:text-content-primary"
+                )}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* full-width price history */}
         <div
           ref={containerRef}
@@ -965,8 +1008,8 @@ export function ThesisChart({
         ) : null}
       </div>
 
-      {/* the two outcomes and the strike, one plain compact caption below the plot — kept out of
-          the data instead of floated over it */}
+      {/* the two outcomes, one plain compact caption below the plot — kept out of the data
+          instead of floated over it. The strike already reads on the chart and in the terms. */}
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs leading-[1.35] text-content-primary">
         <span className="flex items-center gap-1.5">
           <Check aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-additional-green-primary-deep" />
@@ -976,7 +1019,6 @@ export function ThesisChart({
           <X aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-additional-red-primary" />
           {wrong.title}
         </span>
-        <span className="text-content-secondary">Strike {formatStrikePrice(strike)}</span>
       </div>
     </>
   );

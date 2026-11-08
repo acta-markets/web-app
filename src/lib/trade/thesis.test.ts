@@ -100,19 +100,19 @@ describe("scenario", () => {
 describe("cushion sentence", () => {
   it("gives the room left when the thesis holds today", () => {
     // strike 1.5% under spot, thesis "above": right unless it falls more than 1.5%
-    expect(cushionText("SOL", "above", -1.5)).toBe("SOL can fall 1.5% and you're still right.");
+    expect(cushionText("SOL", "above", -1.5, "in 7 days")).toBe("SOL can fall 1.5% in 7 days and you're still right");
     // strike 3.4% over spot, thesis "below": right unless it rises more than 3.4%
-    expect(cushionText("SOL", "below", 3.44)).toBe("SOL can rise 3.4% and you're still right.");
+    expect(cushionText("SOL", "below", 3.44, "in 30 days")).toBe("SOL can rise 3.4% in 30 days and you're still right");
   });
 
   it("gives the move needed when it does not hold yet", () => {
-    expect(cushionText("SOL", "above", 4.8)).toBe("SOL has to rise 4.8% for you to be right.");
-    expect(cushionText("SOL", "below", -2)).toBe("SOL has to fall 2.0% for you to be right.");
+    expect(cushionText("SOL", "above", 4.8, "in 4 days")).toBe("SOL has to rise 4.8% in 4 days for you to be right");
+    expect(cushionText("SOL", "below", -2, "in 2 days")).toBe("SOL has to fall 2.0% in 2 days for you to be right");
   });
 
   it("handles a price at spot and a missing spot", () => {
-    expect(cushionText("SOL", "above", 0.03)).toBe("SOL is right at the strike today.");
-    expect(cushionText("SOL", "below", null)).toBeNull();
+    expect(cushionText("SOL", "above", 0.03, "in 7 days")).toBe("SOL is right at the strike today");
+    expect(cushionText("SOL", "below", null, "in 7 days")).toBeNull();
   });
 });
 
@@ -144,7 +144,7 @@ describe("call to action", () => {
   });
 
   it.each([
-    [{ walletConnected: false }, "Connect wallet", "connect"],
+    [{ walletConnected: false }, "Connect wallet to trade", "connect"],
     [{ referralGated: true }, "Redeem invite to trade", "redeem"],
     [{ pricesLoading: true }, "Loading prices...", null],
     [{ hasMarkets: false }, "No markets right now", null],
@@ -160,7 +160,7 @@ describe("call to action", () => {
   });
 
   it("asks for a wallet before anything else", () => {
-    expect(easyCta({ ...ready, walletConnected: false, pricesLoading: true, priced: false }).label).toBe("Connect wallet");
+    expect(easyCta({ ...ready, walletConnected: false, pricesLoading: true, priced: false }).label).toBe("Connect wallet to trade");
   });
 });
 

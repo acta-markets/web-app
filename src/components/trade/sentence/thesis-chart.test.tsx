@@ -1,6 +1,6 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, returnPctAtPrice, scenarioEndpoints, ThesisChart } from "./thesis-chart";
+import { optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart } from "./thesis-chart";
 
 vi.mock("lightweight-charts", () => {
   const noop = () => {};
@@ -42,15 +42,26 @@ const props = {
 };
 
 describe("thesis chart", () => {
-  it("labels the strike and both outcomes over a day of history", async () => {
+  it("labels the strike and both outcomes, and the expiry auto-picks the week of history", async () => {
     const fetch = mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
     render(<ThesisChart {...props} direction="above" />);
-    expect(fetch).toHaveBeenCalledWith("/api/market/history?symbol=SOL&range=1d");
-    expect(screen.getByText("Strike $95")).toBeTruthy();
+    // a 7-day expiry defaults to a week of history, not a day
+    expect(fetch).toHaveBeenCalledWith("/api/market/history?symbol=SOL&range=1w");
+    expect(screen.getByText(/Strike \$95/)).toBeTruthy();
     expect(screen.getByText("Keep 104.50 USDC")).toBeTruthy();
     expect(screen.getByText("Buy 1.1 SOL at $95")).toBeTruthy();
     expect(screen.getByText(/If you are right: Keep 104\.50 USDC\. If you are wrong: Buy 1\.1 SOL at \$95\./)).toBeTruthy();
     await waitFor(() => expect(screen.getByLabelText("SOL price history. Use the arrow keys to read prices.")).toBeTruthy());
+  });
+
+  it("lets the scale buttons override the range without touching the expiry", async () => {
+    const fetch = mockHistory([[(now - 86400) * 1000, 98], [(now - 43200) * 1000, 100]]);
+    render(<ThesisChart {...props} direction="above" />);
+    expect(fetch).toHaveBeenCalledWith("/api/market/history?symbol=SOL&range=1w");
+    fireEvent.click(screen.getByRole("tab", { name: "3M" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/market/history?symbol=SOL&range=3m"));
+    // the override only changes the window, never the strike date
+    expect(screen.getByText(/Strike \$95/)).toBeTruthy();
   });
 
   it("still shows the outcome zones when there is no price history", async () => {
@@ -58,7 +69,26 @@ describe("thesis chart", () => {
     render(<ThesisChart {...props} direction="below" />);
     await waitFor(() => expect(screen.getByText("Price history unavailable")).toBeTruthy());
     expect(screen.getByText("Keep 104.50 USDC")).toBeTruthy();
-    expect(screen.getByText("Strike $95")).toBeTruthy();
+    expect(screen.getByText(/Strike \$95/)).toBeTruthy();
+  });
+});
+
+describe("range for expiry", () => {
+  const nowMs = now * 1000;
+  const day = 86400_000;
+
+  it("maps near expiries to a day or week, month-out to a month, further out to three months", () => {
+    expect(rangeForExpiry(nowMs + 0.5 * day, nowMs)).toBe("1d");
+    expect(rangeForExpiry(nowMs + 2 * day, nowMs)).toBe("1w");
+    expect(rangeForExpiry(nowMs + 7 * day, nowMs)).toBe("1w");
+    expect(rangeForExpiry(nowMs + 30 * day, nowMs)).toBe("1m");
+    expect(rangeForExpiry(nowMs + 60 * day, nowMs)).toBe("3m");
+    expect(rangeForExpiry(nowMs + 90 * day, nowMs)).toBe("3m");
+  });
+
+  it("never widens beyond the available buckets", () => {
+    expect(rangeForExpiry(nowMs + 400 * day, nowMs)).toBe("3m");
+    expect(rangeForExpiry(nowMs, nowMs)).toBe("1d");
   });
 });
 

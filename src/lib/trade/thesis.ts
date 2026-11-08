@@ -171,18 +171,21 @@ export const SENTENCE = {
 } as const;
 
 /**
- * Where today's price stands against the thesis. When it already holds, the room before
- * it fails ("SOL can fall 1.5% and you're still right."); when it doesn't, the move it
- * needs ("SOL has to rise 4.8% for you to be right."). Ties count as right, as at
- * settlement. `distancePct` is (strike − spot) / spot; null without a spot price.
+ * Where today's price stands against the thesis, over its horizon. When it already holds,
+ * the room before it fails ("SOL can fall 1.5% in 7 days and you're still right"); when it
+ * doesn't, the move it needs ("SOL has to rise 4.8% in 7 days for you to be right"). Ties
+ * count as right, as at settlement. `distancePct` is (strike − spot) / spot; null without a
+ * spot price. `horizon` is the time-to-expiry as a phrase (e.g. "in 7 days"), prepended
+ * before the outcome so the cushion always names when the move must happen.
  */
-export function cushionText(asset: string, direction: Direction, distancePct: number | null): string | null {
+export function cushionText(asset: string, direction: Direction, distancePct: number | null, horizon: string | null): string | null {
   if (distancePct == null) return null;
-  const pct = Math.abs(distancePct).toFixed(1);
-  if (pct === "0.0") return `${asset} is right at the strike today.`;
+  const pct = moveMagnitude(distancePct);
+  if (pct === "0.0") return `${asset} is right at the strike today`;
   const holdsToday = direction === "above" ? distancePct <= 0 : distancePct >= 0;
-  if (holdsToday) return `${asset} can ${direction === "above" ? "fall" : "rise"} ${pct}% and you're still right.`;
-  return `${asset} has to ${direction === "above" ? "rise" : "fall"} ${pct}% for you to be right.`;
+  const time = horizon ? ` ${horizon}` : "";
+  if (holdsToday) return `${asset} can ${direction === "above" ? "fall" : "rise"} ${pct}%${time} and you're still right`;
+  return `${asset} has to ${direction === "above" ? "rise" : "fall"} ${pct}%${time} for you to be right`;
 }
 
 /** The payout line's closing words, e.g. "≈$0.95 (126% APR) now."; the sentence renders exactly this text. */
@@ -208,6 +211,21 @@ export function thesisText({
 /** Strike distance from the reference price, in percent: negative below it. */
 export function strikeDistancePct(strike: number, spot: number | null): number | null {
   return spot != null && spot > 0 ? ((strike - spot) / spot) * 100 : null;
+}
+
+/** The move's magnitude as a one-decimal string, e.g. "5.0". The one number both the strike readout and the cushion sentence speak. */
+function moveMagnitude(distancePct: number): string {
+  return Math.abs(distancePct).toFixed(1);
+}
+
+/**
+ * The move the underlying must make from spot to reach the strike, signed: "+5.0%" rises,
+ * "-5.0%" falls. The single source behind both the strike selector's readout (profit mode)
+ * and the cushion sentence, so the two never drift apart. `null` without a spot price.
+ */
+export function movePctText(strike: number, spot: number | null): string | null {
+  const d = strikeDistancePct(strike, spot);
+  return d == null ? null : `${d > 0 ? "+" : d < 0 ? "-" : ""}${moveMagnitude(d)}%`;
 }
 
 export type Scenario = {
@@ -523,7 +541,7 @@ export type EasyCta = { label: string; action: "connect" | "redeem" | "quote" | 
 
 /** The button's label and what a click does; null action means disabled. */
 export function easyCta(s: EasyCtaState): EasyCta {
-  if (!s.walletConnected) return { label: "Connect wallet", action: "connect" };
+  if (!s.walletConnected) return { label: "Connect wallet to trade", action: "connect" };
   if (s.referralGated) return { label: "Redeem invite to trade", action: "redeem" };
   if (s.pricesLoading) return { label: "Loading prices...", action: null };
   if (!s.hasMarkets) return { label: "No markets right now", action: null };

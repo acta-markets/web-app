@@ -93,20 +93,18 @@ afterEach(() => {
 });
 
 describe("sentence trade", () => {
-  it("opens Earn on a complete thesis with the one-line summary and one Trade button", () => {
+  it("opens Earn on a complete thesis with the premium in the facts and one Trade button", () => {
     render(<SentenceTrade mode="yield" />);
     expect(select("Asset").value).toBe("SOL");
     expect(select("Direction").value).toBe("above");
     expect(select("Strike").value).toBe(String(95e9));
-    expect(select("Expiry").value).toBe(String(now + 7 * day));
+    expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
-    // 1.1 SOL locked at $95, $1 premium per SOL
-    expect(screen.getByText("≈$1.10")).toBeTruthy();
-    expect(screen.getByText("$104.50")).toBeTruthy();
-    expect(screen.getByText(/You're risking \$104\.50, you'd collect \$1\.10 if right\./)).toBeTruthy();
-    expect(screen.getByText("SOL can fall 5.0% and you're still right.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Connect wallet" })).toBeTruthy();
-    // the deposit/payout line left the sentence: it is the summary now
+    // 1.1 SOL locked at $95, $1 premium per SOL — the premium now reads in the facts block
+    // beside the size, not as a risk sentence above the CTA
+    expect(screen.getByText(/≈ \$1\.10/)).toBeTruthy();
+    expect(screen.getByText("SOL can fall 5.0% in 7 days and you're still right")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Connect wallet to trade" })).toBeTruthy();
     expect(screen.queryByText(/I get paid/)).toBeNull();
     expect(screen.queryByText(/If I deposit/)).toBeNull();
     // no options-chain furniture
@@ -125,27 +123,53 @@ describe("sentence trade", () => {
 
   it("switches the amount's token, converting the quantity and keeping the summary in USDC", () => {
     render(<SentenceTrade mode="yield" />);
-    // Earn on a cash-secured put defaults to USDC, 104.50 USDC = 1.1 SOL at $95
-    expect((screen.getByRole("tab", { name: "USDC" }) as HTMLButtonElement).getAttribute("aria-selected")).toBe("true");
+    const token = () => select("Size token");
+    // Yield on a cash-secured put defaults to USDC, 104.50 USDC = 1.1 SOL at $95
+    expect(token().value).toBe("quote");
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
     // switch to SOL: the same quantity, re-expressed in the underlying
-    fireEvent.click(screen.getByRole("tab", { name: "SOL" }));
-    expect((screen.getByRole("tab", { name: "SOL" }) as HTMLButtonElement).getAttribute("aria-selected")).toBe("true");
+    fireEvent.change(token(), { target: { value: "underlying" } });
+    expect(token().value).toBe("underlying");
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("1.1");
-    // the put's risk stays USDC, and the premium is unchanged
-    expect(screen.getByText("≈$1.10")).toBeTruthy();
-    expect(screen.getByText("$104.50")).toBeTruthy();
+    // the put's premium is unchanged when re-expressed in the underlying
+    expect(screen.getByText(/≈ \$1\.10/)).toBeTruthy();
     // switch back round-trips to the USDC amount
-    fireEvent.click(screen.getByRole("tab", { name: "USDC" }));
+    fireEvent.change(token(), { target: { value: "quote" } });
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
+  });
+
+  it("anchors the slider and HALF/MAX to the wallet balance for the selected token", () => {
+    connectWallet();
+    mocks.balance = 50; // 50 USDC in the wallet
+    render(<SentenceTrade mode="yield" />);
+    const slider = screen.getByRole("slider", { name: "Size slider" }) as HTMLInputElement;
+    // the range spans 0 → balance (capped by the rule's max), not the rule's own bounds
+    expect(slider.getAttribute("min")).toBe("0");
+    expect(slider.getAttribute("max")).toBe("50");
+    // MAX fills the balance snapped onto the 9.5 USDC step; HALF fills half of that
+    fireEvent.click(screen.getByRole("button", { name: "MAX" }));
+    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("47.5");
+    fireEvent.click(screen.getByRole("button", { name: "HALF" }));
+    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("19");
   });
 
   it("falls back to the nearest date when the other side does not list the chosen one", () => {
     render(<SentenceTrade mode="yield" />);
-    fireEvent.change(select("Expiry"), { target: { value: String(now + 14 * day) } });
+    fireEvent.click(screen.getByRole("button", { name: "Jan 29" }));
     expect(select("Strike").value).toBe(String(95e9));
     fireEvent.change(select("Direction"), { target: { value: "below" } });
-    expect(select("Expiry").value).toBe(String(now + 7 * day));
+    expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("shows the expiry as inline date buttons, the selected one pressed and selectable", () => {
+    render(<SentenceTrade mode="yield" />);
+    // slash is the shipped pattern: no expiry combobox, every date its own button
+    expect(screen.queryByRole("combobox", { name: "Expiry" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Jan 29" }).getAttribute("aria-pressed")).toBe("false");
+    // picking a later date updates the thesis's expiry
+    fireEvent.click(screen.getByRole("button", { name: "Jan 29" }));
+    expect(screen.getByRole("button", { name: "Jan 29" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("does not present stale premiums, in the sentence or the summary", () => {
@@ -176,17 +200,25 @@ describe("sentence trade", () => {
     expect(select("Strike").disabled).toBe(true);
   });
 
-  it("Profit pays the quote: the summary states the premium, the Trade button buys", () => {
+  it("Profit pays the quote: the summary states the indicative premium, the CTA gets a quote", () => {
     connectWallet();
     render(<SentenceTrade mode="profit" />);
     // a buy trades the call market for above; strikes come from the same listings
     expect(select("Strike").value).toBe(String(105e9));
-    expect(screen.getByText("the quoted premium")).toBeTruthy();
-    expect(screen.getByText("max loss")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Trade" }));
+    // the buy's indicative premium reads in the facts block
+    expect(screen.getByText(/≈ \$1\.00/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Get quote" }));
     expect(mocks.context.submitRfq).toHaveBeenCalledWith({
       market: "call-soon", side: "buy", terms: { type: "covered_call", strike: 105e9 }, quantity: 1_000_000_000, timeoutSeconds: 30,
     });
+  });
+
+  it("Profit shows the move from spot in the strike list, not APR", () => {
+    render(<SentenceTrade mode="profit" />);
+    // a call above spot lists how far the price must rise; a put below how far it must fall
+    expect([...select("Strike").options].map((o) => o.textContent)).toEqual(["$105 · +5.0%", "$110 · +10.0%"]);
+    fireEvent.change(select("Direction"), { target: { value: "below" } });
+    expect([...select("Strike").options].map((o) => o.textContent)).toEqual(["$95 · -5.0%", "$90 · -10.0%", "$80 · -20.0%"]);
   });
 
   it("blocks amounts over the balance or outside the size rule", () => {
