@@ -27,6 +27,7 @@ import {
   depositRuleFor,
   depositToQuantity,
   formatInputValue,
+  presetAmounts,
   quantityToDeposit,
 } from "@/lib/trade/sizing";
 import {
@@ -38,7 +39,6 @@ import {
   type StrikeOption,
 } from "@/lib/trade/strikes";
 import {
-  amountSymbol,
   buyZoneLabels,
   cushionText,
   directionInfo,
@@ -79,8 +79,8 @@ function SentenceSkeleton() {
 
 /**
  * The trade page: one sentence the user edits — "I think [asset] ends [above/below]
- * [$price] on [date]" — the chart echoing it, an amount, a one-line summary and one Trade
- * button. Earn (the sentence's default) sells the view for a premium; Profit pays it.
+ * [strike] by [expiry]" — the chart echoing it, a size, a one-line summary and one Trade
+ * button. Earn sells the view for a premium (a short option); Profit pays it (a long option).
  */
 export function SentenceTrade({
   mode,
@@ -109,6 +109,8 @@ export function SentenceTrade({
   const [strikeChoice, setStrikeChoice] = useState<number | null>(null);
   /** what the user typed; null follows the suggested amount */
   const [amountInput, setAmountInput] = useState<string | null>(null);
+  /** token the amount is entered in; null follows the position's default */
+  const [denomChoice, setDenomChoice] = useState<boolean | null>(null);
 
   const asset = pickAsset(assets, assetChoice ?? initialAsset);
   const snapshot = useTokenMarketsSnapshot(asset?.mint ?? null);
@@ -148,13 +150,26 @@ export function SentenceTrade({
     ? nearestStrike(strikeOptions, strikeChoice)
     : strikeOptions[defaultStrikeIndex(strikeOptions, spot, info.isPut)] ?? null;
 
-  // a sell deposits (USDC for a put, the asset for a call); a buy is sized in the asset
-  const amountInQuote = side === "sell" && info.isPut;
-  const symbol = asset ? amountSymbol(side, direction, asset.symbol) : "USDC";
+  // a sell deposits (USDC for a put, the asset for a call); a buy is sized in the asset.
+  // The token switch lets the user enter the same quantity in either unit.
+  const amountInQuote = denomChoice ?? (side === "sell" && info.isPut);
+  const symbol = asset ? (amountInQuote ? "USDC" : asset.symbol) : "USDC";
   const decimals = snapshot ? Number(snapshot.underlying_decimals) : getToken(asset?.symbol ?? "")?.decimals ?? 9;
   const sizeRule = snapshot?.size_rule ?? null;
   const depositRule = depositRuleFor({ isPut: amountInQuote, sizeRule, strike1e9: strike?.strike1e9 ?? 0, underlyingDecimals: decimals });
   const inputDecimals = depositInputDecimals(depositRule, amountInQuote, decimals);
+  // guards the size field to `inputDecimals` fraction digits, matching AppAmountInput
+  const sizePattern = useMemo(
+    () => (inputDecimals > 0 ? new RegExp(`^\\d*(\\.\\d{0,${inputDecimals}})?$`) : /^\d*$/),
+    [inputDecimals]
+  );
+  // precision for showing the underlying asset amount, from the asset's own size step —
+  // independent of which token the amount happens to be entered in
+  const assetDisplayDecimals = depositInputDecimals(
+    depositRuleFor({ isPut: false, sizeRule, strike1e9: 0, underlyingDecimals: decimals }),
+    false,
+    decimals
+  );
   const suggested = defaultAmount({ rule: depositRule, isPut: amountInQuote, spot });
   const amountText = amountInput ?? (suggested != null ? formatInputValue(suggested, inputDecimals) : "");
   const amount = Number(amountText);
@@ -183,6 +198,16 @@ export function SentenceTrade({
     ? buildScenario({ direction, quantity: quantity / 10 ** decimals, strike: strike.strike, premiumPerUnit, spot })
     : null;
   const distance = strike ? strikeDistancePct(strike.strike, spot) : null;
+
+  // The chart's profit-zone PnL readout: the side, the underlying units the position controls
+  // and the premium in USDC. A buy's premium is only the quote's, so it stays null until then.
+  const chartPnl = quantity != null && strike
+    ? {
+        side,
+        quantity: quantity / 10 ** decimals,
+        premium: side === "sell" ? (outcome?.premium ?? null) : null,
+      }
+    : null;
 
   const balance = useTokenBalance(walletAddress, symbol);
   const insufficientBalance = balance != null && lockedDeposit != null && lockedDeposit > balance + 1e-9;
@@ -230,12 +255,31 @@ export function SentenceTrade({
     setExpiryChoice(null);
     setStrikeChoice(null);
     setAmountInput(null);
+    setDenomChoice(null);
   }
 
   function chooseDirection(next: Direction) {
     setDirectionChoice(next);
     setStrikeChoice(null);
     setAmountInput(null);
+    setDenomChoice(null);
+  }
+
+  /** Flip which token the amount is entered in, re-expressing the same quantity in the new unit. */
+  function chooseToken(next: boolean) {
+    if (next === amountInQuote) return;
+    if (typedQuantity != null && strike) {
+      const converted = quantityToDeposit({ quantity: typedQuantity, isPut: next, strike1e9: strike.strike1e9, underlyingDecimals: decimals });
+      const nextDecimals = depositInputDecimals(
+        depositRuleFor({ isPut: next, sizeRule, strike1e9: strike.strike1e9, underlyingDecimals: decimals }),
+        next,
+        decimals
+      );
+      setAmountInput(formatInputValue(converted, nextDecimals));
+    } else {
+      setAmountInput(null);
+    }
+    setDenomChoice(next);
   }
 
   function onCta() {
@@ -312,11 +356,21 @@ export function SentenceTrade({
   const riskText = outcome
     ? info.isPut
       ? formatUsdAmount(outcome.deposit)
-      : `${formatAmount(outcome.deposit, inputDecimals)} ${asset.symbol}`
+      : `${formatAmount(outcome.deposit, assetDisplayDecimals)} ${asset.symbol}`
     : "—";
+  const strikeLabel = strike ? formatStrikePrice(strike.strike) : null;
+  const expiryLabel = expiry ? formatExpiryDay(expiry.expiryTs * 1000) : null;
+  // the size's consequence in one plain sentence, so the number is never a mystery box
+  const sizeLine = side === "sell"
+    ? outcome
+      ? `You're risking ${riskText}, you'd collect ${formatUsdAmount(outcome.premium)} if right.`
+      : null
+    : strikeLabel
+      ? `You'd collect the payout if ${asset.symbol} ends ${direction} ${strikeLabel}, you pay the quoted premium.`
+      : null;
   const labels = strike
     ? side === "sell" && outcome
-      ? zoneLabels({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: info.isPut ? 4 : inputDecimals })
+      ? zoneLabels({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: assetDisplayDecimals })
       : buyZoneLabels({ asset: asset.symbol, direction, strike: strike.strike })
     : null;
   const amountHint = sizeViolation
@@ -324,141 +378,270 @@ export function SentenceTrade({
     : lockedText != null && amountInput != null && lockedText !== amountText
       ? { text: `Locks ${lockedText} ${symbol} (size steps of ${formatInputValue(depositRule?.step ?? 0, inputDecimals)})`, error: false }
       : null;
+  // the amount's value in the OTHER token, so the switch's effect is visible at a glance
+  const otherAmount = quantity != null && strike
+    ? quantityToDeposit({ quantity, isPut: !amountInQuote, strike1e9: strike.strike1e9, underlyingDecimals: decimals })
+    : null;
+  const conversionHint = otherAmount != null
+    ? amountInQuote
+      ? `≈ ${formatAmount(otherAmount, assetDisplayDecimals)} ${asset.symbol}`
+      : `≈ ${formatUsdAmount(otherAmount)}`
+    : null;
+  const balanceDecimals = amountInQuote ? 2 : 4;
+  const balanceText = walletAddress
+    ? balance != null
+      ? `${formatAmount(balance, balanceDecimals)} ${symbol}`
+      : "—"
+    : null;
+  const presets = presetAmounts({ rule: depositRule, balance, isPut: amountInQuote });
+  const onHalf = depositRule ? () => setAmountInput(formatInputValue(presets.half, inputDecimals)) : undefined;
+  const onMax = depositRule ? () => setAmountInput(formatInputValue(presets.max, inputDecimals)) : undefined;
+
+  const tokenOptions: Array<{ value: "quote" | "underlying"; label: string }> = [
+    { value: "quote", label: "USDC" },
+    { value: "underlying", label: asset.symbol },
+  ];
+
+  // The thesis sentence is the chart's header: it lives above the plot, next to the range
+  // control, so editing the belief and reading the chart happen in one glance and update together.
+  const sentence = (
+    <ThesisSentence
+      compact
+      side={side}
+      asset={asset.symbol}
+      direction={direction}
+      strikeValue={strike ? String(strike.strike1e9) : ""}
+      strikeLabel={strikeLabel}
+      move={cushionText(asset.symbol, direction, distance)}
+      expiryValue={expiry ? String(expiry.expiryTs) : ""}
+      expiryLabel={expiryLabel}
+      options={{
+        assets: assets.map((a) => ({
+          value: a.symbol,
+          label: a.symbol,
+          icon: (
+            <img
+              src={getTokenLogoSrc(a.symbol)}
+              alt=""
+              className="h-4 w-4 shrink-0 rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
+            />
+          ),
+          detail: a.maxApr != null ? `up to ${Math.round(a.maxApr * 100)}% APR` : undefined,
+        })),
+        strikes: strikeOptions.map((o) => ({
+          value: String(o.strike1e9),
+          label: formatStrikePrice(o.strike),
+          detail: o.apr != null ? `${Math.round(o.apr * 100)}% APR` : "no price",
+        })),
+        expiries: expiries.map((e) => ({
+          value: String(e.expiryTs),
+          label: formatExpiryDay(e.expiryTs * 1000),
+          detail: `in ${formatTimeAway(e.expiryTs * 1000, Date.now())}`,
+        })),
+        unavailable: available,
+      }}
+      reserve={sentenceReserve}
+      ready={!!snapshot}
+      disabled={isRequesting}
+      onAsset={chooseAsset}
+      onDirection={chooseDirection}
+      onStrike={(v) => setStrikeChoice(Number(v))}
+      onExpiry={(v) => setExpiryChoice(Number(v))}
+    />
+  );
 
   return (
     <div className={CONTAINER}>
       {topBar(true)}
 
-      <section aria-label="Your trade" className="mt-8 flex flex-col gap-5 max-md:mt-6">
-        <ThesisSentence
-          side={side}
-          asset={asset.symbol}
-          direction={direction}
-          strikeValue={strike ? String(strike.strike1e9) : ""}
-          strikeLabel={strike ? formatStrikePrice(strike.strike) : null}
-          move={cushionText(asset.symbol, direction, distance)}
-          expiryValue={expiry ? String(expiry.expiryTs) : ""}
-          expiryLabel={expiry ? formatExpiryDay(expiry.expiryTs * 1000) : null}
-          options={{
-            assets: assets.map((a) => ({
-              value: a.symbol,
-              label: a.symbol,
-              icon: (
-                <img
-                  src={getTokenLogoSrc(a.symbol)}
-                  alt=""
-                  className="h-4 w-4 shrink-0 rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
-                />
-              ),
-              detail: a.maxApr != null ? `up to ${Math.round(a.maxApr * 100)}% APR` : undefined,
-            })),
-            strikes: strikeOptions.map((o) => ({
-              value: String(o.strike1e9),
-              label: formatStrikePrice(o.strike),
-              detail: o.apr != null ? `${Math.round(o.apr * 100)}% APR` : "no price",
-            })),
-            expiries: expiries.map((e) => ({
-              value: String(e.expiryTs),
-              label: formatExpiryDay(e.expiryTs * 1000),
-              detail: `in ${formatTimeAway(e.expiryTs * 1000, Date.now())}`,
-            })),
-            unavailable: available,
-          }}
-          reserve={sentenceReserve}
-          ready={!!snapshot}
-          disabled={isRequesting}
-          onAsset={chooseAsset}
-          onDirection={chooseDirection}
-          onStrike={(v) => setStrikeChoice(Number(v))}
-          onExpiry={(v) => setExpiryChoice(Number(v))}
-        />
-
-        {/* view → amount → confirm: one field, its balance, the one-line summary, one button */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
-          <label className="flex items-center gap-2 text-content-secondary">
-            Amount
-            <input
-              aria-label={`Amount in ${symbol}`}
-              inputMode="decimal"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="0"
-              value={amountText}
-              disabled={isRequesting}
-              onChange={(e) => {
-                const next = e.target.value.replace(",", ".");
-                const max = inputDecimals > 0 ? new RegExp(`^\\d*(\\.\\d{0,${inputDecimals}})?$`) : /^\d*$/;
-                if (max.test(next)) setAmountInput(next);
-              }}
-              aria-invalid={!!sizeViolation || insufficientBalance || undefined}
-              className={cn(
-                "w-32 border bg-bg-primary px-2 py-1 text-right tabular-nums text-content-primary outline-none transition-colors",
-                sizeViolation || insufficientBalance ? "border-error" : "border-bg-border focus:border-accent-primary"
-              )}
+      <section aria-label="Your trade" className="mt-8 flex flex-col gap-4 max-md:mt-6">
+        {/* one coherent surface: the sentence is the chart's header, the size + summary read as a
+            compact controller beneath it, closed by the CTA */}
+        <AppCard className="p-4 max-md:p-3">
+          {spot != null && strike && expiry && labels ? (
+            <ThesisChart
+              frameless
+              title={sentence}
+              symbol={asset.symbol}
+              spot={spot}
+              strike={strike.strike}
+              expiryMs={expiry.expiryTs * 1000}
+              direction={direction}
+              side={side}
+              right={labels.right}
+              wrong={labels.wrong}
+              onDirection={chooseDirection}
+              strikes={strikeOptions.map((o) => ({ strike: o.strike, strike1e9: o.strike1e9 }))}
+              onStrike={(v) => setStrikeChoice(v)}
+              pnl={chartPnl}
             />
-            <span className="text-content-primary">{symbol}</span>
-          </label>
-          {walletAddress ? (
-            <span className="flex items-center gap-2 text-content-secondary">
-              Balance{" "}
-              <span className="tabular-nums text-content-primary">
-                {balance != null ? `${formatAmount(balance, side === "buy" ? 2 : info.isPut ? 2 : 4)} ${symbol}` : "—"}
-              </span>
-            </span>
+          ) : !snapshot ? (
+            <div className="flex flex-col gap-4">
+              {sentence}
+              <div aria-hidden="true" className="h-[290px] animate-pulse border border-bg-border bg-action-primary/40" />
+            </div>
           ) : null}
-          {amountHint ? (
-            <span className={amountHint.error ? "text-error" : "text-content-secondary"}>{amountHint.text}</span>
-          ) : null}
-        </div>
 
-        <p className="font-mono text-sm leading-[1.4] tracking-[-0.28px] text-content-primary" aria-label="Trade summary">
-          {side === "sell" ? (
-            <>
-              <span className="text-additional-green-primary-deep">You earn</span>{" "}
-              {outcome ? <span>{`≈${formatUsdAmount(outcome.premium)}`}</span> : <span>—</span>}{" "}
-              <span className="text-content-secondary">now</span>{" "}
-              <span className="text-content-secondary">·</span>{" "}
-              <span className="text-content-secondary">risk</span>{" "}
-              <span className="text-additional-red-primary">{riskText}</span>
-            </>
-          ) : (
-            <>
-              <span>You pay</span> <span>the quoted premium</span>{" "}
-              <span className="text-content-secondary">·</span>{" "}
-              <span className="text-content-secondary">max loss</span>{" "}
-              <span className="text-additional-red-primary">the premium</span>
-            </>
-          )}
-        </p>
+          <div className="mt-5 flex flex-col gap-4 border-t border-bg-border pt-4">
+            <div className="flex flex-col gap-1.5">
+              {/* one dense row: the size's consequence fills the freed width on the left and a
+                  compact amount control (token unit + narrow field + presets) sits on the right */}
+              <div
+                className={cn(
+                  "flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 border bg-action-primary px-3 py-2 transition-colors focus-within:border-content-secondary",
+                  sizeViolation || insufficientBalance
+                    ? "border-error"
+                    : "border-bg-border hover:border-content-secondary"
+                )}
+              >
+                {/* the size's consequence, read as a sentence in the freed space (own line on mobile) */}
+                <div className="min-w-0 grow basis-full md:basis-52">
+                  {sizeLine ? (
+                    <p className="font-mono text-sm leading-[1.4] tracking-[-0.28px] text-content-primary">
+                      {sizeLine}
+                    </p>
+                  ) : null}
+                </div>
+
+                <label
+                  htmlFor="trade-size"
+                  className="shrink-0 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary"
+                >
+                  {side === "sell" ? "Deposit" : "Amount"}
+                </label>
+
+                {/* the token unit, as a slim flush toggle rather than a row of buttons */}
+                <div
+                  role="tablist"
+                  aria-label="Size token"
+                  className="flex h-8 shrink-0 items-stretch overflow-hidden border border-bg-border"
+                >
+                  {tokenOptions.map((o) => {
+                    const active = (o.value === "quote") === amountInQuote;
+                    return (
+                      <button
+                        key={o.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        disabled={isRequesting}
+                        onClick={() => chooseToken(o.value === "quote")}
+                        className={cn(
+                          "flex items-center px-2.5 font-mono text-xs leading-[1.2] tracking-[-0.28px] transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                          active
+                            ? "bg-accent-primary/20 text-content-primary"
+                            : "text-content-secondary hover:text-content-primary"
+                        )}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <input
+                  id="trade-size"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="0"
+                  value={amountText}
+                  disabled={isRequesting}
+                  aria-invalid={sizeViolation || insufficientBalance ? true : undefined}
+                  onChange={(e) => {
+                    const next = e.target.value.replace(",", ".");
+                    if (sizePattern.test(next)) setAmountInput(next);
+                  }}
+                  className="min-w-0 flex-1 bg-transparent text-right font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary outline-none placeholder:text-content-secondary disabled:cursor-not-allowed md:w-32 md:flex-none"
+                />
+
+                <div className="flex shrink-0 items-center gap-1">
+                  {onHalf ? (
+                    <button
+                      type="button"
+                      onClick={onHalf}
+                      disabled={isRequesting}
+                      className="font-mono text-xs font-medium leading-[1.2] tracking-[-0.28px] text-accent-secondary transition-colors hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      HALF
+                    </button>
+                  ) : null}
+                  {onMax ? (
+                    <button
+                      type="button"
+                      onClick={onMax}
+                      disabled={isRequesting}
+                      className="font-mono text-xs font-medium leading-[1.2] tracking-[-0.28px] text-accent-secondary transition-colors hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      MAX
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* one slim caption: the amount's other-token value and the wallet balance */}
+              <div className="flex items-center justify-between gap-3 px-1 font-mono text-xs leading-[1.2] tracking-[-0.28px] text-content-secondary">
+                <span className="min-w-0 truncate tabular-nums">{conversionHint}</span>
+                {balanceText != null ? (
+                  <span className="flex shrink-0 items-center gap-1 tabular-nums">
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="shrink-0 text-content-secondary" aria-hidden="true">
+                      <path
+                        d="M6.75 10h6.5M15 5H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2z"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <circle cx="14" cy="10" r="0.75" fill="currentColor" />
+                    </svg>
+                    <span className="truncate">{balanceText}</span>
+                  </span>
+                ) : null}
+              </div>
+
+              {amountHint ? (
+                <p className={cn("font-mono text-sm leading-[1.2] tracking-[-0.28px]", amountHint.error ? "text-error" : "text-content-secondary")}>
+                  {amountHint.text}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <p className="mt-4 border-t border-bg-border pt-4 font-mono text-sm leading-[1.4] tracking-[-0.28px] text-content-primary" aria-label="Trade summary">
+            {side === "sell" ? (
+              <>
+                <span className="text-additional-green-primary-deep">{info.label}</span>{" "}
+                <span className="text-content-secondary">: collect</span>{" "}
+                {outcome ? <span>{`≈${formatUsdAmount(outcome.premium)}`}</span> : <span>—</span>}{" "}
+                <span className="text-content-secondary">premium now</span>{" "}
+                <span className="text-content-secondary">·</span>{" "}
+                <span className="text-content-secondary">max loss</span>{" "}
+                <span className="text-additional-red-primary">{riskText}</span>
+              </>
+            ) : (
+              <>
+                <span>{info.label}</span>{" "}
+                <span className="text-content-secondary">: pay</span>{" "}
+                <span>the quoted premium</span>{" "}
+                <span className="text-content-secondary">·</span>{" "}
+                <span className="text-content-secondary">max loss</span>{" "}
+                <span className="text-additional-red-primary">the premium</span>
+              </>
+            )}
+          </p>
+
+          <AppButton size="lg" className="mt-4 w-full font-mono" disabled={cta.action == null} onClick={onCta}>
+            {cta.label}
+            <img src="/chevron-right-duo-dark.svg" alt="" className="h-6 w-6" />
+          </AppButton>
+        </AppCard>
 
         {failure ? (
           <p role="alert" className="font-mono text-sm text-error">
             {failure.kind === "timeout" ? "No quote came back in 30 seconds. Try again." : failure.message}
           </p>
         ) : null}
-
-        <AppButton size="lg" className="w-full font-mono" disabled={cta.action == null} onClick={onCta}>
-          {cta.label}
-          <img src="/chevron-right-duo-dark.svg" alt="" className="h-6 w-6" />
-        </AppButton>
       </section>
-
-      <div className="mt-10 max-md:mt-8">
-        {spot != null && strike && expiry && labels ? (
-          <ThesisChart
-            symbol={asset.symbol}
-            spot={spot}
-            strike={strike.strike}
-            expiryMs={expiry.expiryTs * 1000}
-            direction={direction}
-            right={labels.right}
-            wrong={labels.wrong}
-            onDirection={chooseDirection}
-          />
-        ) : !snapshot ? (
-          <div aria-hidden="true" className="h-[290px] animate-pulse border border-bg-border bg-action-primary/40" />
-        ) : null}
-      </div>
 
       {modal}
     </div>

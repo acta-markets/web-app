@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 import type { EarnAssetSummary, TokenMarketsInfoData } from "@/lib/rfq-client";
 import { getTokenMint } from "@/lib/tokens";
 import { SentenceTrade } from "./sentence-trade";
@@ -24,7 +25,7 @@ vi.mock("@/components/market/rfq-flow-modal", () => ({
     return null;
   },
 }));
-vi.mock("./thesis-chart", () => ({ ThesisChart: () => null }));
+vi.mock("./thesis-chart", () => ({ ThesisChart: ({ title }: { title?: ReactNode }) => title ?? null }));
 
 const now = 1_800_000_000;
 const day = 86400;
@@ -96,12 +97,13 @@ describe("sentence trade", () => {
     render(<SentenceTrade mode="yield" />);
     expect(select("Asset").value).toBe("SOL");
     expect(select("Direction").value).toBe("above");
-    expect(select("Price").value).toBe(String(95e9));
-    expect(select("Date").value).toBe(String(now + 7 * day));
-    expect((screen.getByLabelText("Amount in USDC") as HTMLInputElement).value).toBe("104.5");
+    expect(select("Strike").value).toBe(String(95e9));
+    expect(select("Expiry").value).toBe(String(now + 7 * day));
+    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
     // 1.1 SOL locked at $95, $1 premium per SOL
     expect(screen.getByText("≈$1.10")).toBeTruthy();
     expect(screen.getByText("$104.50")).toBeTruthy();
+    expect(screen.getByText(/You're risking \$104\.50, you'd collect \$1\.10 if right\./)).toBeTruthy();
     expect(screen.getByText("SOL can fall 5.0% and you're still right.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect wallet" })).toBeTruthy();
     // the deposit/payout line left the sentence: it is the summary now
@@ -116,17 +118,34 @@ describe("sentence trade", () => {
   it("flips to a covered call, swapping the amount symbol and strikes", () => {
     render(<SentenceTrade mode="yield" />);
     fireEvent.change(select("Direction"), { target: { value: "below" } });
-    expect(select("Price").value).toBe(String(105e9));
-    expect([...select("Price").options].map((o) => o.value)).toEqual([String(105e9), String(110e9)]);
-    expect((screen.getByLabelText("Amount in SOL") as HTMLInputElement).value).toBe("1");
+    expect(select("Strike").value).toBe(String(105e9));
+    expect([...select("Strike").options].map((o) => o.value)).toEqual([String(105e9), String(110e9)]);
+    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("1");
+  });
+
+  it("switches the amount's token, converting the quantity and keeping the summary in USDC", () => {
+    render(<SentenceTrade mode="yield" />);
+    // Earn on a cash-secured put defaults to USDC, 104.50 USDC = 1.1 SOL at $95
+    expect((screen.getByRole("tab", { name: "USDC" }) as HTMLButtonElement).getAttribute("aria-selected")).toBe("true");
+    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
+    // switch to SOL: the same quantity, re-expressed in the underlying
+    fireEvent.click(screen.getByRole("tab", { name: "SOL" }));
+    expect((screen.getByRole("tab", { name: "SOL" }) as HTMLButtonElement).getAttribute("aria-selected")).toBe("true");
+    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("1.1");
+    // the put's risk stays USDC, and the premium is unchanged
+    expect(screen.getByText("≈$1.10")).toBeTruthy();
+    expect(screen.getByText("$104.50")).toBeTruthy();
+    // switch back round-trips to the USDC amount
+    fireEvent.click(screen.getByRole("tab", { name: "USDC" }));
+    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
   });
 
   it("falls back to the nearest date when the other side does not list the chosen one", () => {
     render(<SentenceTrade mode="yield" />);
-    fireEvent.change(select("Date"), { target: { value: String(now + 14 * day) } });
-    expect(select("Price").value).toBe(String(95e9));
+    fireEvent.change(select("Expiry"), { target: { value: String(now + 14 * day) } });
+    expect(select("Strike").value).toBe(String(95e9));
     fireEvent.change(select("Direction"), { target: { value: "below" } });
-    expect(select("Date").value).toBe(String(now + 7 * day));
+    expect(select("Expiry").value).toBe(String(now + 7 * day));
   });
 
   it("does not present stale premiums, in the sentence or the summary", () => {
@@ -134,13 +153,13 @@ describe("sentence trade", () => {
     mocks.context.tokenMarketsInfo = { underlyingMint: SOL, data: snapshot({ stale: true }) };
     render(<SentenceTrade mode="yield" />);
     expect(screen.queryByText(/≈\$/)).toBeNull();
-    expect((screen.getByRole("button", { name: "Prices unavailable" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Premium unavailable" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("requests a sell quote from Earn's Trade button at the floored quantity", () => {
     connectWallet();
     render(<SentenceTrade mode="yield" />);
-    fireEvent.change(screen.getByLabelText("Amount in USDC"), { target: { value: "1000" } });
+    fireEvent.change(screen.getByLabelText("Deposit"), { target: { value: "1000" } });
     // 1000 USDC at $95 is 10.526 SOL; the 0.1 SOL step floors it to 10.5 SOL, 997.50 USDC
     expect(screen.getByText("Locks 997.5 USDC (size steps of 9.5)")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Trade" }));
@@ -152,16 +171,16 @@ describe("sentence trade", () => {
       asset: "SOL", terms: { type: "cash_secured_put", strike: 95e9 }, quantity: 10_500_000_000, underlyingDecimals: 9,
       thesis: "SOL will be above $95 on Jan 22",
     });
-    expect((screen.getByLabelText("Amount in USDC") as HTMLInputElement).value).toBe("997.5");
+    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("997.5");
     expect((screen.getByRole("button", { name: "Getting quote..." }) as HTMLButtonElement).disabled).toBe(true);
-    expect(select("Price").disabled).toBe(true);
+    expect(select("Strike").disabled).toBe(true);
   });
 
   it("Profit pays the quote: the summary states the premium, the Trade button buys", () => {
     connectWallet();
     render(<SentenceTrade mode="profit" />);
     // a buy trades the call market for above; strikes come from the same listings
-    expect(select("Price").value).toBe(String(105e9));
+    expect(select("Strike").value).toBe(String(105e9));
     expect(screen.getByText("the quoted premium")).toBeTruthy();
     expect(screen.getByText("max loss")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Trade" }));
@@ -175,7 +194,7 @@ describe("sentence trade", () => {
     mocks.balance = 50;
     render(<SentenceTrade mode="yield" />);
     expect(screen.getByRole("button", { name: "Insufficient balance" })).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Amount in USDC"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Deposit"), { target: { value: "5" } });
     expect(screen.getByRole("button", { name: "Below min 9.5 USDC" })).toBeTruthy();
   });
 

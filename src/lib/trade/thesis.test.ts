@@ -111,7 +111,7 @@ describe("cushion sentence", () => {
   });
 
   it("handles a price at spot and a missing spot", () => {
-    expect(cushionText("SOL", "above", 0.03)).toBe("SOL is right at your price today.");
+    expect(cushionText("SOL", "above", 0.03)).toBe("SOL is right at the strike today.");
     expect(cushionText("SOL", "below", null)).toBeNull();
   });
 });
@@ -148,9 +148,9 @@ describe("call to action", () => {
     [{ referralGated: true }, "Redeem invite to trade", "redeem"],
     [{ pricesLoading: true }, "Loading prices...", null],
     [{ hasMarkets: false }, "No markets right now", null],
-    [{ hasStrike: false }, "Choose a price", null],
-    [{ priced: false }, "Prices unavailable", null],
-    [{ amountEntered: false }, "Enter an amount", null],
+    [{ hasStrike: false }, "Choose a strike", null],
+    [{ priced: false }, "Premium unavailable", null],
+    [{ amountEntered: false }, "Enter a size", null],
     [{ sizeViolation: "Below min 15 USDC" }, "Below min 15 USDC", null],
     [{ insufficientBalance: true }, "Insufficient balance", null],
     [{ connecting: true }, "Connecting...", null],

@@ -60,7 +60,7 @@ const BUY_DIRECTIONS: ReadonlyArray<DirectionInfo> = [
     isPut: false,
     optionName: "Buy a call",
     optionExplainer:
-      "You pay a premium now for the right to buy the asset at your price. To use that right, deposit USDC before expiry.",
+      "You pay a premium now for the right to buy the asset at the strike. To use that right, deposit USDC before expiry.",
   },
   {
     value: "below",
@@ -69,7 +69,7 @@ const BUY_DIRECTIONS: ReadonlyArray<DirectionInfo> = [
     isPut: true,
     optionName: "Buy a put",
     optionExplainer:
-      "You pay a premium now for the right to sell the asset at your price. To use that right, deposit the asset before expiry.",
+      "You pay a premium now for the right to sell the asset at the strike. To use that right, deposit the asset before expiry.",
   },
 ];
 
@@ -179,7 +179,7 @@ export const SENTENCE = {
 export function cushionText(asset: string, direction: Direction, distancePct: number | null): string | null {
   if (distancePct == null) return null;
   const pct = Math.abs(distancePct).toFixed(1);
-  if (pct === "0.0") return `${asset} is right at your price today.`;
+  if (pct === "0.0") return `${asset} is right at the strike today.`;
   const holdsToday = direction === "above" ? distancePct <= 0 : distancePct >= 0;
   if (holdsToday) return `${asset} can ${direction === "above" ? "fall" : "rise"} ${pct}% and you're still right.`;
   return `${asset} has to ${direction === "above" ? "rise" : "fall"} ${pct}% for you to be right.`;
@@ -527,9 +527,9 @@ export function easyCta(s: EasyCtaState): EasyCta {
   if (s.referralGated) return { label: "Redeem invite to trade", action: "redeem" };
   if (s.pricesLoading) return { label: "Loading prices...", action: null };
   if (!s.hasMarkets) return { label: "No markets right now", action: null };
-  if (!s.hasStrike) return { label: "Choose a price", action: null };
-  if (!s.priced) return { label: "Prices unavailable", action: null };
-  if (!s.amountEntered) return { label: "Enter an amount", action: null };
+  if (!s.hasStrike) return { label: "Choose a strike", action: null };
+  if (!s.priced) return { label: "Premium unavailable", action: null };
+  if (!s.amountEntered) return { label: "Enter a size", action: null };
   if (s.sizeViolation) return { label: s.sizeViolation, action: null };
   if (s.insufficientBalance) return { label: "Insufficient balance", action: null };
   if (s.connecting) return { label: "Connecting...", action: null };

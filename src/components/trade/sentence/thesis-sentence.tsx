@@ -78,7 +78,7 @@ function StrikeFace({ label }: { label: string | null }) {
   return label ? <span>{label}</span> : <Pending />;
 }
 
-/** The one editable belief: "I think [asset] ends [above/below] [$price] by [date]." */
+/** The one editable belief: "I think [asset] ends [above/below] [strike] by [expiry]." */
 export function ThesisSentence({
   side,
   asset,
@@ -96,6 +96,7 @@ export function ThesisSentence({
   onDirection,
   onStrike,
   onExpiry,
+  compact = false,
 }: {
   side: TakerSide;
   asset: string;
@@ -115,6 +116,8 @@ export function ThesisSentence({
   onDirection: (direction: Direction) => void;
   onStrike: (strike1e9: string) => void;
   onExpiry: (expiryTs: string) => void;
+  /** caption mode: the belief reads as a compact line under the chart, not a headline */
+  compact?: boolean;
 }) {
   const directionOptions = directionsFor(side).map((d) => {
     const unavailable = options.unavailable?.includes(d.value) ?? false;
@@ -132,7 +135,9 @@ export function ThesisSentence({
   // picking a value never reflows the sentence.
   return (
     <div className="flex flex-col gap-2 font-space font-semibold tracking-[-0.03em] text-content-primary max-md:gap-1">
-      <p className="text-[40px] leading-[1.45] max-lg:text-[34px] max-md:text-[26px] max-md:leading-[1.6]">
+      <p className={compact
+        ? "text-[22px] leading-[1.5] max-lg:text-[20px] max-md:text-[17px]"
+        : "text-[40px] leading-[1.45] max-lg:text-[34px] max-md:text-[26px] max-md:leading-[1.6]"}>
         <span className="whitespace-nowrap">
           {SENTENCE.lead}{" "}
           <AppInlineSelect
@@ -163,7 +168,7 @@ export function ThesisSentence({
         </span>{" "}
         <span className="whitespace-nowrap">
           <AppInlineSelect
-            label="Price"
+            label="Strike"
             value={strikeValue}
             options={options.strikes}
             onChange={onStrike}
@@ -175,7 +180,7 @@ export function ThesisSentence({
           </AppInlineSelect>{" "}
           {SENTENCE.on}{" "}
           <AppInlineSelect
-            label="Date"
+            label="Expiry"
             value={expiryValue}
             options={options.expiries}
             onChange={onExpiry}
@@ -189,7 +194,10 @@ export function ThesisSentence({
         </span>
       </p>
       {/* a quiet line of its own under the belief, so it never touches how the belief wraps; it keeps its height before prices arrive */}
-      <p className="-mt-1 text-[18px] font-medium leading-[1.3] tracking-[-0.02em] text-content-secondary max-md:mt-0 max-md:text-[15px]">
+      <p className={cn(
+        "-mt-1 font-medium leading-[1.3] tracking-[-0.02em] text-content-secondary max-md:mt-0",
+        compact ? "text-[13px]" : "text-[18px] max-md:text-[15px]"
+      )}>
         {move ?? " "}
       </p>
     </div>
