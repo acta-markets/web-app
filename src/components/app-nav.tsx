@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import { ActaLogo } from "@/components/acta-logo";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 
-export type AppTab = "earn" | "trade" | "portfolio";
+export type AppTab = "earn" | "trade" | "portfolio" | "spreads";
 
-const TABS: ReadonlyArray<{ value: AppTab; label: string; href: string }> = [
+const TABS: ReadonlyArray<{ value: AppTab; label: string; href: string; soon?: boolean }> = [
   { value: "earn", label: "Earn", href: "/earn" },
   { value: "trade", label: "Trade", href: "/trade" },
   { value: "portfolio", label: "Portfolio", href: "/portfolio" },
@@ -19,6 +19,7 @@ export function activeAppTab(pathname: string | null): AppTab | null {
   if (under("/earn")) return "earn";
   if (under("/trade") || under("/market")) return "trade";
   if (under("/portfolio")) return "portfolio";
+  if (under("/spreads")) return "spreads";
   return null;
 }
 
@@ -41,14 +42,20 @@ export function AppNav() {
               key={t.value}
               href={t.href}
               aria-current={isActive ? "page" : undefined}
+              aria-label={t.soon ? `${t.label} (coming soon)` : undefined}
               className={[
-                "flex h-8 items-center justify-center whitespace-nowrap border px-3 py-1.5 text-sm font-normal leading-[1.2] tracking-[-0.28px] backdrop-blur-[4px] transition-colors md:h-10 md:px-4 md:py-2.5 md:text-base md:tracking-[-0.32px]",
+                "flex h-8 items-center justify-center gap-1.5 whitespace-nowrap border px-3 py-1.5 text-sm font-normal leading-[1.2] tracking-[-0.28px] backdrop-blur-[4px] transition-colors md:h-10 md:px-4 md:py-2.5 md:text-base md:tracking-[-0.32px]",
                 isActive
                   ? "bg-[rgba(42,162,134,0.2)] border-[rgba(42,162,134,0.3)] text-content-primary"
-                  : "bg-[rgba(18,18,18,0.01)] border-bg-border text-content-secondary hover:text-content-primary"
+                  : t.soon
+                    ? "bg-[rgba(18,18,18,0.01)] border-bg-border text-content-tertiary hover:text-content-primary"
+                    : "bg-[rgba(18,18,18,0.01)] border-bg-border text-content-secondary hover:text-content-primary"
               ].join(" ")}
             >
               {t.label}
+              {t.soon ? (
+                <span className="text-[10px] uppercase tracking-[0.08em] text-content-tertiary">Soon</span>
+              ) : null}
             </Link>
           );
         })}

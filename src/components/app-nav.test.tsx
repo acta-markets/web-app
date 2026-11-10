@@ -19,6 +19,7 @@ describe("activeAppTab", () => {
     ["/trade", "trade"],
     ["/market/SOL", "trade"],
     ["/portfolio", "portfolio"],
+    ["/spreads", "spreads"],
     ["/referrals", null],
     ["/earnings", null],
     [null, null],
@@ -34,6 +35,12 @@ describe("AppNav", () => {
     expect(screen.getByRole("link", { name: "Earn" }).getAttribute("href")).toBe("/earn");
     expect(screen.getByRole("link", { name: "Trade" }).getAttribute("href")).toBe("/trade");
     expect(screen.getByRole("link", { name: "Portfolio" }).getAttribute("href")).toBe("/portfolio");
+  });
+
+  it("does not surface Spreads in the header while it is unbuilt", () => {
+    nav.pathname = "/earn";
+    render(<AppNav />);
+    expect(screen.queryByRole("link", { name: /Spreads/ })).toBeNull();
   });
 
   it("keeps Trade current on a market page", () => {

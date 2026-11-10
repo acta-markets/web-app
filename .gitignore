@@ -26,3 +26,6 @@ pnpm-debug.log*
 .claude/
 .codex/
 .zcode/
+
+# devnet test keypairs - never commit
+scripts/e2e-testnet/*wallet*.json
