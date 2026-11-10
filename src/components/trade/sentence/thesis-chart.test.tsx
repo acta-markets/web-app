@@ -71,6 +71,30 @@ describe("thesis chart", () => {
     expect(screen.getByText("Keep 104.50 USDC")).toBeTruthy();
     expect(screen.getByText(/Strike \$95/)).toBeTruthy();
   });
+
+  it("flips direction from the (flip) button and a clean chart tap, ignoring drags", async () => {
+    const onDirection = vi.fn();
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    const { rerender } = render(<ThesisChart {...props} direction="above" onDirection={onDirection} />);
+    await waitFor(() => expect(screen.getByTestId("chart-flip-surface")).toBeTruthy());
+
+    // the "(flip)" button is keyboard-accessible and flips above → below
+    fireEvent.click(screen.getByRole("button", { name: "Flip direction" }));
+    expect(onDirection).toHaveBeenLastCalledWith("below");
+
+    // a clean tap (press + release, no movement) flips too, below → above
+    rerender(<ThesisChart {...props} direction="below" onDirection={onDirection} />);
+    const surface = screen.getByTestId("chart-flip-surface");
+    fireEvent.pointerDown(surface, { clientX: 40, clientY: 40 });
+    fireEvent.pointerUp(surface, { clientX: 40, clientY: 40 });
+    expect(onDirection).toHaveBeenLastCalledWith("above");
+
+    // a drag that moves more than a few px never flips
+    fireEvent.pointerDown(surface, { clientX: 40, clientY: 40 });
+    fireEvent.pointerMove(surface, { clientX: 140, clientY: 140 });
+    fireEvent.pointerUp(surface, { clientX: 140, clientY: 140 });
+    expect(onDirection).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("range for expiry", () => {

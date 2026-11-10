@@ -45,6 +45,10 @@ const PRICE_COLUMN_WIDTH = 64;
 /** Fixed number of right-axis ticks: the grid count stays put while the labels recompute. */
 const TICK_COUNT = 5;
 const FALLBACK_STRIKE_Y = 130;
+/** How far (px) a pointer may drift between press and release before a chart tap counts as a
+    drag rather than a tap-to-flip. The strike handle captures its own pointer, so this only
+    guards taps that begin on empty chart. */
+const TAP_SLOP = 6;
 
 function downsample(points: Point[], max: number): Point[] {
   if (points.length <= max) return points;
@@ -355,6 +359,154 @@ export type PnlContext = {
   premium: number | null;
 };
 
+type FlipHintVariant = "current" | "underline" | "zones" | "axis" | "coach";
+
+/** Pick an alternative flip affordance for review: `?flip=underline|zones|axis|coach`. */
+function useFlipHintVariant(): FlipHintVariant {
+  const [variant, setVariant] = useState<FlipHintVariant>("current");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const v = new URLSearchParams(window.location.search).get("flip");
+    if (v === "underline" || v === "zones" || v === "axis" || v === "coach") setVariant(v);
+  }, []);
+  return variant;
+}
+
+/** The flip control. Four presentations of the same action, so the affordance can be chosen
+    without touching the mechanics: the pane still flips on a clean tap either way. */
+function FlipAffordance({
+  variant,
+  swapping,
+  onFlip,
+  onSwapEnd,
+}: {
+  variant: FlipHintVariant;
+  swapping: boolean;
+  onFlip: () => void;
+  onSwapEnd: () => void;
+}) {
+  const [coachSeen, setCoachSeen] = useState(true);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setCoachSeen(window.localStorage.getItem("acta.flipCoachSeen") === "1");
+  }, []);
+  const markSeen = () => {
+    setCoachSeen(true);
+    try {
+      window.localStorage.setItem("acta.flipCoachSeen", "1");
+    } catch {
+      /* private mode: the hint simply shows again next visit */
+    }
+  };
+
+  if (variant === "zones") return null;
+
+  if (variant === "underline") {
+    return (
+      <button
+        type="button"
+        onClick={onFlip}
+        aria-label="Flip direction"
+        className="absolute bottom-1.5 left-1/2 z-20 -translate-x-1/2 select-none whitespace-nowrap font-mono text-[10px] leading-none text-content-secondary underline decoration-[0.06em] underline-offset-[0.2em] transition-colors hover:text-content-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
+      >
+        flip direction ⇄
+      </button>
+    );
+  }
+
+  if (variant === "axis") {
+    return (
+      <button
+        type="button"
+        onClick={onFlip}
+        aria-label="Flip direction"
+        title="Tap to flip direction"
+        className="absolute bottom-1.5 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full border border-bg-border bg-bg-primary/90 text-[10px] leading-none text-content-secondary backdrop-blur-[4px] transition-colors hover:border-content-secondary hover:text-content-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
+      >
+        <span aria-hidden="true">⇄</span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onFlip();
+        markSeen();
+      }}
+      title="Tap to flip direction"
+      aria-label="Flip direction"
+      className="group absolute bottom-1.5 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 bg-transparent px-1 py-0.5 font-mono leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary"
+    >
+      <span
+        className={cn("flip-idle flex flex-col items-center gap-y-0.5", swapping && "flip-swapping")}
+        onAnimationEnd={onSwapEnd}
+        aria-hidden="true"
+      >
+        <span className="flip-arrow flip-arrow-up text-[10px] leading-none text-additional-green-primary-deep">↗</span>
+        <span className="flip-arrow flip-arrow-down text-[10px] leading-none text-additional-red-primary">↘</span>
+      </span>
+      <span className="text-[9px] tracking-[-0.28px] text-content-secondary transition-colors group-hover:text-content-primary">flip</span>
+      {variant === "coach" && !coachSeen ? (
+        <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[9px] normal-case tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+          tap anywhere on the chart to flip
+          <span aria-hidden="true" className="absolute left-1/2 top-full -translate-x-1/2 leading-none text-content-secondary">
+            ▾
+          </span>
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/** A zone label that can become the flip control itself: in `zones` mode the tinted halves
+    are labelled by buttons, so the sections read as the things you click. */
+function ZoneChip({
+  text,
+  toneClass,
+  x,
+  y,
+  interactive,
+  onFlip,
+}: {
+  text: string;
+  toneClass: string;
+  x: number;
+  y: number;
+  interactive: boolean;
+  onFlip: () => void;
+}) {
+  const base =
+    "absolute z-[17] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)] transition-colors";
+  if (!interactive) {
+    return (
+      <span aria-hidden="true" className={cn(base, "pointer-events-none", toneClass)} style={{ left: x, top: y }}>
+        {text}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onFlip}
+      aria-label={`Flip direction (${text})`}
+      title="Tap to flip direction"
+      className={cn(
+        base,
+        "pointer-events-auto cursor-pointer hover:border-content-secondary hover:text-content-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary",
+        toneClass
+      )}
+      style={{ left: x, top: y }}
+    >
+      {text}
+      <span aria-hidden="true" className="ml-1 opacity-50">
+        ⇄
+      </span>
+    </button>
+  );
+}
+
 export function ThesisChart({
   symbol,
   spot,
@@ -403,6 +555,8 @@ export function ThesisChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
+  /** True between chart.remove() and the next mount; pending timers and cleanups must not touch a disposed chart. */
+  const disposedRef = useRef(false);
   const domainRef = useRef<[number, number]>([0, 1]);
   const [geometry, setGeometry] = useState<Geometry | null>(null);
   /** One gentle attention pulse on the "your price" handle so its draggability reads at a glance. */
@@ -540,6 +694,46 @@ export function ThesisChart({
     [nearestStrikeIndex, strike, strikesAsc.length, stepStrike]
   );
 
+  /** Tap-to-flip: a clean tap (press and release within a few px, never a drag) on the chart
+      pane toggles the direction, the same above↔below switch as the sentence's direction pill.
+      The strike handle captures its own pointer, so a strike drag never reaches this surface,
+      and the range tabs / strike handle sit above it in z-order. */
+  const tapStartRef = useRef<{ x: number; y: number } | null>(null);
+  const flipHint = useFlipHintVariant();
+  const flipDirection = useCallback(() => {
+    onDirection?.(direction === "above" ? "below" : "above");
+  }, [onDirection, direction]);
+
+  /** A one-shot cross-swap of the two direction arrows, fired whenever the direction flips so the
+      change reads as an inversion instead of a silent state swap. Skips the initial mount (the
+      ref starts on the first direction). */
+  const [swapping, setSwapping] = useState(false);
+  const prevDirectionRef = useRef(direction);
+  useEffect(() => {
+    if (prevDirectionRef.current !== direction) {
+      prevDirectionRef.current = direction;
+      setSwapping(true);
+    }
+  }, [direction]);
+  const onChartPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    tapStartRef.current = { x: e.clientX, y: e.clientY };
+  }, []);
+  const onChartPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const start = tapStartRef.current;
+    if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP) {
+      tapStartRef.current = null;
+    }
+  }, []);
+  const onChartPointerUp = useCallback(() => {
+    if (tapStartRef.current) {
+      tapStartRef.current = null;
+      flipDirection();
+    }
+  }, [flipDirection]);
+  const onChartPointerCancel = useCallback(() => {
+    tapStartRef.current = null;
+  }, []);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -575,7 +769,9 @@ export function ThesisChart({
 
     const resize = () => {
       chart.applyOptions({ width: el.clientWidth || 640 });
-      afterFrame(() => measureRef.current());
+      afterFrame(() => {
+        if (!disposedRef.current) measureRef.current();
+      });
     };
     resize();
     let ro: ResizeObserver | null = null;
@@ -583,7 +779,9 @@ export function ThesisChart({
       ro = new ResizeObserver(resize);
       ro.observe(el);
     }
+    disposedRef.current = false;
     return () => {
+      disposedRef.current = true;
       ro?.disconnect();
       chart.remove();
       chartRef.current = null;
@@ -620,7 +818,9 @@ export function ThesisChart({
     if (!series) return;
     domainRef.current = priceDomain([...points.map((p) => p.v), spot], strike);
     series.setData(points.map((p) => ({ time: p.t as UTCTimestamp, value: p.v })));
-    const t = setTimeout(() => measureRef.current(), 120);
+    const t = setTimeout(() => {
+      if (!disposedRef.current) measureRef.current();
+    }, 120);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, strike]);
@@ -628,7 +828,9 @@ export function ThesisChart({
   // A live spot tick only moves the NOW line/tag within the stable range — re-measure,
   // never re-fit.
   useEffect(() => {
-    const t = setTimeout(() => measureRef.current(), 0);
+    const t = setTimeout(() => {
+      if (!disposedRef.current) measureRef.current();
+    }, 0);
     return () => clearTimeout(t);
   }, [spot]);
 
@@ -649,6 +851,7 @@ export function ThesisChart({
       title: "",
     });
     return () => {
+      if (disposedRef.current) return;
       series.removePriceLine(strikeLine);
     };
   }, [strike]);
@@ -764,7 +967,7 @@ export function ThesisChart({
 
   const body = (
     <>
-      <style>{`@keyframes strike-pulse{0%{box-shadow:0 2px 14px rgba(0,0,0,0.55),0 0 0 0 rgba(42,162,134,0.55)}70%{box-shadow:0 2px 14px rgba(0,0,0,0.55),0 0 0 10px rgba(42,162,134,0)}100%{box-shadow:0 2px 14px rgba(0,0,0,0.55),0 0 0 0 rgba(42,162,134,0)}}`}</style>
+      <style>{`@keyframes strike-pulse{0%{box-shadow:0 2px 14px rgba(0,0,0,0.55),0 0 0 0 rgba(42,162,134,0.55)}70%{box-shadow:0 2px 14px rgba(0,0,0,0.55),0 0 0 10px rgba(42,162,134,0)}100%{box-shadow:0 2px 14px rgba(0,0,0,0.55),0 0 0 0 rgba(42,162,134,0)}}@keyframes flip-idle{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5px)}}@keyframes flip-swap-up{0%,30%{transform:translateY(0)}50%,80%{transform:translateY(100%)}100%{transform:translateY(0)}}@keyframes flip-swap-down{0%,30%{transform:translateY(0)}50%,80%{transform:translateY(-100%)}100%{transform:translateY(0)}}.flip-idle{animation:flip-idle 2.6s ease-in-out infinite}.flip-swapping .flip-arrow-up{animation:flip-swap-up 0.45s ease-in-out}.flip-swapping .flip-arrow-down{animation:flip-swap-down 0.45s ease-in-out}`}</style>
       <div className="min-w-0">
         {title ?? (
           <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px]">
@@ -840,44 +1043,51 @@ export function ThesisChart({
           </svg>
         ) : null}
 
-        {/* clickable above/below zones, split at the strike */}
+        {/* tap-to-flip surface: a clean tap anywhere on the pane toggles direction. It sits at
+            z-10 beneath the range tabs (z-20) and the strike handle (z-18), so pressing a
+            control never flips; the zone/now overlays are pointer-events-none and pass taps
+            straight through. */}
+        <div
+          aria-hidden="true"
+          data-testid="chart-flip-surface"
+          className="absolute inset-0 z-10 cursor-pointer"
+          onPointerDown={onChartPointerDown}
+          onPointerMove={onChartPointerMove}
+          onPointerUp={onChartPointerUp}
+          onPointerCancel={onChartPointerCancel}
+        />
+
+        {/* above/below zones, split at the strike: the tint marks which half is profit (green)
+            vs wrong (red). Purely visual — the flip is the full-pane surface above. */}
         {strikeY != null ? (
           <>
-            <button
-              type="button"
-              onClick={() => onDirection?.("above")}
-              className="absolute inset-x-0 top-0 z-10 cursor-pointer text-left transition hover:brightness-125"
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 transition-colors duration-200"
               style={{ height: Math.max(0, strikeY), background: direction === "above" ? "rgba(34,197,94,0.07)" : "rgba(239,68,68,0.06)" }}
-              aria-label={`Profit if ${symbol} settles above the strike`}
             />
-            <button
-              type="button"
-              onClick={() => onDirection?.("below")}
-              className="absolute inset-x-0 z-10 cursor-pointer text-left transition hover:brightness-125"
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 transition-colors duration-200"
               style={{ top: Math.max(0, strikeY), bottom: 0, background: direction === "below" ? "rgba(34,197,94,0.07)" : "rgba(239,68,68,0.06)" }}
-              aria-label={`Profit if ${symbol} settles below the strike`}
             />
             {/* zone labels: kept out of the click targets and lifted above the frosted future pane */}
-            <span
-              className={cn(
-                "pointer-events-none absolute z-[17] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)]",
-                direction === "above" ? "text-additional-green-primary-deep" : "text-additional-red-primary"
-              )}
-              style={{ left: futureCenterX, top: topZoneCenterY }}
-              aria-hidden="true"
-            >
-              {direction === "above" ? "✓ PROFIT ZONE" : wrongZone}
-            </span>
-            <span
-              className={cn(
-                "pointer-events-none absolute z-[17] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)]",
-                direction !== "above" ? "text-additional-green-primary-deep" : "text-additional-red-primary"
-              )}
-              style={{ left: futureCenterX, top: bottomZoneCenterY }}
-              aria-hidden="true"
-            >
-              {direction !== "above" ? "✓ PROFIT ZONE" : wrongZone}
-            </span>
+            <ZoneChip
+              text={direction === "above" ? "✓ PROFIT ZONE" : wrongZone}
+              toneClass={direction === "above" ? "text-additional-green-primary-deep" : "text-additional-red-primary"}
+              x={futureCenterX}
+              y={topZoneCenterY}
+              interactive={flipHint === "zones"}
+              onFlip={flipDirection}
+            />
+            <ZoneChip
+              text={direction !== "above" ? "✓ PROFIT ZONE" : wrongZone}
+              toneClass={direction !== "above" ? "text-additional-green-primary-deep" : "text-additional-red-primary"}
+              x={futureCenterX}
+              y={bottomZoneCenterY}
+              interactive={flipHint === "zones"}
+              onFlip={flipDirection}
+            />
           </>
         ) : null}
 
@@ -985,6 +1195,13 @@ export function ThesisChart({
             STRIKE {formatStrikePrice(strike)}
           </span>
         ) : null}
+
+        <FlipAffordance
+          variant={flipHint}
+          swapping={swapping}
+          onFlip={flipDirection}
+          onSwapEnd={() => setSwapping(false)}
+        />
 
         </div>
         {/* right axis: price + PnL at each tick, sharing the price's own line */}

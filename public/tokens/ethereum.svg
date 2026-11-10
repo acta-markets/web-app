@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Ethereum">
+  <rect width="32" height="32" fill="#627EEA"/>
+  <path fill="#FFFFFF" d="M16 4 L28 16 L16 21 L4 16 Z"/>
+  <path fill="#FFFFFF" opacity="0.72" d="M4 16 L16 21 L28 16 L16 28 Z"/>
+</svg>

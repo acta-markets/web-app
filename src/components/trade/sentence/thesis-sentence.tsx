@@ -121,13 +121,20 @@ export type SentenceReserve = {
 };
 
 function AssetFace({ symbol }: { symbol: string }) {
+  const logo = getTokenLogoSrc(symbol);
   return (
     <>
-      <img
-        src={getTokenLogoSrc(symbol)}
-        alt=""
-        className="h-[0.75em] w-[0.75em] shrink-0 rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
-      />
+      {logo ? (
+        <img
+          src={logo}
+          alt=""
+          className="h-[0.75em] w-[0.75em] shrink-0 rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
+        />
+      ) : (
+        <span className="flex h-[0.75em] w-[0.75em] shrink-0 items-center justify-center rounded-full border border-[rgba(240,240,240,0.1)] bg-action-primary font-mono text-[0.5em] font-medium leading-none text-content-primary">
+          {symbol.slice(0, 2)}
+        </span>
+      )}
       <span>{symbol}</span>
     </>
   );

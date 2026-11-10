@@ -4,6 +4,9 @@ export {
   ActaWsRequestError,
   WalletAuthProvider,
   verifyAndSignTakerFill,
+  errorAction,
+  isRetryable,
+  type ErrorAction,
   type WalletLike,
   type ConnectionState,
   type ActaWsClientOptions,
@@ -49,7 +52,7 @@ export type {
   ReferralCodeClaimedData,
 } from "@acta-markets/ts-sdk/ws";
 
-import { ActaWsClient, ActaWsRequestError, WalletAuthProvider } from "@acta-markets/ts-sdk/ws";
+import { ActaWsClient, ActaWsRequestError, WalletAuthProvider, errorAction, type ErrorAction } from "@acta-markets/ts-sdk/ws";
 
 import { getDefaultRfqWsUrl } from "./network";
 import packageJson from "../../package.json";
@@ -90,6 +93,28 @@ export function wsErrorMessage(err: unknown): string {
     return err.error.type === "Generic" ? err.error.data.message : err.error.type;
   }
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * What to do next after a request failure, straight from the SDK's error catalog:
+ * `retry`, `reauthenticate`, `refresh`, `reconcile`, `fix_request` or `stop`.
+ * Branch on this instead of matching message text.
+ */
+export function requestAction(err: unknown): ErrorAction | null {
+  if (!(err instanceof ActaWsRequestError)) return null;
+  try {
+    if (err.action) return err.action;
+    return err.error ? errorAction(err.error, err.delivery) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `getTokenMarketsInfo` on an underlying with no markets rejects with `market_not_found`. */
+export function isMarketNotFound(err: unknown): boolean {
+  return err instanceof ActaWsRequestError
+    && err.error?.type === "Generic"
+    && err.error.data.code === "market_not_found";
 }
 
 export function getRfqBackendUrl(): string {

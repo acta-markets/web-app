@@ -56,6 +56,16 @@ export const TOKENS: Record<string, TokenConfig> = {
       devnet: "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4",
     },
   },
+  BTC: {
+    symbol: "BTC",
+    name: "Bitcoin",
+    decimals: 9,
+    logo: "/tokens/bitcoin.svg",
+    mint: {
+      mainnet: "DQF6mZd6e8x1K8dVgxTmNbTifyyzV24HTyEaHAfr98XU",
+      devnet: "DQF6mZd6e8x1K8dVgxTmNbTifyyzV24HTyEaHAfr98XU",
+    },
+  },
   ZBTC: {
     symbol: "zBTC",
     name: "Zeus BTC",
@@ -68,12 +78,23 @@ export const TOKENS: Record<string, TokenConfig> = {
   },
   ETH: {
     symbol: "ETH",
-    name: "Ethereum (Wormhole)",
-    decimals: 8,
-    logo: "/tokens/ethereum.png",
+    name: "Ethereum",
+    decimals: 9,
+    logo: "/tokens/ethereum.svg",
     mint: {
+      // Mainnet ETH on Solana is the Wormhole-wrapped token.
       mainnet: "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
-      devnet: "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs",
+      devnet: "GoLKutCdYNJ8qeFqRLav3n6ytjtiEjvTMJCyRn3paizm",
+    },
+  },
+  QQQ: {
+    symbol: "QQQ",
+    name: "Invesco QQQ Trust",
+    decimals: 9,
+    logo: "/tokens/qqq.svg",
+    mint: {
+      mainnet: "GaNJJYTkqbdvBvqbzPcszAcWjbkjdaJaNkxc4ECWwodU",
+      devnet: "GaNJJYTkqbdvBvqbzPcszAcWjbkjdaJaNkxc4ECWwodU",
     },
   },
   PUMP: {
@@ -177,11 +198,24 @@ export function getTokenMint(symbol: string): string | undefined {
 }
 
 /**
- * Get token logo path
+ * Logos for underlyings the venue trades that aren't mainnet SPL tokens in `TOKENS` (the
+ * devnet xStock / precious-metal references). Kept out of `TOKENS` so the static list stays
+ * "mainnet tokens with real addresses", while these still resolve to a real logo.
+ */
+const EXTRA_LOGOS: Record<string, string> = {
+  TSLA: "/tokens/tsla.svg",
+  XAU: "/tokens/xau.svg",
+};
+
+/**
+ * Get token logo path, or "" when the symbol has no logo. Callers render a monogram
+ * (initials) fallback for the empty case, never a misleading generic glyph — an
+ * unrelated asset like XAU or TSLA must not show the Solana logo.
  */
 export function getTokenLogo(symbol: string): string {
   const token = getToken(symbol);
-  return token?.logo ?? "/tokens/solana.png";
+  if (token?.logo) return token.logo;
+  return EXTRA_LOGOS[symbol.trim().toUpperCase()] ?? "";
 }
 
 /**
@@ -208,6 +242,20 @@ export function normalizeTokenSymbol(symbol: string): string {
   const token = TOKENS[upper];
   if (token) return token.symbol;
   return symbol;
+}
+
+/**
+ * The quote token's display symbol: "USDC" on mainnet, "USDC-DEV" on devnet. The devnet venue
+ * reports the quote as "USDC-Dev" (or "USDC-DEV"); the trade surface is meant to read like the
+ * real product, so the devnet quote is shown under its own explicit name. A quote that is not
+ * a USDC variant (a future EUR/other quote) passes through unchanged, upper-cased. One source
+ * of truth so no surface hardcodes the suffix.
+ */
+export function displayQuoteSymbol(symbol?: string | null): string {
+  const q = symbol?.trim().toUpperCase();
+  if (q && !q.startsWith("USDC")) return q;
+  // The devnet quote is shown as plain USDC: the product reads as mainnet everywhere.
+  return "USDC";
 }
 
 /** Mints the static list misses (e.g. PT terms), from the API's `/tokens`. */

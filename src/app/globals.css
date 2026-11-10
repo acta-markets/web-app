@@ -231,6 +231,143 @@
     font-weight: 600;
   }
 
+  .dataroom-prose {
+    color: var(--content-primary);
+    font-family: var(--font-jetbrains-mono), monospace;
+    font-size: 15px;
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+  }
+
+  .dataroom-prose h1,
+  .dataroom-prose h2,
+  .dataroom-prose h3,
+  .dataroom-prose h4,
+  .dataroom-prose h5,
+  .dataroom-prose h6 {
+    scroll-margin-top: 80px;
+    color: var(--content-primary);
+    font-family: var(--font-space-grotesk), system-ui, sans-serif;
+    font-weight: 600;
+  }
+
+  .dataroom-prose h1 {
+    margin: 0 0 1.4rem;
+    font-size: 1.9rem;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+  }
+
+  .dataroom-prose h2 {
+    margin: 2.75rem 0 0.9rem;
+    font-size: 1.4rem;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+
+  .dataroom-prose h3 {
+    margin: 2rem 0 0.7rem;
+    font-size: 1.1rem;
+    line-height: 1.35;
+  }
+
+  .dataroom-prose h4,
+  .dataroom-prose h5,
+  .dataroom-prose h6 {
+    margin: 1.6rem 0 0.5rem;
+    font-size: 1rem;
+  }
+
+  .dataroom-prose p,
+  .dataroom-prose ul,
+  .dataroom-prose ol,
+  .dataroom-prose blockquote,
+  .dataroom-prose table,
+  .dataroom-prose hr,
+  .dataroom-prose img {
+    margin: 0.9rem 0;
+  }
+
+  .dataroom-prose ul,
+  .dataroom-prose ol {
+    padding-left: 1.6rem;
+  }
+
+  .dataroom-prose ul {
+    list-style: disc;
+  }
+
+  .dataroom-prose ol {
+    list-style: decimal;
+  }
+
+  .dataroom-prose li {
+    margin: 0.3rem 0;
+    padding-left: 0.2rem;
+  }
+
+  .dataroom-prose li::marker {
+    color: var(--accent-secondary);
+  }
+
+  .dataroom-prose a {
+    color: var(--accent-secondary);
+    text-decoration: underline;
+    text-decoration-color: rgb(var(--accent-primary-rgb) / 0.4);
+    text-underline-offset: 3px;
+    transition: color 150ms ease, text-decoration-color 150ms ease;
+  }
+
+  .dataroom-prose a:hover {
+    color: var(--content-primary);
+    text-decoration-color: var(--content-primary);
+  }
+
+  .dataroom-prose strong {
+    color: var(--content-primary);
+    font-weight: 700;
+  }
+
+  .dataroom-prose blockquote {
+    border-left: 2px solid var(--accent-primary);
+    margin-left: 0;
+    padding: 0.5rem 0 0.5rem 1rem;
+    color: var(--content-secondary);
+  }
+
+  .dataroom-prose hr {
+    border: 0;
+    border-top: 1px solid var(--bg-border);
+  }
+
+  .dataroom-prose img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--bg-border);
+  }
+
+  .dataroom-prose table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+
+  .dataroom-prose th,
+  .dataroom-prose td {
+    border: 1px solid var(--bg-border);
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .dataroom-prose th {
+    background: #0b0b0b;
+    color: var(--content-primary);
+    font-weight: 600;
+  }
+
 }
 
 @layer utilities {

@@ -42,10 +42,10 @@ export function Trade2Client() {
 
   const expiries = useMemo<ExpirySides[]>(() => {
     const byTs = new Map<number, ExpirySides>();
-    for (const e of tradableExpiries(snapshot, true, "cash_secured_put", nowSec)) {
+    for (const e of tradableExpiries(snapshot, true, "cash_secured_put", "sell", nowSec)) {
       byTs.set(e.expiryTs, { expiryTs: e.expiryTs, putPda: e.pda, callPda: null });
     }
-    for (const e of tradableExpiries(snapshot, false, "covered_call", nowSec)) {
+    for (const e of tradableExpiries(snapshot, false, "covered_call", "sell", nowSec)) {
       const cur = byTs.get(e.expiryTs);
       if (cur) cur.callPda = e.pda;
       else byTs.set(e.expiryTs, { expiryTs: e.expiryTs, putPda: null, callPda: e.pda });
@@ -64,7 +64,7 @@ export function Trade2Client() {
     const seen = new Set<number>();
     for (const side of sides) {
       const options = side.pda
-        ? buildStrikeOptions(indicativesFor(snapshot, side.pda, side.positionType), {
+        ? buildStrikeOptions(indicativesFor(snapshot, side.pda, side.positionType, "sell"), {
             referencePrice1e9: snapshot ? Number(snapshot.reference_price) : null,
             secondsToExpiry: expiry.expiryTs - nowSec,
             isPut: side.isPut,

@@ -1,5 +1,5 @@
 import type { EarnAssetSummary } from "@/lib/rfq-client";
-import { getToken, normalizeTokenSymbol } from "@/lib/tokens";
+import { normalizeTokenSymbol } from "@/lib/tokens";
 
 export type TradeAsset = {
   symbol: string;
@@ -13,14 +13,18 @@ export type TradeAsset = {
 
 const PREFERRED = ["SOL", "JITOSOL", "JLP", "ZBTC", "ETH", "PUMP", "BONK"];
 
-/** Tradable underlyings from the earn summary, one per mint, known tokens only. */
+/**
+ * Tradable underlyings from the earn summary, one per mint. Every underlying the venue
+ * reports is kept — the earn summary is the source of truth for what is tradable. The
+ * static token list only supplies logos and canonical display names via
+ * `normalizeTokenSymbol`; it never gates a mint out.
+ */
 export function tradeAssets(summary: EarnAssetSummary[] | null): TradeAsset[] {
   if (!summary) return [];
   const byMint = new Map<string, TradeAsset>();
   for (const row of summary) {
     const symbol = normalizeTokenSymbol(row.underlying_symbol);
-    // logo, decimals and wallet balance all come from the token list
-    if (!row.underlying_mint || !getToken(symbol)) continue;
+    if (!row.underlying_mint) continue;
     const entry = byMint.get(row.underlying_mint) ??
       { symbol, mint: row.underlying_mint, hasPut: false, hasCall: false, maxApr: null };
     if (row.position_type === "cash_secured_put") entry.hasPut = true;

@@ -1,3 +1,5 @@
+import { displayQuoteSymbol } from "@/lib/tokens";
+
 export function formatDate(d: Date) {
   return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
 }
@@ -6,12 +8,13 @@ export function formatShortDate(d: Date) {
   return d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
 }
 
+/** A quote-denominated amount with the network's quote label: "USDC" on mainnet, "USDC-DEV" on devnet. */
 export function formatUsdc(n: number) {
   if (!Number.isFinite(n)) return "—";
   return `${n.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  })} USDC`;
+  })} ${displayQuoteSymbol()}`;
 }
 
 /** Expiry day in UTC, e.g. "Nov 7". Settlement times are UTC, so the day never shifts with the viewer. */

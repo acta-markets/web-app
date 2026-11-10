@@ -14,6 +14,9 @@ export const COINGECKO_IDS: Readonly<Record<string, string>> = {
   ZEC: "zcash",
   NVDAX: "nvidia-xstock",
   SPYX: "sp500-xstock",
+  TSLA: "tesla-xstock",
+  // XAU has no coin of its own; PAXG is the closest 1:1 gold-backed series.
+  XAU: "pax-gold",
 };
 
 export function coingeckoId(symbol: string): string | undefined {

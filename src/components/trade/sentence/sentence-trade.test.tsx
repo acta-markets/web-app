@@ -32,9 +32,9 @@ const day = 86400;
 const SOL = getTokenMint("SOL")!;
 const JLP = getTokenMint("JLP")!;
 
-function indicatives(positionType: string, strikes: Array<[number, number | null]>, stale = false) {
+function indicatives(positionType: string, strikes: Array<[number, number | null]>, stale = false, side: "sell" | "buy" = "sell") {
   return {
-    position_type: positionType, updated_at: now, is_stale: stale,
+    position_type: positionType, side, updated_at: now, is_stale: stale,
     strikes: strikes.map(([strike, premium]) => ({ strike: strike * 1e9, best_price: premium == null ? null : premium * 1e9 })),
   };
 }
@@ -45,11 +45,20 @@ function snapshot({ stale = false } = {}): TokenMarketsInfoData {
     reference_price: 100e9, size_rule: { min_size: 1e8, max_size: 1e11, step: 1e8 },
     markets: [
       { market_pda: "put-soon", expiry_ts: now + 7 * day, is_put: true,
-        indicatives: [indicatives("cash_secured_put", [[95, 1], [90, 0.5], [80, null]], stale)] },
+        indicatives: [
+          indicatives("cash_secured_put", [[95, 1], [90, 0.5], [80, null]], stale),
+          indicatives("cash_secured_put", [[95, 1], [90, 0.5], [80, null]], stale, "buy"),
+        ] },
       { market_pda: "put-late", expiry_ts: now + 14 * day, is_put: true,
-        indicatives: [indicatives("cash_secured_put", [[95, 1.5], [90, 0.8]], stale)] },
+        indicatives: [
+          indicatives("cash_secured_put", [[95, 1.5], [90, 0.8]], stale),
+          indicatives("cash_secured_put", [[95, 1.5], [90, 0.8]], stale, "buy"),
+        ] },
       { market_pda: "call-soon", expiry_ts: now + 7 * day, is_put: false,
-        indicatives: [indicatives("covered_call", [[105, 1], [110, 0.5]], stale)] },
+        indicatives: [
+          indicatives("covered_call", [[105, 1], [110, 0.5]], stale),
+          indicatives("covered_call", [[105, 1], [110, 0.5]], stale, "buy"),
+        ] },
     ],
   } as unknown as TokenMarketsInfoData;
 }
@@ -81,6 +90,8 @@ beforeEach(() => {
     earnSummary: summary(),
     tokenMarketsInfo: { underlyingMint: SOL, data: snapshot() },
     getTokenMarketsInfo: mocks.refresh,
+    assetSnapshots: new Map(),
+    getAssetSnapshots: vi.fn(),
     connectionState: "connected", isAuthenticated: false, referralStatus: "unknown",
     bestQuote: null, error: null, submitRfq: vi.fn(), cancelRfq: vi.fn(), openReferralGate: vi.fn(),
     marketDescriptors: [],
@@ -135,6 +146,23 @@ describe("sentence trade", () => {
     expect(screen.getByText(/≈ \$1\.10/)).toBeTruthy();
     // switch back round-trips to the USDC amount
     fireEvent.change(token(), { target: { value: "quote" } });
+    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
+  });
+
+  it("exposes the USDC / asset switch under the size, in lockstep with the in-field dropdown", () => {
+    render(<SentenceTrade mode="yield" />);
+    // a two-option toggle: USDC and the asset's ticker, the quote side selected by default
+    expect(screen.getByRole("button", { name: "USDC", pressed: true })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "SOL", pressed: false })).toBeTruthy();
+    // clicking the asset side flips both controls together — one source of truth
+    fireEvent.click(screen.getByRole("button", { name: "SOL" }));
+    expect(screen.getByRole("button", { name: "SOL", pressed: true })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "USDC", pressed: false })).toBeTruthy();
+    expect(select("Size token").value).toBe("underlying");
+    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("1.1");
+    // and the in-field dropdown drives it back
+    fireEvent.change(select("Size token"), { target: { value: "quote" } });
+    expect(screen.getByRole("button", { name: "USDC", pressed: true })).toBeTruthy();
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
   });
 

@@ -11,7 +11,7 @@ import type { VersionedTransaction } from "@solana/web3.js";
 import { IS_MAINNET } from "@/lib/tokens";
 
 import { BUY_PRODUCT_NAME, isCashSettled, lowerStrike, productLabel, quoteMatchesProduct, type ProductTerms, type TakerSide } from "@/lib/spreads";
-import { formatPrice } from "@/lib/trade/format";
+import { formatPrice, formatUsdc } from "@/lib/trade/format";
 import { BUY_DEPOSIT_REMINDER, BUY_ITM_WARNING, SPREAD_SETTLEMENT_NOTE, buyBreakEven, exerciseDepositText, spreadBounds, spreadBreakEven, spreadMaxGain } from "@/lib/trade/thesis";
 
 export type RfqOrderPreview = {
@@ -222,12 +222,6 @@ export function RfqFlowModal({
     </div>
   );
 
-  const formatUsdc = (value: number) => {
-    return `${value.toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })} USDC`;
-  };
   const quoteQuantity = preview ? preview.quantity / 10 ** preview.underlyingDecimals : 0;
   const isBuy = preview?.side === "buy";
   // a bought spread pays its premium and owes nothing else

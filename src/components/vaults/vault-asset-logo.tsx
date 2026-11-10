@@ -5,7 +5,7 @@ import { getToken } from "@/lib/tokens";
 
 /**
  * Deposit asset logo. Unknown assets get their initials, case kept as is,
- * instead of the Solana fallback `getTokenLogo` would show.
+ * instead of a misleading generic glyph.
  */
 export function VaultAssetLogo({
   symbol,

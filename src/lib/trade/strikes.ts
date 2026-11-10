@@ -1,5 +1,6 @@
 import { computeApyFromScaledPrices } from "@acta-markets/ts-sdk/ws";
 import type { TokenMarketIndicatives, TokenMarketsInfoData } from "@/lib/rfq-client";
+import { isQqqExpiry, restrictsToFridayExpiry } from "./market-hours";
 
 const PRICE_SCALE = 1_000_000_000;
 
@@ -27,8 +28,11 @@ export function expiriesForSide(
   nowSec?: number
 ): ExpiryOption[] {
   if (!data?.markets) return [];
+  const fridayOnly = restrictsToFridayExpiry(data.underlying_symbol ?? "");
   return data.markets
     .filter((m) => m.is_put === isPut && (nowSec == null || Number(m.expiry_ts) > nowSec))
+    // QQQ lists only its weekly expiries: a Friday at 19:30 UTC.
+    .filter((m) => !fridayOnly || isQqqExpiry(Number(m.expiry_ts)))
     .map((m) => ({ pda: m.market_pda, expiryTs: Number(m.expiry_ts), isPut: m.is_put }))
     .sort((a, b) => a.expiryTs - b.expiryTs);
 }
@@ -41,10 +45,11 @@ export function tradableExpiries(
   data: TokenMarketsInfoData | null | undefined,
   isPut: boolean,
   positionType: string,
+  side: TokenMarketIndicatives["side"],
   nowSec: number
 ): ExpiryOption[] {
   return expiriesForSide(data, isPut, nowSec).filter(
-    (e) => (indicativesFor(data, e.pda, positionType)?.strikes.length ?? 0) > 0
+    (e) => (indicativesFor(data, e.pda, positionType, side)?.strikes.length ?? 0) > 0
   );
 }
 
@@ -53,13 +58,14 @@ export function strikesForSide(
   data: TokenMarketsInfoData | null | undefined,
   isPut: boolean,
   positionType: string,
+  side: TokenMarketIndicatives["side"],
   nowSec: number
 ): number[] {
   const strikes = new Set<number>();
   for (const m of data?.markets ?? []) {
     if (m.is_put !== isPut || Number(m.expiry_ts) <= nowSec) continue;
     for (const ind of m.indicatives) {
-      if (ind.position_type === positionType) ind.strikes.forEach((s) => strikes.add(Number(s.strike)));
+      if (ind.position_type === positionType && ind.side === side) ind.strikes.forEach((s) => strikes.add(Number(s.strike)));
     }
   }
   return [...strikes].sort((a, b) => a - b);
@@ -68,11 +74,12 @@ export function strikesForSide(
 export function indicativesFor(
   data: TokenMarketsInfoData | null | undefined,
   marketPda: string | null | undefined,
-  positionType: string
+  positionType: string,
+  side: TokenMarketIndicatives["side"]
 ): TokenMarketIndicatives | undefined {
   return data?.markets
     .find((m) => m.market_pda === marketPda)?.indicatives
-    .find((i) => i.position_type === positionType);
+    .find((i) => i.position_type === positionType && i.side === side);
 }
 
 /**

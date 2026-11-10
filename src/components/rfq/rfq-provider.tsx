@@ -8,6 +8,8 @@ import {
   createRfqClient,
   createWalletAuthProvider,
   ReferralCodeError,
+  isMarketNotFound,
+  requestAction,
   type MarketInfo,
   type MarketDescriptorInfo,
   type PositionInfo,
@@ -25,9 +27,10 @@ import {
   type ClaimErrorReason,
   type TakerFillRfq,
 } from "@/lib/rfq-client";
-import { ALL_POSITIONS } from "@acta-markets/ts-sdk/ws";
+import { ALL_POSITIONS, type TokenProtocolFees } from "@acta-markets/ts-sdk/ws";
 import { isCashSettledTerms, isSpreadTerms, lowerStrike, quoteMatchesProduct, requireStrikeTick, spreadTerms, strikeTicksByMint, validSpreadPremium, type ProductTerms, type TakerSide } from "@/lib/spreads";
 import { RfqNoMakersError } from "@/lib/rfq-collateral";
+import { rememberReferenceTokens } from "@/lib/tokens";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { AppModal } from "@/components/app-ui/app-modal";
 import { ReferralGateModal } from "@/components/referral/referral-gate-modal";
@@ -58,15 +61,22 @@ interface RfqContextValue {
   quoteSecondsRemaining: (quote: QuoteReceivedMessage) => number;
   /** Indicative prices */
   indicativePrices: IndicativePricesMessage | null;
-  /** Returns cached indicatives for specific market + position type */
+  /** Returns cached indicatives for specific market + position type + side */
   getIndicativePricesCached: (
     market: string,
-    positionType: "covered_call" | "cash_secured_put"
+    positionType: "covered_call" | "cash_secured_put",
+    side: TakerSide
   ) => IndicativePricesMessage | null;
   /** Token markets info (single-request bootstrap for market page) */
   tokenMarketsInfo: { underlyingMint: string; data: TokenMarketsInfoData } | null;
+  /** Protocol fees per quote token, keyed by upper-cased symbol, from the venue's token list. */
+  protocolFeesBySymbol: ReadonlyMap<string, TokenProtocolFees>;
   /** Fetch token markets info for an underlying */
   getTokenMarketsInfo: (underlyingMint: string) => void;
+  /** Per-underlying snapshots (mint → snapshot) for the asset picker's live prices. */
+  assetSnapshots: ReadonlyMap<string, TokenMarketsInfoData>;
+  /** Fetch a snapshot for each listed underlying, accumulating into `assetSnapshots`. */
+  getAssetSnapshots: (mints: string[]) => void;
   /** Fetch earn summary */
   getEarnSummary: () => void;
   /** Last error */
@@ -80,7 +90,7 @@ interface RfqContextValue {
   /** the last positions request came back with an error */
   positionsFailed: boolean;
   /** Get indicative prices for a market */
-  getIndicativePrices: (market: string, positionType: "covered_call" | "cash_secured_put") => void;
+  getIndicativePrices: (market: string, positionType: "covered_call" | "cash_secured_put", side: TakerSide) => void;
   /** Submit RFQ request */
   submitRfq: (params: {
     market: string;
@@ -246,7 +256,11 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [indicativePrices, setIndicativePrices] = useState<IndicativePricesMessage | null>(null);
   const [indicativePricesByKey, setIndicativePricesByKey] = useState<Record<string, IndicativePricesMessage>>({});
   const [tokenMarketsInfo, setTokenMarketsInfo] = useState<RfqContextValue["tokenMarketsInfo"]>(null);
+  const [protocolFeesBySymbol, setProtocolFeesBySymbol] = useState<ReadonlyMap<string, TokenProtocolFees>>(
+    new Map()
+  );
   const tokenMarketsRequest = useRef<{ requestId: string; underlyingMint: string } | null>(null);
+  const [assetSnapshots, setAssetSnapshots] = useState<ReadonlyMap<string, TokenMarketsInfoData>>(new Map());
   const [error, setError] = useState<Error | null>(null);
   const pendingRfqAuthWalletRef = useRef<string | null>(null);
   const authInFlightRef = useRef<{ wallet: string; promise: Promise<void>; controller: AbortController } | null>(null);
@@ -268,7 +282,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
   }, [showToast]);
 
   const getIndicativeKey = useCallback(
-    (market: string, positionType: "covered_call" | "cash_secured_put") => `${market}:${positionType}`,
+    (market: string, positionType: "covered_call" | "cash_secured_put", side: TakerSide) => `${market}:${positionType}:${side}`,
     []
   );
 
@@ -363,6 +377,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
           dropRfq();
           tokenMarketsRequest.current = null;
           setTokenMarketsInfo(null);
+          setAssetSnapshots(new Map());
           setMarketDescriptors([]);
           setStrikeTicks(new Map());
         }
@@ -392,6 +407,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         prefetchedIndicativeKeysRef.current.clear();
         tokenMarketsRequest.current = null;
         setTokenMarketsInfo(null);
+        setAssetSnapshots(new Map());
         abandonedRequestsRef.current.clear();
         dropRfq();
         pendingReferralReqsRef.current.clear();
@@ -456,7 +472,11 @@ export function RfqProvider({ children }: RfqProviderProps) {
       });
 
       client.on("requestError", ({ request_id, error }) => {
-        if (request_id === positionsRequestRef.current) setPositionsFailed(true);
+        if (request_id === positionsRequestRef.current) {
+          positionsRequestRef.current = null;
+          setPositionsFailed(true);
+        }
+        if (request_id === activeRfqsRequestRef.current) activeRfqsRequestRef.current = null;
         const kind = pendingReferralReqsRef.current.get(request_id);
         if (!kind) return;
         pendingReferralReqsRef.current.delete(request_id);
@@ -470,7 +490,21 @@ export function RfqProvider({ children }: RfqProviderProps) {
       });
 
       client.on("tokenCaps", (data) => setTokenCaps(data.tokens));
-      client.on("tokens", (tokens) => setStrikeTicks(strikeTicksByMint(tokens)));
+      client.on("tokens", (tokens) => {
+        // The server's token list is the source of truth for symbol/decimals by mint,
+        // so mints the static list misses (XAU, TSLA, "USDC-Dev") still resolve names.
+        rememberReferenceTokens(tokens);
+        setStrikeTicks(strikeTicksByMint(tokens));
+        // The program's own fee schedule, so a local fill preview matches what the server charges.
+        const fees = new Map<string, TokenProtocolFees>();
+        for (const t of tokens) {
+          const key = t.symbol.trim().toUpperCase();
+          // The venue names the quote "USDC-Dev"; the UI shows "USDC", so index both.
+          fees.set(key, t.protocol_fees);
+          if (key.startsWith("USDC")) fees.set("USDC", t.protocol_fees);
+        }
+        setProtocolFeesBySymbol(fees);
+      });
 
       client.on("earnSummary", (data) => {
         // SDK 0.3.0 can emit legacy summaries before descriptor validation fails.
@@ -539,12 +573,13 @@ export function RfqProvider({ children }: RfqProviderProps) {
         for (const mkt of data.markets ?? []) {
           for (const ind of mkt.indicatives ?? []) {
             const pt = ind.position_type as "covered_call" | "cash_secured_put";
-            const key = getIndicativeKey(mkt.market_pda, pt);
+            const key = getIndicativeKey(mkt.market_pda, pt, ind.side);
             updates[key] = {
               next_cursor: null,
               request_id: data.request_id,
               market: mkt.market_pda as IndicativePricesMessage["market"],
               position_type: pt,
+              side: ind.side,
               strikes: ind.strikes,
               updated_at: ind.updated_at,
               is_stale: ind.is_stale,
@@ -558,7 +593,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
       client.on("indicativePrices", (msg) => {
         setIndicativePrices(msg);
-        const key = getIndicativeKey(String(msg.market), msg.position_type as "covered_call" | "cash_secured_put");
+        const key = getIndicativeKey(String(msg.market), msg.position_type as "covered_call" | "cash_secured_put", msg.side);
         setIndicativePricesByKey((prev) => ({ ...prev, [key]: msg }));
       });
 
@@ -590,6 +625,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         if (!pending?.rfqId || msg.rfq_id !== pending.rfqId) return;
         dropRfq();
         if (msg.reason === "no_eligible_makers") setError(new RfqNoMakersError());
+        else if (msg.reason === "server_shutdown") setError(new Error("The server restarted. Please create the request again."));
       });
 
       client.on("orderSubmitted", (orderId, sig) => {
@@ -815,11 +851,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
   }, [fetchPortfolioPrereqs]);
 
   const getIndicativePrices = useCallback(
-    (market: string, positionType: "covered_call" | "cash_secured_put") => {
-      prefetchedIndicativeKeysRef.current.add(getIndicativeKey(market, positionType));
+    (market: string, positionType: "covered_call" | "cash_secured_put", side: TakerSide) => {
+      prefetchedIndicativeKeysRef.current.add(getIndicativeKey(market, positionType, side));
       clientRef.current?.getIndicativePrices({
-        market: market as any,
+        market: address(market),
         position_type: positionType,
+        side,
       });
     },
     [getIndicativeKey]
@@ -833,9 +870,13 @@ export function RfqProvider({ children }: RfqProviderProps) {
     setTokenMarketsInfo(previous => previous?.underlyingMint === underlyingMint ? previous : null);
     void client.requestAll("TokenMarketsInfo", {
       type: "GetTokenMarketsInfo", data: { request_id: requestId, underlying_mint: address(underlyingMint), limit: 200, cursor: { type: "start" } },
-    }).catch(() => {
+    }).catch((err) => {
       if (tokenMarketsRequest.current?.requestId !== requestId) return;
       tokenMarketsRequest.current = null;
+      // `market_not_found` is the expected answer for an asset with no markets, not a failure.
+      if (isMarketNotFound(err)) {
+        console.log(`[RfqProvider] No markets for ${underlyingMint}`);
+      }
       setTokenMarketsInfo(null);
     });
   }, []);
@@ -844,9 +885,28 @@ export function RfqProvider({ children }: RfqProviderProps) {
     clientRef.current?.getEarnSummary();
   }, []);
 
+  const getAssetSnapshots = useCallback((mints: string[]) => {
+    const client = clientRef.current;
+    if (!client) return;
+    for (const mint of new Set(mints.map((m) => m.trim()).filter(Boolean))) {
+      const requestId = crypto.randomUUID();
+      void client.requestAll("TokenMarketsInfo", {
+        type: "GetTokenMarketsInfo", data: { request_id: requestId, underlying_mint: address(mint), limit: 200, cursor: { type: "start" } },
+      }).then((data) => {
+        setAssetSnapshots((prev) => {
+          const next = new Map(prev);
+          next.set(mint, data);
+          return next;
+        });
+      }).catch(() => {
+        // `market_not_found` / error: leave the mint absent so the picker shows a dash, never a stale price
+      });
+    }
+  }, []);
+
   const getIndicativePricesCached = useCallback(
-    (market: string, positionType: "covered_call" | "cash_secured_put") => {
-      return indicativePricesByKey[getIndicativeKey(market, positionType)] ?? null;
+    (market: string, positionType: "covered_call" | "cash_secured_put", side: TakerSide) => {
+      return indicativePricesByKey[getIndicativeKey(market, positionType, side)] ?? null;
     },
     [indicativePricesByKey, getIndicativeKey]
   );
@@ -925,21 +985,41 @@ export function RfqProvider({ children }: RfqProviderProps) {
           underlying_decimals: descriptor.underlying_decimals, quote_decimals: descriptor.quote_decimals,
         } : { market: descriptor.market, terms: params.terms, side, quantity: params.quantity, order_options: [params.terms] },
       };
-      void client.createRfq({ ...rfqRequest, requestId }).catch((err) => {
-        const pending = pendingRfqRef.current;
-        if (pending?.requestId !== requestId) return;
-        const timedOut = err instanceof ActaWsRequestError && err.kind === "timeout";
-        if (timedOut && pending.rfqId) return;
-        if (timedOut) cancelRfq();
-        else dropRfq();
-        const message = wsErrorMessage(err);
-        if (isMissingMarketDescriptorError(message)) {
-          client.getMarketDescriptors();
-          setError(new Error("Market metadata refreshed. Please retry quote request."));
-          return;
-        }
-        setError(new Error(message, { cause: err }));
-      });
+      // The SDK owns the RFQ id: a lost reply is resent with the same id while the RFQ
+      // could still be open, so a retry can never create a second RFQ.
+      void client
+        .createRfqOnce({ ...rfqRequest, requestId })
+        .then(({ rfqId, created }) => {
+          const pending = pendingRfqRef.current;
+          if (pending?.requestId !== requestId) return;
+          // `earlier` means an attempt whose reply was lost had already created it.
+          if (created === "earlier") console.log("[RfqProvider] RFQ already existed:", rfqId);
+          if (rfqId) pending.rfqId = rfqId;
+        })
+        .catch((err) => {
+          const pending = pendingRfqRef.current;
+          if (pending?.requestId !== requestId) return;
+          const action = requestAction(err);
+          const message = wsErrorMessage(err);
+          if (isMissingMarketDescriptorError(message)) {
+            client.getMarketDescriptors();
+            setError(new Error("Market metadata refreshed. Please retry quote request."));
+            return;
+          }
+          if (action === "reconcile") {
+            // It may already exist; the SDK checks status rather than replaying blindly.
+            setError(new Error("The quote request may already exist. Checking its status.", { cause: err }));
+            return;
+          }
+          if (action === "retry") {
+            cancelRfq();
+            setError(new Error(message, { cause: err }));
+            return;
+          }
+          if (action === "refresh") client.getMarketDescriptors();
+          dropRfq();
+          setError(new Error(message, { cause: err }));
+        });
     },
     [marketDescriptors, strikeTicks, cancelRfq, dropRfq]
   );
@@ -955,8 +1035,21 @@ export function RfqProvider({ children }: RfqProviderProps) {
     const client = clientRef.current;
     if (!client) throw new Error("RFQ connection is unavailable");
     if (!client.isAuthenticated()) throw new Error("RFQ connection is not authenticated");
-    await client.submitSignedSponsoredTx({ orderIdHex, txBase64 });
-  }, []);
+    // Never submits the same order twice: an uncertain attempt is resolved by looking the
+    // order up instead of signing again.
+    const outcome = await client.submitOrderOnce({ orderIdHex, txBase64 });
+    if (outcome.type === "accepted") return;
+    if (outcome.type === "rejected") {
+      const reason =
+        outcome.error.type === "Generic" ? outcome.error.data.message : String(outcome.error.type);
+      throw new Error(`${reason} (${outcome.action})`);
+    }
+    // reconciled: the reply was lost, so the SDK checked the order itself.
+    void fetchPositions();
+    if (outcome.state.type === "unknown") {
+      throw new Error("Could not confirm this order. Do not retry; positions will show the final state.");
+    }
+  }, [fetchPositions]);
 
   const redeemInvite = useCallback((rawCode: string) => {
     const client = clientRef.current;
@@ -1036,7 +1129,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
     indicativePrices,
     getIndicativePricesCached,
     tokenMarketsInfo,
+    protocolFeesBySymbol,
     getTokenMarketsInfo,
+    assetSnapshots,
+    getAssetSnapshots,
     getEarnSummary,
     error,
     authenticate,

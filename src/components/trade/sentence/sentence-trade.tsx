@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import * as React from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
 import { useTokenBalance } from "@/components/wallet/use-token-balance";
@@ -16,8 +16,9 @@ import { AppCard } from "@/components/app-ui/app-card";
 import { cn } from "@/lib/cn";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
 import { getTokenLogoSrc } from "@/lib/token-assets";
-import { formatStrikePrice } from "@/lib/markets";
-import { getToken } from "@/lib/tokens";
+import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
+import { displayQuoteSymbol, getToken, getTokenMint } from "@/lib/tokens";
+import { grossFromIndicative1e9, previewFill, type TokenProtocolFees } from "@acta-markets/ts-sdk/ws";
 import { pickAsset, tradeAssets } from "@/lib/trade/assets";
 import { formatAmount, formatExpiryDay, formatTimeAway, formatUsdAmount } from "@/lib/trade/format";
 import {
@@ -98,13 +99,28 @@ export function SentenceTrade({
   howItWorks?: React.ReactNode;
 }) {
   const side: TakerSide = mode === "yield" ? "sell" : "buy";
-  const { earnSummary, referralStatus, openReferralGate, isAuthenticated } = useRfqContext();
+  const { earnSummary, referralStatus, openReferralGate, isAuthenticated, assetSnapshots, getAssetSnapshots, protocolFeesBySymbol } = useRfqContext();
   const { rpc, selectedAccount, signTransaction } = useSolana();
   const { openSidebar } = useWalletSidebar();
   const walletAddress = selectedAccount?.address;
   const { isRequesting, failure, request, modalProps } = useQuoteRequest({ cancelOnUnmount: true });
 
   const assets = useMemo(() => tradeAssets(earnSummary), [earnSummary]);
+  // Live reference prices for the asset picker: one snapshot per listed underlying, refreshed
+  // while the tab is visible. Each snapshot resolves independently; a mint with no markets
+  // simply never appears, so the picker shows a dash instead of a stale guess.
+  const assetMints = useMemo(() => assets.map((a) => a.mint), [assets]);
+  useEffect(() => {
+    if (assetMints.length === 0) return;
+    const refresh = () => { if (!document.hidden) getAssetSnapshots(assetMints); };
+    refresh();
+    const id = window.setInterval(refresh, 30_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [assetMints, getAssetSnapshots]);
   const [assetChoice, setAssetChoice] = useState<string | null>(null);
   const [directionChoice, setDirectionChoice] = useState<Direction>("above");
   const [expiryChoice, setExpiryChoice] = useState<number | null>(null);
@@ -117,12 +133,15 @@ export function SentenceTrade({
   const asset = pickAsset(assets, assetChoice ?? initialAsset);
   const snapshot = useTokenMarketsSnapshot(asset?.mint ?? null);
   const spot = spotFromSnapshot(snapshot);
+  /** Spot for any listed underlying, from the picker's per-mint snapshots (selected one first). */
+  const spotFor = (mint: string) =>
+    spotFromSnapshot(assetSnapshots.get(mint) ?? (mint === asset?.mint ? snapshot : null));
   const nowSec = Math.floor(Date.now() / 1000);
 
   // the sentence's direction maps straight onto the strategy for the mode: above is a put
   // to sell or a call to buy, below the other way round
-  const putExpiries = useMemo(() => tradableExpiries(snapshot, true, "cash_secured_put", nowSec), [snapshot, nowSec]);
-  const callExpiries = useMemo(() => tradableExpiries(snapshot, false, "covered_call", nowSec), [snapshot, nowSec]);
+  const putExpiries = useMemo(() => tradableExpiries(snapshot, true, "cash_secured_put", side, nowSec), [snapshot, side, nowSec]);
+  const callExpiries = useMemo(() => tradableExpiries(snapshot, false, "covered_call", side, nowSec), [snapshot, side, nowSec]);
   const marketOpen = (isPut: boolean) =>
     snapshot ? (isPut ? putExpiries : callExpiries).length > 0 : (isPut ? asset?.hasPut : asset?.hasCall) ?? true;
   const available = directionsFor(side).filter((d) => !marketOpen(d.isPut)).map((d) => d.value);
@@ -140,13 +159,13 @@ export function SentenceTrade({
   const strikeOptions = useMemo(
     () =>
       expiry
-        ? buildStrikeOptions(indicativesFor(snapshot, expiry.pda, info.positionType), {
+        ? buildStrikeOptions(indicativesFor(snapshot, expiry.pda, info.positionType, side), {
           referencePrice1e9: snapshot ? Number(snapshot.reference_price) : null,
           secondsToExpiry: expiry.expiryTs - nowSec,
           isPut: info.isPut,
         })
         : [],
-    [snapshot, expiry, info.positionType, info.isPut, nowSec]
+    [snapshot, expiry, info.positionType, info.isPut, side, nowSec]
   );
   const strike = strikeChoice != null
     ? nearestStrike(strikeOptions, strikeChoice)
@@ -155,7 +174,11 @@ export function SentenceTrade({
   // a sell deposits (USDC for a put, the asset for a call); a buy is sized in the asset.
   // The token switch lets the user enter the same quantity in either unit.
   const amountInQuote = denomChoice ?? (side === "sell" && info.isPut);
-  const symbol = asset ? (amountInQuote ? "USDC" : asset.symbol) : "USDC";
+  // The venue reports the quote as "USDC-Dev" on devnet; `displayQuoteSymbol` names it
+  // "USDC-DEV" there and "USDC" on mainnet, so the switch, balance, size and summary all
+  // follow one source of truth instead of a hardcoded "USDC".
+  const quoteSymbol = displayQuoteSymbol(snapshot?.quote_symbol ?? "USDC");
+  const symbol = asset ? (amountInQuote ? quoteSymbol : asset.symbol) : quoteSymbol;
   const decimals = snapshot ? Number(snapshot.underlying_decimals) : getToken(asset?.symbol ?? "")?.decimals ?? 9;
   const sizeRule = snapshot?.size_rule ?? null;
   const depositRule = depositRuleFor({ isPut: amountInQuote, sizeRule, strike1e9: strike?.strike1e9 ?? 0, underlyingDecimals: decimals });
@@ -203,6 +226,31 @@ export function SentenceTrade({
   // the time-to-expiry the cushion sentence names, e.g. "in 7 days"; null without an expiry
   const horizon = expiry ? `in ${formatTimeAway(expiry.expiryTs * 1000, Date.now())}` : null;
 
+  const quoteDecimalsForPreview = snapshot ? Number(snapshot.quote_decimals) : 6;
+  const preview = useMemo(() => {
+    if (!strike || strike.bestPrice == null || quantity == null || quantity <= 0) return null;
+    const fees: TokenProtocolFees =
+      protocolFeesBySymbol?.get(quoteSymbol.trim().toUpperCase()) ??
+      protocolFeesBySymbol?.get("USDC") ??
+      { type: "none" };
+    const terms = { type: info.positionType, strike: strike.strike1e9 };
+    const indicative = BigInt(Math.round(strike.bestPrice));
+    // A sell indicative already has the fee taken out; previewFill wants the gross price.
+    const gross = side === "sell" ? grossFromIndicative1e9(indicative, "sell", terms, fees) : indicative;
+    try {
+      return previewFill({
+        terms,
+        side,
+        quantity: BigInt(Math.round(quantity)),
+        price1e9: gross,
+        fees,
+        underlyingDecimals: decimals,
+        quoteDecimals: quoteDecimalsForPreview
+      });
+    } catch {
+      return null;
+    }
+  }, [strike, quantity, side, protocolFeesBySymbol, quoteSymbol, info.positionType, decimals, quoteDecimalsForPreview]);
   // The chart's profit-zone PnL readout: the side, the underlying units the position controls
   // and the premium in USDC. A buy's premium is only the quote's, so it stays null until then.
   const chartPnl = quantity != null && strike
@@ -213,7 +261,14 @@ export function SentenceTrade({
       }
     : null;
 
-  const balance = useTokenBalance(walletAddress, symbol);
+  // Balance is keyed on the market's actual mint (server-authoritative), never the symbol
+  // looked up in the static list — that list's devnet mints are wrong (HYPE, JITOSOL). The
+  // entered token is USDC when sizing in quote, else the underlying asset.
+  const balanceMint = amountInQuote || !asset ? getTokenMint("USDC") : asset.mint;
+  const balanceTokenDecimals = amountInQuote || !asset
+    ? (snapshot ? Number(snapshot.quote_decimals) : getToken("USDC")?.decimals ?? 6)
+    : (snapshot ? Number(snapshot.underlying_decimals) : getToken(asset.symbol)?.decimals ?? 9);
+  const balance = useTokenBalance(walletAddress, balanceMint, balanceTokenDecimals);
   const insufficientBalance = balance != null && lockedDeposit != null && lockedDeposit > balance + 1e-9;
 
   // every value the direction and strike pills could show for this asset on either side:
@@ -222,8 +277,8 @@ export function SentenceTrade({
     const strikes = new Map<number, { key: string; label: string }>();
     if (snapshot && asset) {
       for (const sideInfo of directionsFor(side)) {
-        for (const e of tradableExpiries(snapshot, sideInfo.isPut, sideInfo.positionType, nowSec)) {
-          for (const o of buildStrikeOptions(indicativesFor(snapshot, e.pda, sideInfo.positionType), {
+        for (const e of tradableExpiries(snapshot, sideInfo.isPut, sideInfo.positionType, side, nowSec)) {
+          for (const o of buildStrikeOptions(indicativesFor(snapshot, e.pda, sideInfo.positionType, side), {
             referencePrice1e9: Number(snapshot.reference_price),
             secondsToExpiry: e.expiryTs - nowSec,
             isPut: sideInfo.isPut,
@@ -343,12 +398,23 @@ export function SentenceTrade({
   }
 
   const strikeLabel = strike ? formatStrikePrice(strike.strike) : null;
+  // Exact fill economics from the SDK's local preview: the program's own fee formula, so the
+  // premium, the lock and the breakeven agree with what the venue will actually settle.
   // The key facts beside the size: a compact label/value table re-expressing what the chart
   // already shows. The premium is indicative (marked ≈) and only confirmed on quote.
-  const premiumText = outcome ? `≈ ${formatUsdAmount(outcome.premium)}` : "—";
+  const premiumUsd = preview ? Number(preview.premium.netAtoms) / 10 ** quoteDecimalsForPreview : null;
+  const premiumText = premiumUsd != null ? `≈ ${formatUsdAmount(premiumUsd)}` : "—";
+  // Breakeven only when the preview has one that differs from the strike, so it earns its row.
+  const breakevenText = preview ? formatUsdSmart(Number(preview.breakeven1e9) / 1e9) : null;
   const expiryText = expiry ? `${formatExpiryDay(expiry.expiryTs * 1000)} · ${formatTimeAway(expiry.expiryTs * 1000, Date.now())}` : "—";
   const sizeText = quantity != null ? `${formatAmount(quantity / 10 ** decimals, assetDisplayDecimals)} ${asset.symbol}` : "—";
-  const returnText = side === "sell" && outcome?.returnPct != null ? `${outcome.returnPct.toFixed(1)}%` : null;
+  const returnText = (() => {
+    if (side !== "sell" || !preview || spot == null || !preview.collateral) return null;
+    const net = Number(preview.premium.netAtoms) / 10 ** quoteDecimalsForPreview;
+    const c = preview.collateral;
+    const locked = c.asset === "quote" ? Number(c.atoms) / 10 ** quoteDecimalsForPreview : (Number(c.atoms) / 10 ** decimals) * spot;
+    return locked > 0 ? `${((net / locked) * 100).toFixed(1)}%` : null;
+  })();
   const facts: Array<{ label: string; value: string }> = [
     { label: "Premium", value: premiumText },
     { label: "Strike", value: strikeLabel ?? "—" },
@@ -356,6 +422,7 @@ export function SentenceTrade({
     { label: "Size", value: sizeText },
   ];
   if (returnText != null) facts.push({ label: "Return", value: returnText });
+  if (breakevenText != null) facts.push({ label: "Breakeven", value: breakevenText });
 
   const labels = strike
     ? side === "sell" && outcome
@@ -404,7 +471,7 @@ export function SentenceTrade({
   const sliderValue = Number.isFinite(amount) && amount > 0 ? clampNumber(amount, sliderMin, Math.max(sliderMin, sliderMax)) : sliderMin;
 
   const tokenOptions: Array<{ value: "quote" | "underlying"; label: string }> = [
-    { value: "quote", label: "USDC" },
+    { value: "quote", label: quoteSymbol },
     { value: "underlying", label: asset.symbol },
   ];
 
@@ -424,14 +491,22 @@ export function SentenceTrade({
         assets: assets.map((a) => ({
           value: a.symbol,
           label: a.symbol,
-          icon: (
+          icon: getTokenLogoSrc(a.symbol) ? (
             <img
               src={getTokenLogoSrc(a.symbol)}
               alt=""
               className="h-4 w-4 shrink-0 rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
             />
+          ) : (
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[rgba(240,240,240,0.1)] bg-action-primary font-mono text-[9px] font-medium leading-none text-content-primary">
+              {a.symbol.slice(0, 2)}
+            </span>
           ),
-          detail: a.maxApr != null ? `up to ${Math.round(a.maxApr * 100)}% APR` : undefined,
+          // live reference price (from the venue's snapshot), "—" when the oracle has no price
+          detail: (() => {
+            const price = spotFor(a.mint);
+            return price != null ? formatUsdSmart(price) : "—";
+          })(),
         })),
         strikes: strikeOptions.map((o) => ({
           value: String(o.strike1e9),
@@ -564,6 +639,37 @@ export function SentenceTrade({
                     <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
+              </div>
+
+              {/* the token switch under the size: USDC ↔ the asset. One source of truth with
+                  the in-field unit dropdown — both read and write `amountInQuote` via
+                  `chooseToken`, so the slider, balance, conversion and presets all follow
+                  whichever token is selected. */}
+              <div className="inline-flex border border-bg-border bg-action-primary">
+                <button
+                  type="button"
+                  aria-pressed={amountInQuote}
+                  disabled={isRequesting}
+                  onClick={() => chooseToken(true)}
+                  className={cn(
+                    "px-3 py-1 font-mono text-[11px] font-medium uppercase leading-[1.2] tracking-[0.08em] transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                    amountInQuote ? "bg-accent-primary/20 text-content-primary" : "text-content-secondary hover:text-content-primary"
+                  )}
+                >
+                  {quoteSymbol}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={!amountInQuote}
+                  disabled={isRequesting}
+                  onClick={() => chooseToken(false)}
+                  className={cn(
+                    "border-l border-bg-border px-3 py-1 font-mono text-[11px] font-medium uppercase leading-[1.2] tracking-[0.08em] transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                    !amountInQuote ? "bg-accent-primary/20 text-content-primary" : "text-content-secondary hover:text-content-primary"
+                  )}
+                >
+                  {asset.symbol}
+                </button>
               </div>
 
               {/* the step slider: same value as the field, snapped onto the deposit step; the

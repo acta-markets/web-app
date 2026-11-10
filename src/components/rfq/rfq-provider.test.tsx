@@ -22,6 +22,7 @@ async function setup() {
   const client = new ActaWsClient({ url: "ws://localhost", role: "taker", onDisconnect: "keep_quotes", products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], clientName: "test", clientVersion: "0" });
   vi.spyOn(client, "connectAnonymous").mockImplementation(() => {});
   const create = vi.spyOn(client, "createRfq").mockResolvedValue("request");
+  const createOnce = vi.spyOn(client, "createRfqOnce").mockResolvedValue({ rfqId: "request", created: "now" });
   const cancel = vi.spyOn(client, "cancelRfq").mockReturnValue("cancel");
   vi.spyOn(client, "isAuthenticated").mockReturnValue(true);
   vi.spyOn(client, "getMarketDescriptors").mockReturnValue("descriptors");
@@ -38,11 +39,11 @@ async function setup() {
   emit("tokens", [{ mint: "underlying", symbol: "U", decimals: 6, role: { type: "underlying", strike_tick: 1_000_000_000, size_rule: { min_size: 1, max_size: 1e9, step: 1 }, quote_mints: [] } }]);
   const submit = (side?: "buy" | "sell") => {
     act(() => hook.result.current.submitRfq({ market: "market", terms: { type: "covered_call", strike: 1 }, side, quantity: 10 }));
-    return create.mock.lastCall![0].requestId!;
+    return createOnce.mock.lastCall![0].requestId!;
   };
   const quote = (rfq: string, maker = "maker", price = 1, valid_until = 9999999999) =>
     ({ rfq_id: rfq, order_id: `order-${maker}`, maker, side: "sell", terms: { type: "covered_call", strike: 1 }, price, valid_until, nonce: 1n } as QuoteReceivedMessage);
-  return { ...hook, client, create, cancel, emit, submit, quote, metadataRequest };
+  return { ...hook, client, create, createOnce, cancel, emit, submit, quote, metadataRequest };
 }
 
 describe("RFQ request ownership", () => {
@@ -103,7 +104,7 @@ describe("RFQ request ownership", () => {
   });
   it("sends a Buy RFQ, keeps its side for fill verification and takes only Buy quotes", async () => {
     const h = await setup(); const id = h.submit("buy");
-    expect(h.create.mock.lastCall![0].side).toBe("buy");
+    expect(h.createOnce.mock.lastCall![0].side).toBe("buy");
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
     expect(h.result.current.rfqTerms("ours")?.side).toBe("buy");
     h.emit("quoteReceived", h.quote("ours"));
@@ -170,41 +171,40 @@ describe("RFQ request ownership", () => {
     expect(h.result.current.bestQuote?.maker).toBe("a");
     expect(h.result.current.quoteSecondsRemaining(h.result.current.bestQuote!)).toBe(30);
   });
-  it("cancels an unconfirmed RFQ whose receipt timed out once it is created", async () => {
+  it("adopts an RFQ that an earlier attempt already created, without waiting for a receipt", async () => {
     const h = await setup();
-    let reject!: (error: unknown) => void;
-    h.create.mockImplementationOnce(() => new Promise((_, r) => { reject = r; }));
+    h.createOnce.mockResolvedValueOnce({ rfqId: "late", created: "earlier" });
     const id = h.submit();
-    await act(async () => reject(new ActaWsRequestError("timeout", id)));
-    expect(h.result.current.error?.message).toBe("Request timeout");
-    h.emit("rfqCreated", { rfq_id: "late", request_id: id });
+    await act(async () => {});
+    expect(h.result.current.error).toBeNull();
+    expect(id).toEqual(expect.any(String));
+    h.result.current.cancelRfq();
     expect(h.cancel).toHaveBeenCalledExactlyOnceWith("late");
   });
-  it("keeps a created RFQ and its quotes when only the receipt times out", async () => {
+  it("surfaces a create rejection with its message and drops the request", async () => {
     const h = await setup();
     let reject!: (error: unknown) => void;
-    h.create.mockImplementationOnce(() => new Promise((_, r) => { reject = r; }));
+    h.createOnce.mockImplementationOnce(() => new Promise((_, r) => { reject = r; }));
     const id = h.submit();
-    h.emit("rfqCreated", { rfq_id: "ours", request_id: id }); h.emit("quoteReceived", h.quote("ours"));
     await act(async () => reject(new ActaWsRequestError("timeout", id)));
+    // An uncertain create is reconciled by the SDK, so the RFQ is never silently replayed.
+    expect(h.result.current.error?.message).toContain("may already exist");
     expect(h.cancel).not.toHaveBeenCalled();
-    expect(h.result.current.error).toBeNull();
-    expect(h.result.current.bestQuote?.rfq_id).toBe("ours");
   });
   it("accepts RfqCreated before the CommandAccepted receipt", async () => {
     const h = await setup();
-    let resolve!: (id: string) => void;
-    h.create.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+    let resolve!: (r: { rfqId: string; created: "now" | "earlier" }) => void;
+    h.createOnce.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
     const id = h.submit();
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id }); h.emit("quoteReceived", h.quote("ours"));
-    await act(async () => resolve(id));
+    await act(async () => resolve({ rfqId: "ours", created: "now" }));
     expect(h.result.current.bestQuote?.rfq_id).toBe("ours");
     expect(h.result.current.error).toBeNull();
     expect(h.cancel).not.toHaveBeenCalled();
   });
   it("surfaces a correlated RfqRequest rejection", async () => {
     const h = await setup();
-    h.create.mockRejectedValueOnce(new ActaWsRequestError("request_error", "r", { type: "Generic", data: { code: "market_expired", message: "Market expired" } }));
+    h.createOnce.mockRejectedValueOnce(new ActaWsRequestError("request_error", "r", { type: "Generic", data: { code: "market_expired", message: "Market expired" } }));
     h.submit();
     await act(async () => {});
     expect(h.result.current.error?.message).toBe("Market expired");
@@ -262,8 +262,8 @@ describe("token market response ownership", () => {
     act(() => h.result.current.getTokenMarketsInfo("GQ1XdBnJURK2w8fs1jxiTdQATgKSTy3rnx4PfMttvKMs"));
     const id = h.metadataRequest.mock.lastCall![1].data.request_id;
     const data = info(id, "market-A");
-    h.emit("tokenMarketsInfo", { ...data, markets: [{ ...data.markets[0], indicatives: [{ position_type: "covered_call", updated_at: 100, is_stale: true, strikes: [{ strike: 100, best_price: 1 }] }] }] });
-    expect(h.result.current.getIndicativePricesCached("market-A", "covered_call")).toMatchObject({ request_id: id, is_stale: true, updated_at: 100 });
+    h.emit("tokenMarketsInfo", { ...data, markets: [{ ...data.markets[0], indicatives: [{ position_type: "covered_call", side: "sell", updated_at: 100, is_stale: true, strikes: [{ strike: 100, best_price: 1 }] }] }] });
+    expect(h.result.current.getIndicativePricesCached("market-A", "covered_call", "sell")).toMatchObject({ request_id: id, is_stale: true, updated_at: 100 });
   });
 
 });
@@ -374,7 +374,7 @@ describe("spread capability and quote separation", () => {
     h.emit("marketDescriptors", [{ products: ["cash_secured_put", "put_spread", "cash_put"], market: { market_pda: "market", underlying_mint: "underlying", is_put: true }, underlying_decimals: 6, quote_decimals: 6 }]);
     h.emit("welcome", { server_time_unix_ms: Date.now() });
     act(() => h.result.current.submitRfq({ market: "market", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 }, quantity: 1_000_000 }));
-    const request = h.create.mock.lastCall![0];
+    const request = h.createOnce.mock.lastCall![0];
     expect(request).toMatchObject({ side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 } });
     h.emit("rfqCreated", { rfq_id: "spread", request_id: request.requestId });
     const quote = { ...h.quote("spread"), side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 }, price: 1e9 };
@@ -397,7 +397,7 @@ describe("spread capability and quote separation", () => {
     expect(h.result.current.bestQuote).toBeNull();
     h.emit("marketDescriptors", [{ products: ["covered_call"], market: { market_pda: "market", underlying_mint: "underlying", is_put: false }, underlying_decimals: 6, quote_decimals: 6 }]);
     h.submit();
-    h.emit("rfqCreated", { rfq_id: "physical", request_id: h.create.mock.lastCall![0].requestId });
+    h.emit("rfqCreated", { rfq_id: "physical", request_id: h.createOnce.mock.lastCall![0].requestId });
     h.emit("quoteReceived", { ...quote, rfq_id: "physical", terms: { ...quote.terms, lower_strike: 1 } });
     expect(h.result.current.bestQuote).toBeNull();
   });
