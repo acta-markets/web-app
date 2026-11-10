@@ -116,6 +116,13 @@ type Options = {
   scope: StorageScope;
 };
 
+/** Base64 of raw bytes, for the offline debug capture only. */
+function encodeWire(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
 export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransaction, signTransactionBytes, rpc, scope }: Options) {
   const client = getClient();
   const storageKey = storageKeyFor(scope);
@@ -135,6 +142,8 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
   const walletSigning = useRef<Promise<VersionedTransaction> | null>(null);
   /** What the wallet actually returned, kept for the failure message when the verifier refuses. */
   const walletDiagnostic = useRef<string | null>(null);
+  /** Both wires in base64, so a refusal can be diffed offline instead of guessed at. */
+  const walletWires = useRef<{ served: string; returned: string } | null>(null);
   useEffect(() => { signer.current = signTransaction; }, [signTransaction]);
   useEffect(() => { signBytesRef.current = signTransactionBytes; }, [signTransactionBytes]);
   const chain = useRef(rpc);
@@ -419,8 +428,13 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
                   const signed = await signBytes(wire);
                   try {
                     walletDiagnostic.current = describeSignedMessage(wire, messageBytesOf(signed));
+                    walletWires.current = {
+                      served: encodeWire(wire),
+                      returned: encodeWire(signed),
+                    };
                   } catch {
                     walletDiagnostic.current = null;
+                    walletWires.current = null;
                   }
                   return signed;
                 },
@@ -437,8 +451,12 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
                 try {
                   const signedMessage = signedTx.message?.serialize?.();
                   walletDiagnostic.current = signedMessage ? describeSignedMessage(wire, signedMessage) : null;
+                  walletWires.current = signedMessage
+                    ? { served: encodeWire(wire), returned: encodeWire(signedTx.serialize()) }
+                    : null;
                 } catch {
                   walletDiagnostic.current = null;
+                  walletWires.current = null;
                 }
                 // Wallets re-serialise the transaction they return, which can re-encode the
                 // message even when nothing changed. Keep the served message and take only
@@ -474,6 +492,13 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
           reconcile();
         } else if (now === signing && error instanceof flows.VaultIntentError) {
           if (client.isAuthenticated()) client.cancelRfq(active.order.rfqId);
+          if (error.mismatch.kind === "walletMessage" && walletWires.current) {
+            try {
+              window.localStorage.setItem("acta.rfq.debug", JSON.stringify(walletWires.current));
+            } catch {
+              /* private mode: the message diagnostic is still surfaced */
+            }
+          }
           update({
             type: "failed",
             orderId: id,
