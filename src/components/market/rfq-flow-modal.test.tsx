@@ -3,7 +3,6 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WalletTransactionSigner } from "@acta-markets/ts-sdk/ws";
 import { ActaWsClient, type QuoteReceivedMessage, type TakerFillRfq } from "@/lib/rfq-client";
-import { BUY_ITM_WARNING } from "@/lib/trade/thesis";
 import { RfqFlowModal, type RfqOrderPreview } from "./rfq-flow-modal";
 
 const context = vi.hoisted(() => ({ read: vi.fn(), makerVault: vi.fn(async () => null) }));
@@ -222,7 +221,7 @@ describe("Buy", () => {
     const buyQuote = { ...quote, side: "buy", terms: buyPreview.terms, price: 5e9, net_price: 4.5e9 } as QuoteReceivedMessage;
     const row = (label: string) => screen.getByText(label).parentElement;
 
-    it("shows the gross premium, max loss, break-even and the ITM warning for a call", async () => {
+    it("shows the gross premium, max loss and break-even for a call", async () => {
       setup(buyPreview, buyQuote);
       await screen.findByRole("button", { name: "Accept Quote" });
       expect(screen.getByText("Buy a call")).toBeTruthy();
@@ -232,7 +231,6 @@ describe("Buy", () => {
       expect(row("Break-even")?.textContent).toContain("$155");
       expect(row("Deposit to exercise")?.textContent).toContain("300");
       expect(screen.queryByText("APR")).toBeNull();
-      expect(screen.getByRole("alert").textContent).toBe(BUY_ITM_WARNING);
     });
 
     it("mirrors break-even and the exercise deposit for a put", async () => {

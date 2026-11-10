@@ -12,7 +12,7 @@ import { IS_MAINNET } from "@/lib/tokens";
 
 import { BUY_PRODUCT_NAME, isCashSettled, lowerStrike, productLabel, quoteMatchesProduct, type ProductTerms, type TakerSide } from "@/lib/spreads";
 import { formatPrice, formatUsdc } from "@/lib/trade/format";
-import { BUY_DEPOSIT_REMINDER, BUY_ITM_WARNING, SPREAD_SETTLEMENT_NOTE, buyBreakEven, exerciseDepositText, spreadBounds, spreadBreakEven, spreadMaxGain } from "@/lib/trade/thesis";
+import { BUY_DEPOSIT_REMINDER, SPREAD_SETTLEMENT_NOTE, buyBreakEven, exerciseDepositText, spreadBounds, spreadBreakEven, spreadMaxGain } from "@/lib/trade/thesis";
 
 export type RfqOrderPreview = {
   asset: string;
@@ -357,7 +357,6 @@ export function RfqFlowModal({
                 </div>
               )}
             </div>
-            {exercisable ? <p role="alert" className="mt-3 border border-error p-3 font-mono text-sm leading-[1.4] text-error">{BUY_ITM_WARNING}</p> : null}
             {isBuy && !exercisable ? <p className="mt-3 font-mono text-sm leading-[1.4] text-content-secondary">{SPREAD_SETTLEMENT_NOTE}</p> : null}
           </div>
         )}

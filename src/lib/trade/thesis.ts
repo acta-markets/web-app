@@ -372,9 +372,6 @@ export function zoneLabels({
   };
 }
 
-export const BUY_ITM_WARNING =
-  "If the option ends in the money and you did not deposit before expiry, it is not exercised. You lose its value, and the premium is not refunded.";
-
 export const BUY_DEPOSIT_REMINDER = "To exercise, deposit from Portfolio before expiry.";
 
 export function buyBreakEven(isPut: boolean, strike: number, grossPerUnit: number): number {
