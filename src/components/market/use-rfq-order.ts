@@ -13,7 +13,7 @@ import {
   type QuoteReceivedMessage,
   type TakerFillRfq,
 } from "@/lib/rfq-client";
-import { describeSignedMessage, graftWalletSignatures, resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
+import { describeSignedMessage, graftWalletSignatures, messageBytesOf, resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
 
 type OrderSubmission = "unsigned" | "sent";
 type SelectedOrder = {
@@ -414,7 +414,17 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
           bounds: FILL_BOUNDS,
           makerVault: fill.makerVault,
           signer: signBytes
-            ? { signTransaction: async (wire) => signBytes(wire) }
+            ? {
+                signTransaction: async (wire) => {
+                  const signed = await signBytes(wire);
+                  try {
+                    walletDiagnostic.current = describeSignedMessage(wire, messageBytesOf(signed));
+                  } catch {
+                    walletDiagnostic.current = null;
+                  }
+                  return signed;
+                },
+              }
             : {
             signTransaction: async (wire) => {
               if (!sign) throw new Error("Wallet does not support transaction signing");

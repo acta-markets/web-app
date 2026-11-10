@@ -90,6 +90,12 @@ function firstDifference(a: Uint8Array, b: Uint8Array): number {
   return a.length === b.length ? -1 : limit;
 }
 
+/** The message bytes of a serialized transaction, skipping its signature slots. */
+export function messageBytesOf(serializedTx: Uint8Array): Uint8Array {
+  const header = shortvecLength(serializedTx);
+  return serializedTx.subarray(header.size + header.length * 64);
+}
+
 /**
  * A one-line account of what the wallet signed versus what was served, for the failure
  * message when the verifier refuses. Lengths plus the first differing offset are enough to
