@@ -29,3 +29,6 @@ pnpm-debug.log*
 
 # devnet test keypairs - never commit
 scripts/e2e-testnet/*wallet*.json
+
+# browser-automation and diagnostic scripts - never commit
+scripts/agent/

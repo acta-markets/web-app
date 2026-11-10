@@ -1,0 +1,110 @@
+diff --git a/node_modules/@acta-markets/ts-sdk/dist/cjs/ws/servedMessage.js b/node_modules/@acta-markets/ts-sdk/dist/cjs/ws/servedMessage.js
+index ab9ee13..ffe3b84 100644
+--- a/node_modules/@acta-markets/ts-sdk/dist/cjs/ws/servedMessage.js
++++ b/node_modules/@acta-markets/ts-sdk/dist/cjs/ws/servedMessage.js
+@@ -83,6 +83,37 @@ function canonicalMessage(message) {
+     const readonlyNonSigners = group(false, false);
+     const staticAccounts = [payer, ...group(true, true), ...readonlySigners, ...group(false, true), ...readonlyNonSigners];
+     const indexOf = (index) => (index < staticLength ? staticAccounts.indexOf(key(index)) : index);
++    // A wallet that recompiles the message (e.g. `TransactionMessage.decompile` + `compileToV0Message`)
++    // re-sorts each address-table lookup's indexes and remaps the loaded-account instruction references.
++    // Sort those indexes ascending and remap the loaded references so both encodings canonicalise to the
++    // same bytes; the loaded accounts themselves are unchanged.
++    const lookups = message.addressTableLookups ?? [];
++    const loadedBefore = lookups.flatMap((lookup) => [
++        ...(lookup.writableIndexes ?? []).map((altIndex) => ({ lookupTableAddress: lookup.lookupTableAddress, altIndex, kind: "writable" })),
++        ...(lookup.readonlyIndexes ?? []).map((altIndex) => ({ lookupTableAddress: lookup.lookupTableAddress, altIndex, kind: "readonly" })),
++    ]);
++    const sortedLookups = lookups.map((lookup) => ({
++        lookupTableAddress: lookup.lookupTableAddress,
++        writableIndexes: [...(lookup.writableIndexes ?? [])].sort((a, b) => a - b),
++        readonlyIndexes: [...(lookup.readonlyIndexes ?? [])].sort((a, b) => a - b),
++    }));
++    const loadedAfter = sortedLookups.flatMap((lookup) => [
++        ...(lookup.writableIndexes ?? []).map((altIndex) => ({ lookupTableAddress: lookup.lookupTableAddress, altIndex, kind: "writable" })),
++        ...(lookup.readonlyIndexes ?? []).map((altIndex) => ({ lookupTableAddress: lookup.lookupTableAddress, altIndex, kind: "readonly" })),
++    ]);
++    const loadedPos = new Map();
++    loadedAfter.forEach((entry, pos) => loadedPos.set(`${entry.lookupTableAddress}:${entry.kind}:${entry.altIndex}`, pos));
++    const loadedIndexOf = (index) => {
++        if (index < staticLength)
++            return indexOf(index);
++        const entry = loadedBefore[index - staticLength];
++        if (entry === undefined)
++            throw new Error("loaded account index out of range");
++        const pos = loadedPos.get(`${entry.lookupTableAddress}:${entry.kind}:${entry.altIndex}`);
++        if (pos === undefined)
++            throw new Error("loaded account not found");
++        return staticLength + pos;
++    };
+     return (0, kit_1.getCompiledTransactionMessageEncoder)().encode({
+         version: 0,
+         header: {
+@@ -94,10 +125,10 @@ function canonicalMessage(message) {
+         lifetimeToken: message.lifetimeToken,
+         instructions: message.instructions.map((ix) => ({
+             programAddressIndex: indexOf(ix.programAddressIndex),
+-            accountIndices: (ix.accountIndices ?? []).map(indexOf),
++            accountIndices: (ix.accountIndices ?? []).map(loadedIndexOf),
+             data: ix.data ?? new Uint8Array(),
+         })),
+-        addressTableLookups: message.addressTableLookups ?? [],
++        addressTableLookups: sortedLookups,
+     });
+ }
+ function compareBytes(a, b) {
+diff --git a/node_modules/@acta-markets/ts-sdk/dist/ws/servedMessage.js b/node_modules/@acta-markets/ts-sdk/dist/ws/servedMessage.js
+index 25f446c..9b24e32 100644
+--- a/node_modules/@acta-markets/ts-sdk/dist/ws/servedMessage.js
++++ b/node_modules/@acta-markets/ts-sdk/dist/ws/servedMessage.js
+@@ -79,6 +79,37 @@ export function canonicalMessage(message) {
+     const readonlyNonSigners = group(false, false);
+     const staticAccounts = [payer, ...group(true, true), ...readonlySigners, ...group(false, true), ...readonlyNonSigners];
+     const indexOf = (index) => (index < staticLength ? staticAccounts.indexOf(key(index)) : index);
++    // A wallet that recompiles the message (e.g. `TransactionMessage.decompile` + `compileToV0Message`)
++    // re-sorts each address-table lookup's indexes and remaps the loaded-account instruction references.
++    // Sort those indexes ascending and remap the loaded references so both encodings canonicalise to the
++    // same bytes; the loaded accounts themselves are unchanged.
++    const lookups = message.addressTableLookups ?? [];
++    const loadedBefore = lookups.flatMap((lookup) => [
++        ...(lookup.writableIndexes ?? []).map((altIndex) => ({ lookupTableAddress: lookup.lookupTableAddress, altIndex, kind: "writable" })),
++        ...(lookup.readonlyIndexes ?? []).map((altIndex) => ({ lookupTableAddress: lookup.lookupTableAddress, altIndex, kind: "readonly" })),
++    ]);
++    const sortedLookups = lookups.map((lookup) => ({
++        lookupTableAddress: lookup.lookupTableAddress,
++        writableIndexes: [...(lookup.writableIndexes ?? [])].sort((a, b) => a - b),
++        readonlyIndexes: [...(lookup.readonlyIndexes ?? [])].sort((a, b) => a - b),
++    }));
++    const loadedAfter = sortedLookups.flatMap((lookup) => [
++        ...(lookup.writableIndexes ?? []).map((altIndex) => ({ lookupTableAddress: lookup.lookupTableAddress, altIndex, kind: "writable" })),
++        ...(lookup.readonlyIndexes ?? []).map((altIndex) => ({ lookupTableAddress: lookup.lookupTableAddress, altIndex, kind: "readonly" })),
++    ]);
++    const loadedPos = new Map();
++    loadedAfter.forEach((entry, pos) => loadedPos.set(`${entry.lookupTableAddress}:${entry.kind}:${entry.altIndex}`, pos));
++    const loadedIndexOf = (index) => {
++        if (index < staticLength)
++            return indexOf(index);
++        const entry = loadedBefore[index - staticLength];
++        if (entry === undefined)
++            throw new Error("loaded account index out of range");
++        const pos = loadedPos.get(`${entry.lookupTableAddress}:${entry.kind}:${entry.altIndex}`);
++        if (pos === undefined)
++            throw new Error("loaded account not found");
++        return staticLength + pos;
++    };
+     return getCompiledTransactionMessageEncoder().encode({
+         version: 0,
+         header: {
+@@ -90,10 +121,10 @@ export function canonicalMessage(message) {
+         lifetimeToken: message.lifetimeToken,
+         instructions: message.instructions.map((ix) => ({
+             programAddressIndex: indexOf(ix.programAddressIndex),
+-            accountIndices: (ix.accountIndices ?? []).map(indexOf),
++            accountIndices: (ix.accountIndices ?? []).map(loadedIndexOf),
+             data: ix.data ?? new Uint8Array(),
+         })),
+-        addressTableLookups: message.addressTableLookups ?? [],
++        addressTableLookups: sortedLookups,
+     });
+ }
+ function compareBytes(a, b) {
