@@ -460,9 +460,9 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
             type: "failed",
             orderId: id,
             message: error.mismatch.kind === "walletMessage"
-              ? `The wallet returned a different transaction than the verified one${
+              ? `The wallet changed the transaction before signing, which usually means the quote's blockhash expired while the wallet was open. Accept the quote again and sign straight away${
                   walletDiagnostic.current ? ` (${walletDiagnostic.current})` : ""
-                }. It was not submitted; the RFQ was cancelled.`
+                }. Nothing was submitted.`
               : `Transaction does not match the accepted quote (${error.message}). Nothing was signed; the RFQ was cancelled.`,
           });
         } else if (now === signing) {

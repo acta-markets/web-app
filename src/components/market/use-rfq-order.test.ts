@@ -247,7 +247,7 @@ describe("taker order flow", () => {
     sdk.verify.mockRejectedValueOnce(new flows.VaultIntentError({ kind: "walletMessage" }));
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.result.current.flow).toMatchObject({
-      type: "failed", message: expect.stringContaining("It was not submitted"),
+      type: "failed", message: expect.stringContaining("changed the transaction before signing"),
     }));
     expect(h.submit).not.toHaveBeenCalled();
   });
