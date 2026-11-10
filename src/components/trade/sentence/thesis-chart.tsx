@@ -423,7 +423,7 @@ function FlipAffordance({
       >
         ⇄
       </span>
-      flip direction
+      click to flip direction
       {variant === "coach" && !coachSeen ? (
         <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[9px] tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
           tap anywhere on the chart to flip
