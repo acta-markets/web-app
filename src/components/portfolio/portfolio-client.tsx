@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { AppTd, AppTh } from "@/components/app-ui/app-table";
@@ -15,14 +15,19 @@ import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 import { cn } from "@/lib/cn";
 import { AppButton } from "@/components/app-ui/app-button";
-import { isCashSettled, lowerStrike } from "@/lib/spreads";
+import { isCashSettled, isSpreadTerms, lowerStrike, strikeText } from "@/lib/spreads";
 import { formatPortfolioPremium, portfolioIncomeSeries } from "@/lib/portfolio-api";
 import { BUY_STATUS_LABEL, buyStatus, type BuyFacts } from "@/lib/trade/buy-position";
 import { exerciseDepositText } from "@/lib/trade/thesis";
+import { summarizePnl, underlyingMark, unrealizedPnlUsd } from "@/lib/portfolio-pnl";
 import { useBuyDeposit } from "./use-buy-deposit";
 import { useWalletHistory } from "./use-wallet-history";
 import { spreadRowView } from "./spread-positions";
 import { PortfolioEarningsChart } from "@/components/portfolio/portfolio-earnings-chart";
+import { PnlSummary } from "@/components/portfolio/pnl-summary";
+import { PositionCard, type PositionCardData } from "@/components/portfolio/position-card";
+import { PositionsTable } from "@/components/portfolio/positions-table";
+import { buildPositionRows } from "@/lib/portfolio-positions";
 
 function fmtDate(ts: number) {
   const d = new Date(ts * 1000);
@@ -64,6 +69,12 @@ const positionsTabOptions: Array<{ value: PositionsTab; label: string }> = [
   { value: "history", label: "History" }
 ];
 
+type PositionsView = "table" | "cards";
+const positionsViewOptions: Array<{ value: PositionsView; label: string }> = [
+  { value: "table", label: "Table" },
+  { value: "cards", label: "Cards" }
+];
+
 type TableRow = {
   id: string;
   label: string;
@@ -94,6 +105,8 @@ type PortfolioRow = {
   notionalUsd: number;
   apr: number;
   bought: boolean;
+  /** Unrealised P&L for open physical positions; null otherwise. */
+  pnl: { valueUsd: number; stale: boolean } | null;
   buy?: BuyRow;
 };
 
@@ -170,6 +183,7 @@ function BuyStatusCell({ buy, nowSec, deposit }: { buy: BuyRow; nowSec: number; 
 export function PortfolioClient() {
   const [chartRange, setChartRange] = useState<"24h" | "7d" | "30d">("30d");
   const [positionsTab, setPositionsTab] = useState<PositionsTab>("positions");
+  const [positionsView, setPositionsView] = useState<PositionsView>("table");
   const [resolvedUnderlyingByMarket, setResolvedUnderlyingByMarket] = useState<Record<string, string>>({});
   const nowMs = useNow(1000);
   const { isConnected: walletConnected, selectedAccount } = useSolana();
@@ -221,6 +235,26 @@ export function PortfolioClient() {
     for (const m of rfqMarkets) map.set(m.pda, m);
     return map;
   }, [rfqMarkets]);
+
+  const resolveUnderlyingSymbol = useCallback((p: PositionInfo): string => {
+    const px = p as unknown as { underlying_mint?: string };
+    const market = marketByPda.get(p.market);
+    const descriptor = rfqMarketDescriptors.find((d) => {
+      const marketPda = extractDescriptorMarketPda(d);
+      return typeof marketPda === "string" && marketPda === p.market;
+    });
+    const descriptorUnderlying = extractDescriptorUnderlyingMint(descriptor);
+    const descriptorSymbol = extractDescriptorUnderlyingSymbol(descriptor);
+    const underlyingMint =
+      px.underlying_mint ??
+      market?.underlying ??
+      descriptorUnderlying ??
+      resolvedUnderlyingByMarket[p.market];
+    const rawSymbol =
+      descriptorSymbol ??
+      (underlyingMint ? mintToSymbol.get(underlyingMint) ?? "Unknown" : "Unknown");
+    return normalizeTokenSymbol(rawSymbol);
+  }, [marketByPda, rfqMarketDescriptors, resolvedUnderlyingByMarket, mintToSymbol]);
 
   useEffect(() => {
     const unresolvedMarketPdas = Array.from(
@@ -317,6 +351,8 @@ export function PortfolioClient() {
           : 0;
 
       const settlementPrice = market?.settlement_price;
+      const uPnl = unrealizedPnlUsd(p);
+      const pnl = uPnl != null ? { valueUsd: uPnl, stale: underlyingMark(p)?.stale ?? false } : null;
       return {
         id: p.pda,
         asset: assetSymbol,
@@ -332,6 +368,7 @@ export function PortfolioClient() {
         notionalUsd,
         apr,
         bought,
+        pnl,
         buy: bought && (p.state === "open" || p.state === "funded") ? {
           pda: p.pda,
           market: p.market,
@@ -345,6 +382,15 @@ export function PortfolioClient() {
       };
     });
   }, [allPositions, marketByPda, rfqMarketDescriptors, resolvedUnderlyingByMarket, mintToSymbol]);
+
+  const positionTableRows = useMemo(
+    () => buildPositionRows(allPositions, resolveUnderlyingSymbol, nowMs),
+    [allPositions, resolveUnderlyingSymbol, nowMs]
+  );
+  const groupedByUnderlying = useMemo(
+    () => positionTableRows.length >= 8 && new Set(positionTableRows.map((r) => r.symbol)).size >= 2,
+    [positionTableRows]
+  );
 
   const openRows = useMemo(
     () => rows.filter((r) => r.userStatus === "Open"),
@@ -364,6 +410,54 @@ export function PortfolioClient() {
     }),
     [allPositions, rfqMarketDescriptors]
   );
+
+  type OpenCard = { data: PositionCardData; buy?: BuyRow };
+  const openCards = useMemo<OpenCard[]>(() => {
+    const physical: OpenCard[] = openRows.map((r) => ({
+      data: {
+        id: r.id,
+        long: r.bought,
+        type: r.type,
+        headline: `${r.bought ? "Bought " : ""}${r.asset} ${formatStrikePrice(r.strike)} ${r.type}`,
+        strike: formatStrikePrice(r.strike),
+        expiryTs: r.expiryTs ?? r.createdTs,
+        size: `${fmtNumber(r.quantity, 4)} ${r.asset}`,
+        premiumLabel: r.bought ? `${formatUsdSmart(r.premiumUsd)} paid` : formatUsdSmart(r.premiumUsd),
+        aprLabel: r.bought ? "\u2014" : Number.isFinite(r.apr) ? `${r.apr.toFixed(2)}%` : "\u2014",
+        pnl: r.pnl,
+      },
+      buy: r.buy,
+    }));
+
+    const spreads: OpenCard[] = allPositions.flatMap((p) => {
+      const view = spreadRowView(p, rfqMarketDescriptors);
+      if (!view || view.status !== "Open") return [];
+      const terms = p.terms;
+      const strike = isSpreadTerms(terms)
+        ? `${strikeText(terms.lower_strike)} / ${strikeText(terms.upper_strike)}`
+        : "strike" in terms ? strikeText(terms.strike) : "\u2014";
+      const uPnl = unrealizedPnlUsd(p);
+      const pnl = uPnl != null ? { valueUsd: uPnl, stale: underlyingMark(p)?.stale ?? false } : null;
+      return [{
+        data: {
+          id: p.pda,
+          long: p.side === "buy",
+          type: terms.type === "call_spread" ? "call" : "put",
+          headline: view.label,
+          strike,
+          expiryTs: view.expiryTs,
+          size: view.size,
+          premiumLabel: view.premium,
+          aprLabel: view.apr,
+          pnl,
+        },
+      }];
+    });
+
+    return [...physical, ...spreads].sort((a, b) => (a.data.expiryTs ?? 0) - (b.data.expiryTs ?? 0));
+  }, [openRows, allPositions, rfqMarketDescriptors]);
+
+  const pnlSummary = useMemo(() => summarizePnl(allPositions), [allPositions]);
   const totalNotionalUsd = useMemo(
     () => incomeRows.reduce((sum, r) => sum + (Number.isFinite(r.notionalUsd) ? r.notionalUsd : 0), 0)
       + openSpreads.reduce((sum, r) => sum + r.collateralUsd, 0),
@@ -452,7 +546,6 @@ export function PortfolioClient() {
     },
   ];
   const tableRows = positionsTab === "history" ? closedTable : openTable;
-  const openColumn = openTable.some((r) => r.buy) ? "APR / Status" : "APR";
 
   return (
     <div className="mx-auto w-full max-w-[850px] pb-16 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-8">
@@ -495,6 +588,8 @@ export function PortfolioClient() {
           ))}
         </div>
 
+        <PnlSummary summary={figuresUnavailable ? null : pnlSummary} incomplete={!!history.nextCursor} />
+
         <AppCard className="p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">Income</div>
@@ -519,21 +614,51 @@ export function PortfolioClient() {
         {buyDeposit.error ? <p role="alert" className="font-mono text-sm text-error">{buyDeposit.error}</p> : null}
         <div className="flex items-center justify-between">
           <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
-            {positionsTab === "positions" ? `Positions: ${openTable.length}` : "Transactions"}
+            {positionsTab === "positions" ? `Positions: ${positionTableRows.length}` : "Transactions"}
           </h2>
-          <AppSegmented value={positionsTab} onChange={setPositionsTab} options={positionsTabOptions} />
+          <div className="flex items-center gap-2">
+            {positionsTab === "positions" ? (
+              <div className="hidden md:inline-flex">
+                <AppSegmented value={positionsView} onChange={setPositionsView} options={positionsViewOptions} ariaLabel="Positions view" />
+              </div>
+            ) : null}
+            <AppSegmented value={positionsTab} onChange={setPositionsTab} options={positionsTabOptions} />
+          </div>
         </div>
 
         {shouldShowAuthPrompt && positionsTab === "positions" ? (
           <AppCard className="p-6 text-content-secondary">
             Connect wallet and approve RFQ auth to load live positions.
           </AppCard>
+        ) : positionsTab === "positions" ? (
+          <>
+            <div className={cn(positionsView === "table" ? "hidden md:block" : "hidden")}>
+              <PositionsTable rows={positionTableRows} nowMs={nowMs} grouped={groupedByUnderlying} />
+            </div>
+            <div className={cn(positionsView === "cards" ? "block" : "md:hidden")}>
+              {openCards.length === 0 ? (
+                <AppCard className="p-6 text-center text-content-secondary">
+                  No open positions yet. Positions appear here after an RFQ fills.
+                </AppCard>
+              ) : (
+                <div className="grid auto-rows-fr grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {openCards.map((card) => (
+                    <PositionCard
+                      key={card.data.id}
+                      data={card.data}
+                      action={card.buy ? <BuyStatusCell buy={card.buy} nowSec={now} deposit={buyDeposit} /> : null}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         ) : (
           <div className="max-h-[440px] overflow-y-auto border border-bg-border">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-bg-border">
-                  {["Position", "Maturity", "Size", "Premium", positionsTab === "history" ? "Result" : openColumn].map((title, index) => (
+                  {["Position", "Maturity", "Size", "Premium", "Result"].map((title, index) => (
                     <AppTh key={title} className={cn("sticky top-0 z-10 bg-bg-primary", index > 1 && "text-right")}>{title}</AppTh>
                   ))}
                 </tr>
@@ -542,7 +667,7 @@ export function PortfolioClient() {
                 {tableRows.length === 0 ? (
                   <tr>
                     <AppTd colSpan={5} className="py-10 text-center text-content-secondary">
-                      {positionsTab === "positions" ? "No open positions yet." : history.loading ? "Loading positions..." : history.failed ? "Positions unavailable" : "No closed positions yet."}
+                      {history.loading ? "Loading positions..." : history.failed ? "Positions unavailable" : "No closed positions yet."}
                     </AppTd>
                   </tr>
                 ) : (
@@ -553,7 +678,6 @@ export function PortfolioClient() {
                         {row.expiryTs ? (
                           <div className="flex flex-col">
                             <span>{fmtDate(row.expiryTs)}</span>
-                            {positionsTab === "positions" ? <span className="text-xs text-content-secondary/60">{formatCountdown(row.expiryTs, nowMs)}</span> : null}
                           </div>
                         ) : "\u2014"}
                       </AppTd>
@@ -567,7 +691,7 @@ export function PortfolioClient() {
                 )}
               </tbody>
             </table>
-            {positionsTab === "history" && history.nextCursor ? (
+            {history.nextCursor ? (
               <AppButton variant="ghost" className="m-2" disabled={history.loading} onClick={() => void history.loadMore()}>
                 {history.loading ? "Loading..." : "Show more"}
               </AppButton>
