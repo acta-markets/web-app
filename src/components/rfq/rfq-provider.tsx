@@ -989,12 +989,13 @@ export function RfqProvider({ children }: RfqProviderProps) {
       // could still be open, so a retry can never create a second RFQ.
       void client
         .createRfqOnce({ ...rfqRequest, requestId })
-        .then(({ rfqId, created }) => {
+        .then(({ created }) => {
           const pending = pendingRfqRef.current;
           if (pending?.requestId !== requestId) return;
-          // `earlier` means an attempt whose reply was lost had already created it.
-          if (created === "earlier") console.log("[RfqProvider] RFQ already existed:", rfqId);
-          if (rfqId) pending.rfqId = rfqId;
+          // `earlier` means an attempt whose reply was lost had already created it. The id
+          // that matters is the venue's, which only `RfqCreated` carries: `createRfqOnce`
+          // returns the request id, and using it here made every incoming quote look stale.
+          if (created === "earlier") console.log("[RfqProvider] RFQ already existed for", requestId);
         })
         .catch((err) => {
           const pending = pendingRfqRef.current;

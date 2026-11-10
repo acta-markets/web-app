@@ -171,15 +171,19 @@ describe("RFQ request ownership", () => {
     expect(h.result.current.bestQuote?.maker).toBe("a");
     expect(h.result.current.quoteSecondsRemaining(h.result.current.bestQuote!)).toBe(30);
   });
-  it("adopts an RFQ that an earlier attempt already created, without waiting for a receipt", async () => {
+  it("keeps the venue RFQ id from RfqCreated instead of the request id", async () => {
     const h = await setup();
-    h.createOnce.mockResolvedValueOnce({ rfqId: "late", created: "earlier" });
+    h.createOnce.mockResolvedValueOnce({ rfqId: "request-id", created: "earlier" });
     const id = h.submit();
     await act(async () => {});
     expect(h.result.current.error).toBeNull();
-    expect(id).toEqual(expect.any(String));
+    // Quotes only match the venue's id, so the request id returned by createRfqOnce must not
+    // be adopted as one: this quote is keyed on the id from RfqCreated.
+    h.emit("rfqCreated", { rfq_id: "venue-id", request_id: id });
+    h.emit("quoteReceived", h.quote("venue-id"));
+    expect(h.result.current.bestQuote?.rfq_id).toBe("venue-id");
     h.result.current.cancelRfq();
-    expect(h.cancel).toHaveBeenCalledExactlyOnceWith("late");
+    expect(h.cancel).toHaveBeenCalledExactlyOnceWith("venue-id");
   });
   it("surfaces a create rejection with its message and drops the request", async () => {
     const h = await setup();
