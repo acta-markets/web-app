@@ -110,11 +110,13 @@ type Options = {
   acceptQuote: (rfqId: string, maker: string, orderId: string) => Promise<void>;
   submitSignedTx: (orderId: string, tx: string) => Promise<void>;
   signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
+  /** Raw wire signing: the wallet signs exactly the bytes it was served. Preferred when present. */
+  signTransactionBytes?: (bytes: Uint8Array) => Promise<Uint8Array>;
   rpc: Parameters<typeof fetchMakerVault>[0];
   scope: StorageScope;
 };
 
-export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransaction, rpc, scope }: Options) {
+export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransaction, signTransactionBytes, rpc, scope }: Options) {
   const client = getClient();
   const storageKey = storageKeyFor(scope);
   const initialStored = useMemo(() => storageKey ? readStoredOrder(storageKey) : null, [storageKey]);
@@ -122,6 +124,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
   const [flow, setFlow] = useState<OrderFlow>(initialFlow);
   const current = useRef<OrderFlow>(initialFlow);
   const signer = useRef(signTransaction);
+  const signBytesRef = useRef(signTransactionBytes);
   const accepted = useRef<{
     quote: QuoteReceivedMessage;
     rfq: TakerFillRfq;
@@ -133,6 +136,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
   /** What the wallet actually returned, kept for the failure message when the verifier refuses. */
   const walletDiagnostic = useRef<string | null>(null);
   useEffect(() => { signer.current = signTransaction; }, [signTransaction]);
+  useEffect(() => { signBytesRef.current = signTransactionBytes; }, [signTransactionBytes]);
   const chain = useRef(rpc);
   useEffect(() => { chain.current = rpc; }, [rpc]);
   const connection = useRef(0);
@@ -385,7 +389,8 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
       const expired = () => deadline != null && Math.floor(Date.now() / 1000) >= deadline;
       try {
         const sign = signer.current;
-        if (!sign) throw new Error("Wallet does not support transaction signing");
+        const signBytes = signBytesRef.current;
+        if (!sign && !signBytes) throw new Error("Wallet does not support transaction signing");
         if (expired()) throw new Error("Signature deadline expired");
         const fill = accepted.current;
         if (!fill || fill.quote.order_id !== id) {
@@ -408,8 +413,11 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
           tables,
           bounds: FILL_BOUNDS,
           makerVault: fill.makerVault,
-          signer: {
+          signer: signBytes
+            ? { signTransaction: async (wire) => signBytes(wire) }
+            : {
             signTransaction: async (wire) => {
+              if (!sign) throw new Error("Wallet does not support transaction signing");
               if (!live()) throw new Error("Signing was abandoned before the wallet was opened");
               if (expired()) throw new Error("Signature deadline expired");
               const request = sign(VersionedTransaction.deserialize(wire));

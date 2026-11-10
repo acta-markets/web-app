@@ -43,6 +43,13 @@ interface SolanaContextState {
   
   signTransaction: <T extends { serialize(): Uint8Array }>(transaction: T) => Promise<T>;
 
+  /**
+   * Signs the raw wire bytes and returns raw bytes, through the wallet-standard feature only.
+   * Use this for money paths: nothing is deserialised and re-serialised across the wallet
+   * boundary, so the message the wallet signs is exactly the message we verified.
+   */
+  signTransactionBytes: (bytes: Uint8Array) => Promise<Uint8Array>;
+
   signAllTransactions: (transactions: VersionedTransaction[]) => Promise<VersionedTransaction[]>;
 }
 
@@ -307,6 +314,20 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     return signedTx as unknown as T;
   }, [selectedWallet, selectedAccount]);
   
+  const signTransactionBytes = useCallback(async (bytes: Uint8Array): Promise<Uint8Array> => {
+    if (!selectedWallet || !selectedAccount) throw new Error("No wallet connected");
+    const underlyingWallet = walletsRef.current.get(selectedWallet.name);
+    if (!underlyingWallet) throw new Error("Wallet not found in registry");
+    const feature = underlyingWallet.features["solana:signTransaction"];
+    if (!feature?.signTransaction) throw new Error("Wallet does not support transaction signing");
+    const account = underlyingWallet.accounts.find((a: { address: string }) => a.address === selectedAccount.address);
+    if (!account) throw new Error("Account not found in wallet");
+    const results = await feature.signTransaction({ account, transaction: bytes, chain: CHAIN });
+    const signed = results[0]?.signedTransaction;
+    if (!signed) throw new Error("Wallet returned no signed transaction");
+    return signed;
+  }, [selectedWallet, selectedAccount]);
+
   const signAllTransactions = useCallback(async (transactions: VersionedTransaction[]): Promise<VersionedTransaction[]> => {
     if (!selectedWallet || !selectedAccount) {
       throw new Error("No wallet connected");
@@ -341,9 +362,10 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
       disconnectWallet,
       signMessage,
       signTransaction,
+      signTransactionBytes,
       signAllTransactions,
     }),
-    [wallets, selectedWallet, selectedAccount, isConnected, isConnecting, isReady, connectWallet, disconnectWallet, signMessage, signTransaction, signAllTransactions]
+    [wallets, selectedWallet, selectedAccount, isConnected, isConnecting, isReady, connectWallet, disconnectWallet, signMessage, signTransaction, signTransactionBytes, signAllTransactions]
   );
   
   return (

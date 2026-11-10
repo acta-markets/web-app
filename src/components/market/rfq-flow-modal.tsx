@@ -55,6 +55,8 @@ interface RfqFlowModalProps {
   backendUrl: string;
   /** Sign transaction function from wallet */
   signTransaction?: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
+  /** Raw wire signing, preferred on money paths because nothing is re-encoded. */
+  signTransactionBytes?: (bytes: Uint8Array) => Promise<Uint8Array>;
   rpc: Parameters<typeof useRfqOrder>[0]["rpc"];
 }
 
@@ -96,6 +98,7 @@ export function RfqFlowModal({
   walletAddress,
   backendUrl,
   signTransaction,
+  signTransactionBytes,
   rpc,
 }: RfqFlowModalProps) {
   const {
@@ -116,7 +119,7 @@ export function RfqFlowModal({
   const [, tick] = useState(0);
   const [recoveredOpen, setRecoveredOpen] = useState(false);
   const { flow, accept, accepting, abandon, canAbandon, reset, checkStatus, txSignature, restored } = useRfqOrder({
-    getClient, acceptQuote, submitSignedTx, signTransaction, rpc,
+    getClient, acceptQuote, submitSignedTx, signTransaction, signTransactionBytes, rpc,
     scope: { walletAddress, backendUrl },
   });
   const step: FlowStep = flow.type === "idle" ? quoteStep

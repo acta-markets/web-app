@@ -100,7 +100,7 @@ export function SentenceTrade({
 }) {
   const side: TakerSide = mode === "yield" ? "sell" : "buy";
   const { earnSummary, referralStatus, openReferralGate, isAuthenticated, assetSnapshots, getAssetSnapshots, protocolFeesBySymbol } = useRfqContext();
-  const { rpc, selectedAccount, signTransaction } = useSolana();
+  const { rpc, selectedAccount, signTransaction, signTransactionBytes } = useSolana();
   const { openSidebar } = useWalletSidebar();
   const walletAddress = selectedAccount?.address;
   const { isRequesting, failure, request, modalProps } = useQuoteRequest({ cancelOnUnmount: true });
@@ -368,6 +368,7 @@ export function SentenceTrade({
       walletAddress={walletAddress ?? null}
       backendUrl={getRfqBackendUrl()}
       signTransaction={walletAddress ? signTransaction : undefined}
+      signTransactionBytes={walletAddress ? signTransactionBytes : undefined}
       rpc={rpc}
     />
   );
