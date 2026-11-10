@@ -78,8 +78,9 @@ describe("thesis chart", () => {
     const { rerender } = render(<ThesisChart {...props} direction="above" onDirection={onDirection} />);
     await waitFor(() => expect(screen.getByTestId("chart-flip-surface")).toBeTruthy());
 
-    // the "(flip)" button is keyboard-accessible and flips above → below
-    fireEvent.click(screen.getByRole("button", { name: "Flip direction" }));
+    // the pane is the control: it takes focus and flips on Enter, above → below
+    const keyboardSurface = screen.getByRole("button", { name: "Flip direction" });
+    fireEvent.keyDown(keyboardSurface, { key: "Enter" });
     expect(onDirection).toHaveBeenLastCalledWith("below");
 
     // a clean tap (press + release, no movement) flips too, below → above

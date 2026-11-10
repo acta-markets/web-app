@@ -401,23 +401,16 @@ function FlipAffordance({
 
   if (variant === "zones") return null;
 
-  // The default: a labelled control, because "flip" alone left people guessing whether the
-  // pane itself was clickable. It sits above the time axis so it never collides with dates,
-  // and the arrows rotate on flip so the inversion reads as a state change.
+  // The default: a tag, not a button. It teaches that the surface is the control (the pane
+  // itself is the flip target and the keyboard focus stop), so it must not look clickable
+  // itself. Taps fall straight through it.
   return (
-    <button
-      type="button"
-      onClick={() => {
-        onFlip();
-        markSeen();
-      }}
-      title="Flip the direction"
-      aria-label="Flip direction"
-      className="group absolute bottom-9 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1.5 whitespace-nowrap rounded-full border border-[rgba(240,240,240,0.22)] bg-[rgba(18,18,18,0.92)] px-2.5 py-1 font-mono text-[11px] leading-none text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.5)] backdrop-blur-[4px] transition-colors hover:border-accent-primary hover:text-accent-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap rounded-full border border-[rgba(240,240,240,0.08)] bg-[rgba(18,18,18,0.55)] px-2 py-0.5 font-mono text-[9px] leading-none text-content-tertiary backdrop-blur-[3px]"
     >
       <span
-        aria-hidden="true"
-        className="inline-block text-[11px] transition-transform duration-300 ease-out"
+        className="inline-block text-[10px] transition-transform duration-300 ease-out"
         style={{ transform: swapping ? "rotate(180deg)" : "none" }}
         onTransitionEnd={onSwapEnd}
       >
@@ -425,14 +418,14 @@ function FlipAffordance({
       </span>
       click the chart to flip
       {variant === "coach" && !coachSeen ? (
-        <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[9px] tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+        <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[9px] tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
           tap anywhere on the chart to flip
-          <span aria-hidden="true" className="absolute left-1/2 top-full -translate-x-1/2 leading-none text-content-secondary">
+          <span className="absolute left-1/2 top-full -translate-x-1/2 leading-none text-content-secondary">
             ▾
           </span>
         </span>
       ) : null}
-    </button>
+    </span>
   );
 }
 
@@ -1024,13 +1017,21 @@ export function ThesisChart({
             control never flips; the zone/now overlays are pointer-events-none and pass taps
             straight through. */}
         <div
-          aria-hidden="true"
           data-testid="chart-flip-surface"
-          className="absolute inset-0 z-10 cursor-pointer"
+          className="absolute inset-0 z-10 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
+          role="button"
+          tabIndex={0}
+          aria-label="Flip direction"
           onPointerDown={onChartPointerDown}
           onPointerMove={onChartPointerMove}
           onPointerUp={onChartPointerUp}
           onPointerCancel={onChartPointerCancel}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              flipDirection();
+            }
+          }}
         />
 
         {/* above/below zones, split at the strike: the tint marks which half is profit (green)
