@@ -68,6 +68,46 @@ function tableAddresses(
   );
 }
 
+
+/** Width of a Solana shortvec-encoded length at the head of a transaction. */
+function shortvecLength(bytes: Uint8Array): { length: number; size: number } {
+  let length = 0;
+  let size = 0;
+  for (;;) {
+    const byte = bytes[size];
+    if (byte == null) throw new Error("transaction is truncated");
+    length |= (byte & 0x7f) << (7 * size);
+    size += 1;
+    if ((byte & 0x80) === 0) return { length, size };
+    if (size > 3) throw new Error("transaction signature count is malformed");
+  }
+}
+
+/**
+ * Writes the wallet's signatures into the served wire, leaving every other byte alone.
+ *
+ * Wallets return a re-serialised transaction, and that round trip can re-encode the message
+ * even though it is logically unchanged. The verifier compares messages byte for byte, so we
+ * keep the served message and graft only the signature slots onto it.
+ */
+export function graftWalletSignatures(
+  servedTx: Uint8Array,
+  signatures: ReadonlyArray<Uint8Array | null | undefined>,
+): Uint8Array {
+  const bytes = Uint8Array.from(servedTx);
+  const header = shortvecLength(bytes);
+  if (header.length !== signatures.length) {
+    throw new Error(`wallet signed ${signatures.length} of ${header.length} signatures`);
+  }
+  let offset = header.size;
+  for (const signature of signatures) {
+    if (!signature || signature.length !== 64) throw new Error("wallet left a signature empty");
+    bytes.set(signature, offset);
+    offset += 64;
+  }
+  return bytes;
+}
+
 /**
  * Reads every lookup table a served v0 message names from chain. A table that is missing, not owned by the
  * lookup table program, or deactivating is rejected as a served-transaction mismatch.

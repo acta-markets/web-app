@@ -13,7 +13,7 @@ import {
   type QuoteReceivedMessage,
   type TakerFillRfq,
 } from "@/lib/rfq-client";
-import { resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
+import { graftWalletSignatures, resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
 
 type OrderSubmission = "unsigned" | "sent";
 type SelectedOrder = {
@@ -413,7 +413,11 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
               const request = sign(VersionedTransaction.deserialize(wire));
               walletSigning.current = request;
               try {
-                return (await request).serialize();
+                const signedTx = await request;
+                // Wallets re-serialise the transaction they return, which can re-encode the
+                // message even when nothing changed. Keep the served message and take only
+                // the signatures, so the verifier still sees the exact bytes it checked.
+                return graftWalletSignatures(wire, signedTx.signatures);
               } finally {
                 if (walletSigning.current === request) walletSigning.current = null;
               }

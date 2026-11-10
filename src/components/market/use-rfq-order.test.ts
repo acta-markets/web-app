@@ -17,7 +17,7 @@ vi.mock("@/lib/rfq-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/rfq-client")>()),
   verifyAndSignTakerFill: sdk.verify,
 }));
-vi.mock("@/lib/sponsored-tx", () => ({ resolveKeeper: sdk.keeper, resolveLookupTables: sdk.tables }));
+vi.mock("@/lib/sponsored-tx", () => ({ resolveKeeper: sdk.keeper, resolveLookupTables: sdk.tables, graftWalletSignatures: (tx: Uint8Array) => tx }));
 vi.mock("@solana/web3.js", () => ({ VersionedTransaction: { deserialize: vi.fn(() => ({})) } }));
 afterEach(() => {
   cleanup();

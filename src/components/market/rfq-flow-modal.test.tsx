@@ -19,6 +19,8 @@ vi.mock("@/lib/rfq-client", async (importOriginal) => ({
 vi.mock("@/lib/sponsored-tx", () => ({
   resolveKeeper: async () => "Keeper1111111111111111111111111111111111111",
   resolveLookupTables: async () => ({}),
+  // The wallet here is a stub with no real signatures, so the graft is a pass-through.
+  graftWalletSignatures: (tx: Uint8Array) => tx,
 }));
 vi.mock("@solana/web3.js", () => ({ VersionedTransaction: { deserialize: vi.fn(() => ({})) } }));
 beforeEach(() => localStorage.clear());
