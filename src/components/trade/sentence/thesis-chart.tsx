@@ -401,33 +401,9 @@ function FlipAffordance({
 
   if (variant === "zones") return null;
 
-  if (variant === "underline") {
-    return (
-      <button
-        type="button"
-        onClick={onFlip}
-        aria-label="Flip direction"
-        className="absolute bottom-1.5 left-1/2 z-20 -translate-x-1/2 select-none whitespace-nowrap font-mono text-[10px] leading-none text-content-secondary underline decoration-[0.06em] underline-offset-[0.2em] transition-colors hover:text-content-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
-      >
-        flip direction ⇄
-      </button>
-    );
-  }
-
-  if (variant === "axis") {
-    return (
-      <button
-        type="button"
-        onClick={onFlip}
-        aria-label="Flip direction"
-        title="Tap to flip direction"
-        className="absolute bottom-1.5 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full border border-bg-border bg-bg-primary/90 text-[10px] leading-none text-content-secondary backdrop-blur-[4px] transition-colors hover:border-content-secondary hover:text-content-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
-      >
-        <span aria-hidden="true">⇄</span>
-      </button>
-    );
-  }
-
+  // The default: a labelled control, because "flip" alone left people guessing whether the
+  // pane itself was clickable. It sits above the time axis so it never collides with dates,
+  // and the arrows rotate on flip so the inversion reads as a state change.
   return (
     <button
       type="button"
@@ -435,21 +411,21 @@ function FlipAffordance({
         onFlip();
         markSeen();
       }}
-      title="Tap to flip direction"
+      title="Flip the direction"
       aria-label="Flip direction"
-      className="group absolute bottom-1.5 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 bg-transparent px-1 py-0.5 font-mono leading-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary"
+      className="group absolute bottom-9 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1.5 whitespace-nowrap rounded-full border border-[rgba(240,240,240,0.22)] bg-[rgba(18,18,18,0.92)] px-2.5 py-1 font-mono text-[11px] leading-none text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.5)] backdrop-blur-[4px] transition-colors hover:border-accent-primary hover:text-accent-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
     >
       <span
-        className={cn("flip-idle flex flex-col items-center gap-y-0.5", swapping && "flip-swapping")}
-        onAnimationEnd={onSwapEnd}
         aria-hidden="true"
+        className="inline-block text-[11px] transition-transform duration-300 ease-out"
+        style={{ transform: swapping ? "rotate(180deg)" : "none" }}
+        onTransitionEnd={onSwapEnd}
       >
-        <span className="flip-arrow flip-arrow-up text-[10px] leading-none text-additional-green-primary-deep">↗</span>
-        <span className="flip-arrow flip-arrow-down text-[10px] leading-none text-additional-red-primary">↘</span>
+        ⇄
       </span>
-      <span className="text-[9px] tracking-[-0.28px] text-content-secondary transition-colors group-hover:text-content-primary">flip</span>
+      flip direction
       {variant === "coach" && !coachSeen ? (
-        <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[9px] normal-case tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+        <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[9px] tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
           tap anywhere on the chart to flip
           <span aria-hidden="true" className="absolute left-1/2 top-full -translate-x-1/2 leading-none text-content-secondary">
             ▾
