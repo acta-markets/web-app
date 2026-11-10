@@ -83,6 +83,26 @@ function shortvecLength(bytes: Uint8Array): { length: number; size: number } {
   }
 }
 
+/** First index where two byte arrays differ, or -1 when they are equal. */
+function firstDifference(a: Uint8Array, b: Uint8Array): number {
+  const limit = Math.min(a.length, b.length);
+  for (let i = 0; i < limit; i += 1) if (a[i] !== b[i]) return i;
+  return a.length === b.length ? -1 : limit;
+}
+
+/**
+ * A one-line account of what the wallet signed versus what was served, for the failure
+ * message when the verifier refuses. Lengths plus the first differing offset are enough to
+ * tell a re-encode from a genuinely different message.
+ */
+export function describeSignedMessage(servedTx: Uint8Array, signedMessage: Uint8Array): string {
+  const header = shortvecLength(servedTx);
+  const servedMessage = servedTx.subarray(header.size + header.length * 64);
+  const diff = firstDifference(servedMessage, signedMessage);
+  if (diff < 0) return `message identical (${servedMessage.length} bytes)`;
+  return `served message ${servedMessage.length} bytes, wallet signed ${signedMessage.length} bytes, first difference at byte ${diff}`;
+}
+
 /**
  * Writes the wallet's signatures into the served wire, leaving every other byte alone.
  *

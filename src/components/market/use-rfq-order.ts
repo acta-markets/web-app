@@ -13,7 +13,7 @@ import {
   type QuoteReceivedMessage,
   type TakerFillRfq,
 } from "@/lib/rfq-client";
-import { graftWalletSignatures, resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
+import { describeSignedMessage, graftWalletSignatures, resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
 
 type OrderSubmission = "unsigned" | "sent";
 type SelectedOrder = {
@@ -130,6 +130,8 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
     keeper: Address;
   } | null>(null);
   const walletSigning = useRef<Promise<VersionedTransaction> | null>(null);
+  /** What the wallet actually returned, kept for the failure message when the verifier refuses. */
+  const walletDiagnostic = useRef<string | null>(null);
   useEffect(() => { signer.current = signTransaction; }, [signTransaction]);
   const chain = useRef(rpc);
   useEffect(() => { chain.current = rpc; }, [rpc]);
@@ -414,6 +416,12 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
               walletSigning.current = request;
               try {
                 const signedTx = await request;
+                try {
+                  const signedMessage = signedTx.message?.serialize?.();
+                  walletDiagnostic.current = signedMessage ? describeSignedMessage(wire, signedMessage) : null;
+                } catch {
+                  walletDiagnostic.current = null;
+                }
                 // Wallets re-serialise the transaction they return, which can re-encode the
                 // message even when nothing changed. Keep the served message and take only
                 // the signatures, so the verifier still sees the exact bytes it checked.
@@ -452,7 +460,9 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
             type: "failed",
             orderId: id,
             message: error.mismatch.kind === "walletMessage"
-              ? "The wallet returned a different transaction than the verified one. It was not submitted; the RFQ was cancelled."
+              ? `The wallet returned a different transaction than the verified one${
+                  walletDiagnostic.current ? ` (${walletDiagnostic.current})` : ""
+                }. It was not submitted; the RFQ was cancelled.`
               : `Transaction does not match the accepted quote (${error.message}). Nothing was signed; the RFQ was cancelled.`,
           });
         } else if (now === signing) {
