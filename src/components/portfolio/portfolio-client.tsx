@@ -337,6 +337,9 @@ export function PortfolioClient() {
     if (!rfqAuthenticated || !getAssetSnapshots) return;
     const refresh = () => {
       if (document.hidden) return;
+      // Refetch the rows too: the mark baked into each position is refreshed by the server on
+      // every fetch, so this is the dependable path when the snapshot map has no mint yet.
+      fetchRfqPositions();
       const mints = Array.from(
         new Set(
           allPositions
@@ -354,7 +357,7 @@ export function PortfolioClient() {
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [rfqAuthenticated, allPositions, getAssetSnapshots, underlyingMintFor]);
+  }, [rfqAuthenticated, allPositions, getAssetSnapshots, underlyingMintFor, fetchRfqPositions]);
 
   const liveSpotFor = useCallback(
     (p: PositionInfo) => {
