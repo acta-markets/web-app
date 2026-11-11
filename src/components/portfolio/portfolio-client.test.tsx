@@ -167,7 +167,7 @@ describe("Bought options", () => {
   });
 
   it("drops the deposit action once the position is past expiry", async () => {
-    mocks.markets = [{ pda: "m1", settlement_price: 160e9 }];
+    mocks.markets = [{ pda: "m1", settlement: { type: "fixed", price: 160e9 } }];
     await show([bought({ expiry_ts: nowSec() - 10 })]);
     expect(screen.queryByRole("button", { name: /^Fund/ })).toBeNull();
   });

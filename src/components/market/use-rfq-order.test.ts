@@ -507,7 +507,7 @@ describe("taker order flow", () => {
 });
 
 describe("recovery with the current backend contract", () => {
-  const pendingSignature = { rfq_id: "rfq", market: "market" as Address, terms: { type: "covered_call" as const, strike: 1 }, side: "sell" as const, quantity: 1, expires_at: 9999999999, quotes_count: 1, state: "pending_signature" as const, locked_order_id: "order", best_price: null };
+  const pendingSignature = { rfq_id: "rfq", market: "market" as Address, terms: { type: "covered_call" as const, strike: 1 }, side: "sell" as const, quantity: 1, expires_at: 9999999999, quotes_count: 1, state: "pending_signature" as const, lock: { type: "locked" as const, order_id: "order" }, best_price: { type: "none" as const } };
   const enqueued = { ...pendingSignature, state: "enqueued" as const };
 
   it("persists an enqueued order as sent and never offers to abandon it after reload", async () => {
@@ -675,7 +675,7 @@ describe("recovery with the current backend contract", () => {
   it.each(["changed credential", "different selected order", "missing RFQ"])("does not replay AcceptQuote for %s", async scenario => {
     const h = setup(); await h.select(); h.emit("disconnected", 1006, "lost");
     if (scenario === "changed credential") h.session.mockReturnValue("new-auth-session");
-    h.reauth(scenario === "missing RFQ" ? [] : [{ ...pendingSignature, locked_order_id: scenario === "different selected order" ? "other" : "order" }]);
+    h.reauth(scenario === "missing RFQ" ? [] : [{ ...pendingSignature, lock: { type: "locked" as const, order_id: scenario === "different selected order" ? "other" : "order" } }]);
     await waitFor(() => expect(h.result.current.flow.type).toBe(scenario === "different selected order" ? "failed" : "unknown"));
     expect(h.accept).toHaveBeenCalledTimes(1);
     expect(h.sign).not.toHaveBeenCalled();

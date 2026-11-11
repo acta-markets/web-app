@@ -266,8 +266,8 @@ describe("token market response ownership", () => {
     act(() => h.result.current.getTokenMarketsInfo("GQ1XdBnJURK2w8fs1jxiTdQATgKSTy3rnx4PfMttvKMs"));
     const id = h.metadataRequest.mock.lastCall![1].data.request_id;
     const data = info(id, "market-A");
-    h.emit("tokenMarketsInfo", { ...data, markets: [{ ...data.markets[0], indicatives: [{ position_type: "covered_call", side: "sell", updated_at: 100, is_stale: true, strikes: [{ strike: 100, best_price: 1 }] }] }] });
-    expect(h.result.current.getIndicativePricesCached("market-A", "covered_call", "sell")).toMatchObject({ request_id: id, is_stale: true, updated_at: 100 });
+    h.emit("tokenMarketsInfo", { ...data, markets: [{ ...data.markets[0], indicatives: [{ position_type: "covered_call", side: "sell", freshness: { type: "stale", updated_at: 100 }, strikes: [{ strike: 100, price: { type: "quoted", price: 1 } }] }] }] });
+    expect(h.result.current.getIndicativePricesCached("market-A", "covered_call", "sell")).toMatchObject({ request_id: id, freshness: { type: "stale", updated_at: 100 } });
   });
 
 });

@@ -46,7 +46,7 @@ describe("web app authentication through the installed SDK", () => {
     const socket = Socket.current;
     socket.readyState = 1; await socket.onopen?.();
     socket.receive({ type: "Welcome", data: { protocol_version: "1.0.0", server_version: "test", min_supported_version: "1.0.0", server_time_unix_ms: Date.now() } });
-    socket.receive({ type: "AuthSuccess", data: { session_id: "session", expires_at: 9_999_999_999 } });
+    socket.receive({ type: "AuthSuccess", data: { session_id: "session", expires_at: 9_999_999_999, role: { type: "taker" } } });
     expect(socket.sent.some(frame => JSON.parse(frame).type === "GetPositions")).toBe(false);
     const underlyingMint = address(getTokenMint("SOL")!);
     const quoteMint = address(getTokenMint("USDC")!);
