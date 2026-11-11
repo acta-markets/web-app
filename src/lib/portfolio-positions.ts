@@ -1,7 +1,8 @@
 import type { PositionInfo } from "@/lib/rfq-client";
 import { formatStrikePrice } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
-import { isCashSettled } from "@/lib/spreads";
+import { isCashSettled, isCashSettledTerms, isSpreadTerms } from "@/lib/spreads";
+import { exerciseDepositText } from "@/lib/trade/thesis";
 import {
   entryPremiumUsd,
   positionQuantity,
@@ -90,6 +91,8 @@ export type PositionsTableRow = {
   sentence: string;
   /** The product as a thing, not a lifecycle stage: "Covered call", "Call", "Secured put". */
   productLabel: string;
+  /** What funding the exercise costs (strike for a call, underlying for a put); null when it does not apply. */
+  exerciseText: string | null;
   direction: DirectionWord;
   side: "buy" | "sell";
   sizeNum: number;
@@ -106,6 +109,15 @@ export type PositionsTableRow = {
   /** Present for a bought physical position that can still be exercised (deposit action). */
   buy: { pda: string; market: string } | null;
 };
+
+/** What it costs to take delivery: the strike for a call, the underlying for a put. */
+export function exerciseTextFor(p: PositionInfo): string | null {
+  if (p.side !== "buy" || isSpreadTerms(p.terms) || isCashSettledTerms(p.terms)) return null;
+  const isPut = p.terms.type === "cash_secured_put";
+  const quantity = positionQuantity(p);
+  const strike = thesisStrike1e9(p) / 1e9;
+  return exerciseDepositText(isPut, quantity, strike, "");
+}
 
 /** What the position is, in the same words the trade page uses. */
 export function productLabelFor(p: PositionInfo): string {
@@ -138,6 +150,7 @@ export function buildPositionRows(
       direction: directionWord(p),
       side: p.side,
       productLabel: productLabelFor(p),
+      exerciseText: exerciseTextFor(p),
       sizeNum: quantity,
       sizeText: `${quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${symbol}`,
       premiumNum: premium,

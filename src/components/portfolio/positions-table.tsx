@@ -117,7 +117,7 @@ function BuyDepositButton({ row, nowMs, deposit }: { row: PositionsTableRow; now
   const buy = row.buy;
   if (!deposit || !buy) return null;
   if (deposit.funded.has(buy.pda)) {
-    return <span className="shrink-0 text-[11px] text-content-tertiary">Deposited</span>;
+    return <span className="shrink-0 text-[11px] text-content-tertiary">Funded</span>;
   }
   if (row.state === "Open" && row.expiryTs != null && row.expiryTs * 1000 > nowMs) {
     return (
@@ -125,9 +125,19 @@ function BuyDepositButton({ row, nowMs, deposit }: { row: PositionsTableRow; now
         type="button"
         disabled={deposit.pending != null}
         onClick={() => void deposit.deposit({ pda: buy.pda, market: buy.market })}
-        className="shrink-0 font-medium text-accent-secondary underline underline-offset-2 decoration-accent-secondary/60 hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+        title={`Fund the exercise: pay ${row.exerciseText ?? "the strike"} before expiry so the option can be exercised.`}
+        className="shrink-0 whitespace-nowrap font-medium text-accent-secondary underline underline-offset-2 decoration-accent-secondary/60 hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {deposit.pending === buy.pda ? "Depositing…" : "Deposit"}
+        {deposit.pending === buy.pda ? (
+        "Funding…"
+      ) : (
+        <>
+          Fund
+          {row.exerciseText ? (
+            <span className="ml-1 text-content-secondary">{row.exerciseText}</span>
+          ) : null}
+        </>
+      )}
       </button>
     );
   }
@@ -180,14 +190,15 @@ export function PositionsTable({
     <div className="border border-bg-border bg-bg-primary">
       <table className="w-full table-fixed border-collapse text-[13px]">
         <colgroup>
-          <col className="w-[10%]" />
-          <col className="w-[24%]" />
-          <col className="w-[7%]" />
-          <col className="w-[10%]" />
+          <col className="w-[8%]" />
+          <col className="w-[17%]" />
+          <col className="w-[6%]" />
+          <col className="w-[11%]" />
           <col className="w-[11%]" />
           <col className="w-[12%]" />
           <col className="w-[8%]" />
-          <col className="w-[18%]" />
+          <col className="w-[15%]" />
+          <col className="w-[12%]" />
         </colgroup>
         <caption className="sr-only">
           Your positions, sorted by risk: open positions by nearest expiry first, then settled.
@@ -223,6 +234,9 @@ export function PositionsTable({
             <th scope="col" className="whitespace-nowrap px-2.5 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
               Type
             </th>
+            <th scope="col" className="whitespace-nowrap px-2.5 py-2 text-right font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
+              <span className="sr-only">Action</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -230,7 +244,7 @@ export function PositionsTable({
             if (item.kind === "header") {
               return (
                 <tr key={`h-${item.symbol}`} className="border-b border-bg-border bg-action-secondary/40">
-                  <td colSpan={8} className="px-3 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
+                  <td colSpan={9} className="px-3 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
                     {item.symbol} · {item.count}
                   </td>
                 </tr>
@@ -262,20 +276,15 @@ export function PositionsTable({
                   )}
                   title={row.sentence}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <span className="block min-w-0 truncate">
-                      {row.sentenceBody.replace(/\s+by\s+.*$/, "")}
-                    </span>
-                    <BuyDepositButton row={row} nowMs={nowMs} deposit={deposit} />
-                  </span>
+                  <span className="block truncate">{row.sentenceBody.replace(/\s+by\s+.*$/, "")}</span>
                 </td>
                 <td className={cn("whitespace-nowrap px-2.5 py-2.5 align-middle", recessed && "opacity-60")}>
                   <SideBadge side={row.side} />
                 </td>
-                <td className={cn("whitespace-nowrap px-2.5 py-2.5 text-right align-middle tabular-nums text-content-secondary", recessed && "opacity-60")}>
+                <td className={cn("whitespace-nowrap py-2.5 pl-3 pr-2.5 text-right align-middle tabular-nums text-content-secondary", recessed && "opacity-60")}>
                   {row.sizeText}
                 </td>
-                <td className={cn("whitespace-nowrap px-2.5 py-2.5 text-right align-middle tabular-nums", recessed && "opacity-60")}>
+                <td className={cn("whitespace-nowrap py-2.5 pl-3 pr-2.5 text-right align-middle tabular-nums", recessed && "opacity-60")}>
                   {row.premiumNum == null ? (
                     <span className="text-content-secondary">{"\u2014"}</span>
                   ) : (
@@ -287,7 +296,7 @@ export function PositionsTable({
                     </span>
                   )}
                 </td>
-                <td className="whitespace-nowrap px-2.5 py-2.5 text-right align-middle tabular-nums">
+                <td className="whitespace-nowrap py-2.5 pl-3 pr-2.5 text-right align-middle tabular-nums">
                   {row.pnlNum == null || !row.isOpen ? (
                     <span
                       className="text-content-secondary"
@@ -312,7 +321,7 @@ export function PositionsTable({
                     </span>
                   )}
                 </td>
-                <td className={cn("whitespace-nowrap px-2.5 py-2.5 text-right align-middle tabular-nums text-content-secondary", recessed && "opacity-60")}>
+                <td className={cn("whitespace-nowrap py-2.5 pl-3 pr-2.5 text-right align-middle tabular-nums text-content-secondary", recessed && "opacity-60")}>
                   {row.expiryTs == null ? (
                     "\u2014"
                   ) : row.isOpen ? (
@@ -337,6 +346,9 @@ export function PositionsTable({
                     <span className="truncate text-[11.5px] text-content-primary" title={row.productLabel === "Secured put" ? "Cash-secured put" : row.productLabel}>{row.productLabel}</span>
                     <span className="sr-only">, {row.state}</span>
                   </span>
+                </td>
+                <td className="whitespace-nowrap px-2.5 py-2.5 text-right align-middle">
+                  <BuyDepositButton row={row} nowMs={nowMs} deposit={deposit} />
                 </td>
               </tr>
             );

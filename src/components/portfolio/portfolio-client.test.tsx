@@ -129,14 +129,14 @@ describe("Bought options", () => {
   it("shows the premium paid and asks for the exercise deposit before expiry", async () => {
     await show([bought({})]);
     expect(screen.getAllByText(usd(10)).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Fund/ })).toBeTruthy();
     expect(screen.getByText("0 sell · 1 buy open")).toBeTruthy();
     expect(screen.getByText("Buy")).toBeTruthy();
   });
 
   it("offers the deposit action for a bought put too", async () => {
     await show([bought({ terms: { type: "cash_secured_put", strike: 150e9 } })]);
-    expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Fund/ })).toBeTruthy();
     expect(screen.getByText("Put")).toBeTruthy();
   });
 
@@ -150,8 +150,8 @@ describe("Bought options", () => {
     mocks.sendTx.mockResolvedValue("sig");
     await show([bought({})]);
     mocks.fetchPositions.mockClear();
-    fireEvent.click(screen.getByRole("button", { name: "Deposit" }));
-    await screen.findByText("Deposited");
+    fireEvent.click(screen.getByRole("button", { name: /^Fund/ }));
+    await screen.findByText("Funded");
     expect(mocks.buildDeposit).toHaveBeenCalledWith(undefined, "wallet-a", expect.objectContaining({ pda: "bought", market: "m1" }));
     expect(mocks.sendTx).toHaveBeenCalledWith(expect.objectContaining({ feePayer: "wallet-a", instructions: ["ix"] }));
     expect(mocks.fetchPositions).toHaveBeenCalledOnce();
@@ -161,22 +161,22 @@ describe("Bought options", () => {
     mocks.buildDeposit.mockResolvedValue(["ix"]);
     mocks.sendTx.mockRejectedValue(new Error("simulation failed: Error: insufficient funds"));
     await show([bought({})]);
-    fireEvent.click(screen.getByRole("button", { name: "Deposit" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Fund/ }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/Not enough balance/);
-    expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
-    expect(screen.queryByText("Deposited")).toBeNull();
+    expect(screen.getByRole("button", { name: /^Fund/ })).toBeTruthy();
+    expect(screen.queryByText("Funded")).toBeNull();
   });
 
   it("drops the deposit action once the position is past expiry", async () => {
     mocks.markets = [{ pda: "m1", settlement_price: 160e9 }];
     await show([bought({ expiry_ts: nowSec() - 10 })]);
-    expect(screen.queryByRole("button", { name: "Deposit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Fund/ })).toBeNull();
   });
 
   it("stays neutral on a funded position until the price is known", async () => {
     await show([bought({ state: "funded" })]);
     expect(screen.getByText(/, Funded/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Deposit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Fund/ })).toBeNull();
   });
 
   it("does not show a profit for a settled unfunded ITM buy", async () => {

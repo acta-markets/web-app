@@ -129,12 +129,12 @@ describe("PositionsTable", () => {
     const rows = buildPositionRows([buy], () => "SOL", (NOV28 - 3600) * 1000);
     const deposit = { pending: null, funded: new Set<string>(), deposit: vi.fn() };
     render(<PositionsTable rows={rows} nowMs={(NOV28 - 3600) * 1000} grouped={false} deposit={deposit} />);
-    expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Fund/ })).toBeTruthy();
   });
 
   it("hides the deposit action without a deposit handler", () => {
     const buy = pos({ side: "buy", market: "m1", expiry_ts: NOV28 });
     render(<PositionsTable rows={buildPositionRows([buy], () => "SOL", (NOV28 - 3600) * 1000)} nowMs={(NOV28 - 3600) * 1000} grouped={false} />);
-    expect(screen.queryByRole("button", { name: "Deposit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Fund/ })).toBeNull();
   });
 });
