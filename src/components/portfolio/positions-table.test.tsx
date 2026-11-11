@@ -103,7 +103,6 @@ describe("PositionsTable", () => {
     // the whole sentence for assistive tech and hover.
     expect(screen.getByText("ends below $150")).toBeTruthy();
     expect(screen.getByTitle("SOL ends below $150 by Nov 28")).toBeTruthy();
-    expect(screen.getByText("Below")).toBeTruthy();
     // The lifecycle state is still announced, but the visible label is the product type.
     expect(screen.getByText("Covered call")).toBeTruthy();
     expect(screen.getByText(/, Open/)).toBeTruthy();

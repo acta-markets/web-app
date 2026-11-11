@@ -93,22 +93,6 @@ function StateBadge({ state, open }: { state: string; open: boolean }) {
   );
 }
 
-/** The bet itself: which side of the strike the underlying has to finish on. */
-function DirectionBadge({ direction }: { direction: "above" | "below" }) {
-  const above = direction === "above";
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.06em]",
-        above ? "text-additional-green-primary/80" : "text-additional-red-primary/80",
-      )}
-    >
-      <span aria-hidden="true">{above ? "\u2197" : "\u2198"}</span>
-      {above ? "Above" : "Below"}
-    </span>
-  );
-}
-
 /**
  * Compact trailing deposit action for a bought physical position that can still be
  * exercised. A bought option needs a deposit before expiry to exercise; once funded the
@@ -190,13 +174,12 @@ export function PositionsTable({
       <table className="w-full table-fixed border-collapse text-[13px]">
         <colgroup>
           <col className="w-[8%]" />
-          <col className="w-[17%]" />
-          <col className="w-[9%]" />
+          <col className="w-[24%]" />
           <col className="w-[11%]" />
           <col className="w-[11%]" />
           <col className="w-[12%]" />
           <col className="w-[8%]" />
-          <col className="w-[15%]" />
+          <col className="w-[17%]" />
           <col className="w-[9%]" />
         </colgroup>
         <caption className="sr-only">
@@ -209,9 +192,6 @@ export function PositionsTable({
             </th>
             <th scope="col" className="px-2.5 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
               Position
-            </th>
-            <th scope="col" className="whitespace-nowrap px-2.5 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
-              Direction
             </th>
             {SORTABLE.map(({ key, label }) => (
               <th
@@ -243,7 +223,7 @@ export function PositionsTable({
             if (item.kind === "header") {
               return (
                 <tr key={`h-${item.symbol}`} className="border-b border-bg-border bg-action-secondary/40">
-                  <td colSpan={9} className="px-3 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
+                  <td colSpan={8} className="px-3 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
                     {item.symbol} · {item.count}
                   </td>
                 </tr>
@@ -276,9 +256,6 @@ export function PositionsTable({
                   title={row.sentence}
                 >
                   <span className="block truncate">{row.sentenceBody.replace(/\s+by\s+.*$/, "")}</span>
-                </td>
-                <td className={cn("whitespace-nowrap px-2.5 py-2.5 align-middle", recessed && "opacity-60")}>
-                  <DirectionBadge direction={row.direction} />
                 </td>
                 <td className={cn("whitespace-nowrap py-2.5 pl-3 pr-2.5 text-right align-middle tabular-nums text-content-secondary", recessed && "opacity-60")}>
                   {row.sizeText}

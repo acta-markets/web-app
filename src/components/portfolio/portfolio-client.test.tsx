@@ -131,7 +131,6 @@ describe("Bought options", () => {
     expect(screen.getAllByText(usd(10)).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: /^Fund/ })).toBeTruthy();
     expect(screen.getByText("0 sell · 1 buy open")).toBeTruthy();
-    expect(screen.getByText("Above")).toBeTruthy();
   });
 
   it("offers the deposit action for a bought put too", async () => {
