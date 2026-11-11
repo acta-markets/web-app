@@ -87,7 +87,7 @@ export type PositionsTableRow = {
   sentenceBody: string;
   /** "SOL ends below $150 by Nov 28" — the full sentence, for a11y/title. */
   sentence: string;
-  /** The product as a thing, not a lifecycle stage: "Covered call", "Long put". */
+  /** The product as a thing, not a lifecycle stage: "Covered call", "Call", "Secured put". */
   productLabel: string;
   direction: DirectionWord;
   side: "buy" | "sell";
@@ -107,9 +107,11 @@ export type PositionsTableRow = {
 /** What the position is, in the same words the trade page uses. */
 export function productLabelFor(p: PositionInfo): string {
   const isPut = p.terms.type === "cash_secured_put" || p.terms.type === "put_spread" || p.terms.type === "cash_put";
-  // "Secured put" in the table; the full name is in the cell title.
-  if (isPut) return p.side === "buy" ? "Long put" : "Secured put";
-  return p.side === "buy" ? "Long call" : "Covered call";
+  // Buying is long by definition, so the side badge already says it: a bought call is just a
+  // call. Selling is the case that needs naming, since the writer is the secured party.
+  // "Secured put" keeps the full name in the cell title.
+  if (isPut) return p.side === "buy" ? "Put" : "Secured put";
+  return p.side === "buy" ? "Call" : "Covered call";
 }
 
 export function buildPositionRows(
