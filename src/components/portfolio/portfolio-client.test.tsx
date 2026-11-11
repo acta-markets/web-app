@@ -134,7 +134,7 @@ describe("Bought options", () => {
     expect(screen.getByText(usd(10))).toBeTruthy();
     expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
     expect(screen.getByText(/300.*to exercise/)).toBeTruthy();
-    expect(screen.getByText("Long call")).toBeTruthy();
+    expect(screen.getAllByText("Long call").length).toBeGreaterThan(0);
   });
 
   it("asks for the asset to exercise a put", async () => {

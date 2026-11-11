@@ -19,7 +19,7 @@ type SortState = { key: SortKey; dir: SortDir };
 const SORTABLE: Array<{ key: SortKey; label: string }> = [
   { key: "size", label: "Size" },
   { key: "premium", label: "Premium" },
-  { key: "pnl", label: "P&L" },
+  { key: "pnl", label: "uPnL" },
   { key: "expiry", label: "Expiry" },
 ];
 
@@ -146,14 +146,14 @@ export function PositionsTable({
     <div className="border border-bg-border bg-bg-primary">
       <table className="w-full table-fixed border-collapse text-[13px]">
         <colgroup>
-          <col className="w-[11%]" />
-          <col className="w-[30%]" />
+          <col className="w-[10%]" />
+          <col className="w-[24%]" />
           <col className="w-[7%]" />
+          <col className="w-[10%]" />
+          <col className="w-[11%]" />
           <col className="w-[12%]" />
-          <col className="w-[12%]" />
-          <col className="w-[13%]" />
           <col className="w-[8%]" />
-          <col className="w-[9%]" />
+          <col className="w-[18%]" />
         </colgroup>
         <caption className="sr-only">
           Your positions, sorted by risk: open positions by nearest expiry first, then settled.
@@ -187,7 +187,7 @@ export function PositionsTable({
               </th>
             ))}
             <th scope="col" className="whitespace-nowrap px-2.5 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
-              State
+              Type
             </th>
           </tr>
         </thead>
@@ -251,8 +251,13 @@ export function PositionsTable({
                   )}
                 </td>
                 <td className="whitespace-nowrap px-2.5 py-2.5 text-right align-middle tabular-nums">
-                  {row.pnlNum == null ? (
-                    <span className="text-content-secondary">{"\u2014"}</span>
+                  {row.pnlNum == null || !row.isOpen ? (
+                    <span
+                      className="text-content-secondary"
+                      title="Unrealised P&L only exists while a position is open. Realised results are in History."
+                    >
+                      {"\u2014"}
+                    </span>
                   ) : (
                     <span
                       title={
@@ -280,7 +285,21 @@ export function PositionsTable({
                   )}
                 </td>
                 <td className={cn("whitespace-nowrap px-2.5 py-2.5 align-middle", recessed && "opacity-60")}>
-                  <StateBadge state={row.state} open={row.isOpen} />
+                  <span className="flex items-center gap-1.5" title={row.state}>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "h-1.5 w-1.5 shrink-0 rounded-full",
+                        row.state === "Open" && "bg-accent-primary",
+                        row.state === "Funded" && "bg-accent-primary/60",
+                        row.state === "Settling" && "bg-content-secondary",
+                        row.state === "Liquidated" && "bg-additional-red-primary",
+                        !row.isOpen && row.state !== "Settling" && row.state !== "Liquidated" && "bg-content-tertiary",
+                      )}
+                    />
+                    <span className="truncate text-[11.5px] text-content-primary" title={row.productLabel === "Secured put" ? "Cash-secured put" : row.productLabel}>{row.productLabel}</span>
+                    <span className="sr-only">, {row.state}</span>
+                  </span>
                 </td>
               </tr>
             );

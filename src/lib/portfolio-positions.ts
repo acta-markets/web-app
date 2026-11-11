@@ -87,6 +87,8 @@ export type PositionsTableRow = {
   sentenceBody: string;
   /** "SOL ends below $150 by Nov 28" — the full sentence, for a11y/title. */
   sentence: string;
+  /** The product as a thing, not a lifecycle stage: "Covered call", "Long put". */
+  productLabel: string;
   direction: DirectionWord;
   side: "buy" | "sell";
   sizeNum: number;
@@ -101,6 +103,14 @@ export type PositionsTableRow = {
   state: string;
   createdTs: number;
 };
+
+/** What the position is, in the same words the trade page uses. */
+export function productLabelFor(p: PositionInfo): string {
+  const isPut = p.terms.type === "cash_secured_put" || p.terms.type === "put_spread" || p.terms.type === "cash_put";
+  // "Secured put" in the table; the full name is in the cell title.
+  if (isPut) return p.side === "buy" ? "Long put" : "Secured put";
+  return p.side === "buy" ? "Long call" : "Covered call";
+}
 
 export function buildPositionRows(
   positions: readonly PositionInfo[],
@@ -122,6 +132,7 @@ export function buildPositionRows(
       sentence: positionSentence(symbol, p),
       direction: directionWord(p),
       side: p.side,
+      productLabel: productLabelFor(p),
       sizeNum: quantity,
       sizeText: `${quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${symbol}`,
       premiumNum: premium,

@@ -104,7 +104,9 @@ describe("PositionsTable", () => {
     expect(screen.getByText("ends below $150")).toBeTruthy();
     expect(screen.getByTitle("SOL ends below $150 by Nov 28")).toBeTruthy();
     expect(screen.getByText("Sell")).toBeTruthy();
-    expect(screen.getByText("Open")).toBeTruthy();
+    // The lifecycle state is still announced, but the visible label is the product type.
+    expect(screen.getByText("Covered call")).toBeTruthy();
+    expect(screen.getByText(/, Open/)).toBeTruthy();
   });
 
   it("announces the sort direction on sortable headers", () => {
@@ -119,6 +121,6 @@ describe("PositionsTable", () => {
   it("recesses settled rows while keeping them readable", () => {
     const settled = pos({ pda: "s", state: "settled", settlement: { type: "physical", settlement_price: 150e9, is_otm: true } });
     render(<PositionsTable rows={buildPositionRows([settled], () => "SOL", NOV28 * 1000)} nowMs={NOV28 * 1000} grouped={false} />);
-    expect(screen.getByText("Expired").closest("tr")?.className).toContain("bg-action-secondary/20");
+    expect(screen.getByText(/, Expired/).closest("tr")?.className).toContain("bg-action-secondary/20");
   });
 });
