@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { InfoTooltip } from "@/components/app-ui/info-tooltip";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { formatUsdSmart } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
@@ -94,6 +95,19 @@ function StateBadge({ state, open }: { state: string; open: boolean }) {
 }
 
 /**
+ * What the Fund action does, in the position's own numbers: the deposit amount (USDC to
+ * buy at the strike for a call, the underlying units for a put), when it must land, and
+ * what happens if it never does. Physical options do not auto-exercise.
+ */
+function fundTooltipCopy(row: PositionsTableRow): string {
+  const isPut = row.productLabel === "Put";
+  // A bought put deposits the underlying units (the position size); a call deposits USDC.
+  const amount = isPut ? row.sizeText : (row.exerciseText ?? "the required amount");
+  const expiry = row.expiryTs != null ? ` before ${formatExpiryDay(row.expiryTs * 1000)}` : "";
+  return `Deposit ${amount}${expiry} to exercise. Unfunded options are not exercised and the premium is lost.`;
+}
+
+/**
  * Compact trailing deposit action for a bought physical position that can still be
  * exercised. A bought option needs a deposit before expiry to exercise; once funded the
  * state badge takes over, so this only surfaces for an unfunded open buy before expiry.
@@ -106,22 +120,21 @@ function BuyDepositButton({ row, nowMs, deposit }: { row: PositionsTableRow; now
   }
   if (row.state === "Open" && row.expiryTs != null && row.expiryTs * 1000 > nowMs) {
     return (
-      <button
-        type="button"
-        disabled={deposit.pending != null}
-        onClick={() => void deposit.deposit({ pda: buy.pda, market: buy.market })}
-        title={`Fund the exercise: pay ${row.exerciseText ?? "the strike"} before expiry so the option can be exercised.`}
-        aria-label={row.exerciseText ? `Fund exercise, ${row.exerciseText}` : undefined}
-        className="shrink-0 whitespace-nowrap font-medium text-accent-secondary underline underline-offset-2 decoration-accent-secondary/60 hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {deposit.pending === buy.pda ? (
-        "Funding…"
-      ) : (
-        <>
-          Fund
-        </>
-      )}
-      </button>
+      <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+        <button
+          type="button"
+          disabled={deposit.pending != null}
+          onClick={() => void deposit.deposit({ pda: buy.pda, market: buy.market })}
+          title={`Fund the exercise: pay ${row.exerciseText ?? "the strike"} before expiry so the option can be exercised.`}
+          aria-label={row.exerciseText ? `Fund exercise, ${row.exerciseText}` : undefined}
+          className="whitespace-nowrap font-medium text-accent-secondary underline underline-offset-2 decoration-accent-secondary/60 hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {deposit.pending === buy.pda ? "Funding…" : "Fund"}
+        </button>
+        <InfoTooltip label="How funding this position works">
+          {fundTooltipCopy(row)}
+        </InfoTooltip>
+      </span>
     );
   }
   return null;

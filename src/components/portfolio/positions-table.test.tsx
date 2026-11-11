@@ -136,4 +136,69 @@ describe("PositionsTable", () => {
     render(<PositionsTable rows={buildPositionRows([buy], () => "SOL", (NOV28 - 3600) * 1000)} nowMs={(NOV28 - 3600) * 1000} grouped={false} />);
     expect(screen.queryByRole("button", { name: /^Fund/ })).toBeNull();
   });
+
+  it("explains the Fund action with the deposit amount, deadline and consequence", () => {
+    const buy = pos({ side: "buy", market: "m1", expiry_ts: NOV28 });
+    const deposit = { pending: null, funded: new Set<string>(), deposit: vi.fn() };
+    render(
+      <PositionsTable
+        rows={buildPositionRows([buy], () => "SOL", (NOV28 - 3600) * 1000)}
+        nowMs={(NOV28 - 3600) * 1000}
+        grouped={false}
+        deposit={deposit}
+      />,
+    );
+
+    const info = screen.getByRole("button", { name: "How funding this position works" });
+    fireEvent.pointerEnter(info, { pointerType: "mouse" });
+
+    expect(screen.getByText(/Deposit 150\.00 USDC/)).toBeTruthy();
+    expect(screen.getByText(/before Nov 28/)).toBeTruthy();
+    expect(screen.getByText(/not exercised and the premium is lost/)).toBeTruthy();
+  });
+
+  it("names the underlying units as the deposit for a bought put", () => {
+    const put = pos({ side: "buy", market: "m1", expiry_ts: NOV28, terms: { type: "cash_secured_put", strike: 150e9 } });
+    const deposit = { pending: null, funded: new Set<string>(), deposit: vi.fn() };
+    render(
+      <PositionsTable
+        rows={buildPositionRows([put], () => "SOL", (NOV28 - 3600) * 1000)}
+        nowMs={(NOV28 - 3600) * 1000}
+        grouped={false}
+        deposit={deposit}
+      />,
+    );
+
+    const info = screen.getByRole("button", { name: "How funding this position works" });
+    fireEvent.pointerEnter(info, { pointerType: "mouse" });
+
+    expect(screen.getByText(/Deposit 1 SOL/)).toBeTruthy();
+  });
+
+  it("does not surface the funding tooltip for a sold position", () => {
+    const sold = pos();
+    render(
+      <PositionsTable
+        rows={buildPositionRows([sold], () => "SOL", (NOV28 - 3600) * 1000)}
+        nowMs={(NOV28 - 3600) * 1000}
+        grouped={false}
+        deposit={{ pending: null, funded: new Set<string>(), deposit: vi.fn() }}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "How funding this position works" })).toBeNull();
+  });
+
+  it("does not surface the funding tooltip for an already-funded position", () => {
+    const buy = pos({ side: "buy", market: "m1", expiry_ts: NOV28 });
+    const deposit = { pending: null, funded: new Set<string>(["p1"]), deposit: vi.fn() };
+    render(
+      <PositionsTable
+        rows={buildPositionRows([buy], () => "SOL", (NOV28 - 3600) * 1000)}
+        nowMs={(NOV28 - 3600) * 1000}
+        grouped={false}
+        deposit={deposit}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "How funding this position works" })).toBeNull();
+  });
 });
