@@ -16,6 +16,12 @@ import {
 
 type SortState = { key: SortKey; dir: SortDir };
 
+type DepositControl = {
+  pending: string | null;
+  funded: ReadonlySet<string>;
+  deposit: (position: { pda: string; market: string }) => void;
+};
+
 const SORTABLE: Array<{ key: SortKey; label: string }> = [
   { key: "size", label: "Size" },
   { key: "premium", label: "Premium" },
@@ -103,6 +109,32 @@ function SideBadge({ side }: { side: "buy" | "sell" }) {
 }
 
 /**
+ * Compact trailing deposit action for a bought physical position that can still be
+ * exercised. A bought option needs a deposit before expiry to exercise; once funded the
+ * state badge takes over, so this only surfaces for an unfunded open buy before expiry.
+ */
+function BuyDepositButton({ row, nowMs, deposit }: { row: PositionsTableRow; nowMs: number; deposit?: DepositControl }) {
+  const buy = row.buy;
+  if (!deposit || !buy) return null;
+  if (deposit.funded.has(buy.pda)) {
+    return <span className="shrink-0 text-[11px] text-content-tertiary">Deposited</span>;
+  }
+  if (row.state === "Open" && row.expiryTs != null && row.expiryTs * 1000 > nowMs) {
+    return (
+      <button
+        type="button"
+        disabled={deposit.pending != null}
+        onClick={() => void deposit.deposit({ pda: buy.pda, market: buy.market })}
+        className="shrink-0 font-medium text-accent-secondary underline underline-offset-2 decoration-accent-secondary/60 hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {deposit.pending === buy.pda ? "Depositing…" : "Deposit"}
+      </button>
+    );
+  }
+  return null;
+}
+
+/**
  * A unified, sortable positions table — one row per position across every state. Open
  * positions carry the live unrealised mark; settled ones carry the realised outcome; the
  * default order is "most at risk first" (open by nearest expiry, then closed). Closed and
@@ -113,10 +145,12 @@ export function PositionsTable({
   rows,
   nowMs,
   grouped,
+  deposit,
 }: {
   rows: PositionsTableRow[];
   nowMs: number;
   grouped: boolean;
+  deposit?: DepositControl;
 }) {
   const [sort, setSort] = React.useState<SortState>({ key: "risk", dir: "asc" });
 
@@ -228,8 +262,11 @@ export function PositionsTable({
                   )}
                   title={row.sentence}
                 >
-                  <span className="block truncate">
-                    {row.sentenceBody.replace(/\s+by\s+.*$/, "")}
+                  <span className="flex items-center gap-1.5">
+                    <span className="block min-w-0 truncate">
+                      {row.sentenceBody.replace(/\s+by\s+.*$/, "")}
+                    </span>
+                    <BuyDepositButton row={row} nowMs={nowMs} deposit={deposit} />
                   </span>
                 </td>
                 <td className={cn("whitespace-nowrap px-2.5 py-2.5 align-middle", recessed && "opacity-60")}>

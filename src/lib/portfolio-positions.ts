@@ -1,6 +1,7 @@
 import type { PositionInfo } from "@/lib/rfq-client";
 import { formatStrikePrice } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
+import { isCashSettled } from "@/lib/spreads";
 import {
   entryPremiumUsd,
   positionQuantity,
@@ -102,6 +103,8 @@ export type PositionsTableRow = {
   isOpen: boolean;
   state: string;
   createdTs: number;
+  /** Present for a bought physical position that can still be exercised (deposit action). */
+  buy: { pda: string; market: string } | null;
 };
 
 /** What the position is, in the same words the trade page uses. */
@@ -146,6 +149,7 @@ export function buildPositionRows(
       isOpen,
       state: stateLabel(p),
       createdTs: Number(p.created_at),
+      buy: p.side === "buy" && !isCashSettled(p.terms.type) && isOpen ? { pda: p.pda, market: p.market } : null,
     };
   });
 }

@@ -6,8 +6,6 @@ import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { AppTd, AppTh } from "@/components/app-ui/app-table";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import type { PositionInfo } from "@/lib/rfq-client";
-import { getTokenBrand } from "@/lib/token-brand";
-import { getTokenLogoSrc } from "@/lib/token-assets";
 import { getRpcEndpoint } from "@/lib/network";
 import { TOKENS, getNetwork, normalizeTokenSymbol } from "@/lib/tokens";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
@@ -15,17 +13,14 @@ import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 import { cn } from "@/lib/cn";
 import { AppButton } from "@/components/app-ui/app-button";
-import { isCashSettled, isSpreadTerms, lowerStrike, strikeText } from "@/lib/spreads";
-import { formatPortfolioPremium, portfolioIncomeSeries } from "@/lib/portfolio-api";
-import { BUY_STATUS_LABEL, buyStatus, type BuyFacts } from "@/lib/trade/buy-position";
-import { exerciseDepositText } from "@/lib/trade/thesis";
-import { summarizePnl, underlyingMark, unrealizedPnlUsd } from "@/lib/portfolio-pnl";
+import { isCashSettled, lowerStrike } from "@/lib/spreads";
+import { portfolioIncomeSeries } from "@/lib/portfolio-api";
+import { openWrittenApr, summarizePnl, tradingStats } from "@/lib/portfolio-pnl";
 import { useBuyDeposit } from "./use-buy-deposit";
 import { useWalletHistory } from "./use-wallet-history";
 import { spreadRowView } from "./spread-positions";
 import { PortfolioEarningsChart } from "@/components/portfolio/portfolio-earnings-chart";
-import { PnlSummary } from "@/components/portfolio/pnl-summary";
-import { PositionCard, type PositionCardData } from "@/components/portfolio/position-card";
+import { PerformanceStrip } from "@/components/portfolio/performance-strip";
 import { PositionsTable } from "@/components/portfolio/positions-table";
 import { buildPositionRows } from "@/lib/portfolio-positions";
 
@@ -53,61 +48,35 @@ function useNow(tickMs = 1000) {
   return now;
 }
 
-function formatCountdown(targetTs: number, nowMs: number) {
-  const diff = Math.max(0, targetTs * 1000 - nowMs);
-  const s = Math.floor(diff / 1000);
-  const days = Math.floor(s / 86400);
-  const hours = Math.floor((s % 86400) / 3600);
-  const mins = Math.floor((s % 3600) / 60);
-  const secs = s % 60;
-  return `${days}d  ${hours}h  ${mins}m  ${secs}s`;
-}
-
 type PositionsTab = "positions" | "history";
 const positionsTabOptions: Array<{ value: PositionsTab; label: string }> = [
   { value: "positions", label: "Positions" },
   { value: "history", label: "History" }
 ];
 
-type PositionsView = "table" | "cards";
-const positionsViewOptions: Array<{ value: PositionsView; label: string }> = [
-  { value: "table", label: "Table" },
-  { value: "cards", label: "Cards" }
-];
-
 type TableRow = {
   id: string;
   label: string;
-  status: string;
   expiryTs: number | null;
   createdTs: number;
   size: string;
   premium: string;
   last: string;
   negative: boolean;
-  buy?: BuyRow;
 };
-
-type BuyRow = BuyFacts & { pda: string; market: string; exercise: string };
 
 type PortfolioRow = {
   id: string;
   asset: string;
   type: "call" | "put";
   outcome: string;
-  status: PositionInfo["state"];
   userStatus: "Open" | "Settling" | "Closed";
   createdTs: number;
   expiryTs: number | null;
   quantity: number;
   strike: number;
   premiumUsd: number;
-  notionalUsd: number;
-  apr: number;
   bought: boolean;
-  /** Unrealised P&L for open physical positions; null otherwise. */
-  pnl: { valueUsd: number; stale: boolean } | null;
-  buy?: BuyRow;
 };
 
 /** Result of a closed covered call or cash-secured put: premium, less the move past the strike. */
@@ -165,25 +134,9 @@ function extractDescriptorUnderlyingSymbol(descriptor: unknown): string | undefi
   );
 }
 
-function BuyStatusCell({ buy, nowSec, deposit }: { buy: BuyRow; nowSec: number; deposit: ReturnType<typeof useBuyDeposit> }) {
-  const status = deposit.funded.has(buy.pda) ? "funded" : buyStatus(buy, nowSec);
-  if (status !== "deposit") {
-    return <span className={status === "not_exercised" ? "text-error" : undefined}>{BUY_STATUS_LABEL[status]}</span>;
-  }
-  return (
-    <div className="flex flex-col items-end gap-1">
-      <AppButton size="sm" disabled={deposit.pending != null} onClick={() => void deposit.deposit(buy)}>
-        {deposit.pending === buy.pda ? "Depositing..." : "Deposit"}
-      </AppButton>
-      <span className="text-xs text-content-secondary/60">{buy.exercise} to exercise</span>
-    </div>
-  );
-}
-
 export function PortfolioClient() {
   const [chartRange, setChartRange] = useState<"24h" | "7d" | "30d">("30d");
   const [positionsTab, setPositionsTab] = useState<PositionsTab>("positions");
-  const [positionsView, setPositionsView] = useState<PositionsView>("table");
   const [resolvedUnderlyingByMarket, setResolvedUnderlyingByMarket] = useState<Record<string, string>>({});
   const nowMs = useNow(1000);
   const { isConnected: walletConnected, selectedAccount } = useSolana();
@@ -341,44 +294,20 @@ export function PortfolioClient() {
           : Number.isFinite(px.total_premium)
             ? Number(px.total_premium) / 10 ** p.quote_decimals
             : Number(p.price) / strikeScale;
-      const notionalUsd = quantity * strike;
       const createdTs = Number(p.created_at);
       const expiryTs = Number(p.expiry_ts) > 0 ? Number(p.expiry_ts) : null;
-      const durationSec = expiryTs != null ? Math.max(1, expiryTs - createdTs) : 0;
-      const apr =
-        premiumUsd > 0 && notionalUsd > 0 && durationSec > 0
-          ? (premiumUsd / notionalUsd) * (365 * 24 * 60 * 60 / durationSec) * 100
-          : 0;
-
-      const settlementPrice = market?.settlement_price;
-      const uPnl = unrealizedPnlUsd(p);
-      const pnl = uPnl != null ? { valueUsd: uPnl, stale: underlyingMark(p)?.stale ?? false } : null;
       return {
         id: p.pda,
         asset: assetSymbol,
         type: isPut ? "put" : "call",
         outcome: physicalOutcome(p, premiumUsd, strike, quantity),
-        status: p.state,
         userStatus: toUserStatus(p.state),
         createdTs,
         expiryTs,
         quantity,
         strike,
         premiumUsd,
-        notionalUsd,
-        apr,
         bought,
-        pnl,
-        buy: bought && (p.state === "open" || p.state === "funded") ? {
-          pda: p.pda,
-          market: p.market,
-          state: p.state,
-          expiryTs: Number(p.expiry_ts),
-          isPut,
-          strike1e9: Number(lowerStrike(p.terms)),
-          settlementPrice1e9: settlementPrice != null ? Number(settlementPrice) : null,
-          exercise: exerciseDepositText(isPut, quantity, strike, assetSymbol),
-        } : undefined,
       };
     });
   }, [allPositions, marketByPda, rfqMarketDescriptors, resolvedUnderlyingByMarket, mintToSymbol]);
@@ -392,118 +321,35 @@ export function PortfolioClient() {
     [positionTableRows]
   );
 
-  const openRows = useMemo(
-    () => rows.filter((r) => r.userStatus === "Open"),
-    [rows]
-  );
   const historyRows = useMemo(
     () => rows.filter((r) => r.userStatus !== "Open").sort((a, b) => b.createdTs - a.createdTs),
     [rows]
   );
 
-  const incomeRows = useMemo(() => openRows.filter((r) => !r.bought), [openRows]);
-
-  const openSpreads = useMemo(
-    () => allPositions.flatMap((p) => {
-      const view = spreadRowView(p, rfqMarketDescriptors);
-      return view?.status === "Open" ? [view] : [];
-    }),
-    [allPositions, rfqMarketDescriptors]
-  );
-
-  type OpenCard = { data: PositionCardData; buy?: BuyRow };
-  const openCards = useMemo<OpenCard[]>(() => {
-    const physical: OpenCard[] = openRows.map((r) => ({
-      data: {
-        id: r.id,
-        long: r.bought,
-        type: r.type,
-        headline: `${r.bought ? "Bought " : ""}${r.asset} ${formatStrikePrice(r.strike)} ${r.type}`,
-        strike: formatStrikePrice(r.strike),
-        expiryTs: r.expiryTs ?? r.createdTs,
-        size: `${fmtNumber(r.quantity, 4)} ${r.asset}`,
-        premiumLabel: r.bought ? `${formatUsdSmart(r.premiumUsd)} paid` : formatUsdSmart(r.premiumUsd),
-        aprLabel: r.bought ? "\u2014" : Number.isFinite(r.apr) ? `${r.apr.toFixed(2)}%` : "\u2014",
-        pnl: r.pnl,
-      },
-      buy: r.buy,
-    }));
-
-    const spreads: OpenCard[] = allPositions.flatMap((p) => {
-      const view = spreadRowView(p, rfqMarketDescriptors);
-      if (!view || view.status !== "Open") return [];
-      const terms = p.terms;
-      const strike = isSpreadTerms(terms)
-        ? `${strikeText(terms.lower_strike)} / ${strikeText(terms.upper_strike)}`
-        : "strike" in terms ? strikeText(terms.strike) : "\u2014";
-      const uPnl = unrealizedPnlUsd(p);
-      const pnl = uPnl != null ? { valueUsd: uPnl, stale: underlyingMark(p)?.stale ?? false } : null;
-      return [{
-        data: {
-          id: p.pda,
-          long: p.side === "buy",
-          type: terms.type === "call_spread" ? "call" : "put",
-          headline: view.label,
-          strike,
-          expiryTs: view.expiryTs,
-          size: view.size,
-          premiumLabel: view.premium,
-          aprLabel: view.apr,
-          pnl,
-        },
-      }];
-    });
-
-    return [...physical, ...spreads].sort((a, b) => (a.data.expiryTs ?? 0) - (b.data.expiryTs ?? 0));
-  }, [openRows, allPositions, rfqMarketDescriptors]);
-
   const pnlSummary = useMemo(() => summarizePnl(allPositions), [allPositions]);
-  const totalNotionalUsd = useMemo(
-    () => incomeRows.reduce((sum, r) => sum + (Number.isFinite(r.notionalUsd) ? r.notionalUsd : 0), 0)
-      + openSpreads.reduce((sum, r) => sum + r.collateralUsd, 0),
-    [incomeRows, openSpreads]
-  );
-  const weightedApr = useMemo(() => {
-    if (totalNotionalUsd <= 0) return 0;
-    const physical = incomeRows.reduce((sum, r) => sum + r.apr * r.notionalUsd, 0);
-    return (physical + openSpreads.reduce((sum, r) => sum + r.aprPct * r.collateralUsd, 0)) / totalNotionalUsd;
-  }, [incomeRows, openSpreads, totalNotionalUsd]);
+  const openApr = useMemo(() => openWrittenApr(allPositions), [allPositions]);
+  const tradeStats = useMemo(() => tradingStats(allPositions), [allPositions]);
 
-  const nextMaturity = useMemo(() => {
-    const expiries = [...openRows, ...openSpreads]
-      .map((r) => r.expiryTs)
-      .filter((x): x is number => typeof x === "number" && Number.isFinite(x) && x > 0)
-      .sort((a, b) => a - b);
-    return expiries[0] ?? null;
-  }, [openRows, openSpreads]);
-  const countdown = nextMaturity ? formatCountdown(nextMaturity, nowMs) : "\u2014";
-
-  const monthlyRate = weightedApr / 12;
   const pnlSeries = useMemo(() => summary ? portfolioIncomeSeries(summary) : [], [summary]);
-  const { openTable, closedTable } = useMemo(() => {
+  const closedTable = useMemo(() => {
     const physical = (r: PortfolioRow): TableRow => ({
       id: r.id,
       label: `${r.bought ? "Bought " : ""}${r.asset} ${formatStrikePrice(r.strike)} ${r.type}`,
-      status: r.userStatus,
       expiryTs: r.expiryTs ?? r.createdTs,
       createdTs: r.createdTs,
       size: `${fmtNumber(r.quantity, 4)} ${r.asset}`,
       premium: r.bought ? `${formatUsdSmart(r.premiumUsd)} paid` : formatUsdSmart(r.premiumUsd),
-      last: r.userStatus === "Open" ? (Number.isFinite(r.apr) ? `${r.apr.toFixed(2)}%` : "\u2014") : r.outcome,
+      last: r.outcome,
       negative: r.outcome.includes("-"),
-      buy: r.buy,
     });
     const spreads = allPositions.flatMap((p): TableRow[] => {
       const view = spreadRowView(p, rfqMarketDescriptors);
-      return view ? [{ ...view, id: p.pda, createdTs: Number(p.created_at), last: view.status === "Open" ? view.apr : view.result }] : [];
+      return view && view.status !== "Open"
+        ? [{ ...view, id: p.pda, createdTs: Number(p.created_at), last: view.result }]
+        : [];
     });
-    const open = spreads.filter(r => r.status === "Open");
-    const closed = spreads.filter(r => r.status !== "Open");
-    return {
-      openTable: [...openRows.map(physical), ...open].sort((a, b) => (a.expiryTs ?? 0) - (b.expiryTs ?? 0)),
-      closedTable: [...historyRows.map(physical), ...closed].sort((a, b) => b.createdTs - a.createdTs),
-    };
-  }, [allPositions, rfqMarketDescriptors, openRows, historyRows]);
+    return [...historyRows.map(physical), ...spreads].sort((a, b) => b.createdTs - a.createdTs);
+  }, [allPositions, rfqMarketDescriptors, historyRows]);
   const hasLoadedRfqData = rfqPositions.length > 0;
   const shouldShowAuthPrompt = !rfqAuthenticated && !hasLoadedRfqData;
 
@@ -523,29 +369,7 @@ export function PortfolioClient() {
     );
   }
 
-  const tiles = [
-    {
-      label: "Current APR",
-      value: !figuresUnavailable && Number.isFinite(weightedApr) ? `${weightedApr.toFixed(2)}%` : "\u2014",
-      sub: `Next maturity in ${countdown}`,
-    },
-    {
-      label: "Total Earnings",
-      value: figuresUnavailable ? "\u2014" : summary ? formatPortfolioPremium(summary.premium_all_time, summary.quote_decimals, quoteSymbol ?? summary.quote_mint) : "$0",
-      sub: `All-time income${quoteSymbol ? ` (${quoteSymbol})` : ""}`,
-    },
-    {
-      label: "Value locked",
-      value: figuresUnavailable ? "\u2014" : formatUsdSmart(totalNotionalUsd),
-      sub: `${figuresUnavailable ? "\u2014" : history.summary?.reduce((sum, s) => sum + s.open_positions, 0)} open positions`,
-    },
-    {
-      label: "Monthly",
-      value: figuresUnavailable ? "\u2014" : summary ? formatPortfolioPremium(summary.premium_30d, summary.quote_decimals, quoteSymbol ?? summary.quote_mint) : "$0",
-      sub: `${!figuresUnavailable && Number.isFinite(monthlyRate) ? `${monthlyRate.toFixed(2)}%` : "\u2014"} monthly APR`,
-    },
-  ];
-  const tableRows = positionsTab === "history" ? closedTable : openTable;
+  const tableRows = closedTable;
 
   return (
     <div className="mx-auto w-full max-w-[850px] pb-16 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-8">
@@ -578,17 +402,14 @@ export function PortfolioClient() {
       ) : null}
 
       <section className="mt-8 flex flex-col gap-2">
-        <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-          {tiles.map((tile) => (
-            <AppCard key={tile.label} className="p-4">
-              <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">{tile.label}</div>
-              <div className="mt-2 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">{tile.value}</div>
-              <div className="mt-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] tabular-nums text-content-secondary">{tile.sub}</div>
-            </AppCard>
-          ))}
-        </div>
-
-        <PnlSummary summary={figuresUnavailable ? null : pnlSummary} incomplete={!!history.nextCursor} />
+        <PerformanceStrip
+          pnl={figuresUnavailable ? null : pnlSummary}
+          apr={figuresUnavailable ? null : openApr}
+          trading={figuresUnavailable ? null : tradeStats}
+          unavailable={figuresUnavailable}
+          hasPositions={allPositions.length > 0}
+          incomplete={!!history.nextCursor}
+        />
 
         <AppCard className="p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -617,11 +438,6 @@ export function PortfolioClient() {
             {positionsTab === "positions" ? `Positions: ${positionTableRows.length}` : "Transactions"}
           </h2>
           <div className="flex items-center gap-2">
-            {positionsTab === "positions" ? (
-              <div className="hidden md:inline-flex">
-                <AppSegmented value={positionsView} onChange={setPositionsView} options={positionsViewOptions} ariaLabel="Positions view" />
-              </div>
-            ) : null}
             <AppSegmented value={positionsTab} onChange={setPositionsTab} options={positionsTabOptions} />
           </div>
         </div>
@@ -631,28 +447,7 @@ export function PortfolioClient() {
             Connect wallet and approve RFQ auth to load live positions.
           </AppCard>
         ) : positionsTab === "positions" ? (
-          <>
-            <div className={cn(positionsView === "table" ? "hidden md:block" : "hidden")}>
-              <PositionsTable rows={positionTableRows} nowMs={nowMs} grouped={groupedByUnderlying} />
-            </div>
-            <div className={cn(positionsView === "cards" ? "block" : "md:hidden")}>
-              {openCards.length === 0 ? (
-                <AppCard className="p-6 text-center text-content-secondary">
-                  No open positions yet. Positions appear here after an RFQ fills.
-                </AppCard>
-              ) : (
-                <div className="grid auto-rows-fr grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-                  {openCards.map((card) => (
-                    <PositionCard
-                      key={card.data.id}
-                      data={card.data}
-                      action={card.buy ? <BuyStatusCell buy={card.buy} nowSec={now} deposit={buyDeposit} /> : null}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </>
+          <PositionsTable rows={positionTableRows} nowMs={nowMs} grouped={groupedByUnderlying} deposit={buyDeposit} />
         ) : (
           <div className="max-h-[440px] overflow-y-auto border border-bg-border">
             <table className="min-w-full text-sm">
@@ -684,7 +479,7 @@ export function PortfolioClient() {
                       <AppTd className="text-right tabular-nums text-content-secondary">{row.size}</AppTd>
                       <AppTd className="text-right tabular-nums text-content-secondary">{row.premium}</AppTd>
                       <AppTd className={row.negative ? "text-right tabular-nums text-error" : "text-right tabular-nums text-content-secondary"}>
-                        {row.buy ? <BuyStatusCell buy={row.buy} nowSec={now} deposit={buyDeposit} /> : row.last}
+                        {row.last}
                       </AppTd>
                     </tr>
                   ))

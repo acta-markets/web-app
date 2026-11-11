@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PositionInfo } from "@/lib/rfq-client";
 import {
   buildPositionRows,
@@ -122,5 +122,19 @@ describe("PositionsTable", () => {
     const settled = pos({ pda: "s", state: "settled", settlement: { type: "physical", settlement_price: 150e9, is_otm: true } });
     render(<PositionsTable rows={buildPositionRows([settled], () => "SOL", NOV28 * 1000)} nowMs={NOV28 * 1000} grouped={false} />);
     expect(screen.getByText(/, Expired/).closest("tr")?.className).toContain("bg-action-secondary/20");
+  });
+
+  it("surfaces a deposit action for a bought position that can still be exercised", () => {
+    const buy = pos({ side: "buy", market: "m1", expiry_ts: NOV28 });
+    const rows = buildPositionRows([buy], () => "SOL", (NOV28 - 3600) * 1000);
+    const deposit = { pending: null, funded: new Set<string>(), deposit: vi.fn() };
+    render(<PositionsTable rows={rows} nowMs={(NOV28 - 3600) * 1000} grouped={false} deposit={deposit} />);
+    expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
+  });
+
+  it("hides the deposit action without a deposit handler", () => {
+    const buy = pos({ side: "buy", market: "m1", expiry_ts: NOV28 });
+    render(<PositionsTable rows={buildPositionRows([buy], () => "SOL", (NOV28 - 3600) * 1000)} nowMs={(NOV28 - 3600) * 1000} grouped={false} />);
+    expect(screen.queryByRole("button", { name: "Deposit" })).toBeNull();
   });
 });

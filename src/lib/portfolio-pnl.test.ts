@@ -3,9 +3,11 @@ import type { PositionInfo } from "@/lib/rfq-client";
 import {
   entryPremiumUsd,
   formatSignedUsd,
+  openWrittenApr,
   positionDirection,
   realizedPnlUsd,
   summarizePnl,
+  tradingStats,
   unrealizedPnlUsd,
 } from "./portfolio-pnl";
 
@@ -157,5 +159,56 @@ describe("formatSignedUsd", () => {
     expect(formatSignedUsd(12)).toBe("+$12.00");
     expect(formatSignedUsd(-12)).toBe("-$12.00");
     expect(formatSignedUsd(0)).toBe("$0.00");
+  });
+});
+
+describe("openWrittenApr", () => {
+  const YEAR = 365 * 24 * 60 * 60;
+  const sell = (over: Record<string, unknown>) =>
+    pos({ side: "sell", state: "open", terms: { type: "covered_call", strike: 100e9 }, total_premium: 1e6, created_at: 1_700_000_000, expiry_ts: 1_700_000_000 + YEAR, ...over });
+
+  it("weights annualised premium-over-collateral across written positions", () => {
+    // A: $1 premium on $100 collateral, 1 year → 1%; B: $4 on $200, 1 year → 2%
+    const a = sell({});
+    const b = sell({ terms: { type: "covered_call", strike: 200e9 }, total_premium: 4e6 });
+    const result = openWrittenApr([a, b]);
+    expect(result.writtenCount).toBe(2);
+    expect(result.collateralUsd).toBeCloseTo(300);
+    // (1% * 100 + 2% * 200) / 300
+    expect(result.aprPct).toBeCloseTo(500 / 300);
+  });
+
+  it("uses the on-chain spread collateral for written spreads", () => {
+    const spread = pos({ side: "sell", state: "open", terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 120e9 }, total_premium: 2e6, created_at: 1_700_000_000, expiry_ts: 1_700_000_000 + YEAR });
+    const result = openWrittenApr([spread]);
+    expect(result.writtenCount).toBe(1);
+    expect(result.collateralUsd).toBeCloseTo(20);
+    expect(result.aprPct).toBeGreaterThan(0);
+  });
+
+  it("skips buys, settled positions and zero-duration rows rather than guessing", () => {
+    const buy = pos({ side: "buy", state: "open", terms: { type: "covered_call", strike: 100e9 }, price: 1e9, created_at: 1_700_000_000, expiry_ts: 1_700_000_000 + YEAR });
+    const settled = pos({ side: "sell", state: "settled", terms: { type: "covered_call", strike: 100e9 }, total_premium: 1e6, settlement: { type: "physical", is_otm: true } });
+    const zeroDur = sell({ expiry_ts: 1_700_000_000 });
+    expect(openWrittenApr([buy, settled, zeroDur])).toEqual({ aprPct: null, collateralUsd: 0, writtenCount: 0 });
+  });
+});
+
+describe("tradingStats", () => {
+  it("splits collected vs paid premium and counts the open book", () => {
+    const openSell = pos({ side: "sell", state: "open", terms: { type: "covered_call", strike: 150e9 }, total_premium: 2e6 });
+    const openBuy = pos({ side: "buy", state: "open", terms: { type: "covered_call", strike: 150e9 }, price: 5e9 });
+    const settledBuy = pos({ side: "buy", state: "settled", terms: { type: "covered_call", strike: 150e9 }, price: 2e9, settlement: { type: "physical", is_otm: true } });
+    const stats = tradingStats([openSell, openBuy, settledBuy]);
+    expect(stats.collectedUsd).toBeCloseTo(2);
+    expect(stats.paidUsd).toBeCloseTo(7); // 5 + 2
+    expect(stats.openSells).toBe(1);
+    expect(stats.openBuys).toBe(1);
+    expect(stats.sellCount).toBe(1);
+    expect(stats.buyCount).toBe(2);
+  });
+
+  it("reports zero positions honestly via the counts, not as collected figures", () => {
+    expect(tradingStats([])).toEqual({ collectedUsd: 0, paidUsd: 0, openSells: 0, openBuys: 0, sellCount: 0, buyCount: 0 });
   });
 });

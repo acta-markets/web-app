@@ -31,12 +31,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Portfolio WS history", () => {
-  it("appends history and settled spreads using the returned cursor while totals use the summary", async () => {
+  it("appends history and settled spreads using the returned cursor while the chart uses the summary", async () => {
     mocks.page.mockResolvedValueOnce({ positions: [position("new", 1_800_000_000)], next_cursor: "opaque-page-2" })
       .mockResolvedValueOnce({ positions: [position("old", 1_700_000_000, true)], next_cursor: null });
     render(<PortfolioClient />);
-    await screen.findByText("$123.00");
-    expect(screen.getByText("7 open positions")).toBeTruthy();
+    await screen.findByText("Net P&L");
     expect(screen.getByTestId("income-chart").textContent).toContain('"v":123');
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
     expect(screen.getByText(/ call$/)).toBeTruthy();
@@ -45,7 +44,6 @@ describe("Portfolio WS history", () => {
     expect(screen.getByText(/ call$/)).toBeTruthy();
     expect(mocks.page).toHaveBeenLastCalledWith(mocks.client, { settled: true, limit: 50, cursor: "opaque-page-2" }, expect.any(AbortSignal));
     expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
-    expect(screen.getByText("$123.00")).toBeTruthy();
   });
 
   it.each(["page", "summary"] as const)("shows an alert and no zero figures on initial %s failure", async (kind) => {
@@ -62,7 +60,7 @@ describe("Portfolio WS history", () => {
       .mockRejectedValueOnce(new Error("unavailable"))
       .mockResolvedValueOnce({ positions: [], next_cursor: null });
     render(<PortfolioClient />);
-    await screen.findByText("$123.00");
+    await screen.findByText("Net P&L");
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     await screen.findByRole("alert");
@@ -77,7 +75,7 @@ describe("Portfolio WS history", () => {
     mocks.page.mockResolvedValueOnce({ positions: [position("new", 1_800_000_000)], next_cursor: "next" })
       .mockImplementationOnce(() => new Promise(resolve => { resolvePage = resolve; }));
     const view = render(<PortfolioClient />);
-    await screen.findByText("$123.00");
+    await screen.findByText("Net P&L");
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
     const pageSignal = mocks.page.mock.calls[1][2] as AbortSignal;
@@ -90,12 +88,13 @@ describe("Portfolio WS history", () => {
     expect(mocks.page).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps large aggregate tiles exact and withholds an unsafe chart", async () => {
+  it("withholds an unsafe income chart and never renders zero figures", async () => {
     mocks.page.mockResolvedValue({ positions: [], next_cursor: null });
     mocks.summary.mockResolvedValue([{ ...summary[0], premium_all_time: "9007199254740993" }]);
     render(<PortfolioClient />);
-    await screen.findByText("$9,007,199,254.74");
+    await screen.findByText("No positions yet");
     expect(screen.queryByTestId("income-chart")).toBeNull();
+    expect(document.body.textContent).not.toContain("$0");
   });
 
   it("does not restore the previous wallet's history when its page arrives late", async () => {
@@ -105,10 +104,10 @@ describe("Portfolio WS history", () => {
     const view = render(<PortfolioClient />);
     mocks.wallet = "wallet-b";
     view.rerender(<PortfolioClient />);
-    await screen.findByText("$123.00");
+    await screen.findByTestId("income-chart");
     await act(async () => resolveOld({ positions: [position("stale", 1_800_000_000)], next_cursor: "stale" }));
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
-    expect(screen.queryByText("Covered call")).toBeNull();
+    expect(await screen.findByText("No closed positions yet.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
   });
 });
@@ -124,29 +123,26 @@ describe("Bought options", () => {
     mocks.page.mockResolvedValue({ positions: [], next_cursor: null });
     mocks.live = live;
     render(<PortfolioClient />);
-    await screen.findByText(/^Bought .* (call|put)$/);
+    await screen.findByText("Net P&L");
   }
 
-  it("shows the gross premium spent and asks for the exercise deposit before expiry", async () => {
+  it("shows the premium paid and asks for the exercise deposit before expiry", async () => {
     await show([bought({})]);
-    // The amount is shown; "paid" is carried by the side and the tooltip instead of a word
-    // that used to collide with the P&L column at narrow widths.
-    expect(screen.getByText(usd(10))).toBeTruthy();
+    expect(screen.getAllByText(usd(10)).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
-    expect(screen.getByText(/300.*to exercise/)).toBeTruthy();
-    expect(screen.getAllByText("Call").length).toBeGreaterThan(0);
+    expect(screen.getByText("0 sell · 1 buy open")).toBeTruthy();
+    expect(screen.getByText("Buy")).toBeTruthy();
   });
 
-  it("asks for the asset to exercise a put", async () => {
+  it("offers the deposit action for a bought put too", async () => {
     await show([bought({ terms: { type: "cash_secured_put", strike: 150e9 } })]);
-    expect(screen.getByText(/^2 \S*SOL to exercise$/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
+    expect(screen.getByText("Put")).toBeTruthy();
   });
 
-  it("leaves bought options out of APR and value locked", async () => {
+  it("leaves bought options out of the written APR", async () => {
     await show([bought({})]);
-    const tile = (label: string) => screen.getByText(label).parentElement?.textContent;
-    expect(tile("Value locked")).toContain(usd(0));
-    expect(tile("Current APR")).toContain("0.00%");
+    expect(screen.getByText("No open written positions")).toBeTruthy();
   });
 
   it("deposits from the wallet, shows it funded at once and refreshes", async () => {
@@ -171,17 +167,15 @@ describe("Bought options", () => {
     expect(screen.queryByText("Deposited")).toBeNull();
   });
 
-  it("shows the state after expiry from the market's finalized price", async () => {
+  it("drops the deposit action once the position is past expiry", async () => {
     mocks.markets = [{ pda: "m1", settlement_price: 160e9 }];
     await show([bought({ expiry_ts: nowSec() - 10 })]);
-    expect(screen.getByText("Not exercised")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Deposit" })).toBeNull();
   });
 
   it("stays neutral on a funded position until the price is known", async () => {
     await show([bought({ state: "funded" })]);
-    expect(screen.getByText("Deposited")).toBeTruthy();
-    expect(screen.queryByText("Will exercise")).toBeNull();
+    expect(screen.getByText(/, Funded/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Deposit" })).toBeNull();
   });
 

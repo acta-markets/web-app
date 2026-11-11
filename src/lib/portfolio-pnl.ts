@@ -1,4 +1,4 @@
-import { spreadPayoff, SpreadType } from "@acta-markets/ts-sdk/chain";
+import { spreadCollateral, spreadPayoff, SpreadType } from "@acta-markets/ts-sdk/chain";
 import { intrinsicValue1e9 } from "@acta-markets/ts-sdk/ws";
 import type { PositionInfo } from "@/lib/rfq-client";
 import { executionTerms, isCashSettled, isSpreadTerms, lowerStrike } from "@/lib/spreads";
@@ -211,4 +211,121 @@ export function formatSignedUsd(n: number): string {
   const abs = Math.abs(n);
   const body = abs.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return n < 0 ? `-${body}` : `${sign}${body}`;
+}
+
+export const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
+
+export type OpenWrittenApr = {
+  /** Weighted annualised premium-over-collateral across open written positions; null when none are computable. */
+  aprPct: number | null;
+  /** Collateral (USD) backing the weighted APR. */
+  collateralUsd: number;
+  /** Written positions included in the weighting. */
+  writtenCount: number;
+};
+
+/**
+ * The collateral a written (sell) position locks, in quote units (USD): the notional at the
+ * strike for a covered call / cash-secured put, the on-chain spread collateral for a spread.
+ * Null when the position cannot be priced.
+ */
+function writtenCollateralUsd(p: PositionInfo): number | null {
+  const qty = positionQuantity(p);
+  if (!Number.isFinite(qty)) return null;
+  const terms = executionTerms(p.terms);
+  if (isSpreadTerms(terms)) {
+    try {
+      const collateral = spreadCollateral({
+        positionType: terms.type === "call_spread" ? SpreadType.CallSpread : SpreadType.PutSpread,
+        lowerStrike: BigInt(terms.lower_strike),
+        upperStrike: BigInt(terms.upper_strike),
+        quantity: BigInt(p.quantity),
+        quoteDecimals: p.quote_decimals,
+        underlyingDecimals: p.underlying_decimals,
+      });
+      return Number(collateral) / 10 ** p.quote_decimals;
+    } catch {
+      return null;
+    }
+  }
+  const strike = Number(lowerStrike(p.terms)) / PRICE_SCALE;
+  if (!Number.isFinite(strike) || strike <= 0) return null;
+  return qty * strike;
+}
+
+/** One written position's annualised yield: entry premium over locked collateral, or null when not computable. */
+function writtenPositionYield(p: PositionInfo): { aprPct: number; collateralUsd: number } | null {
+  if (p.side !== "sell") return null;
+  if (p.state !== "open" && p.state !== "funded") return null;
+  const premium = entryPremiumUsd(p);
+  if (premium == null || !Number.isFinite(premium) || premium <= 0) return null;
+  const collateral = writtenCollateralUsd(p);
+  if (collateral == null || !Number.isFinite(collateral) || collateral <= 0) return null;
+  const createdTs = Number(p.created_at);
+  const expiryTs = Number(p.expiry_ts);
+  const durationSec = expiryTs > createdTs ? expiryTs - createdTs : 0;
+  if (durationSec <= 0) return null;
+  const aprPct = (premium / collateral) * (SECONDS_PER_YEAR / durationSec) * 100;
+  return { aprPct, collateralUsd: collateral };
+}
+
+/**
+ * Weighted APR across open written positions: each position's annualised premium-over-collateral,
+ * weighted by the collateral it locks. Positions without a computable yield (no premium, no
+ * collateral, or a zero/negative duration) are skipped rather than counted as zero.
+ */
+export function openWrittenApr(positions: readonly PositionInfo[]): OpenWrittenApr {
+  let weighted = 0;
+  let collateralUsd = 0;
+  let writtenCount = 0;
+  for (const p of positions) {
+    const yield_ = writtenPositionYield(p);
+    if (yield_ == null) continue;
+    weighted += yield_.aprPct * yield_.collateralUsd;
+    collateralUsd += yield_.collateralUsd;
+    writtenCount += 1;
+  }
+  if (writtenCount === 0 || collateralUsd <= 0) {
+    return { aprPct: null, collateralUsd: 0, writtenCount: 0 };
+  }
+  return { aprPct: weighted / collateralUsd, collateralUsd, writtenCount };
+}
+
+export type TradingStats = {
+  /** Premium collected across sell positions (loaded), USD. */
+  collectedUsd: number;
+  /** Premium paid across buy positions (loaded), USD. */
+  paidUsd: number;
+  /** Open (or funded) sell positions. */
+  openSells: number;
+  /** Open (or funded) buy positions. */
+  openBuys: number;
+  /** Total sell positions (any state), to distinguish "$0 collected" from "no sells". */
+  sellCount: number;
+  /** Total buy positions (any state). */
+  buyCount: number;
+};
+
+/** Buy/sell trading stats over the given positions: premium collected vs paid, and the open split. */
+export function tradingStats(positions: readonly PositionInfo[]): TradingStats {
+  let collectedUsd = 0;
+  let paidUsd = 0;
+  let openSells = 0;
+  let openBuys = 0;
+  let sellCount = 0;
+  let buyCount = 0;
+  for (const p of positions) {
+    const open = p.state === "open" || p.state === "funded";
+    const premium = entryPremiumUsd(p);
+    if (p.side === "buy") {
+      buyCount += 1;
+      if (premium != null && Number.isFinite(premium)) paidUsd += premium;
+      if (open) openBuys += 1;
+    } else {
+      sellCount += 1;
+      if (premium != null && Number.isFinite(premium)) collectedUsd += premium;
+      if (open) openSells += 1;
+    }
+  }
+  return { collectedUsd, paidUsd, openSells, openBuys, sellCount, buyCount };
 }
