@@ -93,17 +93,18 @@ function StateBadge({ state, open }: { state: string; open: boolean }) {
   );
 }
 
-function SideBadge({ side }: { side: "buy" | "sell" }) {
+/** The bet itself: which side of the strike the underlying has to finish on. */
+function DirectionBadge({ direction }: { direction: "above" | "below" }) {
+  const above = direction === "above";
   return (
     <span
       className={cn(
-        "inline-flex items-center whitespace-nowrap border px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.08em]",
-        side === "buy"
-          ? "border-accent-primary/40 text-accent-secondary"
-          : "border-bg-border text-content-secondary",
+        "inline-flex items-center gap-1 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.06em]",
+        above ? "text-additional-green-primary/80" : "text-additional-red-primary/80",
       )}
     >
-      {side === "buy" ? "Buy" : "Sell"}
+      <span aria-hidden="true">{above ? "\u2197" : "\u2198"}</span>
+      {above ? "Above" : "Below"}
     </span>
   );
 }
@@ -189,13 +190,13 @@ export function PositionsTable({
       <table className="w-full table-fixed border-collapse text-[13px]">
         <colgroup>
           <col className="w-[8%]" />
-          <col className="w-[18%]" />
-          <col className="w-[6%]" />
+          <col className="w-[17%]" />
+          <col className="w-[9%]" />
           <col className="w-[11%]" />
           <col className="w-[11%]" />
           <col className="w-[12%]" />
           <col className="w-[8%]" />
-          <col className="w-[17%]" />
+          <col className="w-[15%]" />
           <col className="w-[9%]" />
         </colgroup>
         <caption className="sr-only">
@@ -210,7 +211,7 @@ export function PositionsTable({
               Position
             </th>
             <th scope="col" className="whitespace-nowrap px-2.5 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
-              Side
+              Direction
             </th>
             {SORTABLE.map(({ key, label }) => (
               <th
@@ -277,7 +278,7 @@ export function PositionsTable({
                   <span className="block truncate">{row.sentenceBody.replace(/\s+by\s+.*$/, "")}</span>
                 </td>
                 <td className={cn("whitespace-nowrap px-2.5 py-2.5 align-middle", recessed && "opacity-60")}>
-                  <SideBadge side={row.side} />
+                  <DirectionBadge direction={row.direction} />
                 </td>
                 <td className={cn("whitespace-nowrap py-2.5 pl-3 pr-2.5 text-right align-middle tabular-nums text-content-secondary", recessed && "opacity-60")}>
                   {row.sizeText}
@@ -341,7 +342,7 @@ export function PositionsTable({
                         !row.isOpen && row.state !== "Settling" && row.state !== "Liquidated" && "bg-content-tertiary",
                       )}
                     />
-                    <span className="truncate text-[11.5px] text-content-primary" title={row.productLabel === "Secured put" ? "Cash-secured put" : row.productLabel}>{row.productLabel}</span>
+                    <span className="truncate text-[11px] text-content-primary" title={row.productLabel === "Secured put" ? "Cash-secured put" : row.productLabel}>{row.productLabel}</span>
                     <span className="sr-only">, {row.state}</span>
                   </span>
                 </td>
