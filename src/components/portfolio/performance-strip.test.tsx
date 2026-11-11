@@ -21,7 +21,9 @@ describe("PerformanceStrip", () => {
   it("shows the weighted APR and its basis", () => {
     render(<PerformanceStrip pnl={pnl} apr={apr} trading={trading} unavailable={false} hasPositions />);
     expect(screen.getByText("18.40%")).toBeTruthy();
-    expect(screen.getByText("Annualised premium over collateral · 3 written")).toBeTruthy();
+    // The basis moved into the title so the sub-line stays on one line at laptop width.
+    expect(screen.getByText("Annualised · 3 written")).toBeTruthy();
+    expect(screen.getByTitle(/Annualised premium over collateral/)).toBeTruthy();
   });
 
   it("shows collected/paid premium and the open split", () => {

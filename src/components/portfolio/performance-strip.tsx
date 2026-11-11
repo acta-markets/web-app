@@ -65,7 +65,7 @@ export function PerformanceStrip({
 
   const aprText = apr.aprPct != null ? `${apr.aprPct.toFixed(2)}%` : "\u2014";
   const aprSub = apr.aprPct != null
-    ? `Annualised premium over collateral · ${apr.writtenCount} written`
+    ? `Annualised · ${apr.writtenCount} written`
     : "No open written positions";
 
   const collectedText = trading.sellCount > 0 ? formatUsdSmart(trading.collectedUsd) : "\u2014";
@@ -99,7 +99,12 @@ export function PerformanceStrip({
             <div>
               <Label>APR</Label>
               <div className="mt-1 font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary">{aprText}</div>
-              <div className="mt-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">{aprSub}</div>
+              <div
+                className="mt-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary"
+                title="Annualised premium over collateral, weighted by collateral size."
+              >
+                {aprSub}
+              </div>
             </div>
             <div>
               <Label>Buy / sell</Label>
