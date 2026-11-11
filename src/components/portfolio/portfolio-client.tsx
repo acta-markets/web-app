@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { AppTd, AppTh } from "@/components/app-ui/app-table";
@@ -333,31 +333,41 @@ export function PortfolioClient() {
 
   // Live marks: the position rows only carry the price that existed at fetch time, so the
   // underlying snapshots are refreshed while the page is open and used as the uPnL mark.
+  const positionsRef = useRef(allPositions);
   useEffect(() => {
-    if (!rfqAuthenticated || !getAssetSnapshots) return;
-    const refresh = () => {
+    positionsRef.current = allPositions;
+  }, [allPositions]);
+
+  // One stable timer. Every dependency lives behind a ref because recreating the interval on
+  // each render meant the 15s tick could be cleared before it ever fired, which is why uPnL
+  // looked frozen even though the venue was publishing new marks.
+  const refreshMarks = useRef<() => void>(() => {});
+  useEffect(() => {
+    refreshMarks.current = () => {
       if (document.hidden) return;
-      // Refetch the rows too: the mark baked into each position is refreshed by the server on
-      // every fetch, so this is the dependable path when the snapshot map has no mint yet.
       fetchRfqPositions();
       const mints = Array.from(
         new Set(
-          allPositions
-            .filter((p) => p.state === "open" || p.state === "funded")
-            .map((p) => underlyingMintFor(p))
-            .filter((mint): mint is string => !!mint),
+          positionsRef.current
+            .filter((p: PositionInfo) => p.state === "open" || p.state === "funded")
+            .map((p: PositionInfo) => underlyingMintFor(p))
+            .filter((mint: string | undefined): mint is string => !!mint),
         ),
       );
       if (mints.length && getAssetSnapshots) getAssetSnapshots(mints);
     };
-    refresh();
-    const id = window.setInterval(refresh, 15_000);
-    document.addEventListener("visibilitychange", refresh);
+  });
+
+  useEffect(() => {
+    if (!rfqAuthenticated) return;
+    const tick = () => refreshMarks.current();
+    const id = window.setInterval(tick, 15_000);
+    document.addEventListener("visibilitychange", tick);
     return () => {
       window.clearInterval(id);
-      document.removeEventListener("visibilitychange", refresh);
+      document.removeEventListener("visibilitychange", tick);
     };
-  }, [rfqAuthenticated, allPositions, getAssetSnapshots, underlyingMintFor, fetchRfqPositions]);
+  }, [rfqAuthenticated]);
 
   const liveSpotFor = useCallback(
     (p: PositionInfo) => {
@@ -370,7 +380,7 @@ export function PortfolioClient() {
 
   const positionTableRows = useMemo(
     () => buildPositionRows(allPositions, resolveUnderlyingSymbol, nowMs, liveSpotFor),
-    [allPositions, resolveUnderlyingSymbol, nowMs]
+    [allPositions, resolveUnderlyingSymbol, nowMs, liveSpotFor]
   );
   const groupedByUnderlying = useMemo(
     () => positionTableRows.length >= 8 && new Set(positionTableRows.map((r) => r.symbol)).size >= 2,
