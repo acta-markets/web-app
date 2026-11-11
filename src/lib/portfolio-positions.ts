@@ -133,6 +133,7 @@ export function buildPositionRows(
   positions: readonly PositionInfo[],
   symbolFor: (p: PositionInfo) => string,
   nowMs: number,
+  liveSpot1e9?: (p: PositionInfo) => number | undefined,
 ): PositionsTableRow[] {
   return positions.map((p) => {
     const symbol = symbolFor(p);
@@ -140,7 +141,7 @@ export function buildPositionRows(
     const premium = entryPremiumUsd(p);
     const isOpen = p.state === "open" || p.state === "funded";
     // Open positions carry the live unrealised mark; settled ones carry the realised outcome.
-    const pnl = isOpen ? unrealizedPnlUsd(p) : realizedPnlUsd(p);
+    const pnl = isOpen ? unrealizedPnlUsd(p, liveSpot1e9?.(p)) : realizedPnlUsd(p);
     const stale = isOpen ? (underlyingMark(p, nowMs)?.stale ?? false) : false;
     return {
       id: p.pda,

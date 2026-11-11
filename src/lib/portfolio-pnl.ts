@@ -83,12 +83,15 @@ export function realizedPnlUsd(p: PositionInfo): number | null {
  * (`underlying_price`), so the option is valued at intrinsic value (spot vs strike) — it
  * carries no time value. Null when the mark is unavailable or the row cannot be priced.
  */
-export function unrealizedPnlUsd(p: PositionInfo): number | null {
-  if (p.underlying_price?.type !== "available") return null;
+export function unrealizedPnlUsd(p: PositionInfo, liveSpot1e9?: number): number | null {
+  // A live mark wins over the row's snapshot: the portfolio refreshes snapshots while the
+  // page is open, and the position row only carries whatever price existed at fetch time.
+  const spot1e9 = liveSpot1e9 ?? (p.underlying_price?.type === "available" ? Number(p.underlying_price.price) : null);
+  if (spot1e9 == null) return null;
   if (p.state !== "open" && p.state !== "funded") return null;
   const entry = entryPremiumUsd(p);
   if (entry == null) return null;
-  const payoff = payoffAtSpotUsd(p, Number(p.underlying_price.price));
+  const payoff = payoffAtSpotUsd(p, spot1e9);
   if (payoff == null) return null;
   return positionDirection(p).long ? payoff - entry : entry - payoff;
 }
@@ -169,7 +172,10 @@ export type PnlSummary = {
   settledCount: number;
 };
 
-export function summarizePnl(positions: readonly PositionInfo[]): PnlSummary {
+export function summarizePnl(
+  positions: readonly PositionInfo[],
+  liveSpot1e9?: (p: PositionInfo) => number | undefined,
+): PnlSummary {
   let realized = 0;
   let unrealized = 0;
   let markedOpen = 0;
@@ -187,7 +193,7 @@ export function summarizePnl(positions: readonly PositionInfo[]): PnlSummary {
       else if (pnl < 0) losses += 1;
       else breakEven += 1;
     } else if (p.state === "open" || p.state === "funded") {
-      const pnl = unrealizedPnlUsd(p);
+      const pnl = unrealizedPnlUsd(p, liveSpot1e9?.(p));
       if (pnl != null) {
         unrealized += pnl;
         markedOpen += 1;

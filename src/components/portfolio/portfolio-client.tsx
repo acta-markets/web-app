@@ -148,6 +148,8 @@ export function PortfolioClient() {
     fetchPositions: fetchRfqPositions,
     positionsFailed,
     getClient,
+    assetSnapshots,
+    getAssetSnapshots,
   } = useRfqContext();
 
   const history = useWalletHistory(walletConnected && rfqAuthenticated ? selectedAccount?.address ?? null : null, rfqPositions, getClient);
@@ -188,6 +190,23 @@ export function PortfolioClient() {
     for (const m of rfqMarkets) map.set(m.pda, m);
     return map;
   }, [rfqMarkets]);
+
+  /** The position's underlying mint, from the same sources the symbol resolver uses. */
+  const underlyingMintFor = useCallback((p: PositionInfo): string | undefined => {
+    const px = p as unknown as { underlying_mint?: string };
+    const market = marketByPda.get(p.market);
+    const descriptor = rfqMarketDescriptors.find((d) => {
+      const marketPda = extractDescriptorMarketPda(d);
+      return typeof marketPda === "string" && marketPda === p.market;
+    });
+    return (
+      px.underlying_mint ??
+      market?.underlying ??
+      extractDescriptorUnderlyingMint(descriptor) ??
+      resolvedUnderlyingByMarket[p.market] ??
+      undefined
+    );
+  }, [marketByPda, rfqMarketDescriptors, resolvedUnderlyingByMarket]);
 
   const resolveUnderlyingSymbol = useCallback((p: PositionInfo): string => {
     const px = p as unknown as { underlying_mint?: string };
@@ -312,8 +331,42 @@ export function PortfolioClient() {
     });
   }, [allPositions, marketByPda, rfqMarketDescriptors, resolvedUnderlyingByMarket, mintToSymbol]);
 
+  // Live marks: the position rows only carry the price that existed at fetch time, so the
+  // underlying snapshots are refreshed while the page is open and used as the uPnL mark.
+  useEffect(() => {
+    if (!rfqAuthenticated || !getAssetSnapshots) return;
+    const refresh = () => {
+      if (document.hidden) return;
+      const mints = Array.from(
+        new Set(
+          allPositions
+            .filter((p) => p.state === "open" || p.state === "funded")
+            .map((p) => underlyingMintFor(p))
+            .filter((mint): mint is string => !!mint),
+        ),
+      );
+      if (mints.length && getAssetSnapshots) getAssetSnapshots(mints);
+    };
+    refresh();
+    const id = window.setInterval(refresh, 15_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [rfqAuthenticated, allPositions, getAssetSnapshots, underlyingMintFor]);
+
+  const liveSpotFor = useCallback(
+    (p: PositionInfo) => {
+      const mint = underlyingMintFor(p);
+      const spot = mint ? assetSnapshots?.get(mint)?.reference_price : null;
+      return spot != null && Number(spot) > 0 ? Number(spot) : undefined;
+    },
+    [assetSnapshots, underlyingMintFor],
+  );
+
   const positionTableRows = useMemo(
-    () => buildPositionRows(allPositions, resolveUnderlyingSymbol, nowMs),
+    () => buildPositionRows(allPositions, resolveUnderlyingSymbol, nowMs, liveSpotFor),
     [allPositions, resolveUnderlyingSymbol, nowMs]
   );
   const groupedByUnderlying = useMemo(
@@ -326,7 +379,7 @@ export function PortfolioClient() {
     [rows]
   );
 
-  const pnlSummary = useMemo(() => summarizePnl(allPositions), [allPositions]);
+  const pnlSummary = useMemo(() => summarizePnl(allPositions, liveSpotFor), [allPositions, liveSpotFor]);
   const openApr = useMemo(() => openWrittenApr(allPositions), [allPositions]);
   const tradeStats = useMemo(() => tradingStats(allPositions), [allPositions]);
 

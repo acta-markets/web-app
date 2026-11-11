@@ -289,11 +289,7 @@ export function PositionsTable({
                       }
                     >
                       <span className={pnlTone(row.pnlNum)}>{row.pnlText}</span>
-                      {row.pnlStale ? (
-                        <span className="ml-1 align-super text-[9px] uppercase tracking-[0.08em] text-content-tertiary">
-                          stale
-                        </span>
-                      ) : null}
+
                     </span>
                   )}
                 </td>
