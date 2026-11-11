@@ -126,6 +126,7 @@ function BuyDepositButton({ row, nowMs, deposit }: { row: PositionsTableRow; now
         disabled={deposit.pending != null}
         onClick={() => void deposit.deposit({ pda: buy.pda, market: buy.market })}
         title={`Fund the exercise: pay ${row.exerciseText ?? "the strike"} before expiry so the option can be exercised.`}
+        aria-label={row.exerciseText ? `Fund exercise, ${row.exerciseText}` : undefined}
         className="shrink-0 whitespace-nowrap font-medium text-accent-secondary underline underline-offset-2 decoration-accent-secondary/60 hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
       >
         {deposit.pending === buy.pda ? (
@@ -133,9 +134,6 @@ function BuyDepositButton({ row, nowMs, deposit }: { row: PositionsTableRow; now
       ) : (
         <>
           Fund
-          {row.exerciseText ? (
-            <span className="ml-1 text-content-secondary">{row.exerciseText}</span>
-          ) : null}
         </>
       )}
       </button>
@@ -191,14 +189,14 @@ export function PositionsTable({
       <table className="w-full table-fixed border-collapse text-[13px]">
         <colgroup>
           <col className="w-[8%]" />
-          <col className="w-[17%]" />
+          <col className="w-[18%]" />
           <col className="w-[6%]" />
           <col className="w-[11%]" />
           <col className="w-[11%]" />
           <col className="w-[12%]" />
           <col className="w-[8%]" />
-          <col className="w-[15%]" />
-          <col className="w-[12%]" />
+          <col className="w-[17%]" />
+          <col className="w-[9%]" />
         </colgroup>
         <caption className="sr-only">
           Your positions, sorted by risk: open positions by nearest expiry first, then settled.
