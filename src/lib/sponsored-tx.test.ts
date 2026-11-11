@@ -18,7 +18,6 @@ import {
   type AddressesByLookupTableAddress,
   type Blockhash,
 } from "@solana/kit";
-import { graftWalletSignatures } from "./sponsored-tx";
 import type { resolveKeeper } from "./sponsored-tx";
 
 type Rpc = Parameters<typeof resolveKeeper>[0];
@@ -224,27 +223,5 @@ describe("resolveLookupTables", () => {
     const error = await resolveLookupTables(rpc, servedTx()).catch((e: unknown) => e);
     expect(error).not.toBeInstanceOf(flows.VaultIntentError);
     expect((error as Error).message).toBe("Unable to read lookup tables: timeout");
-  });
-});
-
-describe("graftWalletSignatures", () => {
-  const sig = (fill: number) => new Uint8Array(64).fill(fill);
-
-  it("writes the wallet signatures over the served slots without touching the message", () => {
-    const message = new Uint8Array([0x80, 0x01, 0x02, 0x03]);
-    const served = new Uint8Array([1, ...sig(0), ...message]); // one signature slot
-    const grafted = graftWalletSignatures(served, [sig(9)]);
-    expect(Array.from(grafted.slice(1, 65))).toEqual(Array.from(sig(9)));
-    expect(Array.from(grafted.slice(65))).toEqual(Array.from(message));
-  });
-
-  it("rejects a wallet that signed a different number of slots", () => {
-    const served = new Uint8Array([1, ...sig(0), 0x00]);
-    expect(() => graftWalletSignatures(served, [])).toThrow(/signed 0 of 1/);
-  });
-
-  it("rejects an empty signature", () => {
-    const served = new Uint8Array([1, ...sig(0), 0x00]);
-    expect(() => graftWalletSignatures(served, [null])).toThrow(/left a signature empty/);
   });
 });

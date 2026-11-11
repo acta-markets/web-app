@@ -110,31 +110,6 @@ export function describeSignedMessage(servedTx: Uint8Array, signedMessage: Uint8
 }
 
 /**
- * Writes the wallet's signatures into the served wire, leaving every other byte alone.
- *
- * Wallets return a re-serialised transaction, and that round trip can re-encode the message
- * even though it is logically unchanged. The verifier compares messages byte for byte, so we
- * keep the served message and graft only the signature slots onto it.
- */
-export function graftWalletSignatures(
-  servedTx: Uint8Array,
-  signatures: ReadonlyArray<Uint8Array | null | undefined>,
-): Uint8Array {
-  const bytes = Uint8Array.from(servedTx);
-  const header = shortvecLength(bytes);
-  if (header.length !== signatures.length) {
-    throw new Error(`wallet signed ${signatures.length} of ${header.length} signatures`);
-  }
-  let offset = header.size;
-  for (const signature of signatures) {
-    if (!signature || signature.length !== 64) throw new Error("wallet left a signature empty");
-    bytes.set(signature, offset);
-    offset += 64;
-  }
-  return bytes;
-}
-
-/**
  * Reads every lookup table a served v0 message names from chain. A table that is missing, not owned by the
  * lookup table program, or deactivating is rejected as a served-transaction mismatch.
  */

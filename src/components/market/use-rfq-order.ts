@@ -13,7 +13,7 @@ import {
   type QuoteReceivedMessage,
   type TakerFillRfq,
 } from "@/lib/rfq-client";
-import { describeSignedMessage, graftWalletSignatures, messageBytesOf, resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
+import { describeSignedMessage, messageBytesOf, resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
 
 type OrderSubmission = "unsigned" | "sent";
 type SelectedOrder = {
@@ -458,10 +458,9 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
                   walletDiagnostic.current = null;
                   walletWires.current = null;
                 }
-                // Wallets re-serialise the transaction they return, which can re-encode the
-                // message even when nothing changed. Keep the served message and take only
-                // the signatures, so the verifier still sees the exact bytes it checked.
-                return graftWalletSignatures(wire, signedTx.signatures);
+                // Wallets such as Solflare recompile the message before signing; the SDK
+                // accepts an equivalent recompilation, so hand back exactly what was signed.
+                return signedTx.serialize();
               } finally {
                 if (walletSigning.current === request) walletSigning.current = null;
               }
