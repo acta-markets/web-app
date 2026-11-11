@@ -16,8 +16,8 @@ const year = 365 * 86400;
 
 function snapshot(): TokenMarketsInfoData {
   const indicatives = (positionType: string, strikes: Array<[number, number | null]>, stale = false, side: "sell" | "buy" = "sell") => ({
-    position_type: positionType, side, updated_at: now, is_stale: stale,
-    strikes: strikes.map(([strike, price]) => ({ strike: strike * 1e9, best_price: price == null ? null : price * 1e9 })),
+    position_type: positionType, side, freshness: { type: stale ? "stale" as const : "fresh" as const, updated_at: now },
+    strikes: strikes.map(([strike, price]) => ({ strike: strike * 1e9, price: price == null ? { type: "none" as const } : { type: "quoted" as const, price: price * 1e9 } })),
   });
   return {
     request_id: "r", underlying_symbol: "SOL", underlying_decimals: 9, quote_symbol: "USDC", quote_decimals: 6,
@@ -79,10 +79,10 @@ describe("strike options", () => {
 
   it("has no APR for stale, missing or expired prices", () => {
     const data = snapshot();
-    data.markets[1].indicatives[0].is_stale = true;
+    data.markets[1].indicatives[0].freshness = { type: "stale", updated_at: now };
     expect(options("put-soon", "cash_secured_put", true, data).every((o) => o.apr == null && o.bestPrice == null)).toBe(true);
 
-    data.markets[3].indicatives[0].strikes[0].best_price = null;
+    data.markets[3].indicatives[0].strikes[0].price = { type: "none" };
     expect(options("call-soon", "covered_call", false, data).find((o) => o.strike === 120)?.apr).toBeNull();
 
     const expired = buildStrikeOptions(indicativesFor(snapshot(), "call-soon", "covered_call", "sell"), {
@@ -98,8 +98,8 @@ describe("per-side indicatives", () => {
     const data = snapshot();
     // Add a buy record for the same product/market; selling must still read the sell record.
     data.markets[1].indicatives.push({
-      position_type: "cash_secured_put", side: "buy", updated_at: now, is_stale: false,
-      strikes: [{ strike: 99e9, best_price: 9e9 }],
+      position_type: "cash_secured_put", side: "buy", freshness: { type: "fresh", updated_at: now },
+      strikes: [{ strike: 99e9, price: { type: "quoted", price: 9e9 } }],
     });
     const sell = indicativesFor(data, "put-soon", "cash_secured_put", "sell");
     const buy = indicativesFor(data, "put-soon", "cash_secured_put", "buy");
@@ -142,7 +142,7 @@ describe("QQQ market hours and Friday expiries", () => {
   function qqq(): TokenMarketsInfoData {
     const ind = (pda: string, strike: number, isPut: boolean) => ({
       market_pda: pda, is_put: isPut,
-      indicatives: [{ position_type: isPut ? "cash_secured_put" : "covered_call", side: "sell", updated_at: nowSec, is_stale: false, strikes: [{ strike: strike * 1e9, best_price: strike * 1e9 }] }],
+      indicatives: [{ position_type: isPut ? "cash_secured_put" : "covered_call", side: "sell", freshness: { type: "fresh", updated_at: nowSec }, strikes: [{ strike: strike * 1e9, price: { type: "quoted", price: strike * 1e9 } }] }],
     });
     return {
       request_id: "r", underlying_symbol: "QQQ", underlying_decimals: 9, quote_symbol: "USDC", quote_decimals: 6,

@@ -581,8 +581,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
               position_type: pt,
               side: ind.side,
               strikes: ind.strikes,
-              updated_at: ind.updated_at,
-              is_stale: ind.is_stale,
+              freshness: ind.freshness,
             };
           }
         }

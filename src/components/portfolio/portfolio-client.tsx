@@ -350,7 +350,7 @@ export function PortfolioClient() {
           ? (premiumUsd / notionalUsd) * (365 * 24 * 60 * 60 / durationSec) * 100
           : 0;
 
-      const settlementPrice = market?.settlement_price;
+      const settlementPrice = market?.settlement.type === "fixed" ? market.settlement.price : null;
       const uPnl = unrealizedPnlUsd(p);
       const pnl = uPnl != null ? { valueUsd: uPnl, stale: underlyingMark(p)?.stale ?? false } : null;
       return {

@@ -262,7 +262,8 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
           if (!isCurrent()) return;
           rfq = snapshot.rfqs.find(row => row.rfq_id === order.rfqId);
         }
-        if (rfq?.locked_order_id === order.orderId) {
+        const lockedOrderId = rfq?.lock.type === "locked" ? rfq.lock.order_id : null;
+        if (rfq && lockedOrderId === order.orderId) {
           if (rfq.state === "enqueued") {
             promoteSent(order);
             return;
@@ -276,7 +277,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
             return;
           }
         }
-        if (rfq && (rfq.state === "active" || rfq.locked_order_id !== order.orderId)) {
+        if (rfq && (rfq.state === "active" || lockedOrderId !== order.orderId)) {
           update({ type: "failed", orderId: order.orderId, message: "Selected quote is no longer active" });
           return;
         }

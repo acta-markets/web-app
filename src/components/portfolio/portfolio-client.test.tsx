@@ -170,7 +170,7 @@ describe("Bought options", () => {
   });
 
   it("shows the state after expiry from the market's finalized price", async () => {
-    mocks.markets = [{ pda: "m1", settlement_price: 160e9 }];
+    mocks.markets = [{ pda: "m1", settlement: { type: "fixed", price: 160e9 } }];
     await show([bought({ expiry_ts: nowSec() - 10 })]);
     expect(screen.getByText("Not exercised")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Deposit" })).toBeNull();

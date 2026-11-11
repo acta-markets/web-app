@@ -1,4 +1,4 @@
-import { computeApyFromScaledPrices } from "@acta-markets/ts-sdk/ws";
+import { computeApyFromScaledPrices, quotedPrice } from "@acta-markets/ts-sdk/ws";
 import type { TokenMarketIndicatives, TokenMarketsInfoData } from "@/lib/rfq-client";
 import { isQqqExpiry, restrictsToFridayExpiry } from "./market-hours";
 
@@ -97,7 +97,8 @@ export function buildStrikeOptions(
   if (!indicatives?.strikes?.length) return [];
   const hasSpot = referencePrice1e9 != null && referencePrice1e9 > 0;
   const options = indicatives.strikes.map((s) => {
-    const bestPrice = !indicatives.is_stale && s.best_price != null ? Number(s.best_price) : null;
+    const price = quotedPrice(s.price);
+    const bestPrice = indicatives.freshness.type !== "stale" && price != null ? Number(price) : null;
     let apr: number | null = null;
     if (bestPrice != null && hasSpot && secondsToExpiry > 0) {
       try {

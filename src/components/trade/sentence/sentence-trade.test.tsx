@@ -34,8 +34,8 @@ const JLP = getTokenMint("JLP")!;
 
 function indicatives(positionType: string, strikes: Array<[number, number | null]>, stale = false, side: "sell" | "buy" = "sell") {
   return {
-    position_type: positionType, side, updated_at: now, is_stale: stale,
-    strikes: strikes.map(([strike, premium]) => ({ strike: strike * 1e9, best_price: premium == null ? null : premium * 1e9 })),
+    position_type: positionType, side, freshness: { type: stale ? "stale" : "fresh", updated_at: now },
+    strikes: strikes.map(([strike, premium]) => ({ strike: strike * 1e9, price: premium == null ? { type: "none" } : { type: "quoted", price: premium * 1e9 } })),
   };
 }
 
