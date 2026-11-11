@@ -104,7 +104,8 @@ function fundTooltipCopy(row: PositionsTableRow): string {
   // A bought put deposits the underlying units (the position size); a call deposits USDC.
   const amount = isPut ? row.sizeText : (row.exerciseText ?? "the required amount");
   const expiry = row.expiryTs != null ? ` before ${formatExpiryDay(row.expiryTs * 1000)}` : "";
-  return `Deposit ${amount}${expiry} to exercise. Unfunded options are not exercised and the premium is lost.`;
+  const delivery = ` Funding it delivers at ${row.strikeText}, which turns your uPnL into realised profit or loss.`;
+  return `Deposit ${amount}${expiry} to exercise.${delivery} Unfunded options are not exercised and the premium is lost.`;
 }
 
 /**

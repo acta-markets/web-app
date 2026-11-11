@@ -155,6 +155,8 @@ describe("PositionsTable", () => {
     expect(screen.getByText(/Deposit 150\.00 USDC/)).toBeTruthy();
     expect(screen.getByText(/before Nov 28/)).toBeTruthy();
     expect(screen.getByText(/not exercised and the premium is lost/)).toBeTruthy();
+    // Funding is what converts the mark into a realised result.
+    expect(screen.getByText(/turns your uPnL into realised/)).toBeTruthy();
   });
 
   it("names the underlying units as the deposit for a bought put", () => {

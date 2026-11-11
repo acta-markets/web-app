@@ -93,6 +93,8 @@ export type PositionsTableRow = {
   productLabel: string;
   /** What funding the exercise costs (strike for a call, underlying for a put); null when it does not apply. */
   exerciseText: string | null;
+  /** The strike as displayed, so copy can name the delivery price without parsing a sentence. */
+  strikeText: string;
   direction: DirectionWord;
   side: "buy" | "sell";
   sizeNum: number;
@@ -152,6 +154,7 @@ export function buildPositionRows(
       side: p.side,
       productLabel: productLabelFor(p),
       exerciseText: exerciseTextFor(p),
+      strikeText: formatStrikePrice(thesisStrike1e9(p) / 1e9),
       sizeNum: quantity,
       sizeText: `${quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${symbol}`,
       premiumNum: premium,
