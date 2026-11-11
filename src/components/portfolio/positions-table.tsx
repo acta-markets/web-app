@@ -296,11 +296,7 @@ export function PositionsTable({
                     </span>
                   ) : (
                     <span
-                      title={
-                        row.pnlStale
-                          ? "Based on a stale underlying price."
-                          : "If you executed now at the current underlying price."
-                      }
+                      title={`Mark ${row.markText ?? "unavailable"} · same spot the trade page labels NOW · valued at intrinsic, so no time value`}
                     >
                       <span className={pnlTone(row.pnlNum)}>{row.pnlText}</span>
 

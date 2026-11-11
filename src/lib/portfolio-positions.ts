@@ -1,5 +1,5 @@
 import type { PositionInfo } from "@/lib/rfq-client";
-import { formatStrikePrice } from "@/lib/markets";
+import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
 import { isCashSettled, isCashSettledTerms, isSpreadTerms } from "@/lib/spreads";
 import { exerciseDepositText } from "@/lib/trade/thesis";
@@ -95,6 +95,8 @@ export type PositionsTableRow = {
   exerciseText: string | null;
   /** The strike as displayed, so copy can name the delivery price without parsing a sentence. */
   strikeText: string;
+  /** The underlying mark the uPnL was valued at, when there is one. */
+  markText: string | null;
   direction: DirectionWord;
   side: "buy" | "sell";
   sizeNum: number;
@@ -143,7 +145,10 @@ export function buildPositionRows(
     const premium = entryPremiumUsd(p);
     const isOpen = p.state === "open" || p.state === "funded";
     // Open positions carry the live unrealised mark; settled ones carry the realised outcome.
-    const pnl = isOpen ? unrealizedPnlUsd(p, liveSpot1e9?.(p)) : realizedPnlUsd(p);
+    const liveSpot = isOpen ? liveSpot1e9?.(p) : undefined;
+    const pnl = isOpen ? unrealizedPnlUsd(p, liveSpot) : realizedPnlUsd(p);
+    const markPrice = liveSpot != null ? liveSpot / 1e9 : underlyingMark(p, nowMs)?.priceUsd ?? null;
+    const markText = markPrice != null ? formatUsdSmart(markPrice) : null;
     const stale = isOpen ? (underlyingMark(p, nowMs)?.stale ?? false) : false;
     return {
       id: p.pda,
@@ -155,6 +160,8 @@ export function buildPositionRows(
       productLabel: productLabelFor(p),
       exerciseText: exerciseTextFor(p),
       strikeText: formatStrikePrice(thesisStrike1e9(p) / 1e9),
+      markText,
+
       sizeNum: quantity,
       sizeText: `${quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${symbol}`,
       premiumNum: premium,
