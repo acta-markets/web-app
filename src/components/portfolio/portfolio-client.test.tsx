@@ -129,7 +129,9 @@ describe("Bought options", () => {
 
   it("shows the gross premium spent and asks for the exercise deposit before expiry", async () => {
     await show([bought({})]);
-    expect(screen.getByText(`${usd(10)} paid`)).toBeTruthy();
+    // The amount is shown; "paid" is carried by the side and the tooltip instead of a word
+    // that used to collide with the P&L column at narrow widths.
+    expect(screen.getByText(usd(10))).toBeTruthy();
     expect(screen.getByRole("button", { name: "Deposit" })).toBeTruthy();
     expect(screen.getByText(/300.*to exercise/)).toBeTruthy();
     expect(screen.getByText("Long call")).toBeTruthy();

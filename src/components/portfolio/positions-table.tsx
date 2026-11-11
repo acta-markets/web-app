@@ -62,7 +62,7 @@ function HeaderSort({
     <button
       type="button"
       onClick={onSort}
-      className="inline-flex items-center gap-1 whitespace-nowrap transition-colors hover:text-content-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
+      className="inline-flex items-center gap-1 whitespace-nowrap uppercase transition-colors hover:text-content-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
     >
       {label}
       <span aria-hidden="true" className="w-2 text-[10px] leading-none text-content-tertiary">
@@ -143,20 +143,30 @@ export function PositionsTable({
   }
 
   return (
-    <div className="border border-bg-border">
-      <table className="w-full text-sm">
+    <div className="border border-bg-border bg-bg-primary">
+      <table className="w-full table-fixed border-collapse text-[13px]">
+        <colgroup>
+          <col className="w-[11%]" />
+          <col className="w-[30%]" />
+          <col className="w-[7%]" />
+          <col className="w-[12%]" />
+          <col className="w-[12%]" />
+          <col className="w-[13%]" />
+          <col className="w-[8%]" />
+          <col className="w-[9%]" />
+        </colgroup>
         <caption className="sr-only">
           Your positions, sorted by risk: open positions by nearest expiry first, then settled.
         </caption>
         <thead>
           <tr className="border-b border-bg-border">
-            <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-left font-medium tracking-tight text-content-secondary">
+            <th scope="col" className="whitespace-nowrap px-2.5 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
               Asset
             </th>
-            <th scope="col" className="min-w-0 px-3 py-2.5 text-left font-medium tracking-tight text-content-secondary">
+            <th scope="col" className="px-2.5 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
               Position
             </th>
-            <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-left font-medium tracking-tight text-content-secondary">
+            <th scope="col" className="whitespace-nowrap px-2.5 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
               Side
             </th>
             {SORTABLE.map(({ key, label }) => (
@@ -164,7 +174,7 @@ export function PositionsTable({
                 key={key}
                 scope="col"
                 aria-sort={sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
-                className="whitespace-nowrap px-3 py-2.5 text-right font-medium tracking-tight text-content-secondary"
+                className="whitespace-nowrap px-2.5 py-2 text-right font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary"
               >
                 <span className="inline-flex justify-end">
                   <HeaderSort
@@ -176,7 +186,7 @@ export function PositionsTable({
                 </span>
               </th>
             ))}
-            <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-left font-medium tracking-tight text-content-secondary">
+            <th scope="col" className="whitespace-nowrap px-2.5 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
               State
             </th>
           </tr>
@@ -198,13 +208,13 @@ export function PositionsTable({
               <tr
                 key={row.id}
                 className={cn(
-                  "border-b border-bg-border last:border-b-0",
-                  recessed && "bg-action-secondary/25",
+                  "border-b border-bg-border transition-colors last:border-b-0 hover:bg-action-secondary/40",
+                  recessed && "bg-action-secondary/20",
                 )}
               >
                 <th
                   scope="row"
-                  className={cn("whitespace-nowrap px-3 py-2.5 text-left align-top", recessed && "opacity-70")}
+                  className={cn("whitespace-nowrap px-2.5 py-2.5 text-left align-middle", recessed && "opacity-60")}
                 >
                   <span className="flex items-center gap-2 font-medium text-content-primary">
                     <AssetLogo symbol={row.symbol} />
@@ -213,30 +223,34 @@ export function PositionsTable({
                 </th>
                 <td
                   className={cn(
-                    "min-w-0 px-3 py-2.5 text-left align-top font-mono text-sm leading-[1.4] text-content-secondary",
-                    recessed && "opacity-70",
+                    "overflow-hidden px-2.5 py-2.5 text-left align-middle font-mono text-[12.5px] text-content-secondary",
+                    recessed && "opacity-60",
                   )}
                   title={row.sentence}
                 >
-                  {row.sentenceBody}
+                  <span className="block truncate">
+                    {row.sentenceBody.replace(/\s+by\s+.*$/, "")}
+                  </span>
                 </td>
-                <td className={cn("whitespace-nowrap px-3 py-2.5 align-top", recessed && "opacity-70")}>
+                <td className={cn("whitespace-nowrap px-2.5 py-2.5 align-middle", recessed && "opacity-60")}>
                   <SideBadge side={row.side} />
                 </td>
-                <td className={cn("whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-content-secondary", recessed && "opacity-70")}>
+                <td className={cn("whitespace-nowrap px-2.5 py-2.5 text-right align-middle tabular-nums text-content-secondary", recessed && "opacity-60")}>
                   {row.sizeText}
                 </td>
-                <td className={cn("whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums", recessed && "opacity-70")}>
+                <td className={cn("whitespace-nowrap px-2.5 py-2.5 text-right align-middle tabular-nums", recessed && "opacity-60")}>
                   {row.premiumNum == null ? (
                     <span className="text-content-secondary">{"\u2014"}</span>
                   ) : (
-                    <span>
-                      <span className="text-content-primary">{formatUsdSmart(row.premiumNum)}</span>
-                      {row.premiumLabel ? <span className="text-content-secondary"> {row.premiumLabel}</span> : null}
+                    <span
+                      className="text-content-primary"
+                      title={row.premiumLabel ? `${formatUsdSmart(row.premiumNum)} ${row.premiumLabel}` : undefined}
+                    >
+                      {formatUsdSmart(row.premiumNum)}
                     </span>
                   )}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums">
+                <td className="whitespace-nowrap px-2.5 py-2.5 text-right align-middle tabular-nums">
                   {row.pnlNum == null ? (
                     <span className="text-content-secondary">{"\u2014"}</span>
                   ) : (
@@ -248,11 +262,15 @@ export function PositionsTable({
                       }
                     >
                       <span className={pnlTone(row.pnlNum)}>{row.pnlText}</span>
-                      {row.pnlStale ? <span className="text-content-tertiary"> · stale</span> : null}
+                      {row.pnlStale ? (
+                        <span className="ml-1 align-super text-[9px] uppercase tracking-[0.08em] text-content-tertiary">
+                          stale
+                        </span>
+                      ) : null}
                     </span>
                   )}
                 </td>
-                <td className={cn("whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-content-secondary", recessed && "opacity-70")}>
+                <td className={cn("whitespace-nowrap px-2.5 py-2.5 text-right align-middle tabular-nums text-content-secondary", recessed && "opacity-60")}>
                   {row.expiryTs == null ? (
                     "\u2014"
                   ) : row.isOpen ? (
@@ -261,7 +279,7 @@ export function PositionsTable({
                     formatExpiryDay(row.expiryTs * 1000)
                   )}
                 </td>
-                <td className={cn("whitespace-nowrap px-3 py-2.5 align-top", recessed && "opacity-70")}>
+                <td className={cn("whitespace-nowrap px-2.5 py-2.5 align-middle", recessed && "opacity-60")}>
                   <StateBadge state={row.state} open={row.isOpen} />
                 </td>
               </tr>

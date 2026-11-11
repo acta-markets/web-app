@@ -235,8 +235,9 @@ export function formatExpiryCountdown(expiryTs: number, nowMs: number): string {
   const hours = Math.floor((s % 86400) / 3600);
   const mins = Math.floor((s % 3600) / 60);
   const secs = s % 60;
-  if (days > 0) return `${days}d ${hours}h ${mins}m ${secs}s`;
-  if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
-  if (mins > 0) return `${mins}m ${secs}s`;
+  // Two units at most: a ticking seconds field in a table is noise, not information.
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  if (mins > 0) return `${mins}m`;
   return `${secs}s`;
 }
