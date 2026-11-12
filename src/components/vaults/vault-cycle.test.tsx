@@ -35,15 +35,15 @@ describe("VaultCurrentCycle", () => {
   });
 
   it("matches the active expiry and never substitutes a vault-wide settlement for cycle completion", () => {
-    const vault = makeVault({ phase: "active", active_expiry: String(NOW + 3600), last_settlement_ts: String(NOW - 60) });
+    const vault = makeVault({ phase: "active", active_expiry: String(NOW + 3600), last_settlement_at: String(NOW - 60) });
     const record: VaultCycle = {
-      cycle_number: "1", capital_generation: vault.capital_generation, expiry: vault.active_expiry,
+      cycle_number: "1", capital_generation: vault.capital_generation, expiry_ts: vault.active_expiry,
       started_at: String(NOW - 3600), finished_at: null, share_price_start: "1000000000",
       share_price_end: "1000000001", equity_start: "100", equity_end: "101", positions_opened: 1,
       positions_settled: 0, return_pct: 0.01, performance_fee_assessed: "0", management_fee_assessed: "0",
     };
     const { rerender } = render(<VaultCurrentCycle vault={vault} nowSecs={NOW} cycles={[
-      { ...record, expiry: String(NOW - 7200), finished_at: String(NOW - 3600) }, record,
+      { ...record, expiry_ts: String(NOW - 7200), finished_at: String(NOW - 3600) }, record,
     ]} />);
     expect(screen.getByRole("heading", { name: "Current cycle · 2" })).toBeTruthy();
     const settlement = screen.getByText("Settlement").parentElement!;
@@ -93,12 +93,12 @@ describe("VaultCurrentCycle", () => {
 
 describe("VaultExposureCard", () => {
   const leg = (position: string, position_type: VaultExposurePosition["position_type"], role: VaultExposurePosition["role"], quantity: string): VaultExposurePosition => ({
-    position, market: "m", position_type, role, status: "open", strike: "100000000000", quantity, expiry: "1800000000",
+    position_pda: position, market_pda: "m", position_type, role, status: "open", strike: "100000000000", quantity, expiry_ts: "1800000000",
     underlying_mint: SOL, quote_mint: USDC, underlying_decimals: 9, quote_decimals: 6,
-    spot: "95000000000", spot_time: "1", distance_pct: null, itm: null, intrinsic: null,
+    spot: "95000000000", spot_published_at: "1", distance_pct: null, itm: null, intrinsic: null,
   });
   const detail = (position: string, role: "writer" | "holder"): VaultPosition => ({
-    position, role, position_type: "call_spread", strike: "100000000000", quantity: "1000000000", net_premium: "1000000",
+    position_pda: position, role, position_type: "call_spread", strike: "100000000000", quantity: "1000000000", net_premium: "1000000",
     product: { kind: "spread", upper_strike: "110000000000", collateral: "10000000" },
   } as VaultPosition);
   const exposure = (positions: VaultExposurePosition[]): VaultExposure => ({ vault_pda: "v", as_of: "1", positions, totals: [] });

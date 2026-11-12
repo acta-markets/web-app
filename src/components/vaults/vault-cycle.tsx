@@ -61,7 +61,7 @@ export function VaultCurrentCycle({ vault, cycles = [], nowSecs }: { vault: Vaul
   const expiry = Number(vault.active_expiry);
   const running = vault.phase === "active" && expiry > 0;
   const current = [...cycles]
-    .filter((cycle) => expiry > 0 && Number(cycle.expiry) === expiry)
+    .filter((cycle) => expiry > 0 && Number(cycle.expiry_ts) === expiry)
     .sort((a, b) =>
       Number(b.capital_generation === vault.capital_generation) - Number(a.capital_generation === vault.capital_generation)
       || Number(b.started_at) - Number(a.started_at),

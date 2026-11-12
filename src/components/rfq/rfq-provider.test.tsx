@@ -35,14 +35,14 @@ async function setup() {
   const emit = (event: string, ...args: unknown[]) => act(() => {
     (client as unknown as { emit: (event: string, ...args: unknown[]) => void }).emit(event, ...args);
   });
-  emit("marketDescriptors", [{ products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], market: { market_pda: "market", underlying_mint: "underlying", is_put: false }, underlying_decimals: 6, quote_decimals: 6 }]);
+  emit("marketDescriptors", [{ products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], market_descriptor: { market_pda: "market", underlying_mint: "underlying", is_put: false }, underlying_decimals: 6, quote_decimals: 6 }]);
   emit("tokens", [{ mint: "underlying", symbol: "U", decimals: 6, role: { type: "underlying", strike_tick: 1_000_000_000, size_rule: { min_size: 1, max_size: 1e9, step: 1 }, quote_mints: [] } }]);
   const submit = (side?: "buy" | "sell") => {
     act(() => hook.result.current.submitRfq({ market: "market", terms: { type: "covered_call", strike: 1 }, side, quantity: 10 }));
     return createOnce.mock.lastCall![0].requestId!;
   };
   const quote = (rfq: string, maker = "maker", price = 1, valid_until = 9999999999) =>
-    ({ rfq_id: rfq, order_id: `order-${maker}`, maker, side: "sell", terms: { type: "covered_call", strike: 1 }, price, valid_until, nonce: 1n } as QuoteReceivedMessage);
+    ({ rfq_id: rfq, order_id: `order-${maker}`, maker_owner: maker, side: "sell", terms: { type: "covered_call", strike: 1 }, price, valid_until, nonce: 1n } as QuoteReceivedMessage);
   return { ...hook, client, create, createOnce, cancel, emit, submit, quote, metadataRequest };
 }
 
@@ -53,7 +53,7 @@ describe("RFQ request ownership", () => {
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
     expect(h.result.current.rfqTerms("other")).toBeNull();
     expect(h.result.current.rfqTerms("ours")).toEqual({
-      rfq_id: "ours", market: { market_pda: "market", underlying_mint: "underlying", is_put: false }, terms: { type: "covered_call", strike: 1 }, side: "sell", quantity: 10, order_options: [{ type: "covered_call", strike: 1 }],
+      rfq_id: "ours", market_descriptor: { market_pda: "market", underlying_mint: "underlying", is_put: false }, terms: { type: "covered_call", strike: 1 }, side: "sell", quantity: 10, order_options: [{ type: "covered_call", strike: 1 }],
     });
   });
   it("only accepts quotes after the matching RfqCreated", async () => {
@@ -120,22 +120,22 @@ describe("RFQ request ownership", () => {
     const buy = (maker: string, price: number, net_price: number) => ({ ...h.quote("ours", maker, price), side: "buy", net_price });
     h.emit("quoteReceived", buy("a", 5, 1));
     h.emit("quoteReceived", buy("b", 3, 2));
-    expect(h.result.current.bestQuote?.maker).toBe("b");
+    expect(h.result.current.bestQuote?.maker_owner).toBe("b");
     h.emit("quoteReceived", buy("c", 4, 0));
-    expect(h.result.current.bestQuote?.maker).toBe("b");
+    expect(h.result.current.bestQuote?.maker_owner).toBe("b");
     h.emit("quoteReceived", buy("b", 6, 0));
-    expect(h.result.current.bestQuote?.maker).toBe("c");
+    expect(h.result.current.bestQuote?.maker_owner).toBe("c");
   });
   it("shows the best quote, replaces a maker's quote and follows QuotesUpdate snapshots", async () => {
     const h = await setup(); const id = h.submit();
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
     h.emit("quoteReceived", h.quote("ours", "a", 5));
     h.emit("quoteReceived", h.quote("ours", "b", 3));
-    expect(h.result.current.bestQuote?.maker).toBe("a");
+    expect(h.result.current.bestQuote?.maker_owner).toBe("a");
     h.emit("quoteReceived", h.quote("ours", "a", 2));
-    expect(h.result.current.bestQuote?.maker).toBe("b");
+    expect(h.result.current.bestQuote?.maker_owner).toBe("b");
     h.emit("quotesUpdate", { rfq_id: "ours", quotes: [h.quote("ours", "c", 4), { ...h.quote("ours", "d", 9), terms: { type: "covered_call", strike: 2 } }] });
-    expect(h.result.current.bestQuote?.maker).toBe("c");
+    expect(h.result.current.bestQuote?.maker_owner).toBe("c");
     h.emit("quotesUpdate", { rfq_id: "ours", quotes: [] });
     expect(h.result.current.bestQuote).toBeNull();
   });
@@ -146,9 +146,9 @@ describe("RFQ request ownership", () => {
       h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
       h.emit("quoteReceived", h.quote("ours", "a", 5, now + 2));
       h.emit("quoteReceived", h.quote("ours", "b", 3, now + 60));
-      expect(h.result.current.bestQuote?.maker).toBe("a");
+      expect(h.result.current.bestQuote?.maker_owner).toBe("a");
       act(() => { vi.advanceTimersByTime(2_000); });
-      expect(h.result.current.bestQuote?.maker).toBe("b");
+      expect(h.result.current.bestQuote?.maker_owner).toBe("b");
     } finally { vi.useRealTimers(); }
   });
   it("cancels its RFQ, including one created after the cancel", async () => {
@@ -165,10 +165,10 @@ describe("RFQ request ownership", () => {
   });
   it("judges quote expiry by the server clock", async () => {
     const h = await setup(); const id = h.submit(); const now = Math.floor(Date.now() / 1000);
-    h.emit("welcome", { server_time_unix_ms: (now - 60) * 1000 });
+    h.emit("welcome", { server_now_at_ms: (now - 60) * 1000 });
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
     h.emit("quoteReceived", h.quote("ours", "a", 5, now - 30));
-    expect(h.result.current.bestQuote?.maker).toBe("a");
+    expect(h.result.current.bestQuote?.maker_owner).toBe("a");
     expect(h.result.current.quoteSecondsRemaining(h.result.current.bestQuote!)).toBe(30);
   });
   it("keeps the venue RFQ id from RfqCreated instead of the request id", async () => {
@@ -368,15 +368,15 @@ it("invalidates pending authentication when the selected wallet changes", async 
 describe("spread capability and quote separation", () => {
   it("requires the server strike tick for both spread strikes", async () => {
     const h = await setup();
-    h.emit("welcome", { server_time_unix_ms: Date.now() });
+    h.emit("welcome", { server_now_at_ms: Date.now() });
     act(() => h.result.current.submitRfq({ market: "market", terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 120.5e9 }, quantity: 1_000_000 }));
     expect(h.create).not.toHaveBeenCalled();
     expect(h.result.current.error?.message).toContain("strike tick");
   });
   it("binds the spread product and complete pair in live and snapshot quotes", async () => {
     const h = await setup();
-    h.emit("marketDescriptors", [{ products: ["cash_secured_put", "put_spread", "cash_put"], market: { market_pda: "market", underlying_mint: "underlying", is_put: true }, underlying_decimals: 6, quote_decimals: 6 }]);
-    h.emit("welcome", { server_time_unix_ms: Date.now() });
+    h.emit("marketDescriptors", [{ products: ["cash_secured_put", "put_spread", "cash_put"], market_descriptor: { market_pda: "market", underlying_mint: "underlying", is_put: true }, underlying_decimals: 6, quote_decimals: 6 }]);
+    h.emit("welcome", { server_now_at_ms: Date.now() });
     act(() => h.result.current.submitRfq({ market: "market", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 }, quantity: 1_000_000 }));
     const request = h.createOnce.mock.lastCall![0];
     expect(request).toMatchObject({ side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 } });
@@ -390,16 +390,16 @@ describe("spread capability and quote separation", () => {
     }
     h.emit("quoteReceived", quote);
     expect(h.result.current.bestQuote).toEqual(quote);
-    h.emit("quoteReceived", { ...quote, maker: "invalid", price: 20e9 });
+    h.emit("quoteReceived", { ...quote, maker_owner: "invalid", price: 20e9 });
     expect(h.result.current.bestQuote).toEqual(quote);
-    h.emit("quotesUpdate", { rfq_id: "spread", quotes: [quote, { ...quote, maker: "invalid", price: 21e9 }] });
+    h.emit("quotesUpdate", { rfq_id: "spread", quotes: [quote, { ...quote, maker_owner: "invalid", price: 21e9 }] });
     expect(h.result.current.bestQuote).toEqual(quote);
     expect(h.result.current.rfqTerms("spread")).toMatchObject({ rfq_id: "spread", side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 } });
     h.emit("stateChange", "connecting");
     expect(h.result.current.bestQuote).toBeNull();
     h.emit("quoteReceived", quote);
     expect(h.result.current.bestQuote).toBeNull();
-    h.emit("marketDescriptors", [{ products: ["covered_call"], market: { market_pda: "market", underlying_mint: "underlying", is_put: false }, underlying_decimals: 6, quote_decimals: 6 }]);
+    h.emit("marketDescriptors", [{ products: ["covered_call"], market_descriptor: { market_pda: "market", underlying_mint: "underlying", is_put: false }, underlying_decimals: 6, quote_decimals: 6 }]);
     h.submit();
     h.emit("rfqCreated", { rfq_id: "physical", request_id: h.createOnce.mock.lastCall![0].requestId });
     h.emit("quoteReceived", { ...quote, rfq_id: "physical", terms: { ...quote.terms, lower_strike: 1 } });

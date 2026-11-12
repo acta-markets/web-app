@@ -25,7 +25,7 @@ function vault(overrides: Partial<Vault> = {}): Vault {
     share_mint: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
     total_shares: "1000000",
     equity: "1000000",
-    capital_fallback_delay_secs: "3600",
+    capital_fallback_delay_seconds: "3600",
     ...overrides,
   });
 }

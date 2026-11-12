@@ -143,16 +143,16 @@ describe("sample-data.json", () => {
     const shifts = (a: string | null | undefined, b: string | null | undefined) => Number(b) - Number(a);
     expect(shifts(vaultNow.generation_started_at, vaultLater.generation_started_at)).toBe(shift);
     expect(shifts(vaultNow.created_at, vaultLater.created_at)).toBe(shift);
-    expect(shifts(vaultNow.price_time, vaultLater.price_time)).toBe(shift);
+    expect(shifts(vaultNow.price_published_at, vaultLater.price_published_at)).toBe(shift);
     const perfNow = vaultNow.performance!;
     const perfLater = vaultLater.performance!;
     expect(shifts(perfNow.computed_at, perfLater.computed_at)).toBe(shift);
-    expect(shifts(perfNow.returns.all!.from_time, perfLater.returns.all!.from_time)).toBe(shift);
-    expect(shifts(perfNow.returns["30d"]!.to_time, perfLater.returns["30d"]!.to_time)).toBe(shift);
+    expect(shifts(perfNow.returns.all!.window_start_at, perfLater.returns.all!.window_start_at)).toBe(shift);
+    expect(shifts(perfNow.returns["30d"]!.window_end_at, perfLater.returns["30d"]!.window_end_at)).toBe(shift);
     expect(shifts(data.exposure[usdc].as_of, later.exposure[usdc].as_of)).toBe(shift);
-    expect(shifts(data.exposure[usdc].positions[0].expiry, later.exposure[usdc].positions[0].expiry)).toBe(shift);
-    expect(shifts(data.exposure[usdc].positions[0].spot_time, later.exposure[usdc].positions[0].spot_time)).toBe(shift);
-    expect(shifts(data.history[usdc][0].event_time, later.history[usdc][0].event_time)).toBe(shift);
+    expect(shifts(data.exposure[usdc].positions[0].expiry_ts, later.exposure[usdc].positions[0].expiry_ts)).toBe(shift);
+    expect(shifts(data.exposure[usdc].positions[0].spot_published_at, later.exposure[usdc].positions[0].spot_published_at)).toBe(shift);
+    expect(shifts(data.history[usdc][0].occurred_at, later.history[usdc][0].occurred_at)).toBe(shift);
     // "0" means unset on chain and stays that way
     expect(later.vaults.find((v) => v.phase === "idle")!.active_expiry).toBe("0");
     // a month on, the last cycle still finished within the past week

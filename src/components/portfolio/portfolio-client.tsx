@@ -194,34 +194,34 @@ export function PortfolioClient() {
   /** The position's underlying mint, from the same sources the symbol resolver uses. */
   const underlyingMintFor = useCallback((p: PositionInfo): string | undefined => {
     const px = p as unknown as { underlying_mint?: string };
-    const market = marketByPda.get(p.market);
+    const market = marketByPda.get(p.market_pda);
     const descriptor = rfqMarketDescriptors.find((d) => {
       const marketPda = extractDescriptorMarketPda(d);
-      return typeof marketPda === "string" && marketPda === p.market;
+      return typeof marketPda === "string" && marketPda === p.market_pda;
     });
     return (
       px.underlying_mint ??
-      market?.underlying ??
+      market?.underlying_mint ??
       extractDescriptorUnderlyingMint(descriptor) ??
-      resolvedUnderlyingByMarket[p.market] ??
+      resolvedUnderlyingByMarket[p.market_pda] ??
       undefined
     );
   }, [marketByPda, rfqMarketDescriptors, resolvedUnderlyingByMarket]);
 
   const resolveUnderlyingSymbol = useCallback((p: PositionInfo): string => {
     const px = p as unknown as { underlying_mint?: string };
-    const market = marketByPda.get(p.market);
+    const market = marketByPda.get(p.market_pda);
     const descriptor = rfqMarketDescriptors.find((d) => {
       const marketPda = extractDescriptorMarketPda(d);
-      return typeof marketPda === "string" && marketPda === p.market;
+      return typeof marketPda === "string" && marketPda === p.market_pda;
     });
     const descriptorUnderlying = extractDescriptorUnderlyingMint(descriptor);
     const descriptorSymbol = extractDescriptorUnderlyingSymbol(descriptor);
     const underlyingMint =
       px.underlying_mint ??
-      market?.underlying ??
+      market?.underlying_mint ??
       descriptorUnderlying ??
-      resolvedUnderlyingByMarket[p.market];
+      resolvedUnderlyingByMarket[p.market_pda];
     const rawSymbol =
       descriptorSymbol ??
       (underlyingMint ? mintToSymbol.get(underlyingMint) ?? "Unknown" : "Unknown");
@@ -236,7 +236,7 @@ export function PortfolioClient() {
             const pp = p as unknown as { underlying_mint?: string };
             return !pp.underlying_mint;
           })
-          .map((p) => p.market)
+          .map((p) => p.market_pda)
           .filter((marketPda) => !marketByPda.has(marketPda) && !resolvedUnderlyingByMarket[marketPda])
       )
     );
@@ -286,18 +286,18 @@ export function PortfolioClient() {
     const strikeScale = 1_000_000_000;
     return allPositions.filter(p => !isCashSettled(p.terms.type)).map((p) => {
       const px = p as unknown as { total_premium?: number; underlying_mint?: string; quote_mint?: string };
-      const market = marketByPda.get(p.market);
+      const market = marketByPda.get(p.market_pda);
       const descriptor = rfqMarketDescriptors.find((d) => {
         const marketPda = extractDescriptorMarketPda(d);
-        return typeof marketPda === "string" && marketPda === p.market;
+        return typeof marketPda === "string" && marketPda === p.market_pda;
       });
       const descriptorUnderlying = extractDescriptorUnderlyingMint(descriptor);
       const descriptorSymbol = extractDescriptorUnderlyingSymbol(descriptor);
       const underlyingMint =
         px.underlying_mint ??
-        market?.underlying ??
+        market?.underlying_mint ??
         descriptorUnderlying ??
-        resolvedUnderlyingByMarket[p.market];
+        resolvedUnderlyingByMarket[p.market_pda];
       const rawSymbol =
         descriptorSymbol ??
         (underlyingMint ? mintToSymbol.get(underlyingMint) ?? "Unknown" : "Unknown");

@@ -7,7 +7,7 @@ vi.mock("./sample", () => ({ VAULTS_SAMPLE_MODE: false, loadSampleData: vi.fn() 
 
 const { loadVaultDepositorHistory } = await import("./source");
 
-const at = (time: number) => ({ event_time: String(time) }) as VaultDepositorEvent;
+const at = (time: number) => ({ occurred_at: String(time) }) as VaultDepositorEvent;
 
 describe("loadVaultDepositorHistory", () => {
   it("pages newest first and stops at the page that reaches the generation start", async () => {
@@ -16,7 +16,7 @@ describe("loadVaultDepositorHistory", () => {
       .mockResolvedValueOnce({ events: [at(200), at(90)], next_cursor: "b" })
       .mockResolvedValueOnce({ events: [at(50)], next_cursor: null });
     const events = await loadVaultDepositorHistory("v", "w", 100n);
-    expect(events.map((e) => e.event_time)).toEqual(["300", "250", "200", "90"]);
+    expect(events.map((e) => e.occurred_at)).toEqual(["300", "250", "200", "90"]);
     expect(api.history).toHaveBeenCalledTimes(2);
   });
 });

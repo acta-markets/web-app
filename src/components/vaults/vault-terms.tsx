@@ -80,7 +80,7 @@ export function VaultTerms({ vault, symbol }: { vault: Vault; symbol: string }) 
         {symbol}, can also hold {secondSymbol}
       </Row>
       <Row label="If the manager stalls">
-        Anyone can process requests after {formatDuration(Number(vault.capital_fallback_delay_secs))}
+        Anyone can process requests after {formatDuration(Number(vault.capital_fallback_delay_seconds))}
       </Row>
       <Row label="Vault">
         <Address value={vault.vault_pda} kind="account" />

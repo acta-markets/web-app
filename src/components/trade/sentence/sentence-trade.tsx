@@ -232,12 +232,12 @@ export function SentenceTrade({
     const fees: TokenProtocolFees =
       protocolFeesBySymbol?.get(quoteSymbol.trim().toUpperCase()) ??
       protocolFeesBySymbol?.get("USDC") ??
-      { type: "none" };
+      { type: "pending" };
     const terms = { type: info.positionType, strike: strike.strike1e9 };
     const indicative = BigInt(Math.round(strike.bestPrice));
-    // A sell indicative already has the fee taken out; previewFill wants the gross price.
-    const gross = side === "sell" ? grossFromIndicative1e9(indicative, "sell", terms, fees) : indicative;
     try {
+      // A sell indicative already has the fee taken out; previewFill wants the gross price.
+      const gross = side === "sell" ? grossFromIndicative1e9(indicative, "sell", terms, fees) : indicative;
       return previewFill({
         terms,
         side,
