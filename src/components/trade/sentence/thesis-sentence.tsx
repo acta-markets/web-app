@@ -212,8 +212,8 @@ export function ThesisSentence({
   return (
     <div className="flex flex-col gap-2 font-space font-semibold tracking-[-0.03em] text-content-primary max-md:gap-1">
       <p className={compact
-        ? "text-[22px] leading-[1.5] max-lg:text-[20px] max-md:text-[17px]"
-        : "text-[40px] leading-[1.45] max-lg:text-[34px] max-md:text-[26px] max-md:leading-[1.6]"}>
+        ? "text-[clamp(17px,1.72vw,21.5px)] leading-[1.5] max-md:text-[17px]"
+        : "text-[clamp(26px,2.85vw,40px)] leading-[1.45]"}>
         <span className="whitespace-nowrap">
           {SENTENCE.lead}{" "}
           <AppInlineSelect
