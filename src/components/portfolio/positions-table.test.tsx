@@ -108,6 +108,22 @@ describe("PositionsTable", () => {
     expect(screen.getByText(/, Open/)).toBeTruthy();
   });
 
+  it("folds a token group shut and opens it again", () => {
+    const many = Array.from({ length: 8 }, (_, i) =>
+      pos({ pda: `p${i}`, market: i % 2 === 0 ? "m1" : "m2" }),
+    );
+    const symbolFor = (p: { market: string }) => (p.market === "m1" ? "SOL" : "HYPE");
+    render(<PositionsTable rows={buildPositionRows(many, symbolFor, NOV28 * 1000)} nowMs={NOV28 * 1000} grouped />);
+    const toggle = screen.getByRole("button", { name: /^SOL/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getAllByText(/^ends /).length).toBeGreaterThan(1);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getAllByText(/^ends /)).toHaveLength(4);
+    fireEvent.click(toggle);
+    expect(screen.getAllByText(/^ends /).length).toBeGreaterThan(4);
+  });
+
   it("announces the sort direction on sortable headers", () => {
     render(<PositionsTable rows={buildPositionRows([pos()], () => "SOL", NOV28 * 1000)} nowMs={NOV28 * 1000} grouped={false} />);
     const size = screen.getByRole("button", { name: "Size" });

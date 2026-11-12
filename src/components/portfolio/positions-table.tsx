@@ -141,6 +141,16 @@ export function PositionsTable({
   deposit?: DepositControl;
 }) {
   const [sort, setSort] = React.useState<SortState>({ key: "risk", dir: "asc" });
+  /** Symbols whose group is folded shut; everything starts open so nothing hides by default. */
+  const [collapsed, setCollapsed] = React.useState<Set<string>>(() => new Set());
+
+  const toggleGroup = (symbol: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(symbol)) next.delete(symbol);
+      else next.add(symbol);
+      return next;
+    });
 
   const items = React.useMemo(
     () => buildDisplayList(rows, sort.key, sort.dir, grouped),
@@ -216,15 +226,31 @@ export function PositionsTable({
         <tbody>
           {items.map((item) => {
             if (item.kind === "header") {
+              const open = !collapsed.has(item.symbol);
               return (
                 <tr key={`h-${item.symbol}`} className="border-b border-bg-border bg-action-secondary/40">
-                  <td colSpan={8} className="px-3 py-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
-                    {item.symbol} · {item.count}
+                  <td colSpan={8} className="p-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(item.symbol)}
+                      aria-expanded={open}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-content-tertiary transition-colors hover:text-content-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent-primary"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn("inline-block w-2 text-[9px] transition-transform", open ? "rotate-90" : "rotate-0")}
+                      >
+                        {"\u25b6"}
+                      </span>
+                      <TokenLogo symbol={item.symbol} className="mr-1.5 h-3.5 w-3.5" />
+                      {item.symbol} · {item.count}
+                    </button>
                   </td>
                 </tr>
               );
             }
             const row = item.row;
+            if (grouped && collapsed.has(row.symbol)) return null;
             const recessed = !row.isOpen && row.state !== "Settling";
             return (
               <tr
