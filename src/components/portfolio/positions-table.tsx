@@ -179,12 +179,13 @@ export function PositionsTable({
       <table className="w-full table-fixed border-collapse text-[13px]">
         <colgroup>
           <col className="w-[8%]" />
-          <col className="w-[24%]" />
+          <col className="w-[20%]" />
+          <col className="w-[9%]" />
+          <col className="w-[10%]" />
+          <col className="w-[10%]" />
           <col className="w-[11%]" />
-          <col className="w-[11%]" />
-          <col className="w-[12%]" />
           <col className="w-[8%]" />
-          <col className="w-[17%]" />
+          <col className="w-[15%]" />
           <col className="w-[9%]" />
         </colgroup>
         <caption className="sr-only">
@@ -197,6 +198,13 @@ export function PositionsTable({
             </th>
             <th scope="col" className="px-2.5 py-2 text-left font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
               Position
+            </th>
+            <th
+              scope="col"
+              title="Current underlying price, the same spot the trade page labels NOW."
+              className="whitespace-nowrap px-2.5 py-2 text-right font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-content-tertiary"
+            >
+              Now
             </th>
             {SORTABLE.map(({ key, label }) => (
               <th
@@ -229,7 +237,7 @@ export function PositionsTable({
               const open = !collapsed.has(item.symbol);
               return (
                 <tr key={`h-${item.symbol}`} className="border-b border-bg-border bg-action-secondary/40">
-                  <td colSpan={8} className="p-0">
+                  <td colSpan={9} className="p-0">
                     <button
                       type="button"
                       onClick={() => toggleGroup(item.symbol)}
@@ -277,6 +285,9 @@ export function PositionsTable({
                   title={row.sentence}
                 >
                   <span className="block truncate">{row.sentenceBody.replace(/\s+by\s+.*$/, "")}</span>
+                </td>
+                <td className={cn("whitespace-nowrap py-2.5 pl-3 pr-2.5 text-right align-middle tabular-nums text-content-secondary", recessed && "opacity-60")}>
+                  {row.markText ?? "\u2014"}
                 </td>
                 <td className={cn("whitespace-nowrap py-2.5 pl-3 pr-2.5 text-right align-middle tabular-nums text-content-secondary", recessed && "opacity-60")}>
                   {row.sizeText}
