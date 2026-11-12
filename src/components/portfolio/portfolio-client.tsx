@@ -137,6 +137,8 @@ function extractDescriptorUnderlyingSymbol(descriptor: unknown): string | undefi
 export function PortfolioClient() {
   const [chartRange, setChartRange] = useState<"24h" | "7d" | "30d">("30d");
   const [positionsTab, setPositionsTab] = useState<PositionsTab>("positions");
+  /** Underlying filter for the positions table; null means every token. */
+  const [tokenFilter, setTokenFilter] = useState<string | null>(null);
   const [resolvedUnderlyingByMarket, setResolvedUnderlyingByMarket] = useState<Record<string, string>>({});
   const nowMs = useNow(1000);
   const { isConnected: walletConnected, selectedAccount } = useSolana();
@@ -382,9 +384,26 @@ export function PortfolioClient() {
     () => buildPositionRows(allPositions, resolveUnderlyingSymbol, nowMs, liveSpotFor),
     [allPositions, resolveUnderlyingSymbol, nowMs, liveSpotFor]
   );
+  const tokenCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of positionTableRows) counts.set(row.symbol, (counts.get(row.symbol) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [positionTableRows]);
+
+  const visibleTableRows = useMemo(
+    () => (tokenFilter ? positionTableRows.filter((r) => r.symbol === tokenFilter) : positionTableRows),
+    [positionTableRows, tokenFilter],
+  );
+
+  // A filter that no longer matches anything (position settled) falls back to every token
+  // instead of leaving an empty table with no way back.
+  useEffect(() => {
+    if (tokenFilter && !tokenCounts.some(([symbol]) => symbol === tokenFilter)) setTokenFilter(null);
+  }, [tokenFilter, tokenCounts]);
+
   const groupedByUnderlying = useMemo(
-    () => positionTableRows.length >= 8 && new Set(positionTableRows.map((r) => r.symbol)).size >= 2,
-    [positionTableRows]
+    () => !tokenFilter && positionTableRows.length >= 8 && new Set(positionTableRows.map((r) => r.symbol)).size >= 2,
+    [positionTableRows, tokenFilter]
   );
 
   const historyRows = useMemo(
@@ -501,7 +520,7 @@ export function PortfolioClient() {
         {buyDeposit.error ? <p role="alert" className="font-mono text-sm text-error">{buyDeposit.error}</p> : null}
         <div className="flex items-center justify-between">
           <h2 className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl">
-            {positionsTab === "positions" ? `Positions: ${positionTableRows.length}` : "Transactions"}
+            {positionsTab === "positions" ? `Positions: ${visibleTableRows.length}` : "Transactions"}
           </h2>
           <div className="flex items-center gap-2">
             <AppSegmented value={positionsTab} onChange={setPositionsTab} options={positionsTabOptions} />
@@ -513,7 +532,22 @@ export function PortfolioClient() {
             Connect wallet and approve RFQ auth to load live positions.
           </AppCard>
         ) : positionsTab === "positions" ? (
-          <PositionsTable rows={positionTableRows} nowMs={nowMs} grouped={groupedByUnderlying} deposit={buyDeposit} />
+          <div className="flex flex-col gap-3">
+            {tokenCounts.length > 1 ? (
+              <div className="-mx-1 overflow-x-auto px-1 pb-1">
+                <AppSegmented
+                  value={tokenFilter ?? "all"}
+                  onChange={(value) => setTokenFilter(value === "all" ? null : value)}
+                  ariaLabel="Filter positions by token"
+                  options={[
+                    { value: "all", label: `All ${positionTableRows.length}` },
+                    ...tokenCounts.map(([symbol, count]) => ({ value: symbol, label: `${symbol} ${count}` })),
+                  ]}
+                />
+              </div>
+            ) : null}
+            <PositionsTable rows={visibleTableRows} nowMs={nowMs} grouped={groupedByUnderlying} deposit={buyDeposit} />
+          </div>
         ) : (
           <div className="max-h-[440px] overflow-y-auto border border-bg-border">
             <table className="min-w-full text-sm">
