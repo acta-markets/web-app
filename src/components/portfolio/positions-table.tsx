@@ -1,10 +1,9 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import * as React from "react";
 import { cn } from "@/lib/cn";
+import { TokenLogo } from "@/components/portfolio/token-logo";
 import { InfoTooltip } from "@/components/app-ui/info-tooltip";
-import { getTokenLogoSrc } from "@/lib/token-assets";
 import { formatUsdSmart } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
 import {
@@ -29,24 +28,6 @@ const SORTABLE: Array<{ key: SortKey; label: string }> = [
   { key: "pnl", label: "uPnL" },
   { key: "expiry", label: "Expiry" },
 ];
-
-function AssetLogo({ symbol }: { symbol: string }) {
-  const logo = getTokenLogoSrc(symbol);
-  if (logo) {
-    return (
-      <img
-        src={logo}
-        alt=""
-        className="h-4 w-4 shrink-0 rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
-      />
-    );
-  }
-  return (
-    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[rgba(240,240,240,0.1)] bg-action-primary font-mono text-[9px] font-medium leading-none text-content-primary">
-      {symbol.slice(0, 2)}
-    </span>
-  );
-}
 
 function pnlTone(n: number): string {
   if (n > 0) return "text-additional-green-primary";
@@ -258,7 +239,7 @@ export function PositionsTable({
                   className={cn("whitespace-nowrap px-2.5 py-2.5 text-left align-middle", recessed && "opacity-60")}
                 >
                   <span className="flex items-center gap-2 font-medium text-content-primary">
-                    <AssetLogo symbol={row.symbol} />
+                    <TokenLogo symbol={row.symbol} />
                     <span>{row.symbol}</span>
                   </span>
                 </th>

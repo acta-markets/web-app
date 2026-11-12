@@ -22,6 +22,7 @@ import { spreadRowView } from "./spread-positions";
 import { PortfolioEarningsChart } from "@/components/portfolio/portfolio-earnings-chart";
 import { PerformanceStrip } from "@/components/portfolio/performance-strip";
 import { PositionsTable } from "@/components/portfolio/positions-table";
+import { TokenLogo } from "@/components/portfolio/token-logo";
 import { buildPositionRows } from "@/lib/portfolio-positions";
 
 function fmtDate(ts: number) {
@@ -539,9 +540,19 @@ export function PortfolioClient() {
                   value={tokenFilter ?? "all"}
                   onChange={(value) => setTokenFilter(value === "all" ? null : value)}
                   ariaLabel="Filter positions by token"
+                  stretch={false}
                   options={[
-                    { value: "all", label: `All ${positionTableRows.length}` },
-                    ...tokenCounts.map(([symbol, count]) => ({ value: symbol, label: `${symbol} ${count}` })),
+                    { value: "all", label: <>All <span className="ml-1.5 tabular-nums text-content-tertiary">{positionTableRows.length}</span></> },
+                    ...tokenCounts.map(([symbol, count]) => ({
+                      value: symbol,
+                      label: (
+                        <>
+                          <TokenLogo symbol={symbol} className="mr-2" />
+                          <span className="font-mono tracking-[0.02em]">{symbol}</span>
+                          <span className="ml-2 tabular-nums text-content-tertiary">{count}</span>
+                        </>
+                      ),
+                    })),
                   ]}
                 />
               </div>

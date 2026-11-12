@@ -3,7 +3,8 @@ import { cn } from "@/lib/cn";
 
 export type AppSegmentedOption<T extends string> = {
   value: T;
-  label: string;
+  /** Plain text, or a composed face such as a logo plus ticker and count. */
+  label: React.ReactNode;
 };
 
 export function AppSegmented<T extends string>({
@@ -13,6 +14,7 @@ export function AppSegmented<T extends string>({
   className,
   size = "sm",
   disabled = false,
+  stretch = true,
   ariaLabel = "segmented"
 }: {
   value: T;
@@ -21,11 +23,14 @@ export function AppSegmented<T extends string>({
   className?: string;
   size?: "sm" | "lg";
   disabled?: boolean;
+  /** Equal-width tabs (default) or each tab hugging its own content. */
+  stretch?: boolean;
   ariaLabel?: string;
 }) {
+  const sizing = stretch ? "flex-1" : "shrink-0";
   const btn = size === "lg"
-    ? "relative min-w-0 flex flex-1 items-center justify-center whitespace-nowrap backdrop-blur-[4px] border px-4 py-2.5 text-base font-normal leading-none tracking-tight transition-colors"
-    : "relative min-w-0 flex flex-1 items-center justify-center whitespace-nowrap backdrop-blur-[4px] border px-4 py-2.5 text-sm font-normal leading-none tracking-tight transition-colors";
+    ? `relative min-w-0 ${sizing} flex items-center justify-center whitespace-nowrap backdrop-blur-[4px] border px-4 py-2.5 text-base font-normal leading-none tracking-tight transition-colors`
+    : `relative min-w-0 ${sizing} flex items-center justify-center whitespace-nowrap backdrop-blur-[4px] border px-4 py-2.5 text-sm font-normal leading-none tracking-tight transition-colors`;
 
   return (
     <div
