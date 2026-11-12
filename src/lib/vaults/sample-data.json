@@ -51,12 +51,6 @@
         },
         "capital_fallback_delay_seconds": "43200",
         "deposit_window_set_at": null,
-        "main_balance": null,
-        "second_balance": null,
-        "balance_updated_at": null,
-        "live_share_supply": "691979678914",
-        "observed_manager_stake_shares": null,
-        "balance_chain_slot": null,
         "policy": {
           "max_open_positions": 4,
           "max_rebalance_drift_bps": 100,
@@ -121,7 +115,10 @@
           "losing_cycles": 2,
           "cycles_completed": 12
         },
-        "metadata": null
+        "metadata": null,
+        "balances": {
+          "type": "unobserved"
+        }
       },
       "cycles": [
         {
@@ -380,12 +377,6 @@
         },
         "capital_fallback_delay_seconds": "43200",
         "deposit_window_set_at": null,
-        "main_balance": null,
-        "second_balance": null,
-        "balance_updated_at": null,
-        "live_share_supply": "76317442301",
-        "observed_manager_stake_shares": null,
-        "balance_chain_slot": null,
         "policy": {
           "max_open_positions": 4,
           "max_rebalance_drift_bps": 100,
@@ -450,7 +441,10 @@
           "losing_cycles": 2,
           "cycles_completed": 10
         },
-        "metadata": null
+        "metadata": null,
+        "balances": {
+          "type": "unobserved"
+        }
       },
       "cycles": [
         {
@@ -643,7 +637,10 @@
             "amount": "93584009",
             "second_amount": "0",
             "shares": "90000000",
-            "boundary_price": "1039822332",
+            "boundary_price": {
+              "type": "set",
+              "share_price": "1039822332"
+            },
             "occurred_at": "1789214400",
             "transaction_signature": "nvda301111111111111111111111111111111111111111111111111111111111111111111111111111111111"
           }
@@ -752,12 +749,6 @@
         },
         "capital_fallback_delay_seconds": "43200",
         "deposit_window_set_at": null,
-        "main_balance": null,
-        "second_balance": null,
-        "balance_updated_at": null,
-        "live_share_supply": "2076180481342",
-        "observed_manager_stake_shares": null,
-        "balance_chain_slot": null,
         "policy": {
           "max_open_positions": 4,
           "max_rebalance_drift_bps": 100,
@@ -830,6 +821,9 @@
           "twitter": "velar_fi",
           "description": null,
           "logo_url": null
+        },
+        "balances": {
+          "type": "unobserved"
         }
       },
       "cycles": [
@@ -1058,7 +1052,10 @@
             "amount": "151173168",
             "second_amount": "0",
             "shares": "150000000",
-            "boundary_price": "1007821123",
+            "boundary_price": {
+              "type": "set",
+              "share_price": "1007821123"
+            },
             "occurred_at": "1790078400",
             "transaction_signature": "usdc201111111111111111111111111111111111111111111111111111111111111111111111111111111111"
           },
@@ -1068,7 +1065,10 @@
             "amount": "502207474",
             "second_amount": "0",
             "shares": "500000000",
-            "boundary_price": "1004414948",
+            "boundary_price": {
+              "type": "set",
+              "share_price": "1004414948"
+            },
             "occurred_at": "1788350400",
             "transaction_signature": "usdc401111111111111111111111111111111111111111111111111111111111111111111111111111111111"
           },
@@ -1078,7 +1078,10 @@
             "amount": "603041400",
             "second_amount": "0",
             "shares": "600000000",
-            "boundary_price": "1005069000",
+            "boundary_price": {
+              "type": "set",
+              "share_price": "1005069000"
+            },
             "occurred_at": "1785758400",
             "transaction_signature": "usdc701111111111111111111111111111111111111111111111111111111111111111111111111111111111"
           }
@@ -1203,12 +1206,6 @@
         },
         "capital_fallback_delay_seconds": "43200",
         "deposit_window_set_at": null,
-        "main_balance": null,
-        "second_balance": null,
-        "balance_updated_at": null,
-        "live_share_supply": "28495937978380",
-        "observed_manager_stake_shares": null,
-        "balance_chain_slot": null,
         "policy": {
           "max_open_positions": 4,
           "max_rebalance_drift_bps": 100,
@@ -1273,7 +1270,10 @@
           "losing_cycles": 2,
           "cycles_completed": 11
         },
-        "metadata": null
+        "metadata": null,
+        "balances": {
+          "type": "unobserved"
+        }
       },
       "cycles": [
         {
@@ -1577,12 +1577,6 @@
         },
         "capital_fallback_delay_seconds": "43200",
         "deposit_window_set_at": null,
-        "main_balance": null,
-        "second_balance": null,
-        "balance_updated_at": null,
-        "live_share_supply": "687448282714",
-        "observed_manager_stake_shares": null,
-        "balance_chain_slot": null,
         "policy": {
           "max_open_positions": 4,
           "max_rebalance_drift_bps": 100,
@@ -1619,7 +1613,10 @@
           "losing_cycles": null,
           "cycles_completed": null
         },
-        "metadata": null
+        "metadata": null,
+        "balances": {
+          "type": "unobserved"
+        }
       },
       "cycles": [
         {
@@ -1846,12 +1843,6 @@
         },
         "capital_fallback_delay_seconds": "43200",
         "deposit_window_set_at": null,
-        "main_balance": null,
-        "second_balance": null,
-        "balance_updated_at": null,
-        "live_share_supply": "168512415558",
-        "observed_manager_stake_shares": null,
-        "balance_chain_slot": null,
         "policy": {
           "max_open_positions": 4,
           "max_rebalance_drift_bps": 100,
@@ -1916,7 +1907,10 @@
           "losing_cycles": 1,
           "cycles_completed": 12
         },
-        "metadata": null
+        "metadata": null,
+        "balances": {
+          "type": "unobserved"
+        }
       },
       "cycles": [
         {
@@ -2217,12 +2211,6 @@
         },
         "capital_fallback_delay_seconds": "43200",
         "deposit_window_set_at": null,
-        "main_balance": null,
-        "second_balance": null,
-        "balance_updated_at": null,
-        "live_share_supply": "4768346161",
-        "observed_manager_stake_shares": null,
-        "balance_chain_slot": null,
         "policy": {
           "max_open_positions": 4,
           "max_rebalance_drift_bps": 100,
@@ -2287,7 +2275,10 @@
           "losing_cycles": 1,
           "cycles_completed": 10
         },
-        "metadata": null
+        "metadata": null,
+        "balances": {
+          "type": "unobserved"
+        }
       },
       "cycles": [
         {

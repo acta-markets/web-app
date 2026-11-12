@@ -28,7 +28,7 @@ const deposit = (shares: bigint, price: string, time: number): VaultDepositorEve
   amount: "0",
   second_amount: "0",
   shares: shares.toString(),
-  boundary_price: price,
+  boundary_price: { type: "set", share_price: price },
   occurred_at: String(time),
   transaction_signature: `sig${time}`,
 });

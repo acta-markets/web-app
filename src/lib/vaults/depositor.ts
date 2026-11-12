@@ -20,6 +20,7 @@ import {
 } from "@solana/kit";
 import { withComputeUnitLimit, type VaultManager } from "./operator";
 import type { Vault } from "./types";
+import { liveShareSupply } from "./view";
 
 export { NATIVE_MINT };
 
@@ -60,7 +61,7 @@ export async function buildSelfProcessWithdrawInstructions(
   const pricedVault = needsEquity ? { ...vault, equity_computed: true } : vault;
   const finalBlock = flows.processFinalWithdrawalBlock(pricedVault);
   const finalRequest = vault.pending_withdraw_count === 1
-    && BigInt(vault.pending_withdraw_shares) === BigInt(vault.live_share_supply ?? vault.total_shares);
+    && BigInt(vault.pending_withdraw_shares) === BigInt(liveShareSupply(vault));
   if (finalRequest && finalBlock) throw new Error(`Final withdrawal is not available: ${finalBlock}`);
   const withdraw = finalBlock === null
     ? await processor.processFinalWithdrawal(user)

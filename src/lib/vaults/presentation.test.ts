@@ -245,7 +245,7 @@ describe("exposure", () => {
       strike: "100000000000",
       quantity: "2000000000",
       net_premium: "1000000",
-      product: { kind: "spread", upper_strike: "110000000000", collateral: "20000000" },
+      product: { type: "spread", upper_strike: "110000000000", collateral: "20000000" },
       ...overrides,
     } as VaultPosition);
     const cash = (overrides: Partial<VaultExposurePosition>) => leg({
@@ -276,7 +276,7 @@ describe("exposure", () => {
     it("pays a cash put in full below its strike", () => {
       const [row] = exposureRows(
         exposure([cash({ position_type: "cash_put", strike: "94000000000", spot: "90000000000" })], null),
-        [detail({ position_type: "cash_put", strike: "94000000000", product: { kind: "spread", upper_strike: "94000000000", collateral: "1" } })],
+        [detail({ position_type: "cash_put", strike: "94000000000", product: { type: "spread", upper_strike: "94000000000", collateral: "1" } })],
       );
       expect([row.type, row.strike, row.distance, row.pnl]).toEqual(["Put spread", "0 / 94", "4.4% ITM", "-7 USDC"]);
     });
@@ -449,7 +449,7 @@ describe("self-processing", () => {
   });
 
   it("does not offer idle valuation while a staging slot is open", () => {
-    const staging = { mint: USDC, from_leg: "second" as const, amount: "5", staged_at: String(NOW), generation: "1" };
+    const staging = { type: "staged" as const, mint: USDC, from_leg: "second" as const, amount: "5", staged_at: String(NOW), generation: "1" };
     const idle = makeVault({ pending_withdraw_count: 1, capital_fallback_delay_seconds: String(delay), staging });
     expect(withdrawSelfProcessView(idle, createdAt, NOW + delay)).toEqual({ kind: "hidden" });
   });
@@ -471,10 +471,10 @@ describe("self-processing", () => {
 
 describe("isLastSharesWithdrawal", () => {
   it("flags redeeming the whole live supply", () => {
-    const vault = makeVault({ total_shares: "1000", live_share_supply: "900" });
+    const vault = makeVault({ total_shares: "1000", balances: { type: "observed" as const, main: "0", second: "0", live_share_supply: "900", manager_stake_shares: "0", observed_at: "0", slot: "0" } });
     expect(isLastSharesWithdrawal(vault, 900n)).toBe(true);
     expect(isLastSharesWithdrawal(vault, 899n)).toBe(false);
-    expect(isLastSharesWithdrawal(makeVault({ total_shares: "1000", live_share_supply: null }), 1000n)).toBe(true);
+    expect(isLastSharesWithdrawal(makeVault({ total_shares: "1000", balances: { type: "unobserved" } }), 1000n)).toBe(true);
     expect(isLastSharesWithdrawal(vault, 0n)).toBe(false);
   });
 });

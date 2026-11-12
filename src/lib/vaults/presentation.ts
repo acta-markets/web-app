@@ -12,6 +12,7 @@ import type {
   VaultPremiumFlow,
   VaultSafety,
 } from "./types";
+import { liveShareSupply } from "./view";
 
 export type AprSource = { label: "Staking" | "Premium"; pct: number };
 
@@ -166,7 +167,7 @@ export function mintUnits(vault: Pick<Vault, "main_mint" | "main_decimals" | "se
 /** "1,250 USDC from SOL": an open staging slot, part of a leg parked in another mint mid-swap. */
 export function stagingText(vault: Vault): string | null {
   const staging = vault.staging;
-  if (!staging) return null;
+  if (staging.type === "none") return null;
   const leg = mintUnits(vault, staging.from_leg === "main" ? vault.main_mint : vault.second_mint);
   const units = mintUnits(vault, staging.mint);
   const held = units
@@ -220,7 +221,7 @@ function formatStrike(atoms: bigint) {
 /** Leg bounds: spreads pay between the two strikes, `lower` starts paying a call spread and `upper` a put spread. */
 function legBounds(position: VaultPosition) {
   const lower = BigInt(position.strike);
-  return { lower, upper: position.product.kind === "spread" ? BigInt(position.product.upper_strike) : lower };
+  return { lower, upper: position.product.type === "spread" ? BigInt(position.product.upper_strike) : lower };
 }
 
 /** Strike at which the leg starts paying, in strike units. */
@@ -275,7 +276,7 @@ export function exposureRows(exposure: VaultExposure, positions: readonly VaultP
     const pnlAtoms = spot === null || !position ? null : pnlAtSpot(p, position, spot);
     const strike = p.position_type === "cash_put"
       ? `0 / ${formatStrike(BigInt(p.strike))}`
-      : position?.product.kind === "spread"
+      : position?.product.type === "spread"
         ? `${formatStrike(BigInt(position.strike))} / ${formatStrike(BigInt(position.product.upper_strike))}`
         : formatStrike(BigInt(p.strike));
     return {
@@ -543,9 +544,9 @@ export function withdrawSelfProcessView(vault: Vault, createdAt: bigint, nowSecs
 }
 
 /** The contract reads the live mint supply for the final withdrawal. */
-export function isLastSharesWithdrawal(vault: Pick<Vault, "live_share_supply" | "total_shares">, shares: bigint): boolean {
+export function isLastSharesWithdrawal(vault: Pick<Vault, "balances" | "total_shares">, shares: bigint): boolean {
   if (shares <= 0n) return false;
-  return shares >= BigInt(vault.live_share_supply ?? vault.total_shares);
+  return shares >= BigInt(liveShareSupply(vault));
 }
 
 /** The binding deposit cap, or null when deposits are uncapped (a u64::MAX cap counts as none). */

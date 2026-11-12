@@ -66,7 +66,7 @@ describe("VaultCurrentCycle", () => {
   it("shows an open staging slot between cycles", () => {
     const vault = makeVault({
       phase: "idle",
-      staging: { mint: USDC, from_leg: "second", amount: "1250000000", staged_at: String(NOW), generation: "3" },
+      staging: { type: "staged", mint: USDC, from_leg: "second", amount: "1250000000", staged_at: String(NOW), generation: "3" },
     });
     render(<VaultCurrentCycle vault={vault} nowSecs={NOW} />);
     expect(screen.getByText("Swap in progress")).toBeTruthy();
@@ -99,7 +99,7 @@ describe("VaultExposureCard", () => {
   });
   const detail = (position: string, role: "writer" | "holder"): VaultPosition => ({
     position_pda: position, role, position_type: "call_spread", strike: "100000000000", quantity: "1000000000", net_premium: "1000000",
-    product: { kind: "spread", upper_strike: "110000000000", collateral: "10000000" },
+    product: { type: "spread", upper_strike: "110000000000", collateral: "10000000" },
   } as VaultPosition);
   const exposure = (positions: VaultExposurePosition[]): VaultExposure => ({ vault_pda: "v", as_of: "1", positions, totals: [] });
 
