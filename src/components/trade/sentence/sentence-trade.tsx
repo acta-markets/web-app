@@ -18,7 +18,7 @@ import { getRfqBackendUrl } from "@/lib/rfq-client";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { displayQuoteSymbol, getToken, getTokenMint } from "@/lib/tokens";
-import { grossFromIndicative1e9, previewFill, type TokenProtocolFees } from "@acta-markets/ts-sdk/ws";
+import { grossFromIndicative1e9, previewFill } from "@acta-markets/ts-sdk/ws";
 import { pickAsset, tradeAssets } from "@/lib/trade/assets";
 import { formatAmount, formatExpiryDay, formatTimeAway, formatUsdAmount } from "@/lib/trade/format";
 import {
@@ -229,10 +229,11 @@ export function SentenceTrade({
   const quoteDecimalsForPreview = snapshot ? Number(snapshot.quote_decimals) : 6;
   const preview = useMemo(() => {
     if (!strike || strike.bestPrice == null || quantity == null || quantity <= 0) return null;
-    const fees: TokenProtocolFees =
+    const fees =
       protocolFeesBySymbol?.get(quoteSymbol.trim().toUpperCase()) ??
-      protocolFeesBySymbol?.get("USDC") ??
-      { type: "pending" };
+      protocolFeesBySymbol?.get("USDC");
+    // Without the quote token's fee config the preview would show a zero fee.
+    if (fees?.type !== "quote") return null;
     const terms = { type: info.positionType, strike: strike.strike1e9 };
     const indicative = BigInt(Math.round(strike.bestPrice));
     try {

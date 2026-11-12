@@ -346,7 +346,7 @@ describe("vaultStatus", () => {
     [{ phase: "idle", accepting_deposits: true }, "Accepting deposits", "open"],
     [{ phase: "idle", accepting_deposits: false }, "Deposits closed", "neutral"],
     [{ phase: "idle", accepting_deposits: false, equity_computed: true }, "Processing requests", "neutral"],
-    [{ phase: "active", active_expiry: String(NOW - 1) }, "Settling", "neutral"],
+    [{ phase: "active", active_expiry_ts: String(NOW - 1) }, "Settling", "neutral"],
     [{ phase: "settling" }, "Settling", "neutral"],
     [{ phase: "processing_capital" }, "Processing requests", "neutral"],
   ] as const)("%o reads %s", (overrides, label, tone) => {
@@ -354,7 +354,7 @@ describe("vaultStatus", () => {
   });
 
   it("takes deposits mid-cycle whatever the intake flag says", () => {
-    const status = vaultStatus(makeVault({ phase: "active", accepting_deposits: false, active_expiry: String(NOW + 86_400) }), NOW);
+    const status = vaultStatus(makeVault({ phase: "active", accepting_deposits: false, active_expiry_ts: String(NOW + 86_400) }), NOW);
     expect(status).toMatchObject({ label: "Accepting deposits", tone: "open" });
     expect(status.detail).toMatch(/^Cycle ends /);
   });
@@ -458,7 +458,7 @@ describe("self-processing", () => {
     const processing = makeVault({
       phase: "processing_capital",
       equity_computed: true,
-      active_expiry: String(NOW - 600),
+      active_expiry_ts: String(NOW - 600),
       capital_fallback_delay_seconds: String(delay),
     });
     expect(withdrawSelfProcessView(processing, createdAt, NOW)).toEqual({ kind: "waiting", availableAt: NOW - 600 + delay });

@@ -23,7 +23,7 @@ const WALLET = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
 const USDC = 1_000_000n;
 
 const deposit = (shares: bigint, price: string, time: number): VaultDepositorEvent => ({
-  vault: "v",
+  vault_pda: "v",
   action: "deposit_processed",
   amount: "0",
   second_amount: "0",

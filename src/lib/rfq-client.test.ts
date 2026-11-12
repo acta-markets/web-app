@@ -45,7 +45,7 @@ describe("web app authentication through the installed SDK", () => {
     client.connectAnonymous();
     const socket = Socket.current;
     socket.readyState = 1; await socket.onopen?.();
-    socket.receive({ type: "Welcome", data: { protocol_version: "1.0.0", server_version: "test", min_supported_version: "1.0.0", server_now_at_ms: Date.now() } });
+    socket.receive({ type: "Welcome", data: { protocol_version: "1.0.0", server_version: "test", min_supported_version: "1.0.0", server_now_at_ms: Date.now(), rate_limits: { connection: { type: "unlimited" }, wallet: { type: "unlimited" }, rfqs: { type: "unlimited" }, quotes: { type: "unlimited" }, queries: { type: "unlimited" }, liquidity_provider: { type: "not_applicable" } } } });
     socket.receive({ type: "AuthSuccess", data: { session_id: "session", expires_at: 9_999_999_999, role: { type: "taker" } } });
     expect(socket.sent.some(frame => JSON.parse(frame).type === "GetPositions")).toBe(false);
     const underlyingMint = address(getTokenMint("SOL")!);
@@ -61,12 +61,12 @@ describe("web app authentication through the installed SDK", () => {
       size_rule: { min_size: 1, max_size: 1e12, step: 1 }, underlying_oracle_pda: walletAddress, quote_oracle_pda: walletAddress,
     }] } });
     await descriptorsRequest;
-    const request = { market_pda: market, terms: { type: "call_spread" as const, lower_strike: 100e9, upper_strike: 120e9 }, side: "sell" as const, quantity: 1e9, timeoutSeconds: 30, requestId: "00000000-0000-0000-0000-000000000002" };
+    const request = { market_pda: market, terms: { type: "call_spread" as const, lower_strike: 100e9, upper_strike: 120e9 }, side: "sell" as const, quantity: 1e9, timeout_seconds: 30, request_id: "00000000-0000-0000-0000-000000000002" };
     const pending = client.createRfq(request);
     await vi.waitFor(() => expect(socket.sent.some(raw => JSON.parse(raw).type === "RfqRequest")).toBe(true));
     const frame = socket.sent.map(raw => JSON.parse(raw)).find(message => message.type === "RfqRequest");
     expect(frame.data).toMatchObject({ terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 120e9 }, side: "sell", quantity: 1e9, timeout_seconds: 30 });
-    socket.receive({ type: "CommandAccepted", data: { request_id: request.requestId } });
+    socket.receive({ type: "CommandAccepted", data: { request_id: request.request_id } });
     await pending;
   });
 
@@ -83,6 +83,7 @@ describe("web app authentication through the installed SDK", () => {
     socket.receive({ type: "Welcome", data: {
       protocol_version: "1.0.0", server_version: "test", min_supported_version: "1.0.0",
       server_now_at_ms: 1_800_000_000_000,
+      rate_limits: { connection: { type: "unlimited" }, wallet: { type: "unlimited" }, rfqs: { type: "unlimited" }, quotes: { type: "unlimited" }, queries: { type: "unlimited" }, liquidity_provider: { type: "not_applicable" } },
     } });
     await vi.waitFor(() => expect(socket.sent.some(s => JSON.parse(s).type === "StartAuth")).toBe(true));
     socket.receive({ type: "AuthRequest", data: { challenge: kind === "canonical" ? challenge : "a".repeat(32) } });

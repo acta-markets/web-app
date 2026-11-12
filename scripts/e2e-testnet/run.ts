@@ -333,8 +333,8 @@ class CaseRunner {
         terms,
         side,
         quantity: spec.quantity,
-        timeoutSeconds,
-        requestId,
+        timeout_seconds: timeoutSeconds,
+        request_id: requestId,
       }).catch((e) => {
         // createRfq rejects on RequestError / not_connected / timeout.
         finish({ failure: { status: "BLOCKED", detail: classifyCreateError(e) } });

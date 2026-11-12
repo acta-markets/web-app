@@ -18,7 +18,7 @@ describe("VaultCurrentCycle", () => {
   it("counts down to expiry and shows premium for the cycle and the generation", () => {
     const vault = makeVault({
       phase: "active",
-      active_expiry: String(NOW + 2 * 86_400 + 3_600),
+      active_expiry_ts: String(NOW + 2 * 86_400 + 3_600),
       second_mint: USDC,
       second_decimals: 6,
       generation_started_at: "1790000000",
@@ -35,9 +35,9 @@ describe("VaultCurrentCycle", () => {
   });
 
   it("matches the active expiry and never substitutes a vault-wide settlement for cycle completion", () => {
-    const vault = makeVault({ phase: "active", active_expiry: String(NOW + 3600), last_settlement_at: String(NOW - 60) });
+    const vault = makeVault({ phase: "active", active_expiry_ts: String(NOW + 3600), last_settlement_at: String(NOW - 60) });
     const record: VaultCycle = {
-      cycle_number: "1", capital_generation: vault.capital_generation, expiry_ts: vault.active_expiry,
+      cycle_number: "1", capital_generation: vault.capital_generation, expiry_ts: vault.active_expiry_ts,
       started_at: String(NOW - 3600), finished_at: null, share_price_start: "1000000000",
       share_price_end: "1000000001", equity_start: "100", equity_end: "101", positions_opened: 1,
       positions_settled: 0, return_pct: 0.01, performance_fee_assessed: "0", management_fee_assessed: "0",

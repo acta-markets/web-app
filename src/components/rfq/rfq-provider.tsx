@@ -947,7 +947,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         terms: params.terms,
         side,
         quantity: params.quantity,
-        timeoutSeconds: params.timeoutSeconds ?? RFQ_TTL_SECONDS,
+        timeout_seconds: params.timeoutSeconds ?? RFQ_TTL_SECONDS,
       };
       console.log("[RfqProvider] Submitting RFQ:", rfqRequest);
       const descriptor = marketDescriptors.find((d) => d.market_descriptor?.market_pda === params.market);
@@ -987,7 +987,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       // The SDK owns the RFQ id: a lost reply is resent with the same id while the RFQ
       // could still be open, so a retry can never create a second RFQ.
       void client
-        .createRfqOnce({ ...rfqRequest, requestId })
+        .createRfqOnce({ ...rfqRequest, request_id: requestId })
         .then(({ created }) => {
           const pending = pendingRfqRef.current;
           if (pending?.requestId !== requestId) return;

@@ -43,7 +43,7 @@ export function makeVault(overrides: Partial<Vault> = {}): Vault {
     phase: "idle",
     safety: "normal",
     capabilities: 0,
-    active_expiry: "0",
+    active_expiry_ts: "0",
     open_positions: "0",
     total_shares: "0",
     share_price: PRICE_SCALE.toString(),
@@ -223,7 +223,7 @@ export function parseSampleData(file: unknown, nowSecs: number): SampleData {
     const v = entry.vault;
     data.vaults.push({
       ...v,
-      active_expiry: shifted(v.active_expiry, shift),
+      active_expiry_ts: shifted(v.active_expiry_ts, shift),
       last_hwm_update_at: shifted(v.last_hwm_update_at, shift),
       last_hwm_reset_at: shifted(v.last_hwm_reset_at, shift),
       last_settlement_at: shifted(v.last_settlement_at, shift),

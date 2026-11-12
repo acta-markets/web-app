@@ -39,7 +39,7 @@ async function setup() {
   emit("tokens", [{ mint: "underlying", symbol: "U", decimals: 6, role: { type: "underlying", strike_tick: 1_000_000_000, size_rule: { min_size: 1, max_size: 1e9, step: 1 }, quote_mints: [] } }]);
   const submit = (side?: "buy" | "sell") => {
     act(() => hook.result.current.submitRfq({ market: "market", terms: { type: "covered_call", strike: 1 }, side, quantity: 10 }));
-    return createOnce.mock.lastCall![0].requestId!;
+    return createOnce.mock.lastCall![0].request_id!;
   };
   const quote = (rfq: string, maker = "maker", price = 1, valid_until = 9999999999) =>
     ({ rfq_id: rfq, order_id: `order-${maker}`, maker_owner: maker, side: "sell", terms: { type: "covered_call", strike: 1 }, price, valid_until, nonce: 1n } as QuoteReceivedMessage);
@@ -380,7 +380,7 @@ describe("spread capability and quote separation", () => {
     act(() => h.result.current.submitRfq({ market: "market", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 }, quantity: 1_000_000 }));
     const request = h.createOnce.mock.lastCall![0];
     expect(request).toMatchObject({ side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 } });
-    h.emit("rfqCreated", { rfq_id: "spread", request_id: request.requestId });
+    h.emit("rfqCreated", { rfq_id: "spread", request_id: request.request_id });
     const quote = { ...h.quote("spread"), side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 }, price: 1e9 };
     for (const wrong of [{ side: undefined }, { side: "buy" }, { terms: undefined }, { terms: { type: "cash_secured_put", strike: 100e9 } }, { terms: { type: "put_spread", lower_strike: 100e9 } }, { terms: { ...quote.terms, upper_strike: 130e9 } }]) {
       h.emit("quoteReceived", { ...quote, ...wrong });
@@ -401,7 +401,7 @@ describe("spread capability and quote separation", () => {
     expect(h.result.current.bestQuote).toBeNull();
     h.emit("marketDescriptors", [{ products: ["covered_call"], market_descriptor: { market_pda: "market", underlying_mint: "underlying", is_put: false }, underlying_decimals: 6, quote_decimals: 6 }]);
     h.submit();
-    h.emit("rfqCreated", { rfq_id: "physical", request_id: h.createOnce.mock.lastCall![0].requestId });
+    h.emit("rfqCreated", { rfq_id: "physical", request_id: h.createOnce.mock.lastCall![0].request_id });
     h.emit("quoteReceived", { ...quote, rfq_id: "physical", terms: { ...quote.terms, lower_strike: 1 } });
     expect(h.result.current.bestQuote).toBeNull();
   });

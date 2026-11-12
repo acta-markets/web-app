@@ -409,7 +409,7 @@ export function vaultStatus(vault: Vault, nowSecs: number): VaultStatusView {
   const block = flows.requestDepositBlock(vault, nowSecs);
   if (block === null) {
     return vault.phase === "active"
-      ? { label: "Accepting deposits", tone: "open", detail: `Cycle ends ${formatDate(Number(vault.active_expiry))}` }
+      ? { label: "Accepting deposits", tone: "open", detail: `Cycle ends ${formatDate(Number(vault.active_expiry_ts))}` }
       : { label: "Accepting deposits", tone: "open" };
   }
   if (block === "cutoff" || vault.phase === "settling") return { label: "Settling", tone: "neutral" };
@@ -510,7 +510,7 @@ export type SelfProcessView =
 /** When anyone, not just the manager, may process a request (the contract's fallback delay). */
 function publicProcessingAt(vault: Vault, createdAt: bigint): number {
   const delay = Number(vault.capital_fallback_delay_seconds);
-  return vault.phase === "processing_capital" ? Number(vault.active_expiry) + delay : Number(createdAt) + delay;
+  return vault.phase === "processing_capital" ? Number(vault.active_expiry_ts) + delay : Number(createdAt) + delay;
 }
 
 export function depositSelfProcessView(vault: Vault, createdAt: bigint, nowSecs: number): SelfProcessView {

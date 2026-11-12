@@ -27,7 +27,7 @@
         "phase": "idle",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry": "0",
+        "active_expiry_ts": "0",
         "open_positions": "0",
         "total_shares": "691979678914",
         "share_price": "1022944333",
@@ -356,7 +356,7 @@
         "phase": "active",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry": "1792130400",
+        "active_expiry_ts": "1792130400",
         "open_positions": "3",
         "total_shares": "76317442301",
         "share_price": "1052447811",
@@ -638,7 +638,7 @@
         "withdrawRequest": null,
         "history": [
           {
-            "vault": "8oDdcWSv5QtSfEE51K7guQL4uy3xbmisoqrjawqmY3Vm",
+            "vault_pda": "8oDdcWSv5QtSfEE51K7guQL4uy3xbmisoqrjawqmY3Vm",
             "action": "deposit_processed",
             "amount": "93584009",
             "second_amount": "0",
@@ -726,7 +726,7 @@
         "phase": "active",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry": "1792216800",
+        "active_expiry_ts": "1792216800",
         "open_positions": "4",
         "total_shares": "2076180481342",
         "share_price": "1015738030",
@@ -1053,7 +1053,7 @@
         "withdrawRequest": null,
         "history": [
           {
-            "vault": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
+            "vault_pda": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
             "action": "withdraw_processed",
             "amount": "151173168",
             "second_amount": "0",
@@ -1063,7 +1063,7 @@
             "transaction_signature": "usdc201111111111111111111111111111111111111111111111111111111111111111111111111111111111"
           },
           {
-            "vault": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
+            "vault_pda": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
             "action": "deposit_processed",
             "amount": "502207474",
             "second_amount": "0",
@@ -1073,7 +1073,7 @@
             "transaction_signature": "usdc401111111111111111111111111111111111111111111111111111111111111111111111111111111111"
           },
           {
-            "vault": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
+            "vault_pda": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
             "action": "deposit_processed",
             "amount": "603041400",
             "second_amount": "0",
@@ -1179,7 +1179,7 @@
         "phase": "active",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry": "1791957600",
+        "active_expiry_ts": "1791957600",
         "open_positions": "3",
         "total_shares": "28495937978380",
         "share_price": "1039872792",
@@ -1553,7 +1553,7 @@
         "phase": "idle",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry": "0",
+        "active_expiry_ts": "0",
         "open_positions": "0",
         "total_shares": "687448282714",
         "share_price": "1053003931",
@@ -1822,7 +1822,7 @@
         "phase": "active",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry": "1792216800",
+        "active_expiry_ts": "1792216800",
         "open_positions": "3",
         "total_shares": "168512415558",
         "share_price": "1015318374",
@@ -2193,7 +2193,7 @@
         "phase": "idle",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry": "0",
+        "active_expiry_ts": "0",
         "open_positions": "0",
         "total_shares": "4768346161",
         "share_price": "1066880647",
