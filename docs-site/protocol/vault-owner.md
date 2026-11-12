@@ -61,6 +61,6 @@ The vault must be idle, normal and unpriced, with no pending capital or open sta
 
 ## Observe and recover
 
-The [Vault HTTP API](../reference/vault-http-api.md) serves indexed state and history. For current permissions, share balances and the result of a capital transaction, read finalized chain accounts.
+The [Vault HTTP API](../reference/http-api.md#vaults) serves indexed state and history. For current permissions, share balances and the result of a capital transaction, read finalized chain accounts.
 
 See [Transaction recovery](recovery.md) and [Safety modes](vault-lifecycle.md#safety-modes).

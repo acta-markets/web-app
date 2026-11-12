@@ -18,10 +18,10 @@ A vault has a phase, a safety mode and a deposit-window flag. The phase tracks t
 
 Deposits enter during `idle` intake or during `active` before expiry. Withdrawals enter in `idle` or in `active` before expiry. `closing` has its own withdrawal path.
 
-The manager normally prices capital and drains the queues. If it does not, anyone can process requests after `capital_fallback_delay_secs` (default 43,200 seconds, maximum 259,200 seconds):
+The manager normally prices capital and drains the queues. If it does not, anyone can process requests after `capital_fallback_delay_seconds` (default 43,200 seconds, maximum 259,200 seconds):
 
 - In `idle`, a request becomes publicly processable at `created_at + delay`, once capital is priced. Under `withdraw_only`, idle requests are processable immediately.
-- In `processing_capital`, public processing opens at `active_expiry + delay`.
+- In `processing_capital`, public processing opens at `active_expiry_ts + delay`.
 - A public processor can price unpriced idle capital only to process an aged withdrawal. A queue holding only deposits cannot force an idle equity checkpoint.
 
 Public processing requires settled positions, validated prices and valid recipient accounts.

@@ -35,9 +35,17 @@ Any `protocol_version` other than `1.0.0` gets an `Error` with `unsupported_prot
     "protocol_version": "1.0.0",
     "server_version": "0.1.0",
     "min_supported_version": "1.0.0",
-    "server_time_unix_ms": 1710000000000,
+    "server_now_at_ms": 1710000000000,
     "min_quote_validity_seconds": 60,
-    "settlement_buffer_seconds": 50
+    "settlement_buffer_seconds": 50,
+    "rate_limits": {
+      "connection": { "type": "bucket", "per_second": 30, "burst": 60 },
+      "wallet": { "type": "bucket", "per_second": 50, "burst": 100 },
+      "rfqs": { "type": "bucket", "per_second": 10, "burst": 20 },
+      "quotes": { "type": "unlimited" },
+      "queries": { "type": "bucket", "per_second": 20, "burst": 40 },
+      "liquidity_provider": { "type": "not_applicable" }
+    }
   }
 }
 ```
@@ -82,12 +90,14 @@ The signature is verified directly against `pubkey`. On success:
   "data": {
     "session_id": "6d1f0c2a-9b7e-4a35-8c41-2e5f7a9b0d13",
     "expires_at": 1710086400,
-    "maker_pda": null
+    "role": {
+      "type": "taker"
+    }
   }
 }
 ```
 
-For takers `expires_at` is a number and `maker_pda` is `null`. Persist `session_id` and `expires_at` for `ResumeAuth`.
+For takers `expires_at` is a number and `role` is `{ "type": "taker" }`. Persist `session_id` and `expires_at` for `ResumeAuth`.
 
 ### 4) Snapshot (server -> client)
 
@@ -100,13 +110,18 @@ Sent automatically after `AuthSuccess`. `markets` lists the active markets in th
     "markets": [
       {
         "pda": "MarketPdaBase58",
-        "underlying": "So11111111111111111111111111111111111111112",
-        "quote": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "underlying_mint": "So11111111111111111111111111111111111111112",
+        "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
         "expiry_ts": 1710600000,
         "is_put": false,
-        "products": ["covered_call", "call_spread"],
+        "products": [
+          "covered_call",
+          "call_spread"
+        ],
         "status": "active",
-        "settlement_price": null
+        "settlement": {
+          "type": "pending"
+        }
       }
     ]
   }
@@ -141,7 +156,7 @@ Full descriptors carry `size_rule`, decimals and oracle PDAs, which you need to 
           "covered_call",
           "call_spread"
         ],
-        "market": {
+        "market_descriptor": {
           "chain_id": 0,
           "program_id": "33Ezs5eoa16QyPW8wifnyz2nCyMEcq2crqkVBNjnTE8U",
           "market_pda": "MarketPdaBase58",
@@ -205,7 +220,7 @@ Every field is required. `underlying_mints: []` and `quote_mints: []` mean every
   "type": "RfqRequest",
   "data": {
     "request_id": "7a4c4b3e-2f1d-4c55-9a51-4f0d0e2b6a42",
-    "market": "MarketPdaBase58",
+    "market_pda": "MarketPdaBase58",
     "terms": { "type": "covered_call", "strike": 136000000000 },
     "side": "sell",
     "quantity": 5000000000,
@@ -240,7 +255,7 @@ The receipt and `RfqCreated` can arrive in either order. `order_options` is the 
 
 ### 8) QuoteReceived (streamed, 0..N)
 
-Each quote is firm and hash-bound through `order_id`. `net_price` is a display estimate and is `null` for spreads and cash puts. Two makers respond:
+Each quote is firm and hash-bound through `order_id`. `net_price` is a display estimate of what you receive per unit after the protocol fee. Two makers respond:
 
 ```json
 {
@@ -249,7 +264,7 @@ Each quote is firm and hash-bound through `order_id`. `net_price` is a display e
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "terms": { "type": "covered_call", "strike": 136000000000 },
     "side": "sell",
-    "maker": "MakerAOwnerPubkeyBase58",
+    "maker_owner": "MakerAOwnerPubkeyBase58",
     "price": 50000000,
     "valid_until": 1710000330,
     "nonce": 42,
@@ -266,7 +281,7 @@ Each quote is firm and hash-bound through `order_id`. `net_price` is a display e
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "terms": { "type": "covered_call", "strike": 136000000000 },
     "side": "sell",
-    "maker": "MakerBOwnerPubkeyBase58",
+    "maker_owner": "MakerBOwnerPubkeyBase58",
     "price": 51000000,
     "valid_until": 1710000335,
     "nonce": 7,
@@ -286,7 +301,7 @@ You pick the winner by `order_id` (here maker B, the higher premium). Show `net_
   "data": {
     "request_id": "0c9e1d52-6c0b-4f7e-b1a9-7d8f3c2e5a10",
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
-    "maker": "MakerBOwnerPubkeyBase58",
+    "maker_owner": "MakerBOwnerPubkeyBase58",
     "order_id": "0x2222222222222222222222222222222222222222222222222222222222222222"
   }
 }
@@ -303,12 +318,12 @@ You pick the winner by `order_id` (here maker B, the higher premium). Show `net_
     "order_id": "0x2222222222222222222222222222222222222222222222222222222222222222",
     "tx_base64": "AQABAg... (base64 v0 VersionedTransaction) ...",
     "last_valid_block_height": 312456789,
-    "signature_deadline": 1710000030
+    "signature_deadline_at": 1710000030
   }
 }
 ```
 
-The receipt and the lifecycle push (`SponsoredTxToSign` here, `OrderAccepted` in step 10) can arrive in either order. Verify the transaction against the accepted quote, sign it and return it before `signature_deadline`. The keeper is the fee payer in signature slot 0. The taker fills signature slot 1. See [Sponsored transaction: raw signing](taker-quickstart.md#sponsored-transaction-raw-signing) for the byte-level layout.
+The receipt and the lifecycle push (`SponsoredTxToSign` here, `OrderAccepted` in step 10) can arrive in either order. Verify the transaction against the accepted quote, sign it and return it before `signature_deadline_at`. The keeper is the fee payer in signature slot 0. The taker fills signature slot 1. See [Sponsored transaction: raw signing](taker-quickstart.md#sponsored-transaction-raw-signing) for the byte-level layout.
 
 ### 10) SubmitSignedSponsoredTx, CommandAccepted, OrderAccepted, OrderSubmitted, OrderConfirmed
 
@@ -357,7 +372,7 @@ The receipt and the lifecycle push (`SponsoredTxToSign` here, `OrderAccepted` in
 
 ### 11) RfqClosed (server -> client)
 
-Terminal RFQ event; it follows `OrderConfirmed` on a fill. Drop per-RFQ state here. `your_quote` and `winner` are always present and `null` when they do not apply.
+Terminal RFQ event; it follows `OrderConfirmed` on a fill. Drop per-RFQ state here. `your_quote` and `winner` are always present and `{ "type": "none" }` when they do not apply.
 
 ```json
 {
@@ -366,11 +381,17 @@ Terminal RFQ event; it follows `OrderConfirmed` on a fill. Drop per-RFQ state he
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "rfq_version": 2,
     "reason": "filled",
-    "your_quote": null,
+    "your_quote": {
+      "type": "none"
+    },
     "winner": {
-      "maker": "MakerBOwnerPubkeyBase58",
+      "type": "winner",
+      "maker_owner": "MakerBOwnerPubkeyBase58",
       "price": 51000000,
-      "tx_signature": "5eyk...base58sig"
+      "transaction": {
+        "type": "sent",
+        "signature": "5eyk...base58sig"
+      }
     },
     "closed_at": 1710000012
   }
@@ -386,21 +407,35 @@ After the position is projected, the session receives the full row. No subscript
   "type": "PositionUpdated",
   "data": {
     "position": {
-      "revision": { "slot": 312456800, "transaction_index": 14, "instruction_index": 2 },
+      "revision": {
+        "slot": 312456800,
+        "transaction_index": 14,
+        "instruction_index": 2
+      },
       "pda": "PositionPdaBase58",
-      "market": "MarketPdaBase58",
+      "market_pda": "MarketPdaBase58",
       "underlying_mint": "So11111111111111111111111111111111111111112",
+      "underlying_symbol": "SOL",
       "underlying_decimals": 9,
       "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "quote_symbol": "USDC",
       "quote_decimals": 6,
-      "terms": { "type": "covered_call", "strike": 136000000000 },
+      "terms": {
+        "type": "covered_call",
+        "strike": 136000000000
+      },
       "side": "sell",
       "state": "open",
       "quantity": 5000000000,
       "price": 51000000,
       "total_premium": 253725,
       "created_at": 1710000012,
-      "expiry_ts": 1710600000
+      "expiry_ts": 1710600000,
+      "underlying_price": {
+        "type": "available",
+        "price": 151000000000,
+        "published_at": 1710000010
+      }
     },
     "update_type": "created"
   }
@@ -420,7 +455,7 @@ A put spread on a put market. The market lists `put_spread` in `products`. The s
   "type": "RfqRequest",
   "data": {
     "request_id": "a1b2c3d4-0001-4a5b-8c6d-7e8f90a1b2c3",
-    "market": "PutMarketPdaBase58",
+    "market_pda": "PutMarketPdaBase58",
     "terms": { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 },
     "side": "sell",
     "quantity": 5000000000,
@@ -453,7 +488,7 @@ A put spread on a put market. The market lists `put_spread` in `products`. The s
 
 ### QuoteReceived
 
-The gross price `G = 1.2` is below the width `10`. `net_price` is `null`.
+The gross price `G = 1.2` is below the width `10`. At 50 bps premium and 10 bps volume the fee is `min(0.006, 0.01)`, so `net_price` is `1.194`.
 
 ```json
 {
@@ -462,17 +497,17 @@ The gross price `G = 1.2` is below the width `10`. `net_price` is `null`.
     "rfq_id": "b2c3d4e5-0002-4b6c-9d7e-8f90a1b2c3d4",
     "terms": { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 },
     "side": "sell",
-    "maker": "MakerAOwnerPubkeyBase58",
+    "maker_owner": "MakerAOwnerPubkeyBase58",
     "price": 1200000000,
     "valid_until": 1710000330,
     "nonce": 11,
     "order_id": "0x3333333333333333333333333333333333333333333333333333333333333333",
-    "net_price": null
+    "net_price": 1194000000
   }
 }
 ```
 
-Gross premium is `6000000` quote atoms. With a premium fee of 50 bps and a volume fee of 10 bps on the `50000000` exposure, the fee is `min(30000, 50000) = 30000` and the net premium is `5970000`. Read the fee bps from `GET /api/v1/venue`. Accept, sign and submit as in steps 9 and 10.
+Gross premium is `6000000` quote atoms. With a premium fee of 50 bps and a volume fee of 10 bps on the `50000000` exposure, the fee is `min(30000, 50000) = 30000` and the net premium is `5970000`. Read the fee bps from the quote token's `protocol_fees` in `GET /api/v1/tokens`. Accept, sign and submit as in steps 9 and 10.
 
 ### Settled position
 
@@ -483,14 +518,24 @@ At settlement price `133` the intrinsic value is `7`. The maker receives `350000
   "type": "PositionUpdated",
   "data": {
     "position": {
-      "revision": { "slot": 312999000, "transaction_index": 3, "instruction_index": 1 },
+      "revision": {
+        "slot": 312999000,
+        "transaction_index": 3,
+        "instruction_index": 1
+      },
       "pda": "PositionPdaBase58",
-      "market": "PutMarketPdaBase58",
+      "market_pda": "PutMarketPdaBase58",
       "underlying_mint": "So11111111111111111111111111111111111111112",
+      "underlying_symbol": "SOL",
       "underlying_decimals": 9,
       "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "quote_symbol": "USDC",
       "quote_decimals": 6,
-      "terms": { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 },
+      "terms": {
+        "type": "put_spread",
+        "lower_strike": 130000000000,
+        "upper_strike": 140000000000
+      },
       "side": "sell",
       "state": "settled",
       "settlement": {
@@ -503,7 +548,10 @@ At settlement price `133` the intrinsic value is `7`. The maker receives `350000
       "price": 1200000000,
       "total_premium": 5970000,
       "created_at": 1710000012,
-      "expiry_ts": 1710600000
+      "expiry_ts": 1710600000,
+      "underlying_price": {
+        "type": "unavailable"
+      }
     },
     "update_type": "settled"
   }
@@ -519,7 +567,7 @@ A cash put carries one strike `K`. It is economically a put spread with lower st
   "type": "RfqRequest",
   "data": {
     "request_id": "c3d4e5f6-0003-4c7d-8e8f-90a1b2c3d4e5",
-    "market": "PutMarketPdaBase58",
+    "market_pda": "PutMarketPdaBase58",
     "terms": { "type": "cash_put", "strike": 136000000000 },
     "side": "sell",
     "quantity": 5000000000,
@@ -537,13 +585,19 @@ A spread whose strikes are unordered, or whose lower strike is `0` for a call sp
   "type": "RequestError",
   "data": {
     "request_id": "a1b2c3d4-0001-4a5b-8c6d-7e8f90a1b2c3",
-    "error": { "type": "Generic", "data": { "code": "spread_invalid_strikes", "message": "spreads require ordered strikes; call lower must be positive" } },
-    "delivery": null
+    "error": {
+      "type": "Generic",
+      "data": {
+        "code": "spread_invalid_strikes",
+        "message": "spreads require ordered strikes; call lower must be positive"
+      }
+    },
+    "delivery": "not_applicable"
   }
 }
 ```
 
-Strikes that are not multiples of the underlying's `strike_tick` fail with `spread_tick_violation`. A product that is not enabled for the pair fails with `product_not_allowed`. `"side": "buy"` fails with `taker_buy_unsupported`.
+Strikes that are not multiples of the underlying's `strike_tick` fail with `spread_tick_violation`. A product that is not enabled for the pair fails with `product_not_allowed`. `"side": "buy"` from a vault session fails with `taker_buy_unsupported`.
 
 ---
 
@@ -574,8 +628,12 @@ A valid session returns `AuthSuccess` (as in step 3, without `AuthRequest` or si
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "rfq_version": 2,
     "reason": "taker_cancelled",
-    "your_quote": null,
-    "winner": null,
+    "your_quote": {
+      "type": "none"
+    },
+    "winner": {
+      "type": "none"
+    },
     "closed_at": 1710000020
   }
 }
@@ -640,14 +698,18 @@ Treat the order as not executed only if every submission you made returned `not_
     "rfq_id": "9a4f8f7b-5a6d-4c8d-8a2e-2a3b4c5d6e7f",
     "rfq_version": 1,
     "reason": "expired",
-    "your_quote": null,
-    "winner": null,
+    "your_quote": {
+      "type": "none"
+    },
+    "winner": {
+      "type": "none"
+    },
     "closed_at": 1710000060
   }
 }
 ```
 
-`reason` is `expired`, `taker_cancelled`, `filled`, `market_expired`, `ladder_timeout` or `no_eligible_makers`. `no_eligible_makers` means no maker could receive the RFQ (none subscribed, or every one skipped for caps or custody), so the server closes it at once instead of at its timeout.
+`reason` is `expired`, `taker_cancelled`, `filled`, `market_expired`, `no_eligible_makers` or `server_shutdown`. `no_eligible_makers` means no maker could receive the RFQ (none subscribed, or every one skipped for caps or custody), so the server closes it at once instead of at its timeout. `server_shutdown` means a graceful server stop closed it before its order reached the keeper.
 
 ### Invite gating (closed mainnet only)
 
@@ -681,8 +743,14 @@ An `RfqRequest` before redemption fails with a typed `InviteRequired` error in a
   "type": "RequestError",
   "data": {
     "request_id": "1e3a5c7e-9b0d-4f26-8a4c-6e8a0c2e4f93",
-    "error": { "type": "Generic", "data": { "code": "invalid_quantity_size_rule", "message": "quantity violates min/max/step" } },
-    "delivery": null
+    "error": {
+      "type": "Generic",
+      "data": {
+        "code": "invalid_quantity_size_rule",
+        "message": "quantity violates min/max/step"
+      }
+    },
+    "delivery": "not_applicable"
   }
 }
 ```
@@ -713,7 +781,7 @@ Subscriptions and in-flight state are not replayed. Re-authenticate, resubscribe
   "type": "GetPositions",
   "data": {
     "request_id": "f1b3d5e7-9a2c-4d84-8e6a-4b6c8d0e2f59",
-    "market": {
+    "market_pda": {
       "type": "all"
     },
     "underlying_mint": {
@@ -744,10 +812,12 @@ Subscriptions and in-flight state are not replayed. Re-authenticate, resubscribe
           "instruction_index": 2
         },
         "pda": "PositionPdaBase58",
-        "market": "MarketPdaBase58",
+        "market_pda": "MarketPdaBase58",
         "underlying_mint": "So11111111111111111111111111111111111111112",
+        "underlying_symbol": "SOL",
         "underlying_decimals": 9,
         "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "quote_symbol": "USDC",
         "quote_decimals": 6,
         "terms": {
           "type": "covered_call",
@@ -759,7 +829,12 @@ Subscriptions and in-flight state are not replayed. Re-authenticate, resubscribe
         "price": 51000000,
         "total_premium": 253725,
         "created_at": 1710000012,
-        "expiry_ts": 1710600000
+        "expiry_ts": 1710600000,
+        "underlying_price": {
+          "type": "available",
+          "price": 151000000000,
+          "published_at": 1710000010
+        }
       }
     ],
     "next_cursor": null
