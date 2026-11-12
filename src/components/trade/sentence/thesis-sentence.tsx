@@ -253,14 +253,18 @@ export function ThesisSentence({
           >
             <StrikeFace label={strikeLabel} />
           </AppInlineSelect>{" "}
-          {SENTENCE.on}
         </span>{" "}
-        <ExpirySlash
-          value={expiryValue}
-          options={options.expiries}
-          onChange={onExpiry}
-          disabled={disabled || !ready || options.expiries.length === 0}
-        />
+        {/* "by" belongs to the date, not to the strike: kept in one nowrap phrase so a
+            break never leaves the preposition stranded at the end of the line. */}
+        <span className="whitespace-nowrap">
+          {SENTENCE.on}{" "}
+          <ExpirySlash
+            value={expiryValue}
+            options={options.expiries}
+            onChange={onExpiry}
+            disabled={disabled || !ready || options.expiries.length === 0}
+          />
+        </span>
       </p>
       {/* a quiet line of its own under the belief, so it never touches how the belief wraps; it keeps its height before prices arrive */}
       <p className={cn(
