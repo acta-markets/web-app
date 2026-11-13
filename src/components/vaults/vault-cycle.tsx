@@ -40,7 +40,7 @@ type CycleStep = { label: string; detail: string };
 
 /** Where the cycle stands, as an index into the steps. After Requests the vault returns to Idle. */
 function cycleStage(vault: Vault, nowSecs: number) {
-  const expiry = Number(vault.active_expiry);
+  const expiry = Number(vault.active_expiry_ts);
   if (vault.phase === "processing_capital") return 4;
   if (vault.phase === "settling") return 3;
   if (vault.phase === "idle" || expiry === 0) return 0;
@@ -58,10 +58,10 @@ function requestsText(vault: Vault) {
 
 /** Recorded cycle boundaries, with a countdown only to the vault's active expiry. */
 export function VaultCurrentCycle({ vault, cycles = [], nowSecs }: { vault: Vault; cycles?: readonly VaultCycle[]; nowSecs: number }) {
-  const expiry = Number(vault.active_expiry);
+  const expiry = Number(vault.active_expiry_ts);
   const running = vault.phase === "active" && expiry > 0;
   const current = [...cycles]
-    .filter((cycle) => expiry > 0 && Number(cycle.expiry) === expiry)
+    .filter((cycle) => expiry > 0 && Number(cycle.expiry_ts) === expiry)
     .sort((a, b) =>
       Number(b.capital_generation === vault.capital_generation) - Number(a.capital_generation === vault.capital_generation)
       || Number(b.started_at) - Number(a.started_at),

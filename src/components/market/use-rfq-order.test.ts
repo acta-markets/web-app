@@ -24,7 +24,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   window.localStorage.clear();
 });
-const quote = { rfq_id: "rfq", order_id: "order", maker: "maker", side: "sell", terms: { type: "covered_call", strike: 1 }, price: 1, valid_until: 9999999999, nonce: 1n } as QuoteReceivedMessage;
+const quote = { rfq_id: "rfq", order_id: "order", maker_owner: "maker", side: "sell", terms: { type: "covered_call", strike: 1 }, price: 1, valid_until: 9999999999, nonce: 1n } as QuoteReceivedMessage;
 const rfq = { rfq_id: "rfq", terms: { type: "covered_call", strike: 1 }, side: "sell", quantity: 1 } as TakerFillRfq;
 const keeper = "Keeper1111111111111111111111111111111111111";
 const tables = { Tab1e11111111111111111111111111111111111111: ["Acct111111111111111111111111111111111111111"] };
@@ -131,10 +131,10 @@ describe("taker order flow", () => {
     const h = setup();
     const vault = { discriminator: 9 } as Vault;
     sdk.makerVault.mockResolvedValue(vault);
-    const vaultQuote = { ...quote, maker: "Vau1tPda1111111111111111111111111111111111" } as QuoteReceivedMessage;
+    const vaultQuote = { ...quote, maker_owner: "Vau1tPda1111111111111111111111111111111111" } as QuoteReceivedMessage;
     await act(async () => { await h.result.current.accept(vaultQuote, rfq); });
-    expect(sdk.makerVault).toHaveBeenCalledExactlyOnceWith(h.options.rpc, vaultQuote.maker);
-    expect(h.accept).toHaveBeenCalledExactlyOnceWith("rfq", vaultQuote.maker, "order");
+    expect(sdk.makerVault).toHaveBeenCalledExactlyOnceWith(h.options.rpc, vaultQuote.maker_owner);
+    expect(h.accept).toHaveBeenCalledExactlyOnceWith("rfq", vaultQuote.maker_owner, "order");
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.submit).toHaveBeenCalledExactlyOnceWith("order", "AQ=="));
     expect(sdk.verify).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ quote: vaultQuote, rfq, makerVault: vault }));
@@ -507,7 +507,7 @@ describe("taker order flow", () => {
 });
 
 describe("recovery with the current backend contract", () => {
-  const pendingSignature = { rfq_id: "rfq", market: "market" as Address, terms: { type: "covered_call" as const, strike: 1 }, side: "sell" as const, quantity: 1, expires_at: 9999999999, quotes_count: 1, state: "pending_signature" as const, lock: { type: "locked" as const, order_id: "order" }, best_price: { type: "none" as const } };
+  const pendingSignature = { rfq_id: "rfq", market_pda: "market" as Address, terms: { type: "covered_call" as const, strike: 1 }, side: "sell" as const, quantity: 1, expires_at: 9999999999, quotes_count: 1, state: "pending_signature" as const, lock: { type: "locked" as const, order_id: "order" }, best_price: { type: "none" as const } };
   const enqueued = { ...pendingSignature, state: "enqueued" as const };
 
   it("persists an enqueued order as sent and never offers to abandon it after reload", async () => {

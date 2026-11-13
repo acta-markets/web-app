@@ -2,7 +2,7 @@
 
 Payloads illustrate wire shapes. Replace abbreviated signatures and past timestamps with real values; request/session/RFQ IDs must be UUIDs and order IDs must decode to 32 bytes. These examples are not transactions to send unchanged.
 
-Every frame is closed: all fields are present, absent facts are explicit `null`, and state-dependent shapes are tagged unions. The field reference is in [`../reference/maker-api.md`](../reference/maker-api.md).
+Every frame is closed: all fields are present, absent facts are tagged unions (`null` only as `next_cursor` on the last page), and state-dependent shapes are tagged unions. The field reference is in [`../reference/maker-api.md`](../reference/maker-api.md).
 
 Example clock: the session starts at Unix time `1710000000`. The venue window from `Welcome` is `min_quote_validity_seconds = 60` and `settlement_buffer_seconds = 50`.
 
@@ -46,9 +46,17 @@ Example clock: the session starts at Unix time `1710000000`. The venue window fr
     "protocol_version": "1.0.0",
     "server_version": "0.1.0",
     "min_supported_version": "1.0.0",
-    "server_time_unix_ms": 1710000000000,
+    "server_now_at_ms": 1710000000000,
     "min_quote_validity_seconds": 60,
-    "settlement_buffer_seconds": 50
+    "settlement_buffer_seconds": 50,
+    "rate_limits": {
+      "connection": { "type": "bucket", "per_second": 30, "burst": 60 },
+      "wallet": { "type": "unlimited" },
+      "rfqs": { "type": "unlimited" },
+      "quotes": { "type": "bucket", "per_second": 50, "burst": 100 },
+      "queries": { "type": "bucket", "per_second": 20, "burst": 40 },
+      "liquidity_provider": { "type": "shared", "per_second": 1000, "burst": 2000 }
+    }
   }
 }
 ```
@@ -86,12 +94,15 @@ The server verifies the signature by `quote_signing` key.
   "data": {
     "session_id": "3a5c7e9b-1d2f-4e60-8a4c-6b8d0f2a4c71",
     "expires_at": 1710086400,
-    "maker_pda": "HYe9CryCnQ3ZviCwoG8X7REFoSBK7HCjrhWWMpNtTah1"
+    "role": {
+      "type": "maker",
+      "maker_pda": "HYe9CryCnQ3ZviCwoG8X7REFoSBK7HCjrhWWMpNtTah1"
+    }
   }
 }
 ```
 
-`maker_pda` is the on-chain maker account PDA for this pubkey. It is `null` if the maker is not yet registered on-chain.
+`role.maker_pda` is the on-chain maker account PDA for this pubkey.
 
 
 ### 4) Snapshot
@@ -103,13 +114,18 @@ The server verifies the signature by `quote_signing` key.
     "markets": [
       {
         "pda": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
-        "underlying": "So11111111111111111111111111111111111111112",
-        "quote": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "underlying_mint": "So11111111111111111111111111111111111111112",
+        "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
         "expiry_ts": 1710600000,
         "is_put": false,
-        "products": ["covered_call", "call_spread"],
+        "products": [
+          "covered_call",
+          "call_spread"
+        ],
         "status": "active",
-        "settlement_price": null
+        "settlement": {
+          "type": "pending"
+        }
       }
     ]
   }
@@ -152,7 +168,7 @@ The server verifies the signature by `quote_signing` key.
   "type": "RfqBroadcast",
   "data": {
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
-    "market": {
+    "market_descriptor": {
       "chain_id": 0,
       "program_id": "33Ezs5eoa16QyPW8wifnyz2nCyMEcq2crqkVBNjnTE8U",
       "market_pda": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
@@ -167,12 +183,12 @@ The server verifies the signature by `quote_signing` key.
     "side": "sell",
     "quantity": 1000000000,
     "expires_at": 1710000050,
-    "taker": "5DNHbugre3SXXogpZroA5SEsENdAd69AfNK5Z7ZCWr84",
+    "taker_owner": "5DNHbugre3SXXogpZroA5SEsENdAd69AfNK5Z7ZCWr84",
     "order_options": [
       { "type": "covered_call", "strike": 150000000000 },
       { "type": "covered_call", "strike": 160000000000 }
     ],
-    "sent_at_unix_ms": 1710000000123
+    "sent_at_ms": 1710000000123
   }
 }
 ```
@@ -205,7 +221,9 @@ The server verifies the signature by `quote_signing` key.
   "data": {
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
-    "replaced_order_id": null
+    "replaced": {
+      "type": "none"
+    }
   }
 }
 ```
@@ -216,12 +234,12 @@ The server verifies the signature by `quote_signing` key.
   "data": {
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
-    "taker": "5DNHbugre3SXXogpZroA5SEsENdAd69AfNK5Z7ZCWr84",
+    "taker_owner": "5DNHbugre3SXXogpZroA5SEsENdAd69AfNK5Z7ZCWr84",
     "price": 5000000000,
     "quantity": 1000000000,
     "terms": { "type": "covered_call", "strike": 160000000000 },
     "side": "sell",
-    "signature_deadline": 1710000040
+    "signature_deadline_at": 1710000040
   }
 }
 ```
@@ -236,14 +254,19 @@ The server verifies the signature by `quote_signing` key.
     "rfq_version": 3,
     "reason": "filled",
     "your_quote": {
+      "type": "quoted",
       "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
       "status": "filled",
       "price": 5000000000
     },
     "winner": {
-      "maker": "A87ysNWAmmqQHafLSQGbYSLhtcV3BjXctR88EWuSobGP",
+      "type": "winner",
+      "maker_owner": "A87ysNWAmmqQHafLSQGbYSLhtcV3BjXctR88EWuSobGP",
       "price": 5000000000,
-      "tx_signature": "<base58 transaction signature>"
+      "transaction": {
+        "type": "sent",
+        "signature": "<base58 transaction signature>"
+      }
     },
     "closed_at": 1710000042
   }
@@ -264,18 +287,18 @@ The server verifies the signature by `quote_signing` key.
     "expiry_ts": 1710600000,
     "terms": { "type": "covered_call", "strike": 160000000000 },
     "side": "sell",
-    "taker": "5DNHbugre3SXXogpZroA5SEsENdAd69AfNK5Z7ZCWr84",
+    "taker_owner": "5DNHbugre3SXXogpZroA5SEsENdAd69AfNK5Z7ZCWr84",
     "price": 5000000000,
     "quantity": 1000000000,
     "position_pda": "75NqraLLofiLUpNQg2wUPG6CJpxcaGEZUwuNrnAgvcTP",
-    "tx_signature": "<base58 transaction signature>",
+    "transaction_signature": "<base58 transaction signature>",
     "filled_at": 1710000042
   }
 }
 ```
 
 `RfqClosed` is the terminal RFQ event for maker-side state.
-For successful fills, the winning maker receives `RfqClosed`, then `QuoteFilled`; `expiry_ts` is `null` when the server no longer knows the market.
+For successful fills, the winning maker receives `RfqClosed`, then `QuoteFilled`.
 `QuoteFilled` is the fill-details event; RFQ closure should still be keyed by `RfqClosed`.
 
 `QuoteFilled` is the fill fact: it carries `price` and `quantity`, with no fee or net-premium field. The authoritative net premium is `total_premium` on the `PositionUpdated` row:
@@ -285,21 +308,35 @@ For successful fills, the winning maker receives `RfqClosed`, then `QuoteFilled`
   "type": "PositionUpdated",
   "data": {
     "position": {
-      "revision": { "slot": 250000000, "transaction_index": 12, "instruction_index": 1 },
+      "revision": {
+        "slot": 250000000,
+        "transaction_index": 12,
+        "instruction_index": 1
+      },
       "pda": "75NqraLLofiLUpNQg2wUPG6CJpxcaGEZUwuNrnAgvcTP",
-      "market": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+      "market_pda": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
       "underlying_mint": "So11111111111111111111111111111111111111112",
+      "underlying_symbol": "SOL",
       "underlying_decimals": 9,
       "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "quote_symbol": "USDC",
       "quote_decimals": 6,
-      "terms": { "type": "covered_call", "strike": 160000000000 },
+      "terms": {
+        "type": "covered_call",
+        "strike": 160000000000
+      },
       "side": "sell",
       "state": "open",
       "quantity": 1000000000,
       "price": 5000000000,
       "total_premium": 4975000,
       "created_at": 1710000042,
-      "expiry_ts": 1710600000
+      "expiry_ts": 1710600000,
+      "underlying_price": {
+        "type": "available",
+        "price": 151000000000,
+        "published_at": 1710000010
+      }
     },
     "update_type": "created"
   }
@@ -317,7 +354,7 @@ A spread or cash-put RFQ carries its strikes in `terms`. The quote repeats them 
   "type": "RfqBroadcast",
   "data": {
     "rfq_id": "00000000-0000-0000-0000-000000000001",
-    "market": {
+    "market_descriptor": {
       "chain_id": 0,
       "program_id": "33Ezs5eoa16QyPW8wifnyz2nCyMEcq2crqkVBNjnTE8U",
       "market_pda": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
@@ -332,11 +369,11 @@ A spread or cash-put RFQ carries its strikes in `terms`. The quote repeats them 
     "side": "sell",
     "quantity": 1000000000,
     "expires_at": 1799999800,
-    "taker": "5DNHbugre3SXXogpZroA5SEsENdAd69AfNK5Z7ZCWr84",
+    "taker_owner": "5DNHbugre3SXXogpZroA5SEsENdAd69AfNK5Z7ZCWr84",
     "order_options": [
       { "type": "call_spread", "lower_strike": 100000000000, "upper_strike": 120000000000 }
     ],
-    "sent_at_unix_ms": 1799999770000
+    "sent_at_ms": 1799999770000
   }
 }
 ```
@@ -372,14 +409,24 @@ Spreads and cash puts go from `open` to `settled` only. A settled row carries th
   "type": "PositionUpdated",
   "data": {
     "position": {
-      "revision": { "slot": 250900000, "transaction_index": 3, "instruction_index": 0 },
+      "revision": {
+        "slot": 250900000,
+        "transaction_index": 3,
+        "instruction_index": 0
+      },
       "pda": "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
-      "market": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+      "market_pda": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
       "underlying_mint": "So11111111111111111111111111111111111111112",
+      "underlying_symbol": "SOL",
       "underlying_decimals": 9,
       "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "quote_symbol": "USDC",
       "quote_decimals": 6,
-      "terms": { "type": "call_spread", "lower_strike": 100000000000, "upper_strike": 120000000000 },
+      "terms": {
+        "type": "call_spread",
+        "lower_strike": 100000000000,
+        "upper_strike": 120000000000
+      },
       "side": "sell",
       "state": "settled",
       "settlement": {
@@ -392,7 +439,10 @@ Spreads and cash puts go from `open` to `settled` only. A settled row carries th
       "price": 5000000000,
       "total_premium": 4980000,
       "created_at": 1799999770,
-      "expiry_ts": 1800086400
+      "expiry_ts": 1800086400,
+      "underlying_price": {
+        "type": "unavailable"
+      }
     },
     "update_type": "settled"
   }
@@ -542,7 +592,7 @@ Use [common paging](../reference/ws-common.md#paging) for maker positions. Start
   "type": "GetMakerPositions",
   "data": {
     "request_id": "a1b2c3d4-0000-4000-8000-000000000011",
-    "market": {
+    "market_pda": {
       "type": "all"
     },
     "underlying_mint": {
@@ -575,7 +625,7 @@ Use [common paging](../reference/ws-common.md#paging) for maker positions. Start
           "instruction_index": 1
         },
         "pda": "75NqraLLofiLUpNQg2wUPG6CJpxcaGEZUwuNrnAgvcTP",
-        "market": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+        "market_pda": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
         "underlying_mint": "So11111111111111111111111111111111111111112",
         "underlying_symbol": "SOL",
         "underlying_decimals": 9,
@@ -592,7 +642,8 @@ Use [common paging](../reference/ws-common.md#paging) for maker positions. Start
         "price": 5000000000,
         "total_premium": 4975000,
         "created_at": 1710000042,
-        "expiry_ts": 1710600000
+        "expiry_ts": 1710600000,
+        "underlying_price": { "type": "available", "price": 151000000000, "published_at": 1710000040 }
       }
     ],
     "unrenderable": [],
@@ -608,7 +659,7 @@ When `next_cursor` is non-null, wrap that opaque string in an `after` cursor. Th
   "type": "GetMakerPositions",
   "data": {
     "request_id": "a1b2c3d4-0000-4000-8000-000000000012",
-    "market": {
+    "market_pda": {
       "type": "all"
     },
     "underlying_mint": {
@@ -664,9 +715,12 @@ A rejected request comes back as a `RequestError`. Stop the loop at the first on
     "request_id": "a1b2c3d4-0000-4000-8000-000000000022",
     "error": {
       "type": "Generic",
-      "data": { "code": "rate_limited", "message": "query rate limit exceeded" }
+      "data": {
+        "code": "rate_limited",
+        "message": "query rate limit exceeded"
+      }
     },
-    "delivery": null
+    "delivery": "not_applicable"
   }
 }
 ```
@@ -682,7 +736,7 @@ A rejected request comes back as a `RequestError`. Stop the loop at the first on
     "request_id": "a1b2c3d4-0000-4000-8000-000000000031",
     "limit": 50,
     "cursor": { "type": "start" },
-    "market": { "type": "all" }
+    "market_pda": { "type": "all" }
   }
 }
 ```
@@ -710,11 +764,14 @@ Response:
           "strike": 160000000000
         },
         "side": "sell",
-        "taker": "5DNHbugre3SXXogpZroA5SEsENdAd69AfNK5Z7ZCWr84",
+        "taker_owner": "5DNHbugre3SXXogpZroA5SEsENdAd69AfNK5Z7ZCWr84",
         "quantity": 1000000000,
         "price": 5000000000,
-        "tx_signature": "<base58 transaction signature>",
-        "position_pda": "75NqraLLofiLUpNQg2wUPG6CJpxcaGEZUwuNrnAgvcTP",
+        "transaction_signature": "<base58 transaction signature>",
+        "position": {
+          "type": "confirmed",
+          "position_pda": "75NqraLLofiLUpNQg2wUPG6CJpxcaGEZUwuNrnAgvcTP"
+        },
         "confirmed_at": 1710000042
       }
     ],
@@ -734,7 +791,7 @@ Next page (keyset pagination). `at` is the last trade's `confirmed_at` and `id` 
     "cursor": {
       "type": "start"
     },
-    "market": {
+    "market_pda": {
       "type": "all"
     }
   }
@@ -772,9 +829,12 @@ Normal SDK list calls collect all pages through one helper. Live quotes and cata
     "request_id": "a1b2c3d4-0000-4000-8000-000000000042",
     "error": {
       "type": "Generic",
-      "data": { "code": "invalid_limit", "message": "limit must be within 1..=200" }
+      "data": {
+        "code": "invalid_limit",
+        "message": "limit must be within 1..=200"
+      }
     },
-    "delivery": null
+    "delivery": "not_applicable"
   }
 }
 ```
@@ -785,7 +845,7 @@ Normal SDK list calls collect all pages through one helper. Live quotes and cata
 {
   "type": "ReplaceQuote",
   "data": {
-    "old_order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
+    "replaced_order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "terms": { "type": "covered_call", "strike": 160000000000 },
     "side": "sell",
@@ -798,7 +858,7 @@ Normal SDK list calls collect all pages through one helper. Live quotes and cata
 }
 ```
 
-On success the server answers with `QuoteAcknowledged` carrying `replaced_order_id`.
+On success the server answers with `QuoteAcknowledged` carrying `replaced`.
 
 ### BatchQuotes
 
@@ -844,7 +904,9 @@ The ack has one tagged result per quote. Correlate by `order_id`:
         "data": {
           "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
           "order_id": "0xaaaa2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
-          "replaced_order_id": null
+          "replaced": {
+            "type": "none"
+          }
         }
       },
       {
@@ -890,7 +952,7 @@ The ack has one tagged result per quote. Correlate by `order_id`:
   "type": "RfqSkipped",
   "data": {
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
-    "market_id": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+    "market_pda": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
     "quantity": 1000000000,
     "cap_detail": {
       "maker_insufficient_balance": { "available": 1000000, "required": 0 }
@@ -908,7 +970,7 @@ The caps filter runs before broadcast and knows no premium, so `required` is `0`
   "type": "CheckQuote",
   "data": {
     "request_id": "a1b2c3d4-0000-4000-8000-000000000051",
-    "market_id": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+    "market_pda": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
     "terms": { "type": "call_spread", "lower_strike": 100000000000, "upper_strike": 120000000000 },
     "side": "sell",
     "quantity": 1000000000,
@@ -953,7 +1015,10 @@ A refusal is `{ "type": "rejected", "cap_detail": <CapError> }`.
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
     "is_best": true,
-    "current_best_price": 5000000000
+    "current_best_price": {
+      "type": "quoted",
+      "price": 5000000000
+    }
   }
 }
 ```
@@ -967,7 +1032,10 @@ A refusal is `{ "type": "rejected", "cap_detail": <CapError> }`.
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
     "your_price": 5000000000,
-    "current_best_price": 5500000000
+    "current_best_price": {
+      "type": "quoted",
+      "price": 5500000000
+    }
   }
 }
 ```
@@ -1006,12 +1074,12 @@ Always sent when a quote expires.
   "type": "CancelAllQuotes",
   "data": {
     "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "market": { "type": "only", "value": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi" }
+    "market_pda": { "type": "only", "value": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi" }
   }
 }
 ```
 
-For every market, send `"market": { "type": "all" }`.
+For every market, send `"market_pda": { "type": "all" }`.
 
 ### QuoteCancelled
 
@@ -1023,6 +1091,19 @@ For every market, send `"market": { "type": "all" }`.
     "order_ids": ["0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"],
     "reason": "requested",
     "cancelled_at": 1710000025
+  }
+}
+```
+
+### RfqLocked
+
+```json
+{
+  "type": "RfqLocked",
+  "data": {
+    "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
+    "rfq_version": 2,
+    "locked_at": 1710000030
   }
 }
 ```
@@ -1051,11 +1132,14 @@ For every market, send `"market": { "type": "all" }`.
     "rfq_version": 2,
     "reason": "expired",
     "your_quote": {
+      "type": "quoted",
       "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
       "status": "expired",
       "price": 5000000000
     },
-    "winner": null,
+    "winner": {
+      "type": "none"
+    },
     "closed_at": 1710000050
   }
 }
@@ -1071,14 +1155,19 @@ For every market, send `"market": { "type": "all" }`.
     "rfq_version": 3,
     "reason": "filled",
     "your_quote": {
+      "type": "quoted",
       "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
       "status": "outbid",
       "price": 5000000000
     },
     "winner": {
-      "maker": "A87ysNWAmmqQHafLSQGbYSLhtcV3BjXctR88EWuSobGP",
+      "type": "winner",
+      "maker_owner": "A87ysNWAmmqQHafLSQGbYSLhtcV3BjXctR88EWuSobGP",
       "price": 5500000000,
-      "tx_signature": "<base58 transaction signature>"
+      "transaction": {
+        "type": "sent",
+        "signature": "<base58 transaction signature>"
+      }
     },
     "closed_at": 1710000042
   }

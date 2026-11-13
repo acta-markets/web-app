@@ -10,9 +10,9 @@ Wire messages, errors and enums are in [`../reference/taker-api.md`](../referenc
 npm install @acta-markets/ts-sdk
 ```
 
-This guide covers version 0.4.2. It speaks WS protocol `1.0.0` and targets the program deployed to devnet and mainnet; both use the same program ID, and `GET /api/v1/venue` returns the authoritative `program_id`. Refer to opcodes and errors by name through the generated constants exported from `@acta-markets/ts-sdk` (`*_DISCRIMINATOR` for opcodes, `ACTA_CONTRACT_ERROR__*` for errors), not by number. The package README and changelog cover the vault builders.
+This guide covers version 0.5.2. It speaks WS protocol `1.0.0` and targets the program deployed to devnet and mainnet; both use the same program ID, and `GET /api/v1/venue` returns the authoritative `program_id`. Refer to opcodes and errors by name through the generated constants exported from `@acta-markets/ts-sdk` (`*_DISCRIMINATOR` for opcodes, `ACTA_CONTRACT_ERROR__*` for errors), not by number. The package README and changelog cover the vault builders.
 
-The wire is closed. The client does not dispatch a frame that lacks a required field or carries an unknown enum value. A message whose type the SDK does not know is reported on the `unknownMessage` event. Facts that are absent arrive as explicit `null`, typed `T | null`. State-dependent shapes are tagged unions. Wire addresses are validated when a frame is decoded. `server_time_unix_ms` and `sent_at_unix_ms` use milliseconds, and `expires_at` uses Unix seconds.
+The wire is closed. The client does not dispatch a frame that lacks a required field or carries an unknown enum value. A message whose type the SDK does not know is reported on the `unknownMessage` event. Absent facts are tagged unions; `null` appears only as `next_cursor` on the last page. Wire addresses are validated when a frame is decoded. `server_now_at_ms` and `sent_at_ms` use milliseconds, and `expires_at` uses Unix seconds.
 
 Taker-only apps should import **`@acta-markets/ts-sdk/ws`**: client, auth, RFQ and sponsored-tx signing, without instruction builders or IDL. The SDK is built on `@solana/kit`; you do not need `@solana/web3.js`. Spread economics helpers and account reads are in `@acta-markets/ts-sdk/chain`, and public reads such as the venue are in `@acta-markets/ts-sdk/http`.
 
@@ -116,7 +116,7 @@ ws.on("chainEvent", (ev) => {
 });
 ```
 
-The client keeps `ws.state.positions` (a `Map` keyed by position PDA). It merges `Positions` responses and `PositionUpdated` pushes and applies a row only if its `revision` is newer than the stored one, so `positionUpdated` does not fire for duplicates or old rows. `comparePositionRevision(a, b)` from `@acta-markets/ts-sdk/ws` compares two revisions `(slot, transaction_index, instruction_index)` lexicographically; use it if you read raw `Positions` pages yourself. Switching the auth provider or logging out clears the cache.
+The client keeps `ws.state.positions` (a `Map` keyed by position PDA). It merges `Positions` responses and `PositionUpdated` pushes and applies a row only if its `revision` is newer than the stored one, so `positionUpdated` does not fire for duplicates or old rows. `comparePositionRevision(a, b)` from `@acta-markets/ts-sdk/ws` compares two revisions `(slot, transaction_index, instruction_index)` lexicographically; use it if you read raw `Positions` pages yourself. Switching the auth provider or logging out clears the cache. Each row carries `underlying_price`: `{ type: "available", price, published_at }` with the trusted oracle price of the underlying in the quote token (`1e9`), or `{ type: "unavailable" }`. Use it with `terms`, `side` and `quantity` for the current value of a position.
 
 Subscriptions restore on reconnect.
 
@@ -157,17 +157,17 @@ ws.on("rfqCreated", (rfq) => console.log(rfq.rfq_id, rfq.expires_at, rfq.order_o
 
 ws.on("quoteReceived", (quote) => {
   // quote.terms is one of rfq.order_options. price is gross; AcceptQuote uses the gross price, hash-bound via order_id.
-  // net_price is Price | null: null for spreads and cash puts.
-  console.log("Quote:", quote.net_price ?? quote.price, "from", quote.maker);
+  // net_price is what a seller receives after the protocol fee, or the gross price a buyer pays.
+  console.log("Quote:", quote.net_price, "from", quote.maker_owner);
 });
 
 await ws.createRfq({
-  market: marketPdaBase58,
+  market_pda: marketPdaBase58,
   terms: { type: "covered_call", strike: 136_000_000_000 },
   side: "sell",
   quantity: 1_000_000_000, // 1 SOL in lamports; must satisfy size_rule
-  timeoutSeconds: 30,
-  requestId: crypto.randomUUID(), // required; also the idempotency key
+  timeout_seconds: 30,
+  request_id: crypto.randomUUID(), // required; also the idempotency key
 });
 ```
 
@@ -182,7 +182,7 @@ Other products:
 
 Spread and cash put strikes must be multiples of the underlying's `strike_tick` (`1e9`-scaled; read it from `TokenInfo.role`). A spread needs `lower_strike < upper_strike`, and a call spread needs `lower_strike > 0`. The market's `is_put` must match the product's side.
 
-`createRfq` resolves with `requestId` on the server's `CommandAccepted` and rejects with `ActaWsRequestError` on the matching `RequestError`, a timeout or a disconnect. `RfqCreated` echoes `request_id` and may arrive before or after that receipt. Repeating a `createRfq` with the same `requestId` returns the same `rfq_id` while the RFQ is active. The RFQ TTL is server-defined within the venue range `min_rfq_timeout_seconds` .. `max_rfq_timeout_seconds` from `GET /api/v1/venue`.
+`createRfq` takes the `RfqRequest` message and resolves with its `request_id` on the server's `CommandAccepted` and rejects with `ActaWsRequestError` on the matching `RequestError`, a timeout or a disconnect. `RfqCreated` echoes `request_id` and may arrive before or after that receipt. Repeating a `createRfq` with the same `request_id` while the RFQ is open is rejected with `duplicate_rfq_id`, which means the first attempt created it; after the RFQ closes the same id opens a new one. `createRfqOnce` handles this: it owns the id and resends a lost reply only while the RFQ could still be open. The RFQ TTL is your `timeout_seconds`, which must be within the venue range `min_rfq_timeout_seconds` .. `max_rfq_timeout_seconds` from `GET /api/v1/venue`.
 
 For spreads and cash puts, `order_options` holds exactly your `terms`.
 
@@ -206,12 +206,16 @@ const terms = {
   underlyingDecimals: 9,
 };
 
+// Fees belong to the quote token (`getTokens()` or `/api/v1/tokens`).
+const fees = quoteToken.protocol_fees;
+if (fees.type !== "quote") throw new Error("quote token has no fee config");
+
 // collateral, grossPremium, protocolFee, netPremium (quote atoms)
 const economics = spreadPremium(
   terms,
   BigInt(quote.price),                 // gross price, 0 < price < width
-  venue.protocol_fee_bps_premium,
-  venue.protocol_fee_bps_volume,
+  fees.premium_bps,
+  fees.volume_bps,
 );
 
 // At settlement price S: holderPayoff and writerReturn sum to economics.collateral
@@ -226,12 +230,12 @@ With `side: "buy"` you buy the product. The maker writes it from its Maker PDA c
 
 ```typescript
 await ws.createRfq({
-  market: marketPdaBase58,
+  market_pda: marketPdaBase58,
   terms: { type: "covered_call", strike: 150_000_000_000 },
   side: "buy",
   quantity: 1_000_000_000,
-  timeoutSeconds: 30,
-  requestId: crypto.randomUUID(),
+  timeout_seconds: 30,
+  request_id: crypto.randomUUID(),
 });
 ```
 
@@ -278,8 +282,8 @@ A mismatch throws `VaultIntentError` and nothing is signed.
 Inputs the helper needs:
 
 - `keeper`: the canonical `GlobalConfig.hotAuthority` address. Read it once from chain.
-- `makerVault`: `await fetchMakerVault(rpc, quote.maker)`, which is a decoded `Vault` when the quote's maker is a vault PDA and `null` for an ordinary maker. A vault maker needs the account; without it the fill is verified as an ordinary maker's. On a buy from a vault the helper checks `OpenPositionForVaultWriter` (or `OpenSpreadForVaultWriter`) with holder byte `1`: your wallet signs and pays from its quote ATA, and the vault delegate's Ed25519 check covers only the order id.
-- `rfq`: a `TakerFillRfq` built from the RFQ (below). Both variants need `rfq_id`, `market` (the descriptor's `market`), `terms`, `side`, `quantity` and `order_options`. A spread or cash put also needs `underlying_decimals` and `quote_decimals` from the descriptor, and its `order_options` must hold exactly `terms`.
+- `makerVault`: `await fetchMakerVault(rpc, quote.maker_owner)`, which is a decoded `Vault` when the quote's maker is a vault PDA and `null` for an ordinary maker. A vault maker needs the account; without it the fill is verified as an ordinary maker's. On a buy from a vault the helper checks `OpenPositionForVaultWriter` (or `OpenSpreadForVaultWriter`) with holder byte `1`: your wallet signs and pays from its quote ATA, and the vault delegate's Ed25519 check covers only the order id.
+- `rfq`: a `TakerFillRfq` built from the RFQ (below). Both variants need `rfq_id`, `market_descriptor` (the descriptor's `market_descriptor`), `terms`, `side`, `quantity` and `order_options`. A spread or cash put also needs `underlying_decimals` and `quote_decimals` from the descriptor, and its `order_options` must hold exactly `terms`.
 - `tables`: address lookup tables, `{}` for sponsored fills.
 
 `TakerFillRfq` is a union: the physical variant (`terms` is `covered_call` or `cash_secured_put`) and the cash variant (`terms` is a spread or `cash_put`, with decimals). Build it with a function that narrows `terms`:
@@ -291,7 +295,7 @@ import type {
 } from "@acta-markets/ts-sdk/ws";
 
 function fillRfq(created: RfqCreatedMessage, descriptor: MarketDescriptorInfo, quantity: number): TakerFillRfq {
-  const base = { rfq_id: created.rfq_id, market: descriptor.market, side: created.side, quantity };
+  const base = { rfq_id: created.rfq_id, market_descriptor: descriptor.market_descriptor, side: created.side, quantity };
   const { terms } = created;
   if (terms.type === "covered_call" || terms.type === "cash_secured_put") {
     return {
@@ -346,7 +350,7 @@ ws.on("sponsoredTxToSign", async (id, txBase64, signatureDeadline, lastValidBloc
       rfq: fillRfq(rfqCreated, descriptor, requestedQuantity),
       keeper,
       taker: address(walletPublicKeyBase58),
-      makerVault: await fetchMakerVault(rpc, acceptedQuote.maker),
+      makerVault: await fetchMakerVault(rpc, acceptedQuote.maker_owner),
       tables: {},
       bounds: { maxUnitLimit: 400_000, maxUnitPriceMicroLamports: 100_000 },
       signer: wallet,
@@ -356,14 +360,12 @@ ws.on("sponsoredTxToSign", async (id, txBase64, signatureDeadline, lastValidBloc
     return;
   }
   if (epoch !== connectionEpoch || id !== orderIdHex || !walletMatches() || expired()) return;
-  try {
-    await ws.submitSignedSponsoredTx({ orderIdHex: id, txBase64: signedTxBase64 });
-  } catch (err) {
-    if (err instanceof ActaWsRequestError && err.delivery === "not_forwarded") {
-      // This attempt was not sent: retry, or choose another quote if no earlier attempt was unknown.
-    } else {
-      ws.getOrderStatus(id); // May have been sent: resolve before anything else.
-    }
+  // Sends the order at most once; a lost reply is resolved with GetOrderStatus, not a resend.
+  const outcome = await ws.submitOrderOnce({ orderIdHex: id, txBase64: signedTxBase64 });
+  if (outcome.type === "rejected") {
+    // Not forwarded: act on outcome.action (fix_request, refresh, ...), or choose another quote.
+  } else if (outcome.type === "reconciled" && outcome.state.type !== "confirmed") {
+    // pending or unknown: wait for OrderConfirmed / OrderFailed; never sign this order again.
   }
 });
 
@@ -374,7 +376,7 @@ try {
 }
 ```
 
-`acceptQuote` resolves on `CommandAccepted` and rejects with `ActaWsRequestError` on its `RequestError`, a timeout or a disconnect; `SponsoredTxToSign` may arrive before or after the receipt. A rejected `submitSignedSponsoredTx` carries `err.delivery`. `not_forwarded` means this attempt was not sent; if every attempt for the order returned it, retrying or choosing another quote is safe. `unknown`, or no `delivery` (timeout, disconnect), means it may have been sent: query `GetOrderStatus` before signing or submitting anything for that RFQ. `lastValidBlockHeight` is the block height the served transaction's blockhash is valid through.
+`acceptQuote` resolves on `CommandAccepted` and rejects with `ActaWsRequestError` on its `RequestError`, a timeout or a disconnect; `SponsoredTxToSign` may arrive before or after the receipt. `submitOrderOnce` above applies the following rules for you. A rejected `submitSignedSponsoredTx` carries `err.delivery`. `not_forwarded` means this attempt was not sent; if every attempt for the order returned it, retrying or choosing another quote is safe. `unknown`, or no `delivery` (timeout, disconnect), means it may have been sent: query `GetOrderStatus` before signing or submitting anything for that RFQ. `lastValidBlockHeight` is the block height the served transaction's blockhash is valid through.
 
 `verifyAndSignTakerFill` fills signature slot 1, the taker's slot. The keeper pays fees and signs slot 0, for ordinary and vault makers alike.
 
@@ -392,7 +394,7 @@ ws.on("orderFailed", (orderIdHex, reason, orderVersion) => {});
 
 ws.on("rfqClosed", (data) => {
   // Terminal: clean up RFQ state.
-  // data.reason: "expired" | "taker_cancelled" | "filled" | "market_expired" | "ladder_timeout"
+  // data.reason: "expired" | "taker_cancelled" | "filled" | "market_expired" | "no_eligible_makers" | "server_shutdown"
   // data.your_quote and data.winner are null when they do not apply.
 });
 ```
@@ -468,11 +470,11 @@ ws.on("error", (e) => {
 });
 
 ws.on("requestError", (envelope) => {
-  // { request_id, error: ServerError, delivery: "not_forwarded" | "unknown" | null }
+  // { request_id, error: ServerError, delivery: "not_applicable" | "not_forwarded" | "unknown" }
 });
 ```
 
-Most query methods (`getMarkets`, `getPositions`, `getOrderStatus`, and others) return a `request_id`. Match it against `msg.request_id` on the corresponding response event to pair UI state with responses. `getPositionsAsync(args)` and `getMyActiveRfqsAsync()` return a promise instead.
+Every query has two forms. `getMarkets()`, `getPositions(args)`, `getOrderStatus(id)` and the rest return a `request_id`; match it against `msg.request_id` on the response event. The `Async` form (`getMarketsAsync()`, `getPositionsAsync(args)`, `getMyCapsAsync()`, …) returns a promise of the whole response, all pages included, and rejects with `ActaWsRequestError`.
 
 Error codes and `OrderFailed` reasons: [taker-api.md](../reference/taker-api.md#errors). Common cases: [faq.md](../reference/faq.md).
 
@@ -484,10 +486,10 @@ Error codes and `OrderFailed` reasons: [taker-api.md](../reference/taker-api.md#
 - **Token caps.** `getTokenCaps(includeMarkets)` -> `tokenCaps` event. The flag is required and the server ignores it. The response carries `tokens`, `markets`, `quotes` and `quote_liabilities`, all always present. Schema: [taker-api.md](../reference/taker-api.md#token-caps) and [caps.md](../reference/caps.md).
 - **Earn summary.** `getEarnSummary()` -> `earnSummary` event. APR range (`apr` is `unavailable` or `available { min, max }`) and capacity per asset for landing pages.
 - **Market price snapshot.** `getTokenMarketsInfo(underlyingMint)` -> `tokenMarketsInfo` returns backend `reference_price`, size rules, decimals and indicative premiums together. See [TokenMarketsInfo](../reference/taker-api.md#tokenmarketsinfo). Correlate the response with the returned request ID and the mint you requested; the response does not echo the mint. Refresh while the view is active; the Acta web app uses 30 seconds.
-- **Indicative prices.** `getIndicativePrices({ market, position_type })` -> `indicativePrices` event. Available for `covered_call` and `cash_secured_put`. A spread or cash put request returns an `Error` with `spread_invalid_strikes`. Non-binding UI reference prices; the server refreshes roughly every 30s.
+- **Indicative prices.** `getIndicativePrices({ market, position_type, side })` -> `indicativePrices` event. Available for `covered_call` and `cash_secured_put`, per taker `side`: each strike's `price` is the median maker price (`{ type: "quoted", price }`, or `{ type: "none" }`), net of the protocol fee for `sell` and the gross price paid for `buy`. A spread or cash put request returns an `Error` with `spread_invalid_strikes`. Non-binding UI reference prices; the server refreshes roughly every 30s.
 - **Expiries.** `getExpiries({ underlying_mint, quote_mint, is_put })` takes `{ type: "all" }` or `{ type: "only", value }` for each filter.
-- **APR inputs.** Use spot and indicative premium from the same `TokenMarketsInfo` response. Suppress the preview when the price is unavailable or the indicative has `is_stale: true`. Clear cached metadata after a failed refresh or disconnect. Pyth credentials belong on the backend, not in browser code.
-- **APR and APY helper.** `computeApyFromScaledPrices({ underlyingAmount, grossPremiumPerUnit1e9, spotPrice1e9, secondsToExpiry })` from `@acta-markets/ts-sdk/ws` returns `{ premiumNotional, collateralNotional, termYield, apr, apy }`. `spotPrice1e9` is required: collateral is valued at spot for calls and puts. `computeApyFromAmounts({ underlyingAmount, premiumPerUnderlying, spotPrice, secondsToExpiry })` takes human units. For the market preview, pass backend `best_price` as `grossPremiumPerUnit1e9`: the backend applies the quote-mint fee adjustment when fee configuration is present. Do not subtract the fee a second time.
+- **APR inputs.** Use spot and indicative premium from the same `TokenMarketsInfo` response. Suppress the preview when the price is unavailable or the indicative `freshness` is not `fresh`. Clear cached metadata after a failed refresh or disconnect. Pyth credentials belong on the backend, not in browser code.
+- **APR and APY helper.** `computeApyFromScaledPrices({ underlyingAmount, grossPremiumPerUnit1e9, spotPrice1e9, secondsToExpiry })` from `@acta-markets/ts-sdk/ws` returns `{ premiumNotional, collateralNotional, termYield, apr, apy }`. `spotPrice1e9` is required: collateral is valued at spot for calls and puts. `computeApyFromAmounts({ underlyingAmount, premiumPerUnderlying, spotPrice, secondsToExpiry })` takes human units. For the market preview, pass the `sell` side `best_price` as `grossPremiumPerUnit1e9`: the backend already nets the protocol fee out of it. Do not subtract the fee a second time.
 - **Fill premium.** `totalPremiumQuoteAtoms(price, quantity, underlyingDecimals, quoteDecimals)` returns the gross premium in quote atoms as a `bigint`, rounded as the contract rounds it. The net premium is `total_premium` on the position row.
 - **Nonces.** `generateNonce()` from `@acta-markets/ts-sdk/ws` returns a fresh `bigint` nonce for signed orders.
 - **Program events.** `decodeActaEventsFromLogsScoped(logs, programId)` from `@acta-markets/ts-sdk` decodes only events emitted by that program.

@@ -19,7 +19,7 @@ Routes use the `/api/v1` prefix:
 
 Closed vaults drop out of list and detail but keep their history routes. Shares can move between wallets, so read current share balances over RPC.
 
-Paginate with the returned cursor. Fields and errors are in [Vault HTTP API](../reference/vault-http-api.md).
+Paginate with the returned cursor. Fields and errors are in [Vault HTTP API](../reference/http-api.md#vaults).
 
 ## Capital transactions
 
@@ -174,7 +174,7 @@ Do not sign a served transaction blind. The SDKs rebuild the expected instructio
 
 A swap's minimum output must meet your own floor (`min_output_floor` in Rust, `minOutputFloor` in TypeScript). This floor does not apply to the first `stage`, whose output is an intermediate asset. Each half still has its own minimum output and contract price-drift check.
 
-| | Rust (`acta-maker-sdk` 0.6.0, feature `vault`) | TypeScript (`@acta-markets/ts-sdk` 0.3.0) |
+| | Rust (`acta-maker-sdk` 0.10.0, feature `vault`) | TypeScript (`@acta-markets/ts-sdk` 0.7.0) |
 | --- | --- | --- |
 | Position open | `VaultOperatorClient::verify_and_sign_sponsored_tx` | `verifyAndSignSponsoredTx` from `/ws` |
 | Swap | `VaultOperatorClient::verify_and_sign_swap` | `verifyAndSignSwap` from `/ws` |

@@ -58,7 +58,7 @@ function solVault(overrides: Partial<Vault> = {}): Vault {
     accepting_deposits: true,
     equity: (1000n * SOL).toString(),
     total_shares: (1000n * SOL).toString(),
-    live_share_supply: (1000n * SOL).toString(),
+    balances: { type: "observed" as const, main: "0", second: "0", live_share_supply: (1000n * SOL).toString(), manager_stake_shares: "0", observed_at: "0", slot: "0" },
     ...overrides,
   });
 }
@@ -178,7 +178,7 @@ function renderModal(vault = solVault(), initialTab: "deposit" | "withdraw" = "d
   it("allows requesting the vault's last live shares", async () => {
     const user = userEvent.setup();
     env.depositor.data = position({ shareBalance: 900n * SOL });
-    renderModal(solVault({ live_share_supply: String(900n * SOL) }), "withdraw");
+    renderModal(solVault({ balances: { type: "observed" as const, main: "0", second: "0", live_share_supply: String(900n * SOL), manager_stake_shares: "0", observed_at: "0", slot: "0" } }), "withdraw");
     await user.click(screen.getByRole("button", { name: "MAX" }));
     expect(screen.getByText(LAST_SHARES_COPY)).toBeTruthy();
     expect(cta("Request withdrawal").disabled).toBe(false);

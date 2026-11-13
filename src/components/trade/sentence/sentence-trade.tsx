@@ -18,7 +18,7 @@ import { getRfqBackendUrl } from "@/lib/rfq-client";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { displayQuoteSymbol, getToken, getTokenMint } from "@/lib/tokens";
-import { grossFromIndicative1e9, previewFill, type TokenProtocolFees } from "@acta-markets/ts-sdk/ws";
+import { grossFromIndicative1e9, previewFill } from "@acta-markets/ts-sdk/ws";
 import { pickAsset, tradeAssets } from "@/lib/trade/assets";
 import { formatAmount, formatExpiryDay, formatTimeAway, formatUsdAmount } from "@/lib/trade/format";
 import {
@@ -229,15 +229,16 @@ export function SentenceTrade({
   const quoteDecimalsForPreview = snapshot ? Number(snapshot.quote_decimals) : 6;
   const preview = useMemo(() => {
     if (!strike || strike.bestPrice == null || quantity == null || quantity <= 0) return null;
-    const fees: TokenProtocolFees =
+    const fees =
       protocolFeesBySymbol?.get(quoteSymbol.trim().toUpperCase()) ??
-      protocolFeesBySymbol?.get("USDC") ??
-      { type: "none" };
+      protocolFeesBySymbol?.get("USDC");
+    // Without the quote token's fee config the preview would show a zero fee.
+    if (fees?.type !== "quote") return null;
     const terms = { type: info.positionType, strike: strike.strike1e9 };
     const indicative = BigInt(Math.round(strike.bestPrice));
-    // A sell indicative already has the fee taken out; previewFill wants the gross price.
-    const gross = side === "sell" ? grossFromIndicative1e9(indicative, "sell", terms, fees) : indicative;
     try {
+      // A sell indicative already has the fee taken out; previewFill wants the gross price.
+      const gross = side === "sell" ? grossFromIndicative1e9(indicative, "sell", terms, fees) : indicative;
       return previewFill({
         terms,
         side,

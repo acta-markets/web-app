@@ -358,7 +358,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       client.on("versionMismatch", rejectProtocol);
 
       client.on("welcome", (welcome) => {
-        serverClockOffsetMsRef.current = Number(welcome.server_time_unix_ms) - Date.now();
+        serverClockOffsetMsRef.current = Number(welcome.server_now_at_ms) - Date.now();
       });
 
       client.on("connected", () => {
@@ -577,7 +577,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
             updates[key] = {
               next_cursor: null,
               request_id: data.request_id,
-              market: mkt.market_pda as IndicativePricesMessage["market"],
+              market_pda: mkt.market_pda as IndicativePricesMessage["market_pda"],
               position_type: pt,
               side: ind.side,
               strikes: ind.strikes,
@@ -592,7 +592,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
       client.on("indicativePrices", (msg) => {
         setIndicativePrices(msg);
-        const key = getIndicativeKey(String(msg.market), msg.position_type as "covered_call" | "cash_secured_put", msg.side);
+        const key = getIndicativeKey(String(msg.market_pda), msg.position_type as "covered_call" | "cash_secured_put", msg.side);
         setIndicativePricesByKey((prev) => ({ ...prev, [key]: msg }));
       });
 
@@ -607,7 +607,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       client.on("quoteReceived", (quote) => {
         const pending = pendingRfqRef.current;
         if (!pending?.rfqId || quote.rfq_id !== pending.rfqId || !quoteMatchesProduct(quote, pending.identity, pending.rfq.side) || (pending.spread && !validSpreadPremium(pending.spread, quote.price))) return;
-        quotesRef.current.set(quote.maker, quote);
+        quotesRef.current.set(quote.maker_owner, quote);
         refreshBestQuote();
       });
       client.on("quotesUpdate", (update) => {
@@ -615,7 +615,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         if (!pending?.rfqId || update.rfq_id !== pending.rfqId) return;
         quotesRef.current.clear();
         for (const quote of update.quotes) {
-          if (quoteMatchesProduct(quote, pending.identity, pending.rfq.side) && (!pending.spread || validSpreadPremium(pending.spread, quote.price))) quotesRef.current.set(quote.maker, quote);
+          if (quoteMatchesProduct(quote, pending.identity, pending.rfq.side) && (!pending.spread || validSpreadPremium(pending.spread, quote.price))) quotesRef.current.set(quote.maker_owner, quote);
         }
         refreshBestQuote();
       });
@@ -853,7 +853,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     (market: string, positionType: "covered_call" | "cash_secured_put", side: TakerSide) => {
       prefetchedIndicativeKeysRef.current.add(getIndicativeKey(market, positionType, side));
       clientRef.current?.getIndicativePrices({
-        market: address(market),
+        market_pda: address(market),
         position_type: positionType,
         side,
       });
@@ -943,14 +943,14 @@ export function RfqProvider({ children }: RfqProviderProps) {
       }
       const side = params.side ?? "sell";
       const rfqRequest = {
-        market: params.market as any,
+        market_pda: params.market as any,
         terms: params.terms,
         side,
         quantity: params.quantity,
-        timeoutSeconds: params.timeoutSeconds ?? RFQ_TTL_SECONDS,
+        timeout_seconds: params.timeoutSeconds ?? RFQ_TTL_SECONDS,
       };
       console.log("[RfqProvider] Submitting RFQ:", rfqRequest);
-      const descriptor = marketDescriptors.find((d) => d.market?.market_pda === params.market);
+      const descriptor = marketDescriptors.find((d) => d.market_descriptor?.market_pda === params.market);
       if (!descriptor) {
         console.warn("[RfqProvider] Missing descriptor for market before RFQ; refreshing descriptors", {
           market: params.market,
@@ -959,14 +959,14 @@ export function RfqProvider({ children }: RfqProviderProps) {
         setError(new Error("Market metadata is still loading. Please retry in a moment."));
         return;
       }
-      if (!descriptor.products.includes(params.terms.type) || descriptor.market.is_put !== (params.terms.type === "cash_secured_put" || params.terms.type === "put_spread" || params.terms.type === "cash_put")) {
+      if (!descriptor.products.includes(params.terms.type) || descriptor.market_descriptor.is_put !== (params.terms.type === "cash_secured_put" || params.terms.type === "put_spread" || params.terms.type === "cash_put")) {
         setError(new Error("This product is not allowed for the selected market."));
         return;
       }
       let spread: ReturnType<typeof spreadTerms> | null = null;
       try {
-        if (params.terms.type === "cash_put") spread = spreadTerms("put_spread", 0, params.terms.strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market.underlying_mint));
-        if (isSpreadTerms(params.terms)) spread = spreadTerms(params.terms.type, params.terms.lower_strike, params.terms.upper_strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market.underlying_mint));
+        if (params.terms.type === "cash_put") spread = spreadTerms("put_spread", 0, params.terms.strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market_descriptor.underlying_mint));
+        if (isSpreadTerms(params.terms)) spread = spreadTerms(params.terms.type, params.terms.lower_strike, params.terms.upper_strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market_descriptor.underlying_mint));
       } catch (err) {
         setError(new Error(wsErrorMessage(err)));
         return;
@@ -979,15 +979,15 @@ export function RfqProvider({ children }: RfqProviderProps) {
         identity: params.terms,
         rfqId: null,
         rfq: isCashSettledTerms(params.terms) ? {
-          market: { ...descriptor.market, collateral_mint: descriptor.market.quote_mint, settlement_mint: descriptor.market.quote_mint },
+          market_descriptor: { ...descriptor.market_descriptor, collateral_mint: descriptor.market_descriptor.quote_mint, settlement_mint: descriptor.market_descriptor.quote_mint },
           terms: params.terms, side, quantity: params.quantity, order_options: [params.terms],
           underlying_decimals: descriptor.underlying_decimals, quote_decimals: descriptor.quote_decimals,
-        } : { market: descriptor.market, terms: params.terms, side, quantity: params.quantity, order_options: [params.terms] },
+        } : { market_descriptor: descriptor.market_descriptor, terms: params.terms, side, quantity: params.quantity, order_options: [params.terms] },
       };
       // The SDK owns the RFQ id: a lost reply is resent with the same id while the RFQ
       // could still be open, so a retry can never create a second RFQ.
       void client
-        .createRfqOnce({ ...rfqRequest, requestId })
+        .createRfqOnce({ ...rfqRequest, request_id: requestId })
         .then(({ created }) => {
           const pending = pendingRfqRef.current;
           if (pending?.requestId !== requestId) return;

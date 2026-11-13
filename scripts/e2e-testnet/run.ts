@@ -188,7 +188,7 @@ async function loadStrikes(
   client: ActaWsClient,
   descriptors: MarketDescriptorInfo[],
 ): Promise<{ referenceByMint: Map<string, number>; strikesByMarketType: Map<string, number[]> }> {
-  const mints = [...new Set(descriptors.map((d) => d.market.underlying_mint))];
+  const mints = [...new Set(descriptors.map((d) => d.market_descriptor.underlying_mint))];
   const referenceByMint = new Map<string, number>();
   const strikesByMarketType = new Map<string, number[]>();
   for (const mint of mints) {
@@ -329,12 +329,12 @@ class CaseRunner {
       this.client.on("requestError", onReqErr);
       this.client.on("disconnected", onDisc);
       this.client.createRfq({
-        market: address(descriptor.market.market_pda),
+        market_pda: address(descriptor.market_descriptor.market_pda),
         terms,
         side,
         quantity: spec.quantity,
-        timeoutSeconds,
-        requestId,
+        timeout_seconds: timeoutSeconds,
+        request_id: requestId,
       }).catch((e) => {
         // createRfq rejects on RequestError / not_connected / timeout.
         finish({ failure: { status: "BLOCKED", detail: classifyCreateError(e) } });
@@ -352,7 +352,7 @@ class CaseRunner {
     // Build the TakerFillRfq the fill is verified against.
     const rfq: TakerFillRfq = {
       rfq_id: quote.rfq_id,
-      market: descriptor.market,
+      market_descriptor: descriptor.market_descriptor,
       terms: { type: terms.type, strike: terms.strike },
       side,
       quantity: spec.quantity,
@@ -391,14 +391,14 @@ class CaseRunner {
     try {
       [keeper, makerVault] = await Promise.all([
         resolveKeeper(this.rpc),
-        fetchMakerVault(this.rpc, quote.maker),
+        fetchMakerVault(this.rpc, quote.maker_owner),
       ]);
     } catch (e) {
       return { status: "FAIL", detail: `chain read failed: ${(e as Error).message}` };
     }
 
     try {
-      await this.client.acceptQuote(quote.rfq_id, quote.maker, quote.order_id);
+      await this.client.acceptQuote(quote.rfq_id, quote.maker_owner, quote.order_id);
     } catch (e) {
       return { status: "FAIL", detail: `acceptQuote failed: ${wsError(e)}` };
     }
@@ -651,12 +651,12 @@ async function main() {
   // Build the case list.
   const cases: CaseSpec[] = [];
   for (const d of physical) {
-    const reference = referenceByMint.get(d.market.underlying_mint) ?? null;
+    const reference = referenceByMint.get(d.market_descriptor.underlying_mint) ?? null;
     const qty = Math.max(Number(d.size_rule.min_size ?? 0), Number(d.size_rule.step ?? 1)) || 1;
     const sym = d.underlying_symbol;
     if (args.underlying && sym.toUpperCase() !== args.underlying) continue;
     if (d.products.includes("covered_call")) {
-      const strikes = strikesByMarketType.get(`${d.market.market_pda}:covered_call`) ?? [];
+      const strikes = strikesByMarketType.get(`${d.market_descriptor.market_pda}:covered_call`) ?? [];
       const strike = pickStrike(strikes, reference);
       if (strike) {
         cases.push({ name: `sell_call  ${sym}`, descriptor: d, terms: { type: "covered_call", strike }, side: "sell", quantity: qty });
@@ -664,7 +664,7 @@ async function main() {
       }
     }
     if (d.products.includes("cash_secured_put")) {
-      const strikes = strikesByMarketType.get(`${d.market.market_pda}:cash_secured_put`) ?? [];
+      const strikes = strikesByMarketType.get(`${d.market_descriptor.market_pda}:cash_secured_put`) ?? [];
       const strike = pickStrike(strikes, reference);
       if (strike) {
         cases.push({ name: `sell_put   ${sym}`, descriptor: d, terms: { type: "cash_secured_put", strike }, side: "sell", quantity: qty });

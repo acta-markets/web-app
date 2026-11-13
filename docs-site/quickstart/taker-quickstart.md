@@ -6,7 +6,7 @@ The message catalogue is in [`../reference/taker-api.md`](../reference/taker-api
 
 A taker needs a Solana wallet keypair. There is no registration and no on-chain setup step: any wallet can open RFQs (rate-limited, and invite-gated on closed mainnet; see [Invite gating](#invite-gating-closed-mainnet)).
 
-The wire is closed. Every field is present on every frame, absent facts are `null`, and state-dependent shapes are tagged unions. The server rejects missing fields, unknown message types and unknown enum values.
+The wire is closed. Every field is present on every frame, absent facts are tagged unions (`null` only as `next_cursor` on the last page), and state-dependent shapes are tagged unions. The server rejects missing fields, unknown message types and unknown enum values.
 
 ---
 
@@ -35,7 +35,7 @@ The first message from the client is `Hello`. The server accepts only `protocol_
 
 `protocol_version`, `on_disconnect`, `client_name` and `client_version` are all required, and `Hello` accepts no other fields. `on_disconnect` is `cancel_quotes` or `keep_quotes`; it sets how a maker's quotes are handled on disconnect.
 
-The server responds with `Welcome`. `server_time_unix_ms` is for clock sync, and `min_quote_validity_seconds` and `settlement_buffer_seconds` are the venue's quote window. Taker auth is lazy: you may authenticate immediately or defer until the first authenticated action. Discovery (`GetMarkets`, `GetMarketDescriptors`, `GetTokenCaps`, `GetIndicativePrices` and others) works before auth; see "Authentication requirements" in [`../reference/taker-api.md`](../reference/taker-api.md).
+The server responds with `Welcome`. `server_now_at_ms` is for clock sync, and `min_quote_validity_seconds` and `settlement_buffer_seconds` are the venue's quote window. Taker auth is lazy: you may authenticate immediately or defer until the first authenticated action. Discovery (`GetMarkets`, `GetMarketDescriptors`, `GetTokenCaps`, `GetIndicativePrices` and others) works before auth; see "Authentication requirements" in [`../reference/taker-api.md`](../reference/taker-api.md).
 
 ### Fresh sign
 
@@ -64,7 +64,7 @@ Before signing, validate the complete challenge with the [canonical auth rules](
 }
 ```
 
-The signature is verified directly against `pubkey`. Auth must finish within 15 seconds of the challenge. The default allows three failed attempts and closes the connection on the fourth. On success the server sends `AuthSuccess { session_id, expires_at, maker_pda }` (`maker_pda` is `null` for a taker) followed by `Snapshot`.
+The signature is verified directly against `pubkey`. Auth must finish within 15 seconds of the challenge. The default allows three failed attempts and closes the connection on the fourth. On success the server sends `AuthSuccess { session_id, expires_at, role }` (`role` is `{ "type": "taker" }` for a taker) followed by `Snapshot`.
 
 ### Session resume
 
@@ -166,7 +166,7 @@ RfqRequest -> RfqCreated -> QuoteReceived (0..N) -> AcceptQuote
   "type": "RfqRequest",
   "data": {
     "request_id": "<uuid>",
-    "market": "<market PDA, base58>",
+    "market_pda": "<market PDA, base58>",
     "terms": { "type": "covered_call", "strike": 136000000000 },
     "side": "sell",
     "quantity": 1000000000,
@@ -175,7 +175,7 @@ RfqRequest -> RfqCreated -> QuoteReceived (0..N) -> AcceptQuote
 }
 ```
 
-`request_id` is required and is also the idempotency key: repeating a request with the same `request_id` while the RFQ is active returns the same `rfq_id`. The server answers with `CommandAccepted { request_id }` or `RequestError { request_id, error, delivery }`. On success it also sends `RfqCreated { rfq_id, rfq_version, terms, side, request_id, expires_at, created_at, order_options }`, before or after the receipt, and broadcasts the RFQ to eligible makers. `order_options` is the list of `terms` makers may quote. For a spread or cash put it holds exactly your `terms`. For a covered call or cash-secured put it is a strike ladder of the same product.
+`request_id` is required and is also the idempotency key: a repeat with the same `request_id` while the RFQ is open fails with `duplicate_rfq_id`, which proves the first attempt created it; after the RFQ closes the same id opens a new one. The server answers with `CommandAccepted { request_id }` or `RequestError { request_id, error, delivery }`. On success it also sends `RfqCreated { rfq_id, rfq_version, terms, side, request_id, expires_at, created_at, order_options }`, before or after the receipt, and broadcasts the RFQ to eligible makers. `order_options` is the list of `terms` makers may quote. For a spread or cash put it holds exactly your `terms`. For a covered call or cash-secured put it is a strike ladder of the same product.
 
 ### 2. Collect quotes
 
@@ -188,7 +188,7 @@ Makers stream `QuoteReceived`. Each quote is firm and hash-bound through `order_
     "rfq_id": "<uuid>",
     "terms": { "type": "covered_call", "strike": 136000000000 },
     "side": "sell",
-    "maker": "<maker owner pubkey, base58>",
+    "maker_owner": "<maker owner pubkey, base58>",
     "price": 50000000,
     "valid_until": 1710000350,
     "nonce": 42,
@@ -200,7 +200,7 @@ Makers stream `QuoteReceived`. Each quote is firm and hash-bound through `order_
 
 - `terms` is one of the RFQ's `order_options`.
 - `price` is the gross premium per underlying unit (`1e9` scale). Use it with `order_id` for all order operations.
-- `net_price` is `Price | null`. It is a display estimate after the protocol fee. It is `null` for spreads and cash puts, and when the server has no fee configuration. The authoritative net premium is computed on chain at open and appears as `total_premium` on the position row.
+- `net_price` is a display estimate after the protocol fee: what you receive on a sell, the gross price on a buy. The authoritative net premium is computed on chain at open and appears as `total_premium` on the position row.
 
 You pick the winner; the server's ranking is advisory. One quote fills the full quantity, with no partial fills.
 
@@ -211,7 +211,7 @@ Call spreads, put spreads and cash puts are cash-settled in the quote mint. A ca
 - Width `W` is `upper_strike - lower_strike` for a spread and `strike` for a cash put.
 - The taker posts collateral `C = ceil(W * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))` in quote atoms and receives the net premium.
 - The gross price `G` satisfies `0 < G < W`.
-- The protocol fee is `min(premium_fee, volume_fee)`. The volume fee applies to the exposure: the width notional for spreads and cash puts, the strike notional for physical products. Read `protocol_fee_bps_premium` and `protocol_fee_bps_volume` from `GET /api/v1/venue`.
+- The protocol fee is `min(premium_fee, volume_fee)`. The volume fee applies to the exposure: the width notional for spreads and cash puts, the strike notional for physical products. Read the quote token's `protocol_fees` (`premium_bps`, `volume_bps`) from `GET /api/v1/tokens`.
 - At expiry the maker receives `ceil(min(intrinsic, W) * quantity ...)` in quote atoms, capped at `C`, and the taker receives the rest. `intrinsic` is `max(S - lower_strike, 0)` for a call spread, `max(upper_strike - S, 0)` for a put spread and `max(strike - S, 0)` for a cash put, where `S` is the settlement price.
 
 Worked numbers are in [`../reference/taker-api.md`](../reference/taker-api.md#economics-of-spreads-and-cash-puts).
@@ -226,7 +226,7 @@ Name the winning quote by `order_id`:
   "data": {
     "request_id": "<uuid>",
     "rfq_id": "<uuid>",
-    "maker": "<maker owner pubkey, base58>",
+    "maker_owner": "<maker owner pubkey, base58>",
     "order_id": "0x<64 hex>"
   }
 }
@@ -241,7 +241,7 @@ The server locks the quote and builds a transaction to sign:
     "order_id": "0x<64 hex>",
     "tx_base64": "<base64 v0 VersionedTransaction>",
     "last_valid_block_height": 312456789,
-    "signature_deadline": 1710000040
+    "signature_deadline_at": 1710000040
   }
 }
 ```
@@ -252,7 +252,7 @@ The server locks the quote and builds a transaction to sign:
 2. Verify the transaction before signing (see below).
 3. Sign with the taker wallet key. Add the signature to slot 1. Do not touch slot 0, re-order accounts or change the message.
 4. Re-serialize the partially signed transaction and base64-encode it.
-5. Submit before `signature_deadline` (Unix seconds):
+5. Submit before `signature_deadline_at` (Unix seconds):
 
 ```json
 {
@@ -337,7 +337,7 @@ The server relays keeper progress:
 | Event | Meaning |
 |---|---|
 | `OrderAccepted` | Signed transaction accepted and queued for execution. An exact `AcceptQuote` retry may also receive it as a liveness ACK. It does not confirm chain execution. |
-| `OrderSubmitted` | Transaction sent to Solana. Carries `tx_signature`, `order_version`. |
+| `OrderSubmitted` | Transaction sent to Solana. Carries `transaction_signature`, `order_version`. |
 | `OrderConfirmed` | Position opened on chain. Carries `position_pda`, `order_version`. |
 | `OrderFailed` | Execution failed. Carries `reason`, `order_version`. |
 | `RfqClosed` | Terminal RFQ event. On a fill it follows `OrderConfirmed`. Drop per-RFQ state only here. |
@@ -373,7 +373,7 @@ Once open, the position's collateral is locked in its own escrow. There is no ma
 
 For a covered call or cash-secured put that is in the money, the maker supplies the settlement asset. If it remains unfunded, a permissionless liquidator can supply that asset and receive the corresponding collateral. Locked collateral does not guarantee a liquidation deadline: completion depends on someone providing the funding.
 
-A call spread, put spread or cash put goes from `open` straight to `settled`. Its `settlement` is `{ "type": "cash", "settlement_price", "holder_payoff", "writer_return" }` with amounts in quote atoms. A settled physical position has `{ "type": "physical", "settlement_price", "is_otm" }`.
+A call spread, put spread or cash put goes from `open` straight to `settled`. Its `settlement` is `{ "type": "cash", "settlement_price", "holder_payoff", "writer_return" }` with amounts in quote atoms. A settled physical position has `{ "type": "physical", "settlement_price", "is_otm", "holder", "writer" }`, each side `{ "collateral_atoms", "settlement_atoms" }` it received; an unfunded in-the-money buy has `{ "type": "not_exercised", "settlement_price" }`.
 
 Every position row carries `revision { slot, transaction_index, instruction_index }`, both decimals and `total_premium`, the net premium in quote atoms after the protocol fee. Track positions in two ways:
 
@@ -385,7 +385,7 @@ Every position row carries `revision { slot, transaction_index, instruction_inde
   "type": "GetPositions",
   "data": {
     "request_id": "<uuid>",
-    "market": {
+    "market_pda": {
       "type": "all"
     },
     "underlying_mint": {
@@ -431,7 +431,7 @@ Subscriptions do not persist across disconnects, and the server does not replay 
   "type": "GetPositions",
   "data": {
     "request_id": "<uuid>",
-    "market": {
+    "market_pda": {
       "type": "all"
     },
     "underlying_mint": {
@@ -469,10 +469,10 @@ The authenticated session proves wallet ownership; no separate signature is need
 
 | Topic | Value |
 |---|---|
-| Application `Ping` | Optional clock sample, for example every 30s. `Pong` carries `server_time_unix_ms`. Transport pongs maintain liveness; the default idle timeout is 90s. |
+| Application `Ping` | Optional clock sample, for example every 30s. `Pong` carries `server_now_at_ms`. Transport pongs maintain liveness; the default idle timeout is 90s. |
 | Server WebSocket ping | Every 30s. Raw clients must answer protocol pings. |
 | Reconnect backoff | Exponential with jitter, for example 1s initial, 30s cap, ±20%. |
-| Clock skew | Track `offset = server_time − local_time` from `Welcome` and `Pong`. Apply it to `expires_at` and `signature_deadline`. |
+| Clock skew | Track `offset = server_time − local_time` from `Welcome` and `Pong`. Apply it to `expires_at` and `signature_deadline_at`. |
 | Signature deadline | `min(now + 30s, quote effective_expiry, rfq.expires_at)`. Sign promptly after `AcceptQuote`. |
 | Rate limits | See [Rate limits and admission](../reference/ws-common.md#rate-limits-and-admission). `RateLimit` errors carry a reason code. |
 
@@ -485,7 +485,7 @@ The reference docs are the language-neutral wire spec. To build a taker client i
 1. An Ed25519 keypair and the ability to sign raw bytes (challenge auth and transaction signing).
 2. A Solana library that can deserialize, partially sign and re-serialize a v0 `VersionedTransaction`, for example `solders` or `solana-py` (Python), `solana-sdk` (Rust), `@solana/web3.js` (TypeScript). Or the raw-byte path above.
 3. A WebSocket client that answers protocol pings.
-4. A strict JSON codec for the closed wire: required fields, explicit `null`, tagged unions.
+4. A strict JSON codec for the closed wire: required fields and tagged unions; `null` only as `next_cursor` on the last page.
 
 The RFQ flow itself needs no RPC: markets, quotes, positions and the sponsored transaction arrive over WebSocket. An RPC read of the `GlobalConfig` account is needed only to learn the keeper address for transaction verification. Contact the Acta team for a Rust or Python starter if you are not on TypeScript.
 

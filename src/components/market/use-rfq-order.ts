@@ -561,7 +561,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
     let keeper: Address;
     try {
       [makerVault, keeper] = await Promise.all([
-        fetchMakerVault(rpc, quote.maker).catch(unreadable("the quote's maker")),
+        fetchMakerVault(rpc, quote.maker_owner).catch(unreadable("the quote's maker")),
         resolveKeeper(rpc).catch(unreadable("the sponsoring keeper")),
       ]);
     } catch (error) {
@@ -574,7 +574,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
     await sendAccept({
       orderId: quote.order_id,
       rfqId: quote.rfq_id,
-      maker: quote.maker,
+      maker: quote.maker_owner,
       originalSessionId: client?.getSessionId() ?? null,
     });
   }, [client, rpc, sendAccept, scope.walletAddress, stopPreparing, update]);

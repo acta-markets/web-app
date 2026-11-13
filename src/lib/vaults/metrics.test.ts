@@ -16,7 +16,7 @@ function cycle(overrides: Partial<VaultCycle> = {}): VaultCycle {
   return {
     cycle_number: "0",
     capital_generation: "0",
-    expiry: "0",
+    expiry_ts: "0",
     started_at: "0",
     finished_at: "100",
     share_price_start: "1000000000",

@@ -13,7 +13,7 @@ Placeholders such as `MarketPdaBase58` stand in for real base58 values in the ex
 
 The protocol version is `1.0.0`. The wire is closed:
 
-- Every field is present on every frame. A fact that is absent is an explicit `null`, for example `settlement_price: null` on a market that is not settled.
+- Every field is present on every frame. A fact that may be absent is a tagged union, for example `settlement: { "type": "pending" }` on a market that is not settled. `null` remains only for `next_cursor` on the last page.
 - State-dependent shapes are tagged unions (`terms`, `state`, `settlement`, `role`, query filters, cursors).
 - A client sends all required fields. The server rejects unknown message types, unknown enum values and missing fields.
 - Prices and strikes are `u64` with a `1e9` scale. Quantities are underlying atoms. Premiums and collateral are quote atoms. Timestamps are Unix seconds unless the field name ends in `_ms`.
@@ -61,14 +61,22 @@ Auth is one of:
     "protocol_version": "1.0.0",
     "server_version": "0.1.0",
     "min_supported_version": "1.0.0",
-    "server_time_unix_ms": 1710000000000,
+    "server_now_at_ms": 1710000000000,
     "min_quote_validity_seconds": 60,
-    "settlement_buffer_seconds": 50
+    "settlement_buffer_seconds": 50,
+    "rate_limits": {
+      "connection": { "type": "bucket", "per_second": 30, "burst": 60 },
+      "wallet": { "type": "bucket", "per_second": 50, "burst": 100 },
+      "rfqs": { "type": "bucket", "per_second": 10, "burst": 20 },
+      "quotes": { "type": "unlimited" },
+      "queries": { "type": "bucket", "per_second": 20, "burst": 40 },
+      "liquidity_provider": { "type": "not_applicable" }
+    }
   }
 }
 ```
 
-`min_quote_validity_seconds` and `settlement_buffer_seconds` are the venue's quote window, also served by `GET /api/v1/venue`.
+`min_quote_validity_seconds` and `settlement_buffer_seconds` are the venue's quote window, also served by `GET /api/v1/venue`. `rate_limits` are this connection's message budgets; see [Rate limits and admission](ws-common.md#rate-limits-and-admission).
 
 ### Connection policy defaults
 
@@ -137,12 +145,14 @@ Validate the challenge ([What to sign](ws-common.md#what-to-sign)), sign its UTF
   "data": {
     "session_id": "6d1f0c2a-9b7e-4a35-8c41-2e5f7a9b0d13",
     "expires_at": 1710086400,
-    "maker_pda": null
+    "role": {
+      "type": "taker"
+    }
   }
 }
 ```
 
-`expires_at` is the resume credential deadline in Unix seconds, not the lifetime of the authenticated socket. `maker_pda` is `null` for a taker. Persist `session_id` and `expires_at`.
+`expires_at` is the resume credential deadline in Unix seconds, not the lifetime of the authenticated socket. `role` is `{ "type": "taker" }` for a taker. Persist `session_id` and `expires_at`.
 
 ### AuthError
 
@@ -190,13 +200,18 @@ The server answers with `SubscribeAck { request_id, subscribed }`, where `subscr
     "markets": [
       {
         "pda": "MarketPdaBase58",
-        "underlying": "So11111111111111111111111111111111111111112",
-        "quote": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "underlying_mint": "So11111111111111111111111111111111111111112",
+        "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
         "expiry_ts": 1710600000,
         "is_put": false,
-        "products": ["covered_call", "call_spread"],
+        "products": [
+          "covered_call",
+          "call_spread"
+        ],
         "status": "active",
-        "settlement_price": null
+        "settlement": {
+          "type": "pending"
+        }
       }
     ]
   }
@@ -289,7 +304,7 @@ Spreads and cash puts are cash-settled in the quote mint. Their lifecycle is Ope
 - **Width** `W` is `upper_strike - lower_strike` for a spread and `strike` for a cash put.
 - **Collateral** `C = ceil(W * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))`, in quote atoms. The taker posts `C`.
 - **Gross price** `G` is per underlying unit, `1e9`-scaled, and satisfies `0 < G < W`. A maker quote outside that range is rejected with `spread_premium_invalid`, so a taker never receives one.
-- **Protocol fee** is `min(premium_fee, volume_fee)`. With `quote(x) = floor(x * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))`, `premium_fee` is `quote(G) - quote(G - floor(G * protocol_fee_bps_premium / 10000))`. `volume_fee` is `floor(quote(exposure) * protocol_fee_bps_volume / 10000)`, where `exposure` is `W` for spreads and cash puts and `strike` for physical products. Read both rates from `GET /api/v1/venue`.
+- **Protocol fee** is `min(premium_fee, volume_fee)`. With `quote(x) = floor(x * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))`, `premium_fee` is `quote(G) - quote(G - floor(G * protocol_fee_bps_premium / 10000))`. `volume_fee` is `floor(quote(exposure) * protocol_fee_bps_volume / 10000)`, where `exposure` is `W` for spreads and cash puts and `strike` for physical products. Read both rates from the quote token's `protocol_fees` in `GET /api/v1/tokens`.
 - **Net premium** is gross premium minus the fee, in quote atoms. The taker receives it at open. It is the `total_premium` of the position row.
 - **Roles.** The text below describes `side: "sell"`, where the taker writes. On `side: "buy"` the roles swap: the taker pays the gross premium, the maker locks `C` from custody, and at expiry the taker receives the payoff. `holder_payoff` and `writer_return` in the position row keep their chain roles, holder and writer, so on a buy the taker's payoff is `holder_payoff`.
 - **At expiry** the maker receives `ceil(min(intrinsic, W) * quantity ...)` in quote atoms, capped at `C`. The taker receives the rest of `C`. `intrinsic` is `max(settlement_price - lower_strike, 0)` for a call spread, `max(upper_strike - settlement_price, 0)` for a put spread, and `max(strike - settlement_price, 0)` for a cash put.
@@ -307,7 +322,7 @@ Example: put spread `(130, 140)`, 5 SOL (`quantity = 5000000000`), SOL has 9 dec
 | Settlement price `140` or above | maker `0`, taker `50000000` |
 | Settlement price `130` or below | maker `50000000`, taker `0` |
 
-The fee bps in the example are illustrative. `QuoteReceived.net_price` is `null` for spreads and cash puts; compute the net premium from the formulas above or read `total_premium` from the position row. `QuoteFilled` carries no fee or net fields.
+The fee bps in the example are illustrative. `QuoteReceived.net_price` shows the same per-unit result; the position's `total_premium` is the exact figure after rounding in quote atoms. `QuoteFilled` carries no fee or net fields.
 
 ---
 
@@ -320,7 +335,7 @@ The fee bps in the example are illustrative. `QuoteReceived.net_price` is `null`
   "type": "RfqRequest",
   "data": {
     "request_id": "7a4c4b3e-2f1d-4c55-9a51-4f0d0e2b6a42",
-    "market": "MarketPdaBase58",
+    "market_pda": "MarketPdaBase58",
     "terms": { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 },
     "side": "sell",
     "quantity": 5000000000,
@@ -329,7 +344,7 @@ The fee bps in the example are illustrative. `QuoteReceived.net_price` is `null`
 }
 ```
 
-`request_id` correlates the reply and is the idempotency key: repeating it returns the RFQ it created. The reply is exactly one `CommandAccepted { request_id }` or `RequestError { request_id, error, delivery }`; see [correlation semantics](ws-common.md#correlation-semantics). `quantity` is in underlying atoms for every product. `timeout_seconds` must be within the venue range `min_rfq_timeout_seconds` to `max_rfq_timeout_seconds`; a value outside it is rejected with `invalid_timeout`.
+`request_id` correlates the reply and becomes the RFQ id. While that RFQ is open, repeating the request is rejected with `duplicate_rfq_id`, which proves the first attempt created it; after it closes, the same id creates a new RFQ. `createRfqOnce` in the TypeScript SDK resends a lost reply only inside that window. The reply is exactly one `CommandAccepted { request_id }` or `RequestError { request_id, error, delivery }`; see [correlation semantics](ws-common.md#correlation-semantics). `quantity` is in underlying atoms for every product. `timeout_seconds` must be within the venue range `min_rfq_timeout_seconds` to `max_rfq_timeout_seconds`; a value outside it is rejected with `invalid_timeout`.
 
 A wallet taker's collateral is checked before broadcast. The wallet's token account must hold the full amount, or the RFQ is rejected with `insufficient_collateral`. If the server cannot read the balance, the RFQ goes ahead and an underfunded fill fails on chain:
 
@@ -367,7 +382,7 @@ The server accepted `RfqRequest`, `AcceptQuote` or `SubmitSignedSponsoredTx`. It
 }
 ```
 
-`terms` and `side` echo the RFQ. `request_id` is `null` for a notification not caused by this session's request. `order_options` is the list of `terms` that makers may quote, the same list makers receive in `RfqBroadcast.order_options`. For a spread or cash put it contains exactly the requested `terms`. For `covered_call` and `cash_secured_put` it is a server-computed strike ladder of the same product; the number of strikes depends on the market and the index price.
+`terms` and `side` echo the RFQ. `request_id` is the `request_id` of the `RfqRequest` that created the RFQ, equal to `rfq_id`. `order_options` is the list of `terms` that makers may quote, the same list makers receive in `RfqBroadcast.order_options`. For a spread or cash put it contains exactly the requested `terms`. For `covered_call` and `cash_secured_put` it is a server-computed strike ladder of the same product; the number of strikes depends on the market and the index price.
 
 ### QuoteReceived (server -> taker)
 
@@ -378,19 +393,19 @@ The server accepted `RfqRequest`, `AcceptQuote` or `SubmitSignedSponsoredTx`. It
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "terms": { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 },
     "side": "sell",
-    "maker": "MakerOwnerPubkeyBase58",
+    "maker_owner": "MakerOwnerPubkeyBase58",
     "price": 1200000000,
     "valid_until": 1710000350,
     "nonce": 42,
     "order_id": "0x1111111111111111111111111111111111111111111111111111111111111111",
-    "net_price": null
+    "net_price": 1194000000
   }
 }
 ```
 
 - `terms` is one of the RFQ's `order_options`.
 - `price` is the gross price from the maker. It is hash-bound through `order_id`; use it for `AcceptQuote` and all order operations.
-- `net_price` is `Price | null`, for display only. It is `null` for spreads and cash puts and when the server has no fee configuration. The contract computes the authoritative fee at open as `min(premium_fee, volume_fee)` after token-decimal scaling.
+- `net_price` is a `Price`, for display only: what the taker receives per unit on a sell, `price - min(premium_fee, volume_fee)` with the volume fee on the strike (physical products and cash puts) or the width (spreads), and the gross `price` on a buy. Without a fee configuration it equals `price`. The contract computes the authoritative fee at open after token-decimal scaling.
 
 ### QuotesUpdate (server -> taker)
 
@@ -406,7 +421,7 @@ The server sends the current executable quote snapshot to the RFQ owner whenever
         "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
         "terms": { "type": "covered_call", "strike": 160000000000 },
         "side": "sell",
-        "maker": "MakerOwnerPubkeyBase58",
+        "maker_owner": "MakerOwnerPubkeyBase58",
         "price": 50000000,
         "valid_until": 1710000350,
         "nonce": 42,
@@ -426,7 +441,7 @@ The server sends the current executable quote snapshot to the RFQ owner whenever
   "data": {
     "request_id": "0c9e1d52-6c0b-4f7e-b1a9-7d8f3c2e5a10",
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
-    "maker": "MakerOwnerPubkeyBase58",
+    "maker_owner": "MakerOwnerPubkeyBase58",
     "order_id": "0x1111111111111111111111111111111111111111111111111111111111111111"
   }
 }
@@ -455,12 +470,12 @@ Success has no `CommandAccepted`: the RFQ, active or awaiting your signature, cl
     "order_id": "0x1111111111111111111111111111111111111111111111111111111111111111",
     "tx_base64": "AQABAg...",
     "last_valid_block_height": 312456789,
-    "signature_deadline": 1710000040
+    "signature_deadline_at": 1710000040
   }
 }
 ```
 
-`tx_base64` is a v0 `VersionedTransaction` with two signature slots. The keeper (fee payer) is slot 0 and the taker is slot 1. The keeper fills slot 0 after you submit. `last_valid_block_height` is the block height the transaction's blockhash is valid through. `signature_deadline` is Unix seconds. Byte-level signing: [Taker quickstart](../quickstart/taker-quickstart.md#sponsored-transaction-raw-signing).
+`tx_base64` is a v0 `VersionedTransaction` with two signature slots. The keeper (fee payer) is slot 0 and the taker is slot 1. The keeper fills slot 0 after you submit. `last_valid_block_height` is the block height the transaction's blockhash is valid through. `signature_deadline_at` is Unix seconds. Byte-level signing: [Taker quickstart](../quickstart/taker-quickstart.md#sponsored-transaction-raw-signing).
 
 ### SubmitSignedSponsoredTx (taker -> server)
 
@@ -512,7 +527,7 @@ Sent when `SubmitSignedSponsoredTx` is accepted and queued for execution. It is 
 | `{ "type": "confirmed", "position_pda": "..." }` | Execution is confirmed; this is the resulting position. |
 | `{ "type": "unknown" }` | Available evidence cannot establish the outcome. This is not proof of nonexecution. |
 
-The response has no `order_version`, `rfq_id` or `tx_signature`. Lookup failures return a correlated `RequestError`. Neither an empty position list nor `unknown` authorizes replaying the order.
+The response has no `order_version`, `rfq_id` or `transaction_signature`. Lookup failures return a correlated `RequestError`. Neither an empty position list nor `unknown` authorizes replaying the order.
 
 `order_version` is on lifecycle pushes: accepted `1`, submitted `2`, failed `3`, confirmed `4`. A later chain confirmation can supersede a local failure.
 
@@ -523,7 +538,7 @@ The response has no `order_version`, `rfq_id` or `tx_signature`. Lookup failures
   "type": "OrderSubmitted",
   "data": {
     "order_id": "0x1111111111111111111111111111111111111111111111111111111111111111",
-    "tx_signature": "5eyk...base58sig",
+    "transaction_signature": "5eyk...base58sig",
     "order_version": 2
   }
 }
@@ -586,22 +601,28 @@ The keeper retries retryable submission failures within a five-attempt budget. E
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "rfq_version": 2,
     "reason": "filled",
-    "your_quote": null,
+    "your_quote": {
+      "type": "none"
+    },
     "winner": {
-      "maker": "MakerOwnerPubkeyBase58",
+      "type": "winner",
+      "maker_owner": "MakerOwnerPubkeyBase58",
       "price": 1200000000,
-      "tx_signature": "5eyk...base58sig"
+      "transaction": {
+        "type": "sent",
+        "signature": "5eyk...base58sig"
+      }
     },
     "closed_at": 1710000012
   }
 }
 ```
 
-`reason` is `expired`, `taker_cancelled`, `filled`, `market_expired`, `ladder_timeout` or `no_eligible_makers`. `no_eligible_makers` means no maker could receive the RFQ (none subscribed, or every one skipped for caps or custody), so the server closes it at once instead of at its timeout. `your_quote` is `null` or `{ order_id, status, price }`. `winner` is `null` or `{ maker, price, tx_signature }`, and `tx_signature` is itself `null` when the signature is not known.
+`reason` is `expired`, `taker_cancelled`, `filled`, `market_expired`, `no_eligible_makers` or `server_shutdown`. `no_eligible_makers` means no maker could receive the RFQ (none subscribed, or every one skipped for caps or custody), so the server closes it at once instead of at its timeout. `server_shutdown` means a graceful server stop closed the RFQ before its order reached the keeper; open a new RFQ after reconnecting. `your_quote` is `{ "type": "none" }` or `{ "type": "quoted", order_id, status, price }`. `winner` is `{ "type": "none" }` or `{ "type": "winner", maker_owner, price, transaction }`, where `transaction` is `{ "type": "pending" }` until the signature is known, then `{ "type": "sent", signature }`.
 
 ### Terminal semantics: OrderConfirmed vs RfqClosed
 
-- `OrderConfirmed` is the order-level confirmation: the selected order is confirmed on chain. It carries `position_pda` and `order_version`. `tx_signature` is delivered earlier, on `OrderSubmitted`.
+- `OrderConfirmed` is the order-level confirmation: the selected order is confirmed on chain. It carries `position_pda` and `order_version`. `transaction_signature` is delivered earlier, on `OrderSubmitted`.
 - `RfqClosed` is the terminal RFQ event. Treat the RFQ as closed for further quoting and accept actions.
 - On a fill, takers receive `OrderConfirmed` followed by `RfqClosed` in close succession.
 
@@ -620,7 +641,7 @@ Every filter is required. `[]` for `status` and `unbounded` for `min_expiry_ts` 
   "type": "GetPositions",
   "data": {
     "request_id": "f1b3d5e7-9a2c-4d84-8e6a-4b6c8d0e2f59",
-    "market": {
+    "market_pda": {
       "type": "all"
     },
     "underlying_mint": {
@@ -640,7 +661,7 @@ Every filter is required. `[]` for `status` and `unbounded` for `min_expiry_ts` 
 
 | Field | Values |
 |---|---|
-| `market`, `underlying_mint` | `{ "type": "all" }` or `{ "type": "only", "value": "<base58>" }` |
+| `market_pda`, `underlying_mint` | `{ "type": "all" }` or `{ "type": "only", "value": "<base58>" }` |
 | `status` | list of `open`, `funded`, `liquidated`, `settled`; `[]` means all statuses |
 | `min_expiry_ts` | `{ "type": "unbounded" }` or `{ "type": "bounded", "value": <unix seconds> }`; positions that expire before `value` are excluded |
 
@@ -693,10 +714,12 @@ Open put spread:
           "instruction_index": 2
         },
         "pda": "PositionPdaBase58",
-        "market": "MarketPdaBase58",
+        "market_pda": "MarketPdaBase58",
         "underlying_mint": "So11111111111111111111111111111111111111112",
+        "underlying_symbol": "SOL",
         "underlying_decimals": 9,
         "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "quote_symbol": "USDC",
         "quote_decimals": 6,
         "terms": {
           "type": "put_spread",
@@ -709,7 +732,12 @@ Open put spread:
         "price": 1200000000,
         "total_premium": 5970000,
         "created_at": 1710000012,
-        "expiry_ts": 1710600000
+        "expiry_ts": 1710600000,
+        "underlying_price": {
+          "type": "available",
+          "price": 136000000000,
+          "published_at": 1710300000
+        }
       }
     ],
     "next_cursor": null
@@ -721,14 +749,24 @@ Settled cash position (settlement price `133`), the same row after settlement:
 
 ```json
 {
-  "revision": { "slot": 312999000, "transaction_index": 3, "instruction_index": 1 },
+  "revision": {
+    "slot": 312999000,
+    "transaction_index": 3,
+    "instruction_index": 1
+  },
   "pda": "PositionPdaBase58",
-  "market": "MarketPdaBase58",
+  "market_pda": "MarketPdaBase58",
   "underlying_mint": "So11111111111111111111111111111111111111112",
+  "underlying_symbol": "SOL",
   "underlying_decimals": 9,
   "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "quote_symbol": "USDC",
   "quote_decimals": 6,
-  "terms": { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 },
+  "terms": {
+    "type": "put_spread",
+    "lower_strike": 130000000000,
+    "upper_strike": 140000000000
+  },
   "side": "sell",
   "state": "settled",
   "settlement": {
@@ -741,11 +779,14 @@ Settled cash position (settlement price `133`), the same row after settlement:
   "price": 1200000000,
   "total_premium": 5970000,
   "created_at": 1710000012,
-  "expiry_ts": 1710600000
+  "expiry_ts": 1710600000,
+  "underlying_price": {
+    "type": "unavailable"
+  }
 }
 ```
 
-A settled physical position carries `"settlement": { "type": "physical", "settlement_price": 150000000000, "is_otm": true }`.
+A settled physical position carries what each side received, in atoms. A funded 1 SOL covered call struck at 160 USDC that expired out of the money: `"settlement": { "type": "physical", "settlement_price": 150000000000, "is_otm": true, "holder": { "collateral_atoms": 0, "settlement_atoms": 160000000 }, "writer": { "collateral_atoms": 1000000000, "settlement_atoms": 0 } }`. The rules are in the [maker reference](maker-api.md).
 
 Field semantics:
 - `state`: `open`, `funded`, `liquidated` or `settled`. Only `settled` carries `settlement`.
@@ -753,6 +794,7 @@ Field semantics:
 - `price`: gross price per underlying unit, `1e9`-scaled.
 - `total_premium`: net premium in quote atoms after the protocol fee. It is the authoritative money figure.
 - `underlying_decimals`, `quote_decimals`: token decimals for converting `quantity` and `total_premium`.
+- `underlying_price`: `{ type: "available", price, published_at }` or `{ type: "unavailable" }`. `price` is the trusted oracle price of the underlying in the quote token, `1e9`-scaled, the one the server prices RFQs with; `published_at` is its publish time in unix seconds. Assets with trading sessions (TSLA, XAU) keep their last price and its old timestamp while the market is closed. `unavailable` means the server has no trusted price, for example after the market was finalized. With `terms` and `side` it gives the position's value if it settled now.
 - `revision`: the last applied lifecycle event in chain order. See below.
 - All amounts are unsigned `u64`.
 
@@ -765,14 +807,24 @@ The server pushes `PositionUpdated` to the session of the position's taker (and 
   "type": "PositionUpdated",
   "data": {
     "position": {
-      "revision": { "slot": 312999000, "transaction_index": 3, "instruction_index": 1 },
+      "revision": {
+        "slot": 312999000,
+        "transaction_index": 3,
+        "instruction_index": 1
+      },
       "pda": "PositionPdaBase58",
-      "market": "MarketPdaBase58",
+      "market_pda": "MarketPdaBase58",
       "underlying_mint": "So11111111111111111111111111111111111111112",
+      "underlying_symbol": "SOL",
       "underlying_decimals": 9,
       "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "quote_symbol": "USDC",
       "quote_decimals": 6,
-      "terms": { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 },
+      "terms": {
+        "type": "put_spread",
+        "lower_strike": 130000000000,
+        "upper_strike": 140000000000
+      },
       "side": "sell",
       "state": "settled",
       "settlement": {
@@ -785,7 +837,12 @@ The server pushes `PositionUpdated` to the session of the position's taker (and 
       "price": 1200000000,
       "total_premium": 5970000,
       "created_at": 1710000012,
-      "expiry_ts": 1710600000
+      "expiry_ts": 1710600000,
+      "underlying_price": {
+        "type": "available",
+        "price": 151000000000,
+        "published_at": 1710000010
+      }
     },
     "update_type": "settled"
   }
@@ -808,7 +865,7 @@ Uses [common paging](ws-common.md#paging).
     "rfqs": [
       {
         "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
-        "market": "MarketPdaBase58",
+        "market_pda": "MarketPdaBase58",
         "terms": {
           "type": "cash_secured_put",
           "strike": 136000000000
@@ -817,9 +874,14 @@ Uses [common paging](ws-common.md#paging).
         "quantity": 20000000,
         "expires_at": 1710000030,
         "state": "active",
-        "locked_order_id": null,
+        "lock": {
+          "type": "unlocked"
+        },
         "quotes_count": 3,
-        "best_price": 50000000
+        "best_price": {
+          "type": "quoted",
+          "price": 50000000
+        }
       }
     ],
     "next_cursor": null
@@ -827,7 +889,7 @@ Uses [common paging](ws-common.md#paging).
 }
 ```
 
-`state` is `active`, `pending_signature` or `enqueued`. `locked_order_id` is the order ID when the RFQ is locked on an order (`pending_signature` or `enqueued`), otherwise `null`. `best_price` is `null` when no quote exists. For `covered_call` and `cash_secured_put` it is the fee-adjusted display price; for spreads and cash puts it is the gross price.
+`state` is `active`, `pending_signature` or `enqueued`. `lock` is `{ "type": "locked", "order_id" }` when the RFQ is locked on an order (`pending_signature` or `enqueued`), otherwise `{ "type": "unlocked" }`. `best_price` is `{ "type": "quoted", "price" }`, or `{ "type": "none" }` when no quote exists. For `covered_call` and `cash_secured_put` it is the fee-adjusted display price; for spreads and cash puts it is the gross price.
 
 ### Position lifecycle (taker perspective)
 
@@ -855,7 +917,7 @@ A successful `ResumeAuth` completes the handoff before `AuthSuccess`: ownership 
 
 | Recovered state | Client action |
 |---|---|
-| Same credential, same `rfq_id` and `locked_order_id`, `pending_signature`, signature not sent | Repeat the exact `AcceptQuote` to retrieve the existing signing payload. While building it, the server may return `OrderAccepted`. Keep the original signature deadline. |
+| Same credential, same `rfq_id` and locked `order_id`, `pending_signature`, signature not sent | Repeat the exact `AcceptQuote` to retrieve the existing signing payload. While building it, the server may return `OrderAccepted`. Keep the original signature deadline. |
 | `enqueued`, or `SubmitSignedSponsoredTx` already sent | Reconcile execution with `GetOrderStatus`; do not resubmit or sign again automatically. |
 | `unknown`, missing RFQ/position, timeout or failed lookup | Keep the outcome unresolved. Missing evidence does not close the obligation. |
 
@@ -950,8 +1012,9 @@ Taker discovery requests. `request_id` is required on each.
   "type": "GetIndicativePrices",
   "data": {
     "request_id": "uuid",
-    "market": "MarketPdaBase58",
+    "market_pda": "MarketPdaBase58",
     "position_type": "covered_call",
+    "side": "sell",
     "limit": 200,
     "cursor": {
       "type": "start"
@@ -1260,7 +1323,7 @@ Uses [common paging](ws-common.md#paging).
     ],
     "markets": [
       {
-        "market_id": "MarketPdaBase58",
+        "market_pda": "MarketPdaBase58",
         "current_oi": 100000000000,
         "max_oi": 250000000000,
         "utilization": 0.4
@@ -1315,6 +1378,7 @@ All four arrays are always present and may be empty. Amounts are `u64`: underlyi
       "step": 100000000
     },
     "reference_price": 150000000000,
+    "session": { "type": "continuous" },
     "markets": [
       {
         "products": [
@@ -1327,12 +1391,18 @@ All four arrays are always present and may be empty. Amounts are `u64`: underlyi
         "indicatives": [
           {
             "position_type": "covered_call",
-            "updated_at": 1710000000,
-            "is_stale": false,
+            "side": "sell",
+            "freshness": {
+              "type": "fresh",
+              "updated_at": 1710000000
+            },
             "strikes": [
               {
                 "strike": 160000000000,
-                "best_price": 50000000
+                "price": {
+                  "type": "quoted",
+                  "price": 50000000
+                }
               }
             ]
           }
@@ -1344,17 +1414,17 @@ All four arrays are always present and may be empty. Amounts are `u64`: underlyi
 }
 ```
 
-`reference_price` is the backend-validated underlying/quote spot, `1e9`-scaled. `best_price` is `Price | null`: a non-binding indicative display premium per underlying unit, `1e9`-scaled, with the quote-mint fee adjustment applied when fee configuration is available. It is an estimate, not the exact on-chain net premium. Size-rule quantities are underlying atoms. Examples illustrate units, not current prices or limits.
+`reference_price` is the backend-validated underlying/quote spot, `1e9`-scaled. `session` says whether the underlying's price feed trades now: `continuous` (around the clock), `open { closes_at }`, `closed { opens_at }` (Unix seconds), `closed_indefinitely` (no session in the next two weeks) or `unknown` (Pyth publishes no schedule for the feed, or it is not loaded yet). Outside a session `reference_price` and the oracle are the last published price, and RFQs still price against it. `indicatives` has one entry per `position_type` and taker `side` with data. each strike's `price` is `{ "type": "quoted", "price" }` with the median of the makers' non-binding indicative premiums per underlying unit, `1e9`-scaled, as the taker sees it. For `side: "sell"` it is net of the protocol fee (what the writer receives); for `side: "buy"` it is the gross price the buyer pays. It is an estimate, not an executable quote. Size-rule quantities are underlying atoms. Examples illustrate units, not current prices or limits.
 
-The response does not echo `underlying_mint`; keep it with the request ID. Use spot and premiums from the same response for an APR estimate, and suppress the estimate when the indicative is stale or missing. `updated_at` and `is_stale` describe the maker indicative premiums, not the oracle spot. The response has no oracle publish timestamp, confidence or age.
+The response does not echo `underlying_mint`; keep it with the request ID. Use spot and premiums from the same response for an APR estimate, and suppress the estimate when the indicative is stale or missing. `freshness` describes the maker indicative premiums, not the oracle spot: `{ "type": "no_data" }` before any maker answered, otherwise `fresh` or `stale` with `updated_at` (Unix seconds). The response has no oracle publish timestamp, confidence or age.
 
 The backend owns Pyth/Hermes access and price validation. A browser does not need a Pyth key. This endpoint supplies a current snapshot, not historical chart data or a binding execution quote.
 
-**Failure behavior:** missing size rules, incomplete metadata or unavailable oracle prices can return an uncorrelated `Error` (including `OraclePriceNotReady`). When there are no active markets for the underlying, the handler sends no response. Apply a request deadline, show unavailable data, and discard stale responses by request ID. Do not read silence as an empty snapshot. This endpoint is an exception to correlated query-error handling.
+**Failure behavior:** missing size rules, incomplete metadata or unavailable oracle prices return `RequestError` with the request's `request_id` (for example `OraclePriceNotReady`). An underlying without active markets returns `RequestError` with `market_not_found`. Show unavailable data and discard stale responses by request ID.
 
 ## Indicative prices
 
-Indicative prices exist for `covered_call` and `cash_secured_put` only. `GetIndicativePrices` with `call_spread`, `put_spread` or `cash_put` returns an uncorrelated `Error` with `spread_invalid_strikes`, because a spread price depends on both strikes the taker selects. A product that is not enabled for the pair returns `product_not_allowed`.
+Indicative prices exist for `covered_call` and `cash_secured_put` only, per taker `side`. `price` is the median of maker indicatives per strike: net of the protocol fee for `sell`, the gross price paid for `buy`; `{ "type": "none" }` when no maker priced the strike. `GetIndicativePrices` with `call_spread`, `put_spread` or `cash_put` returns `RequestError` with `spread_invalid_strikes`, because a spread price depends on both strikes the taker selects. A product that is not enabled for the pair returns `product_not_allowed`.
 
 ### GetIndicativePrices (taker -> server)
 
@@ -1365,8 +1435,9 @@ Uses [common paging](ws-common.md#paging).
   "type": "GetIndicativePrices",
   "data": {
     "request_id": "uuid",
-    "market": "MarketPdaBase58",
+    "market_pda": "MarketPdaBase58",
     "position_type": "covered_call",
+    "side": "sell",
     "limit": 200,
     "cursor": {
       "type": "start"
@@ -1384,18 +1455,26 @@ Uses [common paging](ws-common.md#paging).
   "type": "IndicativePrices",
   "data": {
     "request_id": "uuid",
-    "market": "MarketPdaBase58",
+    "market_pda": "MarketPdaBase58",
     "position_type": "covered_call",
-    "updated_at": 1710000000,
-    "is_stale": false,
+    "side": "sell",
+    "freshness": {
+      "type": "fresh",
+      "updated_at": 1710000000
+    },
     "strikes": [
       {
         "strike": 450000000000,
-        "best_price": 5000000
+        "price": {
+          "type": "quoted",
+          "price": 5000000
+        }
       },
       {
         "strike": 460000000000,
-        "best_price": null
+        "price": {
+          "type": "none"
+        }
       }
     ],
     "next_cursor": null
@@ -1477,13 +1556,13 @@ Field semantics:
 Delivered when subscribed to the channel.
 
 ```json
-{ "type": "TradeExecuted", "data": { "trade": { "id": "uuid", "market": "MarketPdaBase58", "terms": { "type": "covered_call", "strike": 136000000000 }, "side": "sell", "quantity": 5000000000, "price": 50000000, "taker": "TakerPubkeyBase58", "maker": "MakerOwnerPubkeyBase58", "tx_signature": "5eyk...base58sig", "executed_at": 1710000012 } } }
+{ "type": "TradeExecuted", "data": { "trade": { "id": "uuid", "market_pda": "MarketPdaBase58", "terms": { "type": "covered_call", "strike": 136000000000 }, "side": "sell", "quantity": 5000000000, "price": 50000000, "taker_owner": "TakerPubkeyBase58", "maker_pda": "MakerPdaBase58", "transaction_signature": "5eyk...base58sig", "executed_at": 1710000012 } } }
 ```
 
 `TradeExecuted` is a best-effort live hint. Merge it with authoritative history by `trade.id`; do not derive counts from frame counts.
 
 ```json
-{ "type": "ChainEvent", "data": { "event_type": "PositionSettled", "signature": "5eyk...base58sig", "instruction_index": 2, "slot": 312999000, "position": "PositionPdaBase58" } }
+{ "type": "ChainEvent", "data": { "event_type": "PositionSettled", "signature": "5eyk...base58sig", "instruction_index": 2, "slot": 312999000, "position_pda": "PositionPdaBase58" } }
 ```
 
 `event_type` is `PositionOpened`, `MarketCreated`, `MarketFinalized`, `MakerRegistered`, `PositionSettled` or `PositionLiquidated`. A chain event is identified by `(signature, instruction_index)`.
@@ -1492,7 +1571,7 @@ Delivered when subscribed to the channel.
 { "type": "MarketFinalized", "data": { "market_pda": "MarketPdaBase58", "settlement_price": 133000000000 } }
 ```
 
-`MarketCreated` carries a [`MarketInfo`](ws-common.md#marketinfo) as `data`. `StatsUpdate` carries `{ "stats": GlobalStats }` with `usd` (`null` or `{ notional_24h, premium_24h, priced_trades_24h }`), `total_volume_24h`, `total_trades_24h`, `spread_trades_24h`, `total_price_24h`, `active_markets`, `active_makers` and `active_rfqs`.
+`MarketCreated` carries a [`MarketInfo`](ws-common.md#marketinfo) as `data`. `StatsUpdate` carries `{ "stats": GlobalStats }` with `usd` (`{ "type": "unavailable" }` or `{ "type": "available", notional_24h, premium_24h, priced_trades_24h }`), `total_volume_24h`, `total_trades_24h`, `spread_trades_24h`, `total_price_24h`, `active_markets`, `active_makers` and `active_rfqs`.
 
 ---
 
@@ -1536,13 +1615,19 @@ Two error message types: `Error` (connection-level) and `RequestError` (request-
   "type": "RequestError",
   "data": {
     "request_id": "1e3a5c7e-9b0d-4f26-8a4c-6e8a0c2e4f93",
-    "error": { "type": "Generic", "data": { "code": "invalid_quantity_size_rule", "message": "quantity violates min/max/step" } },
-    "delivery": null
+    "error": {
+      "type": "Generic",
+      "data": {
+        "code": "invalid_quantity_size_rule",
+        "message": "quantity violates min/max/step"
+      }
+    },
+    "delivery": "not_applicable"
   }
 }
 ```
 
-`delivery` is `null` except for `SubmitSignedSponsoredTx` and `SwapSubmit` failures, where it is `not_forwarded` or `unknown`.
+`delivery` is `not_applicable` except for `SubmitSignedSponsoredTx` and `SwapSubmit` failures, where it is `not_forwarded` or `unknown`.
 
 Parsing rule for taker integrations:
 

@@ -16,7 +16,7 @@ function descriptor({
 }) {
   return {
     products,
-    market: { market_pda: pda, is_put: isPut, expiry_ts: expiry },
+    market_descriptor: { market_pda: pda, is_put: isPut, expiry_ts: expiry },
   } as any;
 }
 
