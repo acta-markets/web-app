@@ -17,7 +17,7 @@ const DEC5 = Math.floor(Date.UTC(2026, 11, 5, 8, 0, 0) / 1000);
 function pos(over: Record<string, unknown> = {}): PositionInfo {
   return {
     pda: "p1",
-    market: "m1",
+    market_pda: "m1",
     underlying_mint: "sol-mint",
     underlying_decimals: 9,
     quote_mint: "usdc-mint",
@@ -140,7 +140,7 @@ describe("PositionsTable", () => {
   });
 
   it("surfaces a deposit action for a bought position that can still be exercised", () => {
-    const buy = pos({ side: "buy", market: "m1", expiry_ts: NOV28 });
+    const buy = pos({ side: "buy", market_pda: "m1", expiry_ts: NOV28 });
     const rows = buildPositionRows([buy], () => "SOL", (NOV28 - 3600) * 1000);
     const deposit = { pending: null, funded: new Set<string>(), deposit: vi.fn() };
     render(<PositionsTable rows={rows} nowMs={(NOV28 - 3600) * 1000} grouped={false} deposit={deposit} />);
@@ -148,13 +148,13 @@ describe("PositionsTable", () => {
   });
 
   it("hides the deposit action without a deposit handler", () => {
-    const buy = pos({ side: "buy", market: "m1", expiry_ts: NOV28 });
+    const buy = pos({ side: "buy", market_pda: "m1", expiry_ts: NOV28 });
     render(<PositionsTable rows={buildPositionRows([buy], () => "SOL", (NOV28 - 3600) * 1000)} nowMs={(NOV28 - 3600) * 1000} grouped={false} />);
     expect(screen.queryByRole("button", { name: /^Fund/ })).toBeNull();
   });
 
   it("explains the Fund action with the deposit amount, deadline and consequence", () => {
-    const buy = pos({ side: "buy", market: "m1", expiry_ts: NOV28 });
+    const buy = pos({ side: "buy", market_pda: "m1", expiry_ts: NOV28 });
     const deposit = { pending: null, funded: new Set<string>(), deposit: vi.fn() };
     render(
       <PositionsTable
@@ -176,7 +176,7 @@ describe("PositionsTable", () => {
   });
 
   it("names the underlying units as the deposit for a bought put", () => {
-    const put = pos({ side: "buy", market: "m1", expiry_ts: NOV28, terms: { type: "cash_secured_put", strike: 150e9 } });
+    const put = pos({ side: "buy", market_pda: "m1", expiry_ts: NOV28, terms: { type: "cash_secured_put", strike: 150e9 } });
     const deposit = { pending: null, funded: new Set<string>(), deposit: vi.fn() };
     render(
       <PositionsTable
@@ -207,7 +207,7 @@ describe("PositionsTable", () => {
   });
 
   it("does not surface the funding tooltip for an already-funded position", () => {
-    const buy = pos({ side: "buy", market: "m1", expiry_ts: NOV28 });
+    const buy = pos({ side: "buy", market_pda: "m1", expiry_ts: NOV28 });
     const deposit = { pending: null, funded: new Set<string>(["p1"]), deposit: vi.fn() };
     render(
       <PositionsTable

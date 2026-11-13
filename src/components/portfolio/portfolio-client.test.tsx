@@ -16,7 +16,7 @@ vi.mock("@/lib/trade/buy-deposit", () => ({ buildBuyDepositInstructions: mocks.b
 vi.mock("@/lib/vaults/transaction", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/vaults/transaction")>(), sendWalletTransaction: mocks.sendTx }));
 
 function position(pda: string, created_at: number, spread = false): PositionInfo {
-  return { pda, market: "market", underlying_mint: TOKENS.SOL.mint[getNetwork()], quote_mint: TOKENS.USDC.mint[getNetwork()], underlying_decimals: 9, quote_decimals: 6,
+  return { pda, market_pda: "market", underlying_mint: TOKENS.SOL.mint[getNetwork()], quote_mint: TOKENS.USDC.mint[getNetwork()], underlying_decimals: 9, quote_decimals: 6,
     terms: spread ? { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 } : { type: "covered_call", strike: 150e9 },
     state: "settled", created_at, expiry_ts: created_at + 86400, quantity: 1e9, price: 1e9, total_premium: 2e6,
     settlement: spread ? { type: "cash", settlement_price: 110e9, holder_payoff: 10e6, writer_return: 10e6 } : { type: "physical", is_otm: true },
@@ -116,7 +116,7 @@ describe("Bought options", () => {
   const nowSec = () => Math.floor(Date.now() / 1000);
   const usd = formatUsdSmart;
   const bought = (over: Record<string, unknown>) => ({
-    ...position("bought", nowSec() - 100), side: "buy", state: "open", market: "m1", expiry_ts: nowSec() + 3600,
+    ...position("bought", nowSec() - 100), side: "buy", state: "open", market_pda: "m1", expiry_ts: nowSec() + 3600,
     terms: { type: "covered_call", strike: 150e9 }, quantity: 2e9, price: 5e9, total_premium: 9e6, settlement: undefined, ...over,
   }) as unknown as PositionInfo;
   async function show(live: PositionInfo[]) {

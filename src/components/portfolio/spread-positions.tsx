@@ -56,7 +56,7 @@ export type SpreadRowView = {
 export function spreadRowView(position: PositionInfo, descriptors: MarketDescriptorInfo[]): SpreadRowView | null {
   const terms = executionTerms(position.terms);
   if (!isSpreadTerms(terms)) return null;
-  const amounts = spreadPositionAmounts(position, descriptors.find(d => d.market.market_pda === position.market));
+  const amounts = spreadPositionAmounts(position, descriptors.find(d => d.market_descriptor.market_pda === position.market_pda));
   const symbol = amounts?.symbol ?? null;
   const cash = (value: bigint | null, signed = false) => value == null || !amounts
     ? NONE

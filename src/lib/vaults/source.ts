@@ -83,7 +83,7 @@ export async function loadVaultDepositorHistory(
     const page = await fetchVaultDepositorHistory(pda, wallet, { limit: HISTORY_PAGE_LIMIT, cursor }, signal);
     events.push(...page.events);
     const oldest = page.events.at(-1);
-    cursor = oldest && BigInt(oldest.event_time) <= since ? undefined : page.next_cursor ?? undefined;
+    cursor = oldest && BigInt(oldest.occurred_at) <= since ? undefined : page.next_cursor ?? undefined;
   } while (cursor);
   return events;
 }

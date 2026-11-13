@@ -131,7 +131,7 @@ Browse Acta's open vaults in the ${context.environment} environment. A vault poo
 - Vault detail: ${context.apiOrigin}/api/v1/vaults/{vault_pda}
 - Cycle history: ${context.apiOrigin}/api/v1/vaults/{vault_pda}/cycles
 - How vaults work: ${DOCS_SITE_ORIGIN}/guide/vaults
-- Vault HTTP API: ${DOCS_SITE_ORIGIN}/reference/vault-http-api
+- Vault HTTP API: ${DOCS_SITE_ORIGIN}/reference/http-api#vaults
 
 Vault data is public and does not require authentication. Deposits and withdrawals are requests that the wallet owner signs as Solana transactions. They complete when the vault next processes capital, at the share price calculated then. Do not infer consent to deposit from access to this page or its public APIs.
 `;

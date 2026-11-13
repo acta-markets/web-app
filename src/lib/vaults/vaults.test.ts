@@ -25,9 +25,25 @@ function vault(overrides: Partial<Vault> = {}): Vault {
     share_mint: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
     total_shares: "1000000",
     equity: "1000000",
-    capital_fallback_delay_secs: "3600",
+    capital_fallback_delay_seconds: "3600",
     ...overrides,
   });
+}
+
+/** The HTTP shape of a view vault: the fields `view.ts` unpacks, as the server sends them. */
+function wire(view: Vault) {
+  const {
+    deposit_window_set_at: _window, created_at: _created, generation_started_at: _started, tvl_usd_1e9: _tvl,
+    price_published_at: _priced, premium: _premium, fees: _fees, depositors_in_generation: _depositors,
+    performance: _performance, metadata: _metadata, ...rest
+  } = view;
+  return {
+    ...rest,
+    deposit_window: { type: "unset" },
+    tvl_usd: { type: "unpriced" },
+    stats: { type: "not_indexed" },
+    metadata: { type: "none" },
+  };
 }
 
 describe("vault math", () => {
@@ -54,7 +70,7 @@ describe("vault api", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("calls the configured backend through the SDK client", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ vaults: [vault()], next_cursor: null }), { status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ vaults: [wire(vault())], next_cursor: null }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(fetchVaults()).resolves.toHaveLength(1);
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/api\/v1\/vaults\?.*limit=200/);

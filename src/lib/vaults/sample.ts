@@ -43,7 +43,7 @@ export function makeVault(overrides: Partial<Vault> = {}): Vault {
     phase: "idle",
     safety: "normal",
     capabilities: 0,
-    active_expiry: "0",
+    active_expiry_ts: "0",
     open_positions: "0",
     total_shares: "0",
     share_price: PRICE_SCALE.toString(),
@@ -59,26 +59,21 @@ export function makeVault(overrides: Partial<Vault> = {}): Vault {
     management_fee_bps: 200,
     manager_stake_min_bps: 100,
     share_price_hwm: PRICE_SCALE.toString(),
-    last_hwm_update_ts: "0",
-    last_hwm_reset_ts: "0",
-    last_settlement_ts: "0",
+    last_hwm_update_at: "0",
+    last_hwm_reset_at: "0",
+    last_settlement_at: "0",
     capacity: { type: "unlimited" },
-    capital_fallback_delay_secs: "43200",
-    deposit_window_set_ts: null,
-    main_balance: null,
-    second_balance: null,
-    balance_updated_at: null,
-    live_share_supply: null,
-    observed_manager_stake_shares: null,
-    balance_chain_slot: null,
-    staging: null,
+    capital_fallback_delay_seconds: "43200",
+    deposit_window_set_at: null,
+    balances: { type: "unobserved" },
+    staging: { type: "none" },
     staged_generation: "0",
     policy: { max_open_positions: 4, max_rebalance_drift_bps: 100, min_main_liquidity_bps: 1000 },
     projection: { version: "1", slot: "1", transaction_index: 0, signature: "1".repeat(88), event_index: 0 },
     created_at: null,
     generation_started_at: null,
     tvl_usd_1e9: null,
-    price_time: null,
+    price_published_at: null,
     premium: null,
     fees: null,
     depositors_in_generation: null,
@@ -202,7 +197,7 @@ function shiftedPerformance(performance: VaultPerformance | null, shift: number)
   const returns = { ...performance.returns };
   for (const w of WINDOWS) {
     const r = returns[w];
-    if (r) returns[w] = { ...r, from_time: shifted(r.from_time, shift), to_time: shifted(r.to_time, shift) };
+    if (r) returns[w] = { ...r, window_start_at: shifted(r.window_start_at, shift), window_end_at: shifted(r.window_end_at, shift) };
   }
   return { ...performance, computed_at: shifted(performance.computed_at, shift), returns };
 }
@@ -223,22 +218,22 @@ export function parseSampleData(file: unknown, nowSecs: number): SampleData {
     const v = entry.vault;
     data.vaults.push({
       ...v,
-      active_expiry: shifted(v.active_expiry, shift),
-      last_hwm_update_ts: shifted(v.last_hwm_update_ts, shift),
-      last_hwm_reset_ts: shifted(v.last_hwm_reset_ts, shift),
-      last_settlement_ts: shifted(v.last_settlement_ts, shift),
-      deposit_window_set_ts: shiftedOrNull(v.deposit_window_set_ts, shift),
-      balance_updated_at: shiftedOrNull(v.balance_updated_at, shift),
+      active_expiry_ts: shifted(v.active_expiry_ts, shift),
+      last_hwm_update_at: shifted(v.last_hwm_update_at, shift),
+      last_hwm_reset_at: shifted(v.last_hwm_reset_at, shift),
+      last_settlement_at: shifted(v.last_settlement_at, shift),
+      deposit_window_set_at: shiftedOrNull(v.deposit_window_set_at, shift),
+      balances: v.balances.type === "observed" ? { ...v.balances, observed_at: shifted(v.balances.observed_at, shift) } : v.balances,
       created_at: shiftedOrNull(v.created_at, shift),
       generation_started_at: shiftedOrNull(v.generation_started_at, shift),
-      price_time: shiftedOrNull(v.price_time, shift),
+      price_published_at: shiftedOrNull(v.price_published_at, shift),
       performance: shiftedPerformance(v.performance, shift),
     });
     data.meta[pda] = entry.meta;
     data.keys[entry.key] = pda;
     data.cycles[pda] = entry.cycles.map((c) => ({
       ...c,
-      expiry: shifted(c.expiry, shift),
+      expiry_ts: shifted(c.expiry_ts, shift),
       started_at: shifted(c.started_at, shift),
       finished_at: shiftedOrNull(c.finished_at, shift),
     }));
@@ -246,10 +241,10 @@ export function parseSampleData(file: unknown, nowSecs: number): SampleData {
     data.exposure[pda] = {
       ...x,
       as_of: shifted(x.as_of, shift),
-      positions: x.positions.map((p) => ({ ...p, expiry: shifted(p.expiry, shift), spot_time: shiftedOrNull(p.spot_time, shift) })),
+      positions: x.positions.map((p) => ({ ...p, expiry_ts: shifted(p.expiry_ts, shift), spot_published_at: shiftedOrNull(p.spot_published_at, shift) })),
     };
     const p = entry.position;
-    data.history[pda] = p.history.map((e) => ({ ...e, event_time: shifted(e.event_time, shift) }));
+    data.history[pda] = p.history.map((e) => ({ ...e, occurred_at: shifted(e.occurred_at, shift) }));
     data.depositors[pda] = {
       shareBalance: amount(p.shareBalance, where),
       mainTokenBalance: amount(p.mainTokenBalance, where),

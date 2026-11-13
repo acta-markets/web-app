@@ -26,7 +26,7 @@ beforeEach(() => localStorage.clear());
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 const quote = {
-  rfq_id: "rfq", order_id: "order", maker: "maker", side: "sell", terms: { type: "covered_call", strike: 1_000_000_000 },
+  rfq_id: "rfq", order_id: "order", maker_owner: "maker", side: "sell", terms: { type: "covered_call", strike: 1_000_000_000 },
   price: 1_000_000_000, valid_until: 9999999999, nonce: 1n,
 } as QuoteReceivedMessage;
 const preview: RfqOrderPreview = {

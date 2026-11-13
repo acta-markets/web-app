@@ -13,9 +13,9 @@ export function descriptorSupportsCashProduct(
   product: CashSettledProduct,
   nowMs = Date.now(),
 ) {
-  const expiryTs = Number(descriptor.market.expiry_ts);
+  const expiryTs = Number(descriptor.market_descriptor.expiry_ts);
   return Number.isFinite(expiryTs)
     && expiryTs * 1000 > nowMs
-    && descriptor.market.is_put === isPutProduct(product)
+    && descriptor.market_descriptor.is_put === isPutProduct(product)
     && descriptor.products.includes(product);
 }

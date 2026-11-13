@@ -95,6 +95,7 @@ beforeEach(() => {
     connectionState: "connected", isAuthenticated: false, referralStatus: "unknown",
     bestQuote: null, error: null, submitRfq: vi.fn(), cancelRfq: vi.fn(), openReferralGate: vi.fn(),
     marketDescriptors: [],
+    protocolFeesBySymbol: new Map([["USDC", { type: "quote", premium_bps: 0, volume_bps: 0 }]]),
   };
 });
 afterEach(() => {

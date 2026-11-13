@@ -81,8 +81,8 @@ export function useVaultOperator(
   );
 
   const clock =
-    vault?.deposit_window_set_ts != null
-      ? flows.windowClock(vault.accepting_deposits, Number(vault.deposit_window_set_ts) * 1000, Date.now())
+    vault?.deposit_window_set_at != null
+      ? flows.windowClock(vault.accepting_deposits, Number(vault.deposit_window_set_at) * 1000, Date.now())
       : { openForMs: null, closedForMs: null };
   const nextStep = vault && role ? flows.nextCapitalStep(vault, clock, policy) : null;
 

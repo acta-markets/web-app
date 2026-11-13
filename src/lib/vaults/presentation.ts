@@ -12,6 +12,7 @@ import type {
   VaultPremiumFlow,
   VaultSafety,
 } from "./types";
+import { liveShareSupply } from "./view";
 
 export type AprSource = { label: "Staking" | "Premium"; pct: number };
 
@@ -51,9 +52,9 @@ export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0
   }
   const all = performance?.returns.all ?? null;
   const young =
-    performance?.covered === true && (all === null || Number(performance.computed_at) - Number(all.from_time) < APY_WINDOW_SECS);
+    performance?.covered === true && (all === null || Number(performance.computed_at) - Number(all.window_start_at) < APY_WINDOW_SECS);
   if (!young) return { value: NONE, muted: true, sources: [], note: "Not available." };
-  const days = all === null ? 0 : (Number(all.to_time) - Number(all.from_time)) / 86_400;
+  const days = all === null ? 0 : (Number(all.window_end_at) - Number(all.window_start_at)) / 86_400;
   if (all === null || days < PROJECTED_MIN_DAYS) {
     return { value: "New", muted: true, sources: staking, note: "Projected APY shows after 20 days of history." };
   }
@@ -70,7 +71,7 @@ export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0
 export function vaultReturn(performance: VaultPerformance | null): { value: string; since: number | null } {
   const all = performance?.returns.all ?? null;
   if (all === null) return { value: NONE, since: null };
-  return { value: formatPercent(all.return_pct, { signed: true }), since: Number(all.from_time) };
+  return { value: formatPercent(all.return_pct, { signed: true }), since: Number(all.window_start_at) };
 }
 
 const WIND_DOWN: ReadonlySet<VaultSafety> = new Set<VaultSafety>(["closing", "withdraw_only", "emergency_unwind"]);
@@ -166,7 +167,7 @@ export function mintUnits(vault: Pick<Vault, "main_mint" | "main_decimals" | "se
 /** "1,250 USDC from SOL": an open staging slot, part of a leg parked in another mint mid-swap. */
 export function stagingText(vault: Vault): string | null {
   const staging = vault.staging;
-  if (!staging) return null;
+  if (staging.type === "none") return null;
   const leg = mintUnits(vault, staging.from_leg === "main" ? vault.main_mint : vault.second_mint);
   const units = mintUnits(vault, staging.mint);
   const held = units
@@ -220,7 +221,7 @@ function formatStrike(atoms: bigint) {
 /** Leg bounds: spreads pay between the two strikes, `lower` starts paying a call spread and `upper` a put spread. */
 function legBounds(position: VaultPosition) {
   const lower = BigInt(position.strike);
-  return { lower, upper: position.product.kind === "spread" ? BigInt(position.product.upper_strike) : lower };
+  return { lower, upper: position.product.type === "spread" ? BigInt(position.product.upper_strike) : lower };
 }
 
 /** Strike at which the leg starts paying, in strike units. */
@@ -261,9 +262,9 @@ function formatSigned(amount: bigint, decimals: number) {
 
 /** `positions` adds what `/exposure` lacks for cash products: the second strike and the premium. */
 export function exposureRows(exposure: VaultExposure, positions: readonly VaultPosition[] = []): ExposureRow[] {
-  const byPda = new Map(positions.map((position) => [position.position, position]));
+  const byPda = new Map(positions.map((position) => [position.position_pda, position]));
   return exposure.positions.map((p) => {
-    const position = byPda.get(p.position) ?? null;
+    const position = byPda.get(p.position_pda) ?? null;
     const spot = p.spot === null ? null : BigInt(p.spot);
     const trigger = position ? triggerStrike(position) : BigInt(p.strike);
     const isCall = p.position_type === "covered_call" || p.position_type === "call_spread";
@@ -275,11 +276,11 @@ export function exposureRows(exposure: VaultExposure, positions: readonly VaultP
     const pnlAtoms = spot === null || !position ? null : pnlAtSpot(p, position, spot);
     const strike = p.position_type === "cash_put"
       ? `0 / ${formatStrike(BigInt(p.strike))}`
-      : position?.product.kind === "spread"
+      : position?.product.type === "spread"
         ? `${formatStrike(BigInt(position.strike))} / ${formatStrike(BigInt(position.product.upper_strike))}`
         : formatStrike(BigInt(p.strike));
     return {
-      position: p.position,
+      position: p.position_pda,
       type: EXPOSURE_TYPE[p.position_type],
       role: p.role === "writer" ? "Sold" : "Bought",
       strike,
@@ -409,7 +410,7 @@ export function vaultStatus(vault: Vault, nowSecs: number): VaultStatusView {
   const block = flows.requestDepositBlock(vault, nowSecs);
   if (block === null) {
     return vault.phase === "active"
-      ? { label: "Accepting deposits", tone: "open", detail: `Cycle ends ${formatDate(Number(vault.active_expiry))}` }
+      ? { label: "Accepting deposits", tone: "open", detail: `Cycle ends ${formatDate(Number(vault.active_expiry_ts))}` }
       : { label: "Accepting deposits", tone: "open" };
   }
   if (block === "cutoff" || vault.phase === "settling") return { label: "Settling", tone: "neutral" };
@@ -509,8 +510,8 @@ export type SelfProcessView =
 
 /** When anyone, not just the manager, may process a request (the contract's fallback delay). */
 function publicProcessingAt(vault: Vault, createdAt: bigint): number {
-  const delay = Number(vault.capital_fallback_delay_secs);
-  return vault.phase === "processing_capital" ? Number(vault.active_expiry) + delay : Number(createdAt) + delay;
+  const delay = Number(vault.capital_fallback_delay_seconds);
+  return vault.phase === "processing_capital" ? Number(vault.active_expiry_ts) + delay : Number(createdAt) + delay;
 }
 
 export function depositSelfProcessView(vault: Vault, createdAt: bigint, nowSecs: number): SelfProcessView {
@@ -536,16 +537,16 @@ export function withdrawSelfProcessView(vault: Vault, createdAt: bigint, nowSecs
     const idle = flows.processIdleWithdrawalBlock(vault, createdAt, nowSecs);
     if (idle === null) return { kind: "available", label: "Process my withdrawal" };
     if (idle === "authority") {
-      return { kind: "waiting", availableAt: Number(createdAt) + Number(vault.capital_fallback_delay_secs) };
+      return { kind: "waiting", availableAt: Number(createdAt) + Number(vault.capital_fallback_delay_seconds) };
     }
   }
   return { kind: "hidden" };
 }
 
 /** The contract reads the live mint supply for the final withdrawal. */
-export function isLastSharesWithdrawal(vault: Pick<Vault, "live_share_supply" | "total_shares">, shares: bigint): boolean {
+export function isLastSharesWithdrawal(vault: Pick<Vault, "balances" | "total_shares">, shares: bigint): boolean {
   if (shares <= 0n) return false;
-  return shares >= BigInt(vault.live_share_supply ?? vault.total_shares);
+  return shares >= BigInt(liveShareSupply(vault));
 }
 
 /** The binding deposit cap, or null when deposits are uncapped (a u64::MAX cap counts as none). */

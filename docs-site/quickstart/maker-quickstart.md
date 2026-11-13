@@ -2,7 +2,7 @@
 
 JSON-layer path for a maker connection: auth, subscribe, quote, handle fills, reconnect. Rust integrations should start with [`maker-rust-sdk.md`](maker-rust-sdk.md). Payload examples are in [`maker-wire-examples.md`](maker-wire-examples.md); onboarding is in [`../reference/sandbox.md`](../reference/sandbox.md); units and envelopes are in [`../reference/ws-common.md`](../reference/ws-common.md); the message catalogue is in [`../reference/maker-api.md`](../reference/maker-api.md).
 
-The wire is closed. Every field is present on every frame, absent facts are explicit `null`, and state-dependent shapes are tagged unions. Unknown message types, error codes, enum values and missing fields are rejected, by the server and by your decoder.
+The wire is closed. Every field is present on every frame, absent facts are tagged unions (`null` only as `next_cursor` on the last page), and state-dependent shapes are tagged unions. Unknown message types, error codes, enum values and missing fields are rejected, by the server and by your decoder.
 
 ---
 
@@ -26,7 +26,7 @@ The first message from the client is `Hello`. All four fields are required.
 - `on_disconnect` sets what happens to this connection's quotes when it ends. With `cancel_quotes`, the engine cancels the session's active and retained non-winning quotes. With `keep_quotes`, resting quotes stay live while the maker is offline. Selected and executing orders survive both.
 - There is no feature negotiation. `QuoteExpired` events are always sent.
 
-The server responds with `Welcome` (`server_time_unix_ms` is for clock sync), then `AuthRequest` with a challenge string. Validate the entire [canonical auth challenge](../reference/ws-common.md#what-to-sign) before invoking your signer. Then sign its original UTF-8 bytes with `quote_signing`, base58-encode the signature, and reply with `AuthChallenge`:
+The server responds with `Welcome` (`server_now_at_ms` is for clock sync), then `AuthRequest` with a challenge string. Validate the entire [canonical auth challenge](../reference/ws-common.md#what-to-sign) before invoking your signer. Then sign its original UTF-8 bytes with `quote_signing`, base58-encode the signature, and reply with `AuthChallenge`:
 
 ```json
 {
@@ -86,14 +86,14 @@ Details: [Products and terms](../reference/maker-api.md#products-and-terms).
 
 ## Quoting
 
-Units: `rfq.quantity` (and `size_rule`, `QuoteFilled.quantity`) is in underlying atoms; strikes and `price` are 1e9-scaled per underlying token, independent of decimals. Decimals are not in `RfqBroadcast`: read `underlying_decimals` and `quote_decimals` from `GetMarketDescriptors` and cache them by `market.market_pda`. The gross premium (before protocol fees) in quote atoms is `floor(price * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))`, the contract's rounding.
+Units: `rfq.quantity` (and `size_rule`, `QuoteFilled.quantity`) is in underlying atoms; strikes and `price` are 1e9-scaled per underlying token, independent of decimals. Decimals are not in `RfqBroadcast`: read `underlying_decimals` and `quote_decimals` from `GetMarketDescriptors` and cache them by `market_descriptor.market_pda`. The gross premium (before protocol fees) in quote atoms is `floor(price * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))`, the contract's rounding.
 
 On `RfqBroadcast`, first verify the [market PDA and terms](../reference/maker-api.md#quote-flow) against your configured Acta program. The program ID is the same on devnet and mainnet; `GET /api/v1/venue` returns it as `program_id`. Then choose the terms to quote:
 
 - Covered call and cash-secured put: the strike of `rfq.terms` or of an entry in `rfq.order_options`.
 - Spread and cash put: exactly `rfq.terms`.
 
-Compute the premium, set `now + min_quote_validity_seconds <= valid_until <= market.expiry_ts` (read `min_quote_validity_seconds` from `GET /api/v1/venue` at startup; do not hardcode it) and keep `valid_until − settlement_buffer_seconds` after now. Build the [order preimage](../reference/maker-api.md#order-id-preimage): 182 bytes for covered calls and cash-secured puts, 190 bytes for spreads and cash puts. Its `maker` field is the `maker_owner` pubkey. Check your builder against the [test vectors](../reference/maker-api.md#test-vectors). Hash it to `order_id`, sign the 32-byte hash with `quote_signing`, and send `Quote`:
+Compute the premium, set `now + min_quote_validity_seconds <= valid_until <= market_descriptor.expiry_ts` (read `min_quote_validity_seconds` from `GET /api/v1/venue` at startup; do not hardcode it) and keep `valid_until − settlement_buffer_seconds` after now. Build the [order preimage](../reference/maker-api.md#order-id-preimage): 182 bytes for covered calls and cash-secured puts, 190 bytes for spreads and cash puts. Its `maker` field is the `maker_owner` pubkey. Check your builder against the [test vectors](../reference/maker-api.md#test-vectors). Hash it to `order_id`, sign the 32-byte hash with `quote_signing`, and send `Quote`:
 
 ```json
 {
@@ -131,7 +131,7 @@ A spread quote repeats the RFQ's two strikes:
 
 Spread and cash-put prices must satisfy `0 < price < width`, where `width` is `upper_strike − lower_strike` (`strike` for a cash put). The gross premium in quote atoms must be positive and below the collateral `C = ceil(width * quantity * 10^quote_decimals / (1e9 * 10^underlying_decimals))`. Otherwise the quote is rejected with `spread_premium_invalid`. For the 100/120 call spread above with 1 SOL (`quantity` 1000000000, 9 and 6 decimals), `C` is 20000000 and the gross premium is 5000000.
 
-The protocol fee is `min(premium fee, volume fee)`. The venue publishes `protocol_fee_bps_premium` and `protocol_fee_bps_volume` on `GET /api/v1/venue`. The formulas are under [Cash settlement and fees](../reference/maker-api.md#cash-settlement-and-fees). The authoritative net premium for a fill is `total_premium` on its position row. The maker's cost is the gross premium, and the fee is that cost minus `total_premium`.
+The protocol fee is `min(premium fee, volume fee)`. Each quote token publishes its fees as `protocol_fees` (`premium_bps`, `volume_bps`) on `GET /api/v1/tokens`. The formulas are under [Cash settlement and fees](../reference/maker-api.md#cash-settlement-and-fees). The authoritative net premium for a fill is `total_premium` on its position row. The maker's cost is the gross premium, and the fee is that cost minus `total_premium`.
 
 When an RFQ permits several strikes, each strike requires a distinct quote. Prefer `BatchQuotes` for several strikes or RFQs: one frame and one `BatchQuotesAck` instead of one message per quote. Each quote requires its own `order_id` and `nonce`. A new quote on the same `(rfq_id, terms)` replaces the prior quote for that pair.
 
@@ -147,15 +147,16 @@ Lifecycle events are keyed by `order_id`. `RfqClosed` is the terminal event for 
 
 | Event | Description |
 |---|---|
-| `QuoteAcknowledged` | Server accepted the quote. `replaced_order_id` is set on a replace and `null` otherwise. |
+| `QuoteAcknowledged` | Server accepted the quote. `replaced` is `{ "type": "replaced", "order_id" }` on a replace and `{ "type": "none" }` otherwise. |
 | `QuoteRejected` | Server refused the quote; see `reason`. |
 | `QuoteBestStatus` | Quote is currently the best in the book. |
 | `QuoteOutbid` | Quote has been displaced by a better one. |
 | `QuoteRefreshRequested` | Settlement-buffer cutoff is approaching; resubmit with `valid_until ≥ min_valid_until` before the cutoff. Identified by `(rfq_id, terms)`. `reason` is `expired` or `expiring_soon`. |
 | `QuoteSelected` | Quote locked; awaiting the taker signature. |
-| `QuoteFilled` | Position opened on-chain. Carries `position_pda`, `tx_signature`, `terms` and `side`. It has no fee or net-premium field. |
+| `QuoteFilled` | Position opened on-chain. Carries `position_pda`, `transaction_signature`, `terms` and `side`. It has no fee or net-premium field. |
 | `QuoteCancelled` | Terminal. `reason` ∈ {`requested`, `risk_check`, `rfq_accepted`, `maker_disconnected`}. |
 | `QuoteExpired` | Always sent when a quote expires. `reason` ∈ {`expired`, `expiring_soon`}. |
+| `RfqLocked` | Another maker's quote was accepted. Yours stays as a backup; do not re-quote until `RfqAvailableAgain`. |
 | `RfqAvailableAgain` | Settlement reverted; the auction has reopened. The maker may re-quote with a fresh `order_id`. |
 | `RfqClosed` | Terminal RFQ event. Drop per-RFQ state. |
 
@@ -172,15 +173,16 @@ You do **not** settle or liquidate. Publishing the settlement price and finalizi
 
 ## Indicative pricing
 
-When indicative pricing is enabled on the server, a connected `/maker` session subscribed to `rfqs` with matching mint filters may receive `IndicativePricesRequest` for covered calls or cash-secured puts. There is no separate enrollment. `/maker/data` does not receive these requests. Prices are non-binding; reply with `IndicativePricesResponse` using the request ID:
+When indicative pricing is enabled on the server, a connected `/maker` session subscribed to `rfqs` with matching mint filters may receive `IndicativePricesRequest` for covered calls or cash-secured puts, once per taker side (`buy` only with a `taker_buy_rfqs` subscription). There is no separate enrollment. `/maker/data` does not receive these requests. Prices are non-binding; reply with `IndicativePricesResponse` using the request ID and the request's `side`:
 
 ```json
 {
   "type": "IndicativePricesResponse",
   "data": {
     "request_id": "<from request>",
-    "market": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
+    "market_pda": "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi",
     "position_type": "covered_call",
+    "side": "sell",
     "prices": [
       { "strike": 150000000000, "price": 4500000000 },
       { "strike": 160000000000, "price": 5000000000 }
@@ -192,6 +194,8 @@ When indicative pricing is enabled on the server, a connected `/maker` session s
 ## Reconnection
 
 With `on_disconnect: "cancel_quotes"`, the engine removes the connection's active and retained non-winning quotes on disconnect; selected/executing obligations survive. With `keep_quotes`, resting quotes can remain fillable while offline. Resume restores server subscriptions; fresh auth requires restoring them. The server does not replay events missed during the disconnect window. Events already in flight can arrive again after recovery, so process lifecycle events idempotently by `order_id`.
+
+A graceful server stop first drains, then closes every RFQ whose order has not reached the keeper with `RfqClosed { reason: "server_shutdown" }`; your quotes on it report `your_quote.status = "cancelled"`. An order already forwarded for execution is not closed and can still land on chain. After a crash nothing is closed: the engine starts empty and no RFQ, resting quote or selection survives. In both cases treat the restart as a disconnect: reconnect, run the recovery below, and let step 5 settle every order you had selected before counting its collateral free.
 
 Recover in this order after reauthentication. Use `/maker/data` for the data reads and `/maker` for the quote plane.
 
@@ -278,7 +282,7 @@ See [common paging](../reference/ws-common.md#paging). History reads run newest 
   "type": "GetMakerPositions",
   "data": {
     "request_id": "a1b2c3d4-0000-4000-8000-000000000011",
-    "market": {
+    "market_pda": {
       "type": "all"
     },
     "underlying_mint": {
@@ -374,7 +378,7 @@ Discovery returns tradable markets only (non-finalized, non-disabled, before the
 
 | Topic | Recommendation |
 |---|---|
-| Application Ping | Approximately every 30 seconds. Each `Pong` carries an updated `server_time_unix_ms`. |
+| Application Ping | Approximately every 30 seconds. Each `Pong` carries an updated `server_now_at_ms`. |
 | Reconnect backoff | Exponential with jitter, e.g. 250 ms initial, 5 s cap, ±20%. |
 | `valid_until` margin | `rfq.expires_at + min_quote_validity_seconds` plus a little slack, capped at `market.expiry_ts`, with `min_quote_validity_seconds` from `GET /api/v1/venue`. Values below `now + min_quote_validity_seconds` or after market expiry are rejected; going far beyond the auction plus the settlement buffer only widens the maker's exposure window. |
 | Clock skew | Track `offset = server_time − local_time` from `Welcome` and `Pong`. Apply when computing `valid_until`. |

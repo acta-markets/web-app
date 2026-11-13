@@ -5,7 +5,7 @@ import {
   flows,
   resolveVaultPriceSection,
 } from "@acta-markets/ts-sdk/chain";
-import type { VaultDepositRequest, VaultWithdrawRequest } from "@acta-markets/ts-sdk/http";
+import type { VaultDepositRequest, VaultWithdrawRequest } from "./types";
 import { VaultDelegatePermission, hasVaultPermission } from "@acta-markets/ts-sdk/ws";
 import {
   address,
@@ -78,10 +78,10 @@ async function collectPages<T>(
 }
 
 export const fetchAllVaultDepositRequests = (pda: string, signal?: AbortSignal): Promise<VaultDepositRequest[]> =>
-  collectPages((cursor) => fetchVaultDepositRequests(pda, { cursor, limit: 100 }, signal));
+  collectPages((cursor) => fetchVaultDepositRequests(pda, { cursor, limit: 200 }, signal));
 
 export const fetchAllVaultWithdrawRequests = (pda: string, signal?: AbortSignal): Promise<VaultWithdrawRequest[]> =>
-  collectPages((cursor) => fetchVaultWithdrawRequests(pda, { cursor, limit: 100 }, signal));
+  collectPages((cursor) => fetchVaultWithdrawRequests(pda, { cursor, limit: 200 }, signal));
 
 const COMPUTE_BUDGET_PROGRAM_ID = address("ComputeBudget111111111111111111111111111111");
 

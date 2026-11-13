@@ -66,10 +66,12 @@ There is no order book. The taker drives a sealed auction, makers stream signed 
 - Makers reply with signed `Quote`s. Each quote is a `(terms, side, price, valid_until)` against the fixed request. Makers cannot quote partial size or change the terms.
 - The taker selects the winner by sending `AcceptQuote { maker, order_id }`. Whatever `order_id` the taker names wins. The server's "best price" (`QuoteBestStatus` / `QuoteOutbid`) is advisory only and never selects the winner.
 - Winner-take-all: one quote is locked for the full RFQ quantity. No partial fills, no multiple winners. Every live quote reserves full capacity against caps (open interest, notional, position count) for its validity window; the reservation is released on cancel, expiry, or rejection, and converts into position exposure on fill. See [caps.md](caps.md#how-quotes-consume-capacity).
-- A maker's live quote is keyed by `(rfq_id, terms)`. A new quote with the same key replaces the previous one, and `QuoteAcknowledged.replaced_order_id` names it.
+- A maker's live quote is keyed by `(rfq_id, terms)`. A new quote with the same key replaces the previous one, and `QuoteAcknowledged.replaced` names it.
 - The advisory "best" ranking (used only for `QuoteBestStatus` / `best_price`) is: higher premium wins, ties broken by earlier `received_at`, then by smaller `order_id`.
 
-Indicative pricing: after connecting, makers may receive `IndicativePricesRequest` and reply with non-binding reference prices per strike. Takers see these while browsing, before opening an RFQ.
+Indicative pricing: after connecting, makers may receive `IndicativePricesRequest`, one per taker side, and reply with non-binding reference prices per strike. Takers see the median per strike while browsing, before opening an RFQ.
+
+When the taker accepts a quote, the other makers on the RFQ receive `RfqLocked`. Their quotes stay as backups: a failed signature reopens the RFQ with `RfqAvailableAgain`.
 
 ## Trade lifecycle
 
@@ -192,7 +194,7 @@ fee_total   = min(premium_fee, volume_fee)
 net_premium = gross_premium - fee_total
 ```
 
-The taker receives `net_premium`; `Position.total_premium` and the wire field `total_premium` hold the same net value in quote atoms. The maker pays `gross_premium`, so its cost is `scaled_quote_amount(price, quantity)` and the fee is that cost minus `total_premium`. `protocol_fee_bps_premium` and `protocol_fee_bps_volume` are on-chain config set by governance (each ≤ 10000 bps) and are published by `GET /api/v1/venue`. `net_price` in WS payloads is a display estimate only; for accounting use the formula above or `total_premium`.
+The taker receives `net_premium`; `Position.total_premium` and the wire field `total_premium` hold the same net value in quote atoms. The maker pays `gross_premium`, so its cost is `scaled_quote_amount(price, quantity)` and the fee is that cost minus `total_premium`. `protocol_fee_bps_premium` and `protocol_fee_bps_volume` are on-chain config of each quote token, set by governance (each ≤ 10000 bps), and are published as the token's `protocol_fees` by `GET /api/v1/tokens`. `net_price` in WS payloads is a display estimate only; for accounting use the formula above or `total_premium`.
 
 ### Spread payoff
 
@@ -216,7 +218,7 @@ After expiry the hot wallet publishes one scalar price per oracle account (one f
 settlement_price = floor(underlying_price * PRICE_SCALE / quote_price)
 ```
 
-`FinalizeMarket` needs both oracle prices published at or after expiry. The market stores `settlement_price`, which the market rows return as `null` until then. Settlement prices are determined as described in [Settlement fixing](#settlement-fixing).
+`FinalizeMarket` needs both oracle prices published at or after expiry. The market stores `settlement_price`, which the market rows return as `settlement: { "type": "pending" }` until then. Settlement prices are determined as described in [Settlement fixing](#settlement-fixing).
 
 At-the-money counts as OTM.
 
@@ -326,8 +328,8 @@ Events worth tracking end to end:
 
 | Event | When |
 | --- | --- |
-| `QuoteFilled` / `OrderConfirmed` | Position opened on chain; carries `position_pda` and `tx_signature`. `QuoteFilled` has no fee or net-premium fields; read the money from the position row. |
-| `RfqClosed` | Auction closed; on a fill, `winner = { maker, price, tx_signature }`. |
+| `QuoteFilled` / `OrderConfirmed` | Position opened on chain; both carry `position_pda`, and `QuoteFilled` also `transaction_signature`. `QuoteFilled` has no fee or net-premium fields; read the money from the position row. |
+| `RfqClosed` | Auction closed; on a fill, `winner = { type: "winner", maker, price, transaction }`. |
 | `ChainEvent(position_opened)` | Position opened, via chain events. |
 | `PositionUpdated { position, update_type }` | Full position row; `update_type` is `created`, `funded`, `liquidated` or `settled`. Apply it only if its `revision` is newer than the stored one. |
 | `MarketFinalized` | Market expired, settlement price set. |

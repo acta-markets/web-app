@@ -173,7 +173,7 @@ export function buildPositionRows(
       isOpen,
       state: stateLabel(p),
       createdTs: Number(p.created_at),
-      buy: p.side === "buy" && !isCashSettled(p.terms.type) && isOpen ? { pda: p.pda, market: p.market } : null,
+      buy: p.side === "buy" && !isCashSettled(p.terms.type) && isOpen ? { pda: p.pda, market: p.market_pda } : null,
     };
   });
 }

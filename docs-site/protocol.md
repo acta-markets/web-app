@@ -29,4 +29,4 @@ Trading runs over WebSocket. HTTP returns indexed market, position and vault dat
 
 - [WebSocket conventions](reference/ws-common.md): messages, units and signing.
 - [HTTP API](reference/http-api.md): venue limits, tokens, markets, makers and statistics.
-- [Vault HTTP API](reference/vault-http-api.md): vaults, cycles and depositor history.
+- [Vault HTTP API](reference/http-api.md#vaults): vaults, cycles and depositor history.

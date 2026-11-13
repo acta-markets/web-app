@@ -52,7 +52,6 @@
 * [Roles and permissions](protocol/vault-permissions.md)
 * [Vault API, SDKs and swaps](protocol/vault-integration.md)
 * [Vault operator guide](quickstart/vault-operator-guide.md)
-* [Vault HTTP API](reference/vault-http-api.md)
 
 ## Reference
 
@@ -61,3 +60,4 @@
 * [Protocol changelog](reference/protocol-changelog.md)
 * [Endpoints and maker registration](reference/sandbox.md)
 * [Integration FAQ](reference/faq.md)
+* [Agents and automation](quickstart/agents.md)
