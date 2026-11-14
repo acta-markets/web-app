@@ -60,6 +60,15 @@ NEXT_PUBLIC_SOLANA_RPC_URL="<mainnet_rpc_url>"  # Optional browser-accessible RP
 # NEXT_PUBLIC_VAULTS_SAMPLE="1"  # Dev only: sample vaults on /earn; ignored by production builds
 ```
 
+### Hard rule: the `devnet` branch targets devnet
+
+Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-api.acta.markets`) on Solana devnet. It never talks to `beta-api` or mainnet.
+
+- `next.config.mjs` enforces this: when `VERCEL_GIT_COMMIT_REF` is `devnet` it forces `NEXT_PUBLIC_SOLANA_NETWORK=devnet` and blanks `NEXT_PUBLIC_RFQ_WS_URL`, `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SOLANA_RPC_URL`, so the Vercel project's Preview variables cannot redirect it. `src/lib/devnet-branch-env.test.ts` guards it.
+- Do not remove or weaken that override, and do not add a network or backend variable that bypasses it. A new `NEXT_PUBLIC_*` variable that selects a network or backend must be added to the override.
+- Why: `devnet` follows the devnet backend's wire format, which can be ahead of beta. Pointed at `beta-api`, the SDK rejects the handshake and the app shows "This app requires the WS 1.0.0 API".
+- Locally, keep `.env.local` on devnet while working on this branch.
+
 ## Architecture
 
 **Next.js 14 App Router** with two route groups:

@@ -17,6 +17,8 @@ WebSocket integration imports `@acta-markets/ts-sdk/ws`.
 
 `NEXT_PUBLIC_RFQ_WS_URL` selects the
 backend, and `NEXT_PUBLIC_SOLANA_NETWORK` selects the matching token addresses.
+Builds of the `devnet` branch ignore both and always use the devnet backend
+(enforced in `next.config.mjs`; see "Hard rule" in `AGENTS.md`).
 Market prices and indicative premiums come from that backend.
 `NEXT_PUBLIC_PYTH_FEED_SHARDS` (comma-separated, default `0`) lists the Pyth
 push-oracle shards that backend posts vault feeds to; it must match the tx-service
