@@ -263,6 +263,8 @@ const PROFIT = "rgba(92,168,124,0.60)";
 const LOSS = "rgba(194,104,104,0.60)";
 
 /** The NOW tag's half height, and how far its centre sits from the live-price dot it names. */
+/** Below this pane width (a phone) the overlays switch to their compact placement. */
+const NARROW_PANE_WIDTH = 420;
 const NOW_TAG_HALF = 9;
 const NOW_TAG_OFFSET = NOW_TAG_HALF + 9;
 
@@ -414,7 +416,8 @@ function FlipAffordance({
       >
         ⇄
       </span>
-      click the chart to flip
+      <span className="max-md:hidden">click the chart to flip</span>
+      <span className="md:hidden">tap to flip</span>
       {variant === "coach" && !coachSeen ? (
         <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[9px] tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
           tap anywhere on the chart to flip
@@ -434,6 +437,7 @@ function ZoneChip({
   toneClass,
   x,
   y,
+  compact,
   interactive,
   onFlip,
 }: {
@@ -441,11 +445,15 @@ function ZoneChip({
   toneClass: string;
   x: number;
   y: number;
+  /** A narrow pane: `x` is the chip's right edge instead of its centre, and the type is smaller. */
+  compact: boolean;
   interactive: boolean;
   onFlip: () => void;
 }) {
-  const base =
-    "absolute z-[17] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wider backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)] transition-colors";
+  const base = cn(
+    "absolute z-[17] -translate-y-1/2 whitespace-nowrap rounded-md border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono font-semibold uppercase tracking-wider backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)] transition-colors",
+    compact ? "-translate-x-full text-[10px]" : "-translate-x-1/2 text-xs"
+  );
   if (!interactive) {
     return (
       <span aria-hidden="true" className={cn(base, "pointer-events-none", toneClass)} style={{ left: x, top: y }}>
@@ -869,6 +877,10 @@ export function ThesisChart({
       ? nowX + (geometry.paneWidth - nowX) / 2
       : geometry.paneWidth * 0.75 // no history → same 50/50 spot the "now" line would occupy
     : 0;
+  // On a phone the future strip is too narrow to centre a chip in without it running into the
+  // NOW tag on the boundary, so there the chips hug the pane's right edge instead.
+  const narrowPane = geometry != null && geometry.paneWidth < NARROW_PANE_WIDTH;
+  const zoneChipX = narrowPane && geometry ? geometry.paneWidth - 6 : futureCenterX;
   const topZoneCenterY = strikeY != null ? strikeY / 2 : 0;
   const bottomZoneCenterY = strikeY != null ? strikeY + (CHART_HEIGHT - strikeY) / 2 : 0;
 
@@ -1075,16 +1087,18 @@ export function ThesisChart({
             <ZoneChip
               text={direction === "above" ? "✓ PROFIT ZONE" : wrongZone}
               toneClass={direction === "above" ? "text-additional-green-primary-deep" : "text-additional-red-primary"}
-              x={futureCenterX}
+              x={zoneChipX}
               y={topZoneCenterY}
+              compact={narrowPane}
               interactive={flipHint === "zones"}
               onFlip={flipDirection}
             />
             <ZoneChip
               text={direction !== "above" ? "✓ PROFIT ZONE" : wrongZone}
               toneClass={direction !== "above" ? "text-additional-green-primary-deep" : "text-additional-red-primary"}
-              x={futureCenterX}
+              x={zoneChipX}
               y={bottomZoneCenterY}
+              compact={narrowPane}
               interactive={flipHint === "zones"}
               onFlip={flipDirection}
             />
@@ -1229,16 +1243,19 @@ export function ThesisChart({
         />
 
         </div>
-        {/* right axis: price + PnL at each tick, sharing the price's own line */}
+        {/* right axis: price + PnL at each tick, sharing the price's own line. Not on a phone:
+            there the plot takes the full width, the strike handle and the NOW tag carry the two
+            prices that matter, and the outcomes are spelled out in the strip under the chart. */}
         {rightAxis.ticks.length > 0 ? (
           <div
-            className="relative w-12 shrink-0 border-l border-bg-border md:w-16"
+            data-testid="chart-price-rail"
+            className="relative w-16 shrink-0 border-l border-bg-border max-md:hidden"
             aria-hidden="true"
           >
             {rightAxis.ticks.map((t, i) => (
               <div
                 key={i}
-                className="pointer-events-none absolute right-1.5 -translate-y-1/2 text-right font-mono text-[9px] leading-[1.15] tabular-nums md:text-[10px]"
+                className="pointer-events-none absolute right-1.5 -translate-y-1/2 text-right font-mono text-[10px] leading-[1.15] tabular-nums"
                 style={{ top: t.y }}
               >
                 <div className="text-content-secondary">{t.price}</div>
