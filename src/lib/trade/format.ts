@@ -1,32 +1,36 @@
+import { numberFormat } from "@/lib/number-format";
 import { displayQuoteSymbol } from "@/lib/tokens";
 
+// Built once and reused: `toLocaleDateString` builds a new formatter on every call.
+const DATE_WITH_YEAR = new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", year: "numeric" });
+const DATE_SHORT = new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit" });
+const DAY_UTC = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const TIME_UTC = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+
 export function formatDate(d: Date) {
-  return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+  return DATE_WITH_YEAR.format(d);
 }
 
 export function formatShortDate(d: Date) {
-  return d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
+  return DATE_SHORT.format(d);
 }
 
 /** A quote-denominated amount with the network's quote label: "USDC" on mainnet, "USDC-DEV" on devnet. */
 export function formatUsdc(n: number) {
   if (!Number.isFinite(n)) return "—";
-  return `${n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })} ${displayQuoteSymbol()}`;
+  return `${numberFormat({ minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)} ${displayQuoteSymbol()}`;
 }
 
 /** Expiry day in UTC, e.g. "Nov 7". Settlement times are UTC, so the day never shifts with the viewer. */
 export function formatExpiryDay(expiryMs: number) {
-  return new Date(expiryMs).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  return DAY_UTC.format(new Date(expiryMs));
 }
 
 /** e.g. "Nov 7, 08:00 UTC" */
 export function formatExpiryUtc(expiryMs: number) {
   const date = new Date(expiryMs);
-  const day = date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-  const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+  const day = DAY_UTC.format(date);
+  const time = TIME_UTC.format(date);
   return `${day}, ${time} UTC`;
 }
 
@@ -34,18 +38,18 @@ export function formatExpiryUtc(expiryMs: number) {
 export function formatPrice(n: number) {
   const abs = Math.abs(n);
   const maximumFractionDigits = abs >= 1000 ? 0 : abs >= 1 ? 2 : abs >= 0.01 ? 4 : 8;
-  return n.toLocaleString("en-US", {
+  return numberFormat({
     style: "currency",
     currency: "USD",
     minimumFractionDigits: abs >= 1 && abs < 1000 ? 2 : 0,
     maximumFractionDigits,
-  });
+  }).format(n);
 }
 
 /** A dollar amount such as a premium: cents, or "<$0.01" for dust. */
 export function formatUsdAmount(n: number) {
   if (n > 0 && n < 0.01) return "<$0.01";
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return numberFormat({ style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
 /** Time left in words, rounded: "4 days", "1 day", "20 hours", "under an hour". */
@@ -75,7 +79,7 @@ export function formatCountdown(expiryMs: number, nowMs: number) {
 /** A token amount with grouping and at most `maxDecimals` fraction digits. */
 export function formatAmount(value: number, maxDecimals = 4) {
   if (!Number.isFinite(value)) return "—";
-  return value.toLocaleString("en-US", { maximumFractionDigits: maxDecimals });
+  return numberFormat({ maximumFractionDigits: maxDecimals }).format(value);
 }
 
 /** Time to expiry: in hours inside the last day, whole days before that. */

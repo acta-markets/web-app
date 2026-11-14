@@ -1,5 +1,6 @@
 export type MarketType = "call" | "csp";
 
+import { numberFormat } from "@/lib/number-format";
 import type { EarnAssetSummary } from "@/lib/rfq-client";
 
 export function summaryCapFilledPct(summary: Pick<EarnAssetSummary, "cap_filled_pct"> | null | undefined): number | null {
@@ -12,12 +13,7 @@ export function formatPct(n: number) {
 }
 
 export function formatStrikePrice(n: number) {
-  return n.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 9,
-  });
+  return numberFormat({ style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 9 }).format(n);
 }
 
 /**
@@ -30,23 +26,11 @@ export function formatUsdSmart(n: number) {
   const abs = Math.abs(n);
 
   if (abs >= 1000) {
-    return n.toLocaleString("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-      useGrouping: true
-    });
+    return numberFormat({ style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0, useGrouping: true }).format(n);
   }
   
   if (abs >= 100) {
-    return n.toLocaleString("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-      useGrouping: false
-    });
+    return numberFormat({ style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 0, useGrouping: false }).format(n);
   }
 
   const useGrouping = false;
@@ -64,12 +48,12 @@ export function formatUsdSmart(n: number) {
     max = 8;
   }
 
-  return n.toLocaleString("en-US", {
+  return numberFormat({
     style: "currency",
     currency: "USD",
     maximumFractionDigits: max,
     minimumFractionDigits: abs >= 1 ? 2 : 0,
-    useGrouping
-  });
+    useGrouping,
+  }).format(n);
 }
 
