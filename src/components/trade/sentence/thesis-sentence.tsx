@@ -14,12 +14,15 @@ import type { TakerSide } from "@/lib/spreads";
 import { DIRECTIONS, SENTENCE, type Direction } from "@/lib/trade/thesis";
 
 // Pill text stays in the sentence's own ink so the sentence reads as one line of text;
-// the tint (and the direction arrow) carries the meaning.
+// the tint (and the direction arrow) carries the meaning. The tint is bright enough, with an
+// edge in its own hue, that each pill reads as a control to set rather than a highlighted word.
+// (The hue tokens are CSS variables, which take no alpha, so the tints are spelled out:
+// violet #7251F7, green #49AA19, red #FF3347.)
 const PILL = {
-  violet: "border-additional-violet-secondary bg-additional-violet-secondary text-content-primary hover:border-additional-violet-primary",
-  above: "border-additional-green-secondary bg-additional-green-secondary text-content-primary hover:border-additional-green-primary",
-  below: "border-additional-red-secondary bg-additional-red-secondary text-content-primary hover:border-additional-red-primary",
-  accent: "border-accent-primary/20 bg-accent-primary/15 text-content-primary hover:border-accent-primary",
+  violet: "border-[rgba(114,81,247,0.6)] bg-[rgba(114,81,247,0.3)] text-content-primary hover:border-additional-violet-primary-deep hover:bg-[rgba(114,81,247,0.42)]",
+  above: "border-[rgba(73,170,25,0.6)] bg-[rgba(73,170,25,0.24)] text-content-primary hover:border-additional-green-primary-deep hover:bg-[rgba(73,170,25,0.36)]",
+  below: "border-[rgba(255,51,71,0.55)] bg-[rgba(255,51,71,0.22)] text-content-primary hover:border-additional-red-primary hover:bg-[rgba(255,51,71,0.34)]",
+  accent: "border-accent-primary/60 bg-accent-primary/25 text-content-primary hover:border-accent-primary hover:bg-accent-primary/40",
 } as const;
 
 /** The direction pill is plain text when the UI derives it from a strategy, so it never hints at a hover. */
@@ -99,7 +102,8 @@ function ExpirySlash({
                 "underline-offset-[0.2em] decoration-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary disabled:cursor-not-allowed disabled:opacity-60",
                 selected
                   ? "text-content-primary underline decoration-additional-violet-primary-deep"
-                  : "text-content-secondary no-underline hover:text-content-primary hover:underline"
+                  // an option, not a caption: a step brighter than the sentence's quiet text
+                  : "text-content-primary no-underline opacity-65 hover:underline hover:opacity-100"
               )}
             >
               {o.label}

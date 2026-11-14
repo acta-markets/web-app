@@ -28,8 +28,8 @@ export const INLINE_PILL_FACE = "col-start-1 row-start-1 inline-flex items-cente
 /** The pill itself, shared by every inline control in a sentence so they read as one family. */
 export const INLINE_PILL =
   "group/pill relative inline-flex items-center gap-[0.15em] whitespace-nowrap border px-[0.25em] py-[0.06em] leading-[1.15] transition-colors";
-/** The small glyph at a pill's end that says it can be changed: quiet at rest, full on hover. */
-export const INLINE_PILL_GLYPH = "h-[0.55em] w-[0.55em] shrink-0 opacity-60 transition-opacity group-hover/pill:opacity-100";
+/** The small glyph at a pill's end that says it can be changed: clear at rest, full on hover. */
+export const INLINE_PILL_GLYPH = "h-[0.55em] w-[0.55em] shrink-0 opacity-90 transition-opacity group-hover/pill:opacity-100";
 const FACE = INLINE_PILL_FACE;
 const PILL = INLINE_PILL;
 
