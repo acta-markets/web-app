@@ -2,11 +2,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart } from "./thesis-chart";
 
+const setData = vi.hoisted(() => vi.fn());
+
 vi.mock("lightweight-charts", () => {
   const noop = () => {};
   return {
     createChart: () => ({
-      addSeries: () => ({ setData: noop, createPriceLine: () => ({}), removePriceLine: noop, priceToCoordinate: () => null, coordinateToPrice: () => null }),
+      addSeries: () => ({ setData, createPriceLine: () => ({}), removePriceLine: noop, priceToCoordinate: () => null, coordinateToPrice: () => null }),
       remove: noop,
       applyOptions: noop,
       timeScale: () => ({ fitContent: noop, setVisibleRange: noop, setVisibleLogicalRange: noop, getVisibleLogicalRange: () => null, timeToCoordinate: () => null }),
@@ -62,6 +64,17 @@ describe("thesis chart", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/market/history?symbol=SOL&range=3m"));
     // the override only changes the window, never the strike date
     expect(screen.getByText(/Strike \$95/)).toBeTruthy();
+  });
+
+  it("ends the line at the live price, so a lagging history cannot leave the NOW tag off the line", async () => {
+    // the history stops two days ago at 80 while the live price is 100
+    mockHistory([[(now - 3 * 86400) * 1000, 82], [(now - 2 * 86400) * 1000, 80]]);
+    const { rerender } = render(<ThesisChart {...props} direction="above" />);
+    const lastPoint = () => (setData.mock.calls.at(-1)?.[0] as Array<{ time: number; value: number }>).at(-1);
+    await waitFor(() => expect(lastPoint()).toEqual({ time: now, value: 100 }));
+    // a price tick moves that point's value, never its time
+    rerender(<ThesisChart {...props} spot={103} direction="above" />);
+    await waitFor(() => expect(lastPoint()).toEqual({ time: now, value: 103 }));
   });
 
   it("still shows the outcome zones when there is no price history", async () => {

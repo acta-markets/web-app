@@ -643,37 +643,6 @@ export function SentenceTrade({
                 </div>
               </div>
 
-              {/* the token switch under the size: USDC ↔ the asset. One source of truth with
-                  the in-field unit dropdown — both read and write `amountInQuote` via
-                  `chooseToken`, so the slider, balance, conversion and presets all follow
-                  whichever token is selected. */}
-              <div className="inline-flex border border-bg-border bg-action-primary">
-                <button
-                  type="button"
-                  aria-pressed={amountInQuote}
-                  disabled={isRequesting}
-                  onClick={() => chooseToken(true)}
-                  className={cn(
-                    "px-3 py-1 font-mono text-[11px] font-medium uppercase leading-[1.2] tracking-[0.08em] transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                    amountInQuote ? "bg-accent-primary/20 text-content-primary" : "text-content-secondary hover:text-content-primary"
-                  )}
-                >
-                  {quoteSymbol}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={!amountInQuote}
-                  disabled={isRequesting}
-                  onClick={() => chooseToken(false)}
-                  className={cn(
-                    "border-l border-bg-border px-3 py-1 font-mono text-[11px] font-medium uppercase leading-[1.2] tracking-[0.08em] transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                    !amountInQuote ? "bg-accent-primary/20 text-content-primary" : "text-content-secondary hover:text-content-primary"
-                  )}
-                >
-                  {asset.symbol}
-                </button>
-              </div>
-
               {/* the step slider: same value as the field, snapped onto the deposit step; the
                   dots are a quiet scale, not extra controls. Hidden when the range collapses
                   (a loaded zero balance) */}

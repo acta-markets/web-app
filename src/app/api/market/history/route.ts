@@ -20,6 +20,21 @@ function rangeToDays(r: Range) {
   }
 }
 
+/** CoinGecko ends every series at the current price, so an older last point means a stale cache entry. */
+const MAX_AGE_MS = 15 * 60 * 1000;
+
+function isStale(points: Array<[number, number]>) {
+  const last = points[points.length - 1];
+  return !last || Date.now() - last[0] > MAX_AGE_MS;
+}
+
+async function fetchPrices(endpoint: string, init: RequestInit): Promise<Array<[number, number]> | null> {
+  const res = await fetch(endpoint, init);
+  if (!res.ok) return null;
+  const json = (await res.json()) as { prices?: Array<[number, number]> };
+  return Array.isArray(json.prices) ? json.prices : [];
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const symbol = normalizeSymbol(url.searchParams.get("symbol") ?? "");
@@ -43,14 +58,16 @@ export async function GET(req: Request) {
   )}/market_chart?vs_currency=usd&days=${days}`;
 
   try {
-    const res = await fetch(endpoint, {
-      next: { revalidate: 60 }
-    });
-    if (!res.ok) {
+    let points = await fetchPrices(endpoint, { next: { revalidate: 60 } });
+    if (!points) {
       return NextResponse.json({ ok: true, source: "none", points: [] as Array<[number, number]> });
     }
-    const json = (await res.json()) as { prices?: Array<[number, number]> };
-    const points = Array.isArray(json.prices) ? json.prices : [];
+    // The data cache serves a stale entry while it revalidates, and keeps it when the refresh
+    // fails, so an idle or rate-limited server can hand back a series that ends days ago.
+    if (isStale(points)) {
+      const fresh = await fetchPrices(endpoint, { cache: "no-store" });
+      if (fresh && !isStale(fresh)) points = fresh;
+    }
     return NextResponse.json({ ok: true, source: "coingecko", points });
   } catch {
     return NextResponse.json({ ok: true, source: "none", points: [] as Array<[number, number]> });

@@ -110,9 +110,9 @@ describe("PositionsTable", () => {
 
   it("folds a token group shut and opens it again", () => {
     const many = Array.from({ length: 8 }, (_, i) =>
-      pos({ pda: `p${i}`, market: i % 2 === 0 ? "m1" : "m2" }),
+      pos({ pda: `p${i}`, market_pda: i % 2 === 0 ? "m1" : "m2" }),
     );
-    const symbolFor = (p: { market: string }) => (p.market === "m1" ? "SOL" : "HYPE");
+    const symbolFor = (p: { market_pda: string }) => (p.market_pda === "m1" ? "SOL" : "HYPE");
     render(<PositionsTable rows={buildPositionRows(many, symbolFor, NOV28 * 1000)} nowMs={NOV28 * 1000} grouped />);
     const toggle = screen.getByRole("button", { name: /^SOL/ });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");

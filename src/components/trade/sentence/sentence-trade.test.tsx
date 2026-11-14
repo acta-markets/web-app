@@ -150,23 +150,6 @@ describe("sentence trade", () => {
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
   });
 
-  it("exposes the USDC / asset switch under the size, in lockstep with the in-field dropdown", () => {
-    render(<SentenceTrade mode="yield" />);
-    // a two-option toggle: USDC and the asset's ticker, the quote side selected by default
-    expect(screen.getByRole("button", { name: "USDC", pressed: true })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "SOL", pressed: false })).toBeTruthy();
-    // clicking the asset side flips both controls together — one source of truth
-    fireEvent.click(screen.getByRole("button", { name: "SOL" }));
-    expect(screen.getByRole("button", { name: "SOL", pressed: true })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "USDC", pressed: false })).toBeTruthy();
-    expect(select("Size token").value).toBe("underlying");
-    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("1.1");
-    // and the in-field dropdown drives it back
-    fireEvent.change(select("Size token"), { target: { value: "quote" } });
-    expect(screen.getByRole("button", { name: "USDC", pressed: true })).toBeTruthy();
-    expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
-  });
-
   it("anchors the slider and HALF/MAX to the wallet balance for the selected token", () => {
     connectWallet();
     mocks.balance = 50; // 50 USDC in the wallet

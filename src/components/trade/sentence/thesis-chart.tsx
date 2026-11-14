@@ -542,6 +542,25 @@ export function ThesisChart({
     return () => clearInterval(id);
   }, []);
 
+  // The line ends on a live point at the current price, so it always meets the NOW tag. The
+  // history (CoinGecko) and the live price (RFQ backend) are different sources and the history
+  // can lag, which otherwise leaves the tag hanging above or below the end of the line. The
+  // point's time is fixed per history load so a price tick moves it vertically only.
+  const liveT = useMemo(
+    () => (points.length ? Math.max(Date.now() / 1000, points[points.length - 1].t + 1) : null),
+    [points]
+  );
+  const seriesData = useCallback(
+    (live: number) => {
+      const data = points.map((p) => ({ time: p.t as UTCTimestamp, value: p.v }));
+      if (liveT != null) data.push({ time: liveT as UTCTimestamp, value: live });
+      return data;
+    },
+    [points, liveT]
+  );
+  const spotRef = useRef(spot);
+  spotRef.current = spot;
+
   /** Read the chart's pixel geometry so the overlay (zones, "now" boundary, future fan) lines up. */
   const measure = useCallback(() => {
     const series = seriesRef.current;
@@ -551,7 +570,6 @@ export function ThesisChart({
     const width = el.clientWidth || 0;
     const height = el.clientHeight || CHART_HEIGHT;
     const pane = chart.paneSize?.() ?? { width, height };
-    const last = points[points.length - 1];
     setGeometry({
       width,
       height,
@@ -559,9 +577,9 @@ export function ThesisChart({
       paneHeight: pane.height || height,
       strikeY: series.priceToCoordinate(strike) ?? FALLBACK_STRIKE_Y,
       spotY: series.priceToCoordinate(spot) ?? null,
-      nowX: last ? chart.timeScale().timeToCoordinate(last.t as UTCTimestamp) : null,
+      nowX: liveT != null ? chart.timeScale().timeToCoordinate(liveT as UTCTimestamp) : null,
     });
-  }, [points, strike, spot]);
+  }, [liveT, strike, spot]);
   const measureRef = useRef(measure);
   measureRef.current = measure;
 
@@ -764,7 +782,7 @@ export function ThesisChart({
     const series = seriesRef.current;
     const chart = chartRef.current;
     if (!series || !chart) return;
-    const data = points.map((p) => ({ time: p.t as UTCTimestamp, value: p.v }));
+    const data = seriesData(spotRef.current);
     series.setData(data);
     if (data.length > 0) {
       // Idempotent 50/50 history/future split: the "now" boundary sits at the pane's
@@ -776,7 +794,7 @@ export function ThesisChart({
       const span = to - from;
       chart.timeScale().setVisibleLogicalRange({ from, to: to + span });
     }
-  }, [points]);
+  }, [seriesData]);
 
   // The price domain depends on the data and the strike. Re-apply it (and re-autoscale)
   // only when either changes; this must not touch the time range. The live spot is read
@@ -786,7 +804,7 @@ export function ThesisChart({
     const series = seriesRef.current;
     if (!series) return;
     domainRef.current = priceDomain([...points.map((p) => p.v), spot], strike);
-    series.setData(points.map((p) => ({ time: p.t as UTCTimestamp, value: p.v })));
+    series.setData(seriesData(spot));
     const t = setTimeout(() => {
       if (!disposedRef.current) measureRef.current();
     }, 120);
@@ -794,14 +812,15 @@ export function ThesisChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, strike]);
 
-  // A live spot tick only moves the NOW line/tag within the stable range — re-measure,
-  // never re-fit.
+  // A live spot tick only moves the line's last point and the NOW line/tag within the
+  // stable range — re-measure, never re-fit.
   useEffect(() => {
+    seriesRef.current?.setData(seriesData(spot));
     const t = setTimeout(() => {
       if (!disposedRef.current) measureRef.current();
     }, 0);
     return () => clearTimeout(t);
-  }, [spot]);
+  }, [spot, seriesData]);
 
   useEffect(() => {
     const series = seriesRef.current;
