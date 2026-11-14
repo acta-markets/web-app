@@ -6,7 +6,7 @@ import { ActaWsClient, type QuoteReceivedMessage, type TakerFillRfq } from "@/li
 import { RfqFlowModal, type RfqOrderPreview } from "./rfq-flow-modal";
 
 const context = vi.hoisted(() => ({ read: vi.fn(), makerVault: vi.fn(async () => null) }));
-vi.mock("@/components/rfq/rfq-provider", () => ({ useRfqContext: context.read }));
+vi.mock("@/components/rfq/rfq-provider", () => ({ useRfqContext: context.read, RFQ_TTL_SECONDS: 30 }));
 vi.mock("@acta-markets/ts-sdk/chain", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@acta-markets/ts-sdk/chain")>()),
   fetchMakerVault: () => context.makerVault(),
@@ -62,7 +62,7 @@ function setup(previewOverrides: Partial<RfqOrderPreview> = {}, bestQuote: Quote
     (client as unknown as { emit: (event: string, ...args: unknown[]) => void }).emit(event, ...args);
   });
   const send = async () => {
-    fireEvent.click(screen.getByRole("button", { name: "Accept Quote" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm trade" }));
     await waitFor(() => expect(accept).toHaveBeenCalledOnce());
     emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(submit).toHaveBeenCalledOnce());
@@ -77,7 +77,7 @@ function setup(previewOverrides: Partial<RfqOrderPreview> = {}, bestQuote: Quote
 describe("RFQ order modal", () => {
   it("shows the best quote and cancels the RFQ when closed before accepting", async () => {
     const h = setup();
-    await screen.findByRole("button", { name: "Accept Quote" });
+    await screen.findByRole("button", { name: "Confirm trade" });
     expect(screen.getAllByText("1.00 USDC").length).toBeGreaterThan(0);
     context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, price: 2_000_000_000 } });
     h.rerender(<RfqFlowModal {...h.props} />);
@@ -92,29 +92,29 @@ describe("RFQ order modal", () => {
     const h = setup();
     context.read.mockReturnValue({ ...context.read(), bestQuote: null });
     h.rerender(<RfqFlowModal {...h.props} />);
-    expect(screen.queryByRole("button", { name: "Accept Quote" })).toBeNull();
-    expect(screen.getByText("Getting quote from market makers")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Confirm trade" })).toBeNull();
+    expect(screen.getByText("Asking market makers for a price")).toBeTruthy();
   });
 
   it("prices the premium with the underlying's own decimals", async () => {
     // 2 JLP (6 decimals) at a 1 USDC premium each
     setup({ asset: "JLP", quantity: 2_000_000, underlyingDecimals: 6, quantityDisplay: "2 JLP" });
-    await screen.findByRole("button", { name: "Accept Quote" });
+    await screen.findByRole("button", { name: "Confirm trade" });
     expect(screen.getAllByText("2.00 USDC").length).toBeGreaterThan(0);
     expect(screen.queryAllByText("0.00 USDC")).toHaveLength(0);
   });
 
   it("shows the thesis the order expresses", async () => {
     setup({ thesis: "SOL will be above $1 on Nov 7" });
-    await screen.findByRole("button", { name: "Accept Quote" });
-    expect(screen.getByText("“SOL will be above $1 on Nov 7”")).toBeTruthy();
+    await screen.findByRole("button", { name: "Confirm trade" });
+    expect(screen.getByText("SOL will be above $1 on Nov 7")).toBeTruthy();
   });
 
   it("keeps the accepted quote displayed while its maker is looked up", async () => {
     let lookedUp!: (vault: null) => void;
     context.makerVault.mockImplementationOnce(() => new Promise(resolve => { lookedUp = resolve; }));
     const h = setup();
-    fireEvent.click(await screen.findByRole("button", { name: "Accept Quote" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm trade" }));
     context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, order_id: "other", price: 2_000_000_000 } });
     h.rerender(<RfqFlowModal {...h.props} />);
     expect(screen.getAllByText("1.00 USDC").length).toBeGreaterThan(0);
@@ -127,25 +127,26 @@ describe("RFQ order modal", () => {
     const h = setup();
     await h.send();
     h.emit(event, "order", ...(event === "orderSubmitted" ? ["signature", 2] : [2]));
-    expect(screen.getByRole("button", { name: "Check order status" })).toBeTruthy();
-    expect(screen.queryByText("Submitting to blockchain...")).toBeNull();
+    expect(screen.getByRole("button", { name: "Check status" })).toBeTruthy();
+    expect(screen.queryByText("Sending your trade to Solana")).toBeNull();
   });
 
   it("links the sent transaction while confirmation is pending", async () => {
     const h = setup();
     await h.send();
-    expect(screen.getByText("Order submitted. Waiting for on-chain confirmation.")).toBeTruthy();
+    expect(screen.getByText("Waiting for on-chain confirmation")).toBeTruthy();
+    expect(screen.getByText("Your trade was submitted.")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "View on Solscan" })).toBeNull();
     h.emit("orderSubmitted", "order", "sig123", 2);
-    expect(screen.getByText("Transaction sent. Waiting for on-chain confirmation.")).toBeTruthy();
+    expect(screen.getByText("Your transaction was sent.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "View on Solscan" }).getAttribute("href")).toContain("/tx/sig123");
   });
 
   it("lets an order waiting on AcceptQuote be cancelled and closed", async () => {
     const h = setup();
     h.accept.mockImplementation(() => new Promise(() => {}));
-    fireEvent.click(await screen.findByRole("button", { name: "Accept Quote" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm trade" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel trade" }));
     expect(h.cancelOnServer).toHaveBeenCalledWith("rfq");
     fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
     expect(h.props.onClose).toHaveBeenCalledOnce();
@@ -153,10 +154,10 @@ describe("RFQ order modal", () => {
 
   it("lets a restored, never-signed order be cancelled and closed", async () => {
     const h = setup();
-    fireEvent.click(await screen.findByRole("button", { name: "Accept Quote" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm trade" }));
     await waitFor(() => expect(h.accept).toHaveBeenCalledOnce());
     h.reload();
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel order" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel trade" }));
     expect(h.cancelOnServer).toHaveBeenCalledWith("rfq");
     expect(h.sign).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
@@ -170,14 +171,14 @@ describe("RFQ order modal", () => {
     await h.send();
     h.emit("orderSubmitted", "order", "signature", 2);
     h.reload();
-    await screen.findByRole("button", { name: "Check order status" });
-    expect(screen.getByText("Recovered order")).toBeTruthy();
+    await screen.findByRole("button", { name: "Check status" });
+    expect(screen.getByText("Your unfinished trade")).toBeTruthy();
     expect(screen.queryByText("1 SOL")).toBeNull();
     expect(h.accept).toHaveBeenCalledOnce();
     expect(h.submit).toHaveBeenCalledOnce();
     expect(h.sign).toHaveBeenCalledOnce();
     h.emit("orderConfirmed", "order", "position", 3);
-    expect(screen.getByText("Order Confirmed!")).toBeTruthy();
+    expect(screen.getByText("Your trade is confirmed")).toBeTruthy();
     expect(screen.getByRole("link", { name: "View on Solscan" }).getAttribute("href")).toContain("signature");
     expect(localStorage.length).toBe(0);
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
@@ -189,7 +190,7 @@ describe("RFQ order modal", () => {
     await h.send();
     h.status.mockResolvedValue({ request_id: "read", order_id: "order", state: { type: "confirmed", position_pda: "position" as Address } });
     h.reload();
-    await screen.findByText("Order Confirmed!");
+    await screen.findByText("Your trade is confirmed");
     expect(h.submit).toHaveBeenCalledOnce();
   });
 });
@@ -203,52 +204,121 @@ it("counts down the server-adjusted validity, disables expiry, and refreshes for
   const expiring = { ...quote, valid_until: Date.now() / 1000 + 8 };
   context.read.mockReturnValue({ ...context.read(), bestQuote: expiring, quoteSecondsRemaining: remaining });
   h.rerender(<RfqFlowModal {...h.props} />);
-  expect(screen.getByRole("timer").textContent).toBe("Quote expires in 3s");
+  expect(screen.getByRole("timer").textContent).toBe("Confirm within 3s");
   act(() => vi.advanceTimersByTime(3000));
   context.read.mockReturnValue({ ...context.read(), bestQuote: null });
   h.rerender(<RfqFlowModal {...h.props} />);
-  expect(screen.getByRole("timer").textContent).toBe("Quote expired. Request a fresh quote.");
-  expect((screen.getByRole("button", { name: "Accept Quote" }) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "Accept Quote" }));
+  expect(screen.getByRole("timer").textContent).toBe("This quote expired. Get a fresh one to continue.");
+  // an expired quote cannot be confirmed: the button is gone, not merely disabled
+  expect(screen.queryByRole("button", { name: "Confirm trade" })).toBeNull();
   expect(h.accept).not.toHaveBeenCalled();
   context.read.mockReturnValue({ ...context.read(), bestQuote: { ...expiring, valid_until: Date.now() / 1000 + 15 } });
   h.rerender(<RfqFlowModal {...h.props} />);
-  expect(screen.getByRole("timer").textContent).toBe("Quote expires in 10s");
-  expect((screen.getByRole("button", { name: "Accept Quote" }) as HTMLButtonElement).disabled).toBe(false);
+  expect(screen.getByRole("timer").textContent).toBe("Confirm within 10s");
+  expect((screen.getByRole("button", { name: "Confirm trade" }) as HTMLButtonElement).disabled).toBe(false);
+});
+
+it("counts down to the RFQ's close, which comes before the quote's own padded validity", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-27T10:00:00Z"));
+  const h = setup();
+  const now = Date.now() / 1000;
+  const closesAt = now + 20;
+  context.read.mockReturnValue({
+    ...context.read(),
+    bestQuote: { ...quote, valid_until: now + 50 },
+    rfqSecondsRemaining: () => Math.max(0, Math.ceil(closesAt - Date.now() / 1000)),
+  });
+  h.rerender(<RfqFlowModal {...h.props} />);
+  expect(screen.getByRole("timer").textContent).toBe("Confirm within 20s");
+  // a requote with a later validity does not push the countdown back up
+  act(() => vi.advanceTimersByTime(5000));
+  context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, valid_until: Date.now() / 1000 + 50 } });
+  h.rerender(<RfqFlowModal {...h.props} />);
+  expect(screen.getByRole("timer").textContent).toBe("Confirm within 15s");
+  act(() => vi.advanceTimersByTime(15_000));
+  expect(screen.getByRole("timer").textContent).toBe("This quote expired. Get a fresh one to continue.");
+  expect(screen.queryByRole("button", { name: "Confirm trade" })).toBeNull();
+});
+
+describe("asking again from inside the modal", () => {
+  it("offers a fresh quote once the quote expires, and waits for it in place", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-27T10:00:00Z"));
+    const onRequote = vi.fn();
+    const h = setup();
+    const expired = { ...quote, valid_until: Date.now() / 1000 - 1 };
+    context.read.mockReturnValue({ ...context.read(), bestQuote: expired });
+    h.rerender(<RfqFlowModal {...h.props} onRequote={onRequote} />);
+    context.read.mockReturnValue({ ...context.read(), bestQuote: null });
+    h.rerender(<RfqFlowModal {...h.props} onRequote={onRequote} />);
+    fireEvent.click(screen.getByRole("button", { name: "Get a fresh quote" }));
+    expect(onRequote).toHaveBeenCalledOnce();
+    expect(screen.getByText("Asking market makers for a price")).toBeTruthy();
+    expect(h.accept).not.toHaveBeenCalled();
+  });
+
+  it("stops waiting when no quote comes back, and lets the user try again", () => {
+    vi.useFakeTimers();
+    const onRequote = vi.fn();
+    const h = setup();
+    context.read.mockReturnValue({ ...context.read(), bestQuote: null });
+    h.rerender(<RfqFlowModal {...h.props} onRequote={onRequote} />);
+    expect(screen.getByText("Asking market makers for a price")).toBeTruthy();
+    act(() => vi.advanceTimersByTime(30_000));
+    expect(screen.getByText("No quote came back in 30 seconds.")).toBeTruthy();
+    expect(h.cancel).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRequote).toHaveBeenCalledOnce();
+    expect(screen.getByText("Asking market makers for a price")).toBeTruthy();
+  });
 });
 
 describe("Buy", () => {
     const buyPreview = { side: "buy" as const, terms: { type: "covered_call" as const, strike: 150e9 }, strikeDisplay: "$150", quantity: 2e9, quantityDisplay: "2 SOL" };
     const buyQuote = { ...quote, side: "buy", terms: buyPreview.terms, price: 5e9, net_price: 4.5e9 } as QuoteReceivedMessage;
-    const row = (label: string) => screen.getByText(label).parentElement;
+    /** the value beside a label in the terms list */
+    const row = (label: string) => screen.getByText(label).nextElementSibling;
 
     it("shows the gross premium, max loss and break-even for a call", async () => {
       setup(buyPreview, buyQuote);
-      await screen.findByRole("button", { name: "Accept Quote" });
+      await screen.findByRole("button", { name: "Confirm trade" });
       expect(screen.getByText("Buy a call")).toBeTruthy();
       expect(screen.getAllByText("10.00 USDC").length).toBeGreaterThan(0);
       expect(screen.queryByText("9.00 USDC")).toBeNull();
-      expect(row("Max loss")?.textContent).toContain("10.00 USDC");
+      // the premium is the most a buyer can lose, said once under the amount
+      expect(screen.getByText("This is the most you can lose.")).toBeTruthy();
+      expect(screen.queryByText("Max loss")).toBeNull();
       expect(row("Break-even")?.textContent).toContain("$155");
       expect(row("Deposit to exercise")?.textContent).toContain("300");
       expect(screen.queryByText("APR")).toBeNull();
     });
 
+    it("once confirmed, reminds of the deposit in one line and makes Portfolio the main button", async () => {
+      const h = setup(buyPreview, buyQuote);
+      await h.send();
+      h.emit("orderConfirmed", "order", "position", 3);
+      expect(screen.getByText("Your trade is confirmed")).toBeTruthy();
+      expect(screen.getByText("To exercise, deposit from Portfolio before expiry.")).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Deposit in Portfolio" }).getAttribute("href")).toBe("/portfolio");
+      expect(screen.queryByRole("link", { name: "View in Portfolio" })).toBeNull();
+    });
+
     it("mirrors break-even and the exercise deposit for a put", async () => {
       const terms = { type: "cash_secured_put" as const, strike: 150e9 };
       setup({ ...buyPreview, terms }, { ...buyQuote, terms });
-      await screen.findByRole("button", { name: "Accept Quote" });
+      await screen.findByRole("button", { name: "Confirm trade" });
       expect(screen.getByText("Buy a put")).toBeTruthy();
       expect(row("Break-even")?.textContent).toContain("$145");
       expect(row("Deposit to exercise")?.textContent).toContain("2 SOL");
     });
 
-    it("shows max loss, max gain and break-even for a bought spread, with no deposit", async () => {
+    it("shows max gain and break-even for a bought spread, with no deposit", async () => {
       const terms = { type: "call_spread" as const, lower_strike: 150e9, upper_strike: 160e9 };
       setup({ ...buyPreview, terms }, { ...buyQuote, terms });
-      await screen.findByText("Quote Received");
+      await screen.findByRole("button", { name: "Confirm trade" });
       expect(screen.getByText("Buy a call spread")).toBeTruthy();
-      expect(screen.getByText("Max loss").nextElementSibling?.textContent).toBe("10.00 USDC");
+      expect(screen.getByText("This is the most you can lose.")).toBeTruthy();
       expect(screen.getByText("Max gain").nextElementSibling?.textContent).toBe("10.00 USDC");
       expect(screen.getByText("Break-even").nextElementSibling?.textContent).toBe("$155.00");
       expect(screen.queryByText("Deposit to exercise")).toBeNull();
@@ -259,7 +329,7 @@ describe("Buy", () => {
     it("breaks even under the upper leg of a bought cash put", async () => {
       const terms = { type: "cash_put" as const, strike: 150e9 };
       setup({ ...buyPreview, terms }, { ...buyQuote, terms });
-      await screen.findByText("Quote Received");
+      await screen.findByRole("button", { name: "Confirm trade" });
       expect(screen.getByText("Buy a cash put")).toBeTruthy();
       expect(screen.getByText("Max gain").nextElementSibling?.textContent).toBe("290.00 USDC");
       expect(screen.getByText("Break-even").nextElementSibling?.textContent).toBe("$145.00");
@@ -267,14 +337,15 @@ describe("Buy", () => {
 
     it("waits on a quote of the wrong side", () => {
       setup(buyPreview, { ...buyQuote, side: "sell" });
-      expect(screen.queryByRole("button", { name: "Accept Quote" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Confirm trade" })).toBeNull();
     });
 
     it("leaves the sell panel without any buy terms", async () => {
       setup();
-      await screen.findByRole("button", { name: "Accept Quote" });
+      await screen.findByRole("button", { name: "Confirm trade" });
       expect(screen.queryByText("Max loss")).toBeNull();
+      expect(screen.queryByText("Deposit to exercise")).toBeNull();
       expect(screen.queryByRole("alert")).toBeNull();
-      expect(screen.getByText("Total premium")).toBeTruthy();
+      expect(screen.getByText("You earn now")).toBeTruthy();
     });
 });

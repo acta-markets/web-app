@@ -59,6 +59,12 @@ interface RfqContextValue {
   /** Best live quote for our open RFQ */
   bestQuote: QuoteReceivedMessage | null;
   quoteSecondsRemaining: (quote: QuoteReceivedMessage) => number;
+  /**
+   * Seconds until this RFQ closes, which is when its quotes stop being acceptable. A quote's own
+   * `valid_until` runs past that (makers pad it), so this is the deadline to show. Null for
+   * an RFQ that is not the current one.
+   */
+  rfqSecondsRemaining: (rfqId: string) => number | null;
   /** Indicative prices */
   indicativePrices: IndicativePricesMessage | null;
   /** Returns cached indicatives for specific market + position type + side */
@@ -172,6 +178,8 @@ interface RfqProviderProps {
 }
 
 const RFQ_SESSION_KEY = "acta_rfq_ws_session";
+/** An earn summary asked for again within this window is the same answer; skip the request. */
+const EARN_SUMMARY_REPEAT_MS = 5_000;
 export const RFQ_TTL_SECONDS = 30;
 
 function isAuthFailureError(err: ActaWsClientError): boolean {
@@ -247,7 +255,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const [positionsFailed, setPositionsFailed] = useState(false);
   const positionsRequestRef = useRef<string | null>(null);
   const activeRfqsRequestRef = useRef<string | null>(null);
-  const pendingRfqRef = useRef<{ requestId: string; identity: ProductTerms; spread: ReturnType<typeof spreadTerms> | null; rfqId: string | null; rfq: RfqBeforeCreation } | null>(null);
+  const pendingRfqRef = useRef<{ requestId: string; identity: ProductTerms; spread: ReturnType<typeof spreadTerms> | null; rfqId: string | null; rfq: RfqBeforeCreation; /** server seconds; our own estimate until `RfqCreated` names it */ expiresAt: number } | null>(null);
   const abandonedRequestsRef = useRef(new Set<string>());
   const quotesRef = useRef(new Map<string, QuoteReceivedMessage>());
   const quoteExpiryTimerRef = useRef<number | null>(null);
@@ -260,6 +268,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
     new Map()
   );
   const tokenMarketsRequest = useRef<{ requestId: string; underlyingMint: string } | null>(null);
+  /** When the earn summary was last asked for, so a page that mounts right after connect does not ask again. */
+  const earnSummaryRequestedAt = useRef(0);
   const [assetSnapshots, setAssetSnapshots] = useState<ReadonlyMap<string, TokenMarketsInfoData>>(new Map());
   const [error, setError] = useState<Error | null>(null);
   const pendingRfqAuthWalletRef = useRef<string | null>(null);
@@ -299,6 +309,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
   const quoteSecondsRemaining = useCallback((quote: QuoteReceivedMessage) =>
     Math.max(0, Math.ceil(Number(quote.valid_until) - (Date.now() + serverClockOffsetMsRef.current) / 1000)), []);
+
+  const rfqSecondsRemaining = useCallback((rfqId: string) => {
+    const pending = pendingRfqRef.current;
+    if (!pending || pending.rfqId !== rfqId) return null;
+    return Math.max(0, Math.ceil(pending.expiresAt - (Date.now() + serverClockOffsetMsRef.current) / 1000));
+  }, []);
 
   const refreshBestQuote = useCallback(() => {
     if (quoteExpiryTimerRef.current != null) window.clearTimeout(quoteExpiryTimerRef.current);
@@ -365,6 +381,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         console.log("[RfqProvider] Connected (anonymous)");
         setConnectionState("connected");
         setError(null);
+        earnSummaryRequestedAt.current = Date.now();
         client.getEarnSummary();
         client.getMarketDescriptors();
         client.getTokens();
@@ -537,6 +554,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         setStrikeTicks(new Map());
         client.getMarketDescriptors();
         client.getTokens();
+        earnSummaryRequestedAt.current = Date.now();
         client.getEarnSummary();
       });
 
@@ -602,7 +620,11 @@ export function RfqProvider({ children }: RfqProviderProps) {
           return;
         }
         const pending = pendingRfqRef.current;
-        if (pending && msg.request_id === pending.requestId) pending.rfqId = msg.rfq_id;
+        if (pending && msg.request_id === pending.requestId) {
+          pending.rfqId = msg.rfq_id;
+          const expiresAt = Number(msg.expires_at);
+          if (Number.isFinite(expiresAt) && expiresAt > 0) pending.expiresAt = expiresAt;
+        }
       });
       client.on("quoteReceived", (quote) => {
         const pending = pendingRfqRef.current;
@@ -881,7 +903,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
   }, []);
 
   const getEarnSummary = useCallback(() => {
-    clientRef.current?.getEarnSummary();
+    const client = clientRef.current;
+    // The provider asks on connect; a page that mounts in the same moment would only repeat it,
+    // and every repeat makes the trade page re-fetch a snapshot per listed asset.
+    if (!client || Date.now() - earnSummaryRequestedAt.current < EARN_SUMMARY_REPEAT_MS) return;
+    earnSummaryRequestedAt.current = Date.now();
+    client.getEarnSummary();
   }, []);
 
   const getAssetSnapshots = useCallback((mints: string[]) => {
@@ -978,6 +1005,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         spread,
         identity: params.terms,
         rfqId: null,
+        expiresAt: (Date.now() + serverClockOffsetMsRef.current) / 1000 + rfqRequest.timeout_seconds,
         rfq: isCashSettledTerms(params.terms) ? {
           market_descriptor: { ...descriptor.market_descriptor, collateral_mint: descriptor.market_descriptor.quote_mint, settlement_mint: descriptor.market_descriptor.quote_mint },
           terms: params.terms, side, quantity: params.quantity, order_options: [params.terms],
@@ -1126,6 +1154,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     positions,
     bestQuote,
     quoteSecondsRemaining,
+    rfqSecondsRemaining,
     indicativePrices,
     getIndicativePricesCached,
     tokenMarketsInfo,

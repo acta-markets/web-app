@@ -58,6 +58,20 @@ describe("quote request lifecycle", () => {
     expect(hook.result.current.isRequesting).toBe(false);
   });
 
+  it("sends the same request again from the open modal, which stays open", () => {
+    const hook = renderHook(() => useQuoteRequest());
+    act(() => hook.result.current.modalProps.onRequote());
+    expect(mocks.context.submitRfq).not.toHaveBeenCalled(); // nothing to repeat yet
+
+    act(() => hook.result.current.request(rfq, preview));
+    mocks.context = { ...mocks.context, bestQuote: { strike: 95e9 } };
+    hook.rerender();
+    act(() => hook.result.current.modalProps.onRequote());
+    expect(mocks.context.submitRfq).toHaveBeenCalledTimes(2);
+    expect(mocks.context.submitRfq).toHaveBeenLastCalledWith({ ...rfq, timeoutSeconds: 30 });
+    expect(hook.result.current.modalProps.open).toBe(true);
+  });
+
   it("cancels a pending RFQ on unmount only when asked to", () => {
     const keeps = renderHook(() => useQuoteRequest());
     act(() => keeps.result.current.request(rfq, preview));

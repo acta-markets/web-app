@@ -16,7 +16,8 @@ export type QuoteFailure = { kind: "error"; message: string } | { kind: "timeout
 /**
  * Fresh quote on click: `request` sends the RFQ and waits. The first quote opens the
  * order modal, an RFQ error ends the wait, and with no quote after RFQ_TTL_SECONDS the
- * RFQ is cancelled. Spread `modalProps` onto `RfqFlowModal`.
+ * RFQ is cancelled. Spread `modalProps` onto `RfqFlowModal`; from there an expired quote or a
+ * failed order can ask again without leaving the modal.
  */
 export function useQuoteRequest({ cancelOnUnmount = false }: { cancelOnUnmount?: boolean } = {}) {
   const { bestQuote, error, submitRfq, cancelRfq } = useRfqContext();
@@ -62,11 +63,18 @@ export function useQuoteRequest({ cancelOnUnmount = false }: { cancelOnUnmount?:
     };
   }, [cancelOnUnmount]);
 
+  const lastRfq = useRef<QuoteRfq | null>(null);
   const request = useCallback((rfq: QuoteRfq, orderPreview: RfqOrderPreview) => {
+    lastRfq.current = rfq;
     setFailure(null);
     setPreview(orderPreview);
     submitRfq({ ...rfq, timeoutSeconds: RFQ_TTL_SECONDS });
     setIsRequesting(true);
+  }, [submitRfq]);
+
+  /** The same request again, from inside the open modal: it waits there for the new quote. */
+  const requote = useCallback(() => {
+    if (lastRfq.current) submitRfq({ ...lastRfq.current, timeoutSeconds: RFQ_TTL_SECONDS });
   }, [submitRfq]);
 
   const onClose = useCallback(() => {
@@ -78,6 +86,6 @@ export function useQuoteRequest({ cancelOnUnmount = false }: { cancelOnUnmount?:
     isRequesting,
     failure,
     request,
-    modalProps: { open: modalOpen, onClose, requestNonce, preview },
+    modalProps: { open: modalOpen, onClose, requestNonce, preview, onRequote: requote },
   };
 }

@@ -185,6 +185,20 @@ describe("RFQ request ownership", () => {
     h.result.current.cancelRfq();
     expect(h.cancel).toHaveBeenCalledExactlyOnceWith("venue-id");
   });
+  it("reports the time to the RFQ's close: its own estimate first, then the venue's", async () => {
+    const h = await setup();
+    const id = h.submit();
+    await act(async () => {});
+    // before RfqCreated there is no venue id to ask about
+    expect(h.result.current.rfqSecondsRemaining("venue-id")).toBeNull();
+    const closesAt = Math.floor(Date.now() / 1000) + 12;
+    h.emit("rfqCreated", { rfq_id: "venue-id", request_id: id, expires_at: closesAt });
+    const left = h.result.current.rfqSecondsRemaining("venue-id")!;
+    expect(left).toBeGreaterThan(10);
+    expect(left).toBeLessThanOrEqual(13);
+    // another RFQ's id is not ours to time
+    expect(h.result.current.rfqSecondsRemaining("someone-else")).toBeNull();
+  });
   it("surfaces a create rejection with its message and drops the request", async () => {
     const h = await setup();
     let reject!: (error: unknown) => void;

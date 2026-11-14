@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AppButton } from "@/components/app-ui/app-button";
+import { useEffect, useRef, useState } from "react";
 import { AppModal } from "@/components/app-ui/app-modal";
-import { useRfqContext } from "@/components/rfq/rfq-provider";
+import { RFQ_TTL_SECONDS, useRfqContext } from "@/components/rfq/rfq-provider";
 import type { QuoteReceivedMessage } from "@/lib/rfq-client";
-import { Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { QuoteFlowView, quoteFlowTitle, type QuoteFlowOrder, type QuoteFlowStep } from "./quote-flow-view";
 import { useRfqOrder } from "./use-rfq-order";
 import type { VersionedTransaction } from "@solana/web3.js";
 import { IS_MAINNET } from "@/lib/tokens";
 
 import { BUY_PRODUCT_NAME, isCashSettled, lowerStrike, productLabel, quoteMatchesProduct, type ProductTerms, type TakerSide } from "@/lib/spreads";
-import { formatPrice, formatUsdc } from "@/lib/trade/format";
+import { formatExpiryUtc, formatPrice, formatUsdc } from "@/lib/trade/format";
 import { BUY_DEPOSIT_REMINDER, SPREAD_SETTLEMENT_NOTE, buyBreakEven, exerciseDepositText, spreadBounds, spreadBreakEven, spreadMaxGain } from "@/lib/trade/thesis";
 
 export type RfqOrderPreview = {
@@ -31,18 +30,7 @@ export type RfqOrderPreview = {
   lockedPremiumUsd?: number | null;
 };
 
-type FlowStep = 
-  | "idle"
-  | "requesting_quote"
-  | "quote_received"
-  | "accepting_quote"
-  | "signing"
-  | "submitting"
-  | "confirmed"
-  | "failed"
-  | "recovering"
-  | "pending"
-  | "unknown";
+type FlowStep = QuoteFlowStep;
 
 interface RfqFlowModalProps {
   open: boolean;
@@ -50,6 +38,8 @@ interface RfqFlowModalProps {
   onBusyChange?: (busy: boolean) => void;
   /** Incremented by parent whenever a new quote is requested */
   requestNonce: number;
+  /** Sends the same request again, for a quote that expired or an order that failed. */
+  onRequote?: () => void;
   preview: RfqOrderPreview | null;
   walletAddress: string | null;
   backendUrl: string;
@@ -60,33 +50,29 @@ interface RfqFlowModalProps {
   rpc: Parameters<typeof useRfqOrder>[0]["rpc"];
 }
 
-function BuyQuoteRows({ preview, quantity, grossPerUnit, maxLoss, formatQuote }: {
-  preview: RfqOrderPreview;
-  quantity: number;
-  grossPerUnit: number;
-  maxLoss: string;
-  formatQuote: (value: number) => string;
-}) {
+const PENDING = "\u2014";
+
+/**
+ * A bought position's terms that depend on the quoted price; dashes until the quote is in.
+ * The most it can lose is the premium itself, which the headline already says.
+ */
+function buyQuoteFacts(preview: RfqOrderPreview, quantity: number, grossPerUnit: number | null): Array<[string, string]> {
   const isPut = preview.terms.type === "cash_secured_put";
   const strike = lowerStrike(preview.terms) / 1_000_000_000;
   const bounds = spreadBounds(preview.terms);
-  const rows = bounds ? [
-    ["Max loss", maxLoss],
-    ["Max gain", formatQuote(spreadMaxGain(quantity, bounds.upper, bounds.lower) - grossPerUnit * quantity)],
-    ["Break-even", formatPrice(preview.terms.type === "call_spread"
-      ? spreadBreakEven(false, bounds.lower / 1e9, grossPerUnit)
-      : spreadBreakEven(true, bounds.upper / 1e9, grossPerUnit))],
-  ] : [
-    ["Max loss", maxLoss],
-    ["Break-even", formatPrice(buyBreakEven(isPut, strike, grossPerUnit))],
+  const priced = grossPerUnit != null;
+  if (bounds) {
+    return [
+      ["Max gain", priced ? formatUsdc(spreadMaxGain(quantity, bounds.upper, bounds.lower) - grossPerUnit * quantity) : PENDING],
+      ["Break-even", priced ? formatPrice(preview.terms.type === "call_spread"
+        ? spreadBreakEven(false, bounds.lower / 1e9, grossPerUnit)
+        : spreadBreakEven(true, bounds.upper / 1e9, grossPerUnit)) : PENDING],
+    ];
+  }
+  return [
+    ["Break-even", priced ? formatPrice(buyBreakEven(isPut, strike, grossPerUnit)) : PENDING],
     ["Deposit to exercise", exerciseDepositText(isPut, quantity, strike, preview.asset)],
   ];
-  return rows.map(([label, value]) => (
-    <div key={label} className="flex justify-between text-sm">
-      <span className="text-content-tertiary">{label}</span>
-      <span className="text-content-secondary">{value}</span>
-    </div>
-  ));
 }
 
 export function RfqFlowModal({
@@ -94,6 +80,7 @@ export function RfqFlowModal({
   onClose,
   onBusyChange,
   requestNonce,
+  onRequote,
   preview,
   walletAddress,
   backendUrl,
@@ -104,6 +91,7 @@ export function RfqFlowModal({
   const {
     bestQuote,
     quoteSecondsRemaining,
+    rfqSecondsRemaining,
     isAuthenticated,
     error: rfqError,
     acceptQuote,
@@ -197,33 +185,53 @@ export function RfqFlowModal({
     return () => window.clearInterval(timer);
   }, [modalOpen, flow.type, accepting, quote]);
 
-  const secondsRemaining = quote ? quoteSecondsRemaining(quote) : 0;
+  // Waiting for a quote inside the modal (the first one was withdrawn, or a fresh one was asked
+  // for) must end: past the request's own lifetime nothing more can arrive.
+  useEffect(() => {
+    if (!modalOpen || flow.type !== "idle" || quoteStep !== "requesting_quote") return;
+    const timer = window.setTimeout(() => {
+      cancelRfq();
+      setError(`No quote came back in ${RFQ_TTL_SECONDS} seconds.`);
+      setStep("failed");
+    }, RFQ_TTL_SECONDS * 1000);
+    return () => window.clearTimeout(timer);
+  }, [modalOpen, flow.type, quoteStep, cancelRfq]);
+
+  // The time left to confirm is the RFQ's, not the quote's: makers pad a quote's validity past
+  // the RFQ's close and refresh it as they requote, so counting that down ran long and jumped.
+  // The RFQ's close only ever approaches. The quote's own validity still caps it.
+  const quoteRemaining = quote ? quoteSecondsRemaining(quote) : 0;
+  const rfqRemaining = quote ? rfqSecondsRemaining?.(quote.rfq_id) ?? null : null;
+  const secondsRemaining = rfqRemaining == null ? quoteRemaining : Math.min(quoteRemaining, rfqRemaining);
+  // what was left when this RFQ's quote was first shown: the countdown bar drains against it
+  const countdownStart = useRef<{ rfqId: string; total: number } | null>(null);
+  if (quote && countdownStart.current?.rfqId !== quote.rfq_id) {
+    countdownStart.current = { rfqId: quote.rfq_id, total: Math.max(1, secondsRemaining) };
+  }
+  const secondsTotal = quote ? countdownStart.current?.total ?? 0 : 0;
   const handleAcceptQuote = () => {
     if (quote && quoteSecondsRemaining(quote) > 0) void accept(quote, rfqTerms(quote.rfq_id));
   };
 
+  /** Mid-order (signing, sending, checking) the modal stays: the order has to settle first. */
+  const closable = flow.type === "idle" || flow.type === "confirmed" || flow.type === "failed";
   const handleClose = () => {
-    if (flow.type !== "idle" && flow.type !== "confirmed" && flow.type !== "failed") {
-      return;
-    }
+    if (!closable) return;
     if (flow.type !== "confirmed") cancelRfq();
     reset();
     setRecoveredOpen(false);
     onClose();
   };
 
-  const solscanLink = txSignature && (
-    <div className="mt-2 text-sm text-content-secondary">
-      <a
-        href={`https://solscan.io/tx/${txSignature}${IS_MAINNET ? "" : "?cluster=devnet"}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-accent-primary underline"
-      >
-        View on Solscan
-      </a>
-    </div>
-  );
+  const handleRequote = onRequote
+    ? () => {
+        reset();
+        setError(null);
+        setQuote(null);
+        setStep("requesting_quote");
+        onRequote();
+      }
+    : undefined;
 
   const quoteQuantity = preview ? preview.quantity / 10 ** preview.underlyingDecimals : 0;
   const isBuy = preview?.side === "buy";
@@ -238,206 +246,49 @@ export function RfqFlowModal({
         : null;
   const displayedAprPct = preview?.lockedAprPct ?? null;
 
-  const processingLabel =
-    step === "accepting_quote"
-      ? "Accepting quote..."
-      : step === "signing"
-        ? "Waiting for wallet signature..."
-        : "Submitting to blockchain...";
-
-  const progressText =
-    step === "requesting_quote"
-      ? "Getting quote..."
-      : step === "quote_received" || step === "accepting_quote"
-        ? "Review & accept quote"
-        : step === "signing" || step === "submitting"
-          ? "Sign & submit transaction"
-          : step === "confirmed"
-            ? "Order confirmed"
-            : step === "failed" ? "Order failed" : "Checking order status";
-  const panelClass = "border border-bg-border bg-action-primary/30 p-4";
+  const order: QuoteFlowOrder | null = preview && !isRestoredOrder ? {
+    thesis: preview.thesis ?? null,
+    premiumLabel: isBuy ? "You pay premium" : "You earn now",
+    premium: totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : null,
+    premiumNote: isBuy ? "This is the most you can lose." : null,
+    facts: [
+      [isBuy ? "Size" : "You deposit", preview.quantityDisplay],
+      // the thesis already names the strike; without one the row carries it
+      ...(preview.thesis ? [] : [["Strike", preview.strikeDisplay] as [string, string]]),
+      ...(isBuy ? buyQuoteFacts(preview, quoteQuantity, quoteUnitPremium) : []),
+      ...(!isBuy && displayedAprPct != null ? [["APR", `${displayedAprPct.toFixed(2)}%`] as [string, string]] : []),
+      ...(preview.expiryTs != null ? [["Expires", formatExpiryUtc(preview.expiryTs * 1000)] as [string, string]] : []),
+      ["Type", isBuy ? BUY_PRODUCT_NAME[preview.terms.type] : productLabel(preview.terms.type)],
+    ],
+    note: isBuy && !exercisable ? SPREAD_SETTLEMENT_NOTE : null,
+    nextStep: exercisable ? BUY_DEPOSIT_REMINDER : null,
+  } : null;
 
   return (
-    <AppModal open={modalOpen} onClose={handleClose} title="Submit Order" showHowItWorks={false}>
-      <div className="space-y-4">
-
-        {isRestoredOrder ? (
-          <div className={panelClass}>
-            <div className="font-mono text-sm font-medium text-content-secondary">Recovered order</div>
-          </div>
-        ) : preview ? <div className={panelClass}>
-          <div className="font-mono text-sm font-medium text-content-secondary">Order</div>
-          {preview.thesis ? (
-            <p className="mt-2 font-space text-lg font-semibold leading-[1.2] text-content-primary">
-              &ldquo;{preview.thesis}&rdquo;
-            </p>
-          ) : null}
-          <div className="mt-2 space-y-2 font-mono">
-            <div className="flex justify-between">
-              <span className="text-content-secondary">Asset</span>
-              <span className="font-semibold text-content-primary">{preview.asset}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-content-secondary">Type</span>
-              <span className="font-semibold text-content-primary">
-                {isBuy ? BUY_PRODUCT_NAME[preview.terms.type] : productLabel(preview.terms.type)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-content-secondary">Strike</span>
-              <span className="font-semibold text-content-primary">{preview.strikeDisplay}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-content-secondary">Quantity</span>
-              <span className="font-semibold text-content-primary">{preview.quantityDisplay}</span>
-            </div>
-            {totalPremiumUsd != null && (
-              <div className="flex justify-between">
-                <span className="text-content-secondary">{isBuy ? "Premium you pay" : "Premium"}</span>
-                <span className="font-semibold text-content-primary">{formatUsdc(totalPremiumUsd)}</span>
-              </div>
-            )}
-            {displayedAprPct != null && (
-              <div className="flex justify-between">
-                <span className="text-content-secondary">APR</span>
-                <span className="font-semibold text-content-primary">{displayedAprPct.toFixed(2)}%</span>
-              </div>
-            )}
-          </div>
-        </div> : null}
-
-        <>
-        <div className="flex items-center gap-2 font-mono text-sm">
-          {(step === "requesting_quote" || step === "accepting_quote" || step === "signing" || step === "submitting") ? (
-            <Loader2 className="h-4 w-4 animate-spin text-accent-primary" />
-          ) : step === "confirmed" ? (
-            <CheckCircle2 className="h-4 w-4 text-additional-green-primary" />
-          ) : step === "failed" ? (
-            <XCircle className="h-4 w-4 text-additional-red-primary" />
-          ) : (
-            <div className="h-2.5 w-2.5 border border-content-tertiary" />
-          )}
-          <span className="text-content-secondary">{progressText}</span>
-        </div>
-
-        {step === "requesting_quote" && (
-          <div className={panelClass}>
-            <div className="flex items-center gap-2 font-mono text-sm font-semibold text-accent-primary">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Getting quote from market makers
-            </div>
-            <div className="mt-1 font-mono text-xs text-content-secondary">
-              This usually takes a few seconds.
-            </div>
-          </div>
-        )}
-
-        {!isRestoredOrder && quote && step === "quote_received" && (
-          <div className={panelClass}>
-            <div className="font-mono text-sm font-semibold text-accent-primary">Quote Received</div>
-            <p role="timer" className="mt-1 font-mono text-sm text-content-secondary">
-              {secondsRemaining > 0 ? `Quote expires in ${secondsRemaining}s` : "Quote expired. Request a fresh quote."}
-            </p>
-            <div className="mt-3 space-y-2 font-mono">
-              <div className="flex justify-between">
-                <span className="text-content-secondary">{isBuy ? "Premium you pay" : "Total premium"}</span>
-                <span className="text-lg font-bold text-accent-primary">
-                  {totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : "—"}
-                </span>
-              </div>
-              {isBuy && preview && quoteUnitPremium != null ? (
-                <BuyQuoteRows
-                  preview={preview}
-                  quantity={quoteQuantity}
-                  grossPerUnit={quoteUnitPremium}
-                  maxLoss={totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : "—"}
-                  formatQuote={formatUsdc}
-                />
-              ) : (
-                <div className="flex justify-between text-sm">
-                  <span className="text-content-tertiary">APR</span>
-                  <span className="text-content-secondary">{displayedAprPct != null ? `${displayedAprPct.toFixed(2)}%` : "—"}</span>
-                </div>
-              )}
-            </div>
-            {isBuy && !exercisable ? <p className="mt-3 font-mono text-sm leading-[1.4] text-content-secondary">{SPREAD_SETTLEMENT_NOTE}</p> : null}
-          </div>
-        )}
-        </>
-
-        {step === "confirmed" && (
-          <div className={`${panelClass} text-center`}>
-            <CheckCircle2 className="mx-auto h-12 w-12 text-additional-green-primary" />
-            <div className="mt-3 font-mono font-semibold text-content-primary">Order Confirmed!</div>
-            {positionPda && (
-              <div className="mt-1 text-xs text-content-secondary">
-                Position opened successfully.
-              </div>
-            )}
-            {exercisable ? <div className="mt-1 text-xs text-content-secondary">{BUY_DEPOSIT_REMINDER}</div> : null}
-            {solscanLink}
-          </div>
-        )}
-
-        {step === "failed" && flowError && (
-          <div className={panelClass}>
-            <div className="flex items-start gap-3">
-              <XCircle className="h-5 w-5 shrink-0 text-additional-red-primary" />
-              <div>
-                <div className="font-mono font-semibold text-content-primary">Order Failed</div>
-                <div className="mt-1 font-mono text-sm text-content-secondary">{flowError}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {(step === "recovering" || step === "pending" || step === "unknown") && (
-          <div className={panelClass}>
-            <p className="font-mono text-sm text-content-secondary">
-              {step === "recovering" ? "Connection lost. Your order will be checked after reconnect."
-                : step === "pending" ? (txSignature ? "Transaction sent. Waiting for on-chain confirmation." : "Order submitted. Waiting for on-chain confirmation.")
-                : "The order outcome is not yet known. Check its status before placing another order."}
-            </p>
-            {step === "pending" && solscanLink}
-            <div className="mt-3 flex gap-2">
-              <AppButton onClick={checkStatus}>Check order status</AppButton>
-              {canAbandon && <AppButton variant="secondary" onClick={abandon}>Cancel order</AppButton>}
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          {step === "quote_received" && (
-            <>
-              <AppButton variant="secondary" className="flex-1" onClick={handleClose}>
-                Cancel
-              </AppButton>
-              <AppButton className="flex-1" onClick={handleAcceptQuote} disabled={accepting || secondsRemaining === 0}>
-                Accept Quote
-              </AppButton>
-            </>
-          )}
-
-          {(step === "accepting_quote" || step === "signing" || step === "submitting") && (
-            <>
-              {canAbandon && (
-                <AppButton variant="secondary" className="flex-1" onClick={abandon}>Cancel order</AppButton>
-              )}
-              <AppButton className="flex-1" disabled>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {processingLabel}
-              </AppButton>
-            </>
-          )}
-
-          {(step === "confirmed" || step === "failed") && (
-            <AppButton className="w-full" onClick={handleClose}>
-              {step === "confirmed" ? "Done" : "Close"}
-            </AppButton>
-          )}
-        </div>
-
-      </div>
+    <AppModal
+      open={modalOpen}
+      onClose={handleClose}
+      title={quoteFlowTitle(step, isRestoredOrder)}
+      showHowItWorks={false}
+      dismissible={closable}
+      className="max-w-lg"
+    >
+      <QuoteFlowView
+        step={step}
+        order={order}
+        restored={isRestoredOrder}
+        secondsRemaining={secondsRemaining}
+        secondsTotal={secondsTotal}
+        error={flowError}
+        txUrl={txSignature ? `https://solscan.io/tx/${txSignature}${IS_MAINNET ? "" : "?cluster=devnet"}` : null}
+        accepting={accepting}
+        canAbandon={canAbandon}
+        onAccept={handleAcceptQuote}
+        onClose={handleClose}
+        onAbandon={abandon}
+        onCheckStatus={checkStatus}
+        onRequote={handleRequote}
+      />
     </AppModal>
   );
 }
