@@ -44,12 +44,12 @@ export function AppNav() {
               aria-current={isActive ? "page" : undefined}
               aria-label={t.soon ? `${t.label} (coming soon)` : undefined}
               className={[
-                "flex h-8 items-center justify-center gap-1.5 whitespace-nowrap border px-3 py-1.5 text-sm font-normal leading-[1.2] tracking-[-0.28px] backdrop-blur-[4px] transition-colors md:h-10 md:px-4 md:py-2.5 md:text-base md:tracking-[-0.32px]",
+                "flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-sm font-normal leading-[1.2] tracking-[-0.28px] backdrop-blur-[4px] transition-colors md:h-10 md:px-4 md:py-2.5 md:text-base md:tracking-[-0.32px]",
                 isActive
-                  ? "bg-[rgba(42,162,134,0.2)] border-[rgba(42,162,134,0.3)] text-content-primary"
+                  ? "bg-[rgba(42,162,134,0.2)] text-content-primary"
                   : t.soon
-                    ? "bg-[rgba(18,18,18,0.01)] border-bg-border text-content-tertiary hover:text-content-primary"
-                    : "bg-[rgba(18,18,18,0.01)] border-bg-border text-content-secondary hover:text-content-primary"
+                    ? "bg-[rgba(18,18,18,0.01)] text-content-tertiary hover:text-content-primary"
+                    : "bg-[rgba(18,18,18,0.01)] text-content-secondary hover:text-content-primary"
               ].join(" ")}
             >
               {t.label}
@@ -62,7 +62,6 @@ export function AppNav() {
       </div>
       <div className="flex w-[129px] flex-col items-end">
         <SolanaConnectButton />
-        <Link prefetch={false} href="/docs" className="mt-2 text-xs text-content-secondary hover:text-accent-secondary">Docs</Link>
       </div>
     </nav>
   );

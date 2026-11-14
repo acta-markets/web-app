@@ -29,8 +29,8 @@ export function AppSegmented<T extends string>({
 }) {
   const sizing = stretch ? "flex-1" : "shrink-0";
   const btn = size === "lg"
-    ? `relative min-w-0 ${sizing} flex items-center justify-center whitespace-nowrap backdrop-blur-[4px] border px-4 py-2.5 text-base font-normal leading-none tracking-tight transition-colors`
-    : `relative min-w-0 ${sizing} flex items-center justify-center whitespace-nowrap backdrop-blur-[4px] border px-4 py-2.5 text-sm font-normal leading-none tracking-tight transition-colors`;
+    ? `relative min-w-0 ${sizing} flex items-center justify-center whitespace-nowrap backdrop-blur-[4px] px-4 py-2.5 text-base font-normal leading-none tracking-tight transition-colors`
+    : `relative min-w-0 ${sizing} flex items-center justify-center whitespace-nowrap backdrop-blur-[4px] px-4 py-2.5 text-sm font-normal leading-none tracking-tight transition-colors`;
 
   return (
     <div
@@ -52,8 +52,8 @@ export function AppSegmented<T extends string>({
               btn,
               "disabled:cursor-not-allowed disabled:opacity-40",
               active
-                ? "bg-accent-primary/20 border-accent-primary/30 text-content-primary"
-                : "bg-[rgba(18,18,18,0.01)] border-bg-border text-content-secondary hover:text-content-primary"
+                ? "bg-accent-primary/20 text-content-primary"
+                : "bg-[rgba(18,18,18,0.01)] text-content-secondary hover:text-content-primary"
             )}
           >
             {o.label}
