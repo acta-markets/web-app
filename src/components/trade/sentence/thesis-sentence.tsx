@@ -1,10 +1,17 @@
 /* eslint-disable @next/next/no-img-element */
 import * as React from "react";
-import { AppInlineSelect, type AppInlineSelectOption } from "@/components/app-ui/app-inline-select";
+import { ArrowUpDown } from "lucide-react";
+import {
+  AppInlineSelect,
+  INLINE_PILL,
+  INLINE_PILL_FACE,
+  INLINE_PILL_GLYPH,
+  type AppInlineSelectOption,
+} from "@/components/app-ui/app-inline-select";
 import { cn } from "@/lib/cn";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import type { TakerSide } from "@/lib/spreads";
-import { DIRECTIONS, SENTENCE, directionsFor, type Direction } from "@/lib/trade/thesis";
+import { DIRECTIONS, SENTENCE, type Direction } from "@/lib/trade/thesis";
 
 // Pill text stays in the sentence's own ink so the sentence reads as one line of text;
 // the tint (and the direction arrow) carries the meaning.
@@ -87,6 +94,8 @@ function ExpirySlash({
               disabled={disabled || o.disabled}
               onClick={() => onChange(o.value)}
               className={cn(
+                // on a phone the tap area fills the line's height, not just the word's
+                "relative max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1 max-md:after:content-['']",
                 "underline-offset-[0.2em] decoration-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary disabled:cursor-not-allowed disabled:opacity-60",
                 selected
                   ? "text-content-primary underline decoration-additional-violet-primary-deep"
@@ -151,6 +160,55 @@ function DirectionFace({ direction }: { direction: Direction }) {
   );
 }
 
+/**
+ * The direction has two values, so it is a switch, not a menu: one click on the pill flips it,
+ * the same as a click on the chart. It keeps the width of its wider value, so flipping never
+ * reflows the sentence. When the asset lists no markets the other way, it is plain text.
+ */
+function DirectionToggle({
+  direction,
+  unavailable,
+  disabled,
+  className,
+  onChange,
+}: {
+  direction: Direction;
+  unavailable?: ReadonlyArray<Direction>;
+  disabled: boolean;
+  className: string;
+  onChange: (direction: Direction) => void;
+}) {
+  const other: Direction = direction === "above" ? "below" : "above";
+  const blocked = unavailable?.includes(other) ?? false;
+  return (
+    <button
+      type="button"
+      data-pill="Direction"
+      aria-label={blocked ? `Direction: ${direction}` : `Direction: ${direction}. Switch to ${other}`}
+      title={blocked ? `No markets ${other} for this asset` : `Switch to ${other}`}
+      disabled={disabled || blocked}
+      onClick={() => onChange(other)}
+      className={cn(
+        INLINE_PILL,
+        // on a phone the tap area fills the line's height, not just the word's
+        "max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1 max-md:after:content-['']",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary",
+        disabled ? "cursor-not-allowed opacity-60" : blocked ? "cursor-default" : "cursor-pointer",
+        className,
+      )}
+    >
+      <span className="inline-grid">
+        {DIRECTIONS.map((d) => (
+          <span key={d.value} aria-hidden={d.value !== direction} className={cn(INLINE_PILL_FACE, d.value !== direction && "invisible")}>
+            <DirectionFace direction={d.value} />
+          </span>
+        ))}
+      </span>
+      {blocked ? null : <ArrowUpDown aria-hidden="true" className={INLINE_PILL_GLYPH} />}
+    </button>
+  );
+}
+
 function StrikeFace({ label }: { label: string | null }) {
   return label ? <span>{label}</span> : <Pending />;
 }
@@ -171,6 +229,7 @@ export function ThesisSentence({
   onAsset,
   onDirection,
   onStrike,
+  onStrikePreview,
   onExpiry,
   compact = false,
 }: {
@@ -190,21 +249,12 @@ export function ThesisSentence({
   onAsset: (symbol: string) => void;
   onDirection: (direction: Direction) => void;
   onStrike: (strike1e9: string) => void;
+  /** the strike under the pointer or the keyboard while its menu is open; null once it closes */
+  onStrikePreview?: (strike1e9: string | null) => void;
   onExpiry: (expiryTs: string) => void;
   /** caption mode: the belief reads as a compact line under the chart, not a headline */
   compact?: boolean;
 }) {
-  const directionOptions = directionsFor(side).map((d) => {
-    const unavailable = options.unavailable?.includes(d.value) ?? false;
-    return {
-      value: d.value,
-      label: d.value,
-      icon: <span aria-hidden="true" className={cn("w-3 text-center", ARROW[d.value])}>{d.arrow}</span>,
-      detail: unavailable ? "no markets" : d.optionName.toLowerCase(),
-      disabled: unavailable,
-    };
-  });
-
   // The belief is one line; the cushion reads quietly under it, a size down. Lines break
   // only between the nowrap phrases. The direction and strike pills hold their widest
   // value's width so picking them never reflows the sentence; the asset pill hugs its
@@ -212,7 +262,7 @@ export function ThesisSentence({
   return (
     <div className="flex flex-col gap-2 font-space font-semibold tracking-[-0.03em] text-content-primary max-md:gap-1">
       <p className={compact
-        ? "text-[clamp(17px,1.72vw,21.5px)] leading-[1.5] max-md:text-[17px]"
+        ? "text-[clamp(17px,1.72vw,21.5px)] leading-[1.5] max-md:text-[17px] max-md:leading-[1.9]"
         : "text-[clamp(26px,2.85vw,40px)] leading-[1.45]"}>
         <span className="whitespace-nowrap">
           {SENTENCE.lead}{" "}
@@ -229,17 +279,13 @@ export function ThesisSentence({
         </span>{" "}
         <span className="whitespace-nowrap">
           {SENTENCE.willBe}{" "}
-          <AppInlineSelect
-            label="Direction"
-            value={direction}
-            options={directionOptions}
-            onChange={(v) => onDirection(v as Direction)}
+          <DirectionToggle
+            direction={direction}
+            unavailable={options.unavailable}
             disabled={disabled}
             className={PILL[direction]}
-            reserve={DIRECTIONS.map((d) => ({ key: d.value, face: <DirectionFace direction={d.value} /> }))}
-          >
-            <DirectionFace direction={direction} />
-          </AppInlineSelect>
+            onChange={onDirection}
+          />
         </span>{" "}
         <span className="whitespace-nowrap">
           <AppInlineSelect
@@ -247,6 +293,7 @@ export function ThesisSentence({
             value={strikeValue}
             options={options.strikes}
             onChange={onStrike}
+            onPreview={onStrikePreview}
             disabled={disabled || !ready || options.strikes.length === 0}
             className={PILL.accent}
             reserve={reserve.strikes.map((s) => ({ key: s.key, face: <StrikeFace label={s.label} /> }))}

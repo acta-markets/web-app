@@ -130,20 +130,33 @@ export function presetAmounts({
   return { half: snapDown(max / 2), max };
 }
 
-/** A starting deposit worth about `targetUsd`, on the step grid and inside the rule. */
+/**
+ * A starting deposit, on the step grid and inside the rule: worth about `targetUsd`, or
+ * `targetUnits` of the asset when the asset has a set starting size (0.1 BTC).
+ */
 export function defaultAmount({
   rule,
   isPut,
   spot,
   targetUsd = 100,
+  targetUnits,
 }: {
   rule: DepositRule | null;
   isPut: boolean;
   spot: number | null;
   targetUsd?: number;
+  targetUnits?: number;
 }): number | null {
   if (!rule) return null;
-  const target = isPut ? targetUsd : spot != null && spot > 0 ? targetUsd / spot : null;
+  const hasSpot = spot != null && spot > 0;
+  const target =
+    targetUnits != null
+      ? isPut
+        ? hasSpot ? targetUnits * spot : null
+        : targetUnits
+      : isPut
+        ? targetUsd
+        : hasSpot ? targetUsd / spot : null;
   if (target == null) return null;
   const stepped = rule.step > 0 ? rule.min + Math.round((target - rule.min) / rule.step) * rule.step : target;
   return clampNumber(stepped, rule.min, rule.max);

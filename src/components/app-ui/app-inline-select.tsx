@@ -10,6 +10,10 @@ export type AppInlineSelectOption = {
   label: string;
   /** secondary text: right-aligned in the menu, after a dot in the phone picker */
   detail?: string;
+  /** a quieter fact between the label and the detail, e.g. a strike's distance from today's price */
+  meta?: string;
+  /** options sharing a group sit under one small heading; give consecutive options the same name */
+  group?: string;
   /** shown before the label in the menu only */
   icon?: React.ReactNode;
   disabled?: boolean;
@@ -19,9 +23,15 @@ export type AppInlineSelectOption = {
 const MENU_QUERY = "(min-width: 768px)";
 const MENU_GAP = 6;
 
-const FACE = "col-start-1 row-start-1 inline-flex items-center gap-[0.15em]";
-const PILL =
-  "relative inline-flex items-center gap-[0.15em] whitespace-nowrap border px-[0.25em] py-[0.06em] leading-[1.15] transition-colors";
+/** One face of a pill; faces stacked in one grid cell let the pill keep its widest value's width. */
+export const INLINE_PILL_FACE = "col-start-1 row-start-1 inline-flex items-center gap-[0.15em]";
+/** The pill itself, shared by every inline control in a sentence so they read as one family. */
+export const INLINE_PILL =
+  "group/pill relative inline-flex items-center gap-[0.15em] whitespace-nowrap border px-[0.25em] py-[0.06em] leading-[1.15] transition-colors";
+/** The small glyph at a pill's end that says it can be changed: quiet at rest, full on hover. */
+export const INLINE_PILL_GLYPH = "h-[0.55em] w-[0.55em] shrink-0 opacity-60 transition-opacity group-hover/pill:opacity-100";
+const FACE = INLINE_PILL_FACE;
+const PILL = INLINE_PILL;
 
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
@@ -40,7 +50,18 @@ function useMenuMode() {
 }
 
 function nativeLabel(o: AppInlineSelectOption) {
-  return o.detail ? `${o.label} · ${o.detail}` : o.label;
+  return [o.label, o.meta, o.detail].filter(Boolean).join(" · ");
+}
+
+/** Options in runs of the same group, in order; ungrouped options form runs of their own. */
+function groupRuns(options: ReadonlyArray<AppInlineSelectOption>) {
+  const runs: Array<{ group: string | undefined; items: Array<{ option: AppInlineSelectOption; index: number }> }> = [];
+  options.forEach((option, index) => {
+    const last = runs[runs.length - 1];
+    if (last && last.group === option.group) last.items.push({ option, index });
+    else runs.push({ group: option.group, items: [{ option, index }] });
+  });
+  return runs;
 }
 
 /**
@@ -57,6 +78,7 @@ export function AppInlineSelect({
   disabled,
   className,
   reserve,
+  onPreview,
   children
 }: {
   /** accessible name of the select */
@@ -68,6 +90,8 @@ export function AppInlineSelect({
   className?: string;
   /** faces of every value the pill can show; it keeps the widest one's width, so picking never reflows the text around it */
   reserve?: ReadonlyArray<{ key: string; face: React.ReactNode }>;
+  /** called with the option under the pointer or the keyboard while the menu is open, and with null when it closes */
+  onPreview?: (value: string | null) => void;
   children: React.ReactNode;
 }) {
   const menu = useMenuMode();
@@ -85,13 +109,13 @@ export function AppInlineSelect({
       ) : (
         children
       )}
-      <ChevronDown aria-hidden="true" className="h-[0.4em] w-[0.4em] shrink-0 opacity-50" />
+      <ChevronDown aria-hidden="true" className={INLINE_PILL_GLYPH} />
     </>
   );
 
   if (menu) {
     return (
-      <MenuSelect label={label} value={value} options={options} onChange={onChange} disabled={disabled} className={className}>
+      <MenuSelect label={label} value={value} options={options} onChange={onChange} disabled={disabled} className={className} onPreview={onPreview}>
         {face}
       </MenuSelect>
     );
@@ -113,13 +137,23 @@ export function AppInlineSelect({
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none text-base opacity-0 [color-scheme:dark] disabled:cursor-not-allowed"
+        // taller than the pill it covers, so a thumb does not have to hit a 24px word
+        className="absolute inset-x-0 -inset-y-1 cursor-pointer appearance-none text-base opacity-0 [color-scheme:dark] disabled:cursor-not-allowed"
       >
-        {options.map((o) => (
-          <option key={o.value} value={o.value} disabled={o.disabled}>
-            {nativeLabel(o)}
-          </option>
-        ))}
+        {groupRuns(options).map((run, r) => {
+          const items = run.items.map(({ option: o }) => (
+            <option key={o.value} value={o.value} disabled={o.disabled}>
+              {nativeLabel(o)}
+            </option>
+          ));
+          return run.group ? (
+            <optgroup key={`${run.group}-${r}`} label={run.group}>
+              {items}
+            </optgroup>
+          ) : (
+            items
+          );
+        })}
       </select>
     </span>
   );
@@ -132,6 +166,7 @@ function MenuSelect({
   onChange,
   disabled,
   className,
+  onPreview,
   children
 }: {
   label: string;
@@ -140,6 +175,7 @@ function MenuSelect({
   onChange: (value: string) => void;
   disabled?: boolean;
   className?: string;
+  onPreview?: (value: string | null) => void;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -219,6 +255,15 @@ function MenuSelect({
     if (open && active >= 0) document.getElementById(`${id}-${active}`)?.scrollIntoView?.({ block: "nearest" });
   }, [open, active, id]);
 
+  // Tell the owner which option is being considered, so it can preview it; null once the menu closes.
+  const previewRef = React.useRef(onPreview);
+  previewRef.current = onPreview;
+  const previewValue = open && active >= 0 && !options[active]?.disabled ? (options[active]?.value ?? null) : null;
+  React.useEffect(() => {
+    previewRef.current?.(previewValue);
+  }, [previewValue]);
+  React.useEffect(() => () => previewRef.current?.(null), []);
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!open) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
@@ -287,35 +332,45 @@ function MenuSelect({
               style={{ left: position?.left ?? 0, top: position?.top ?? 0, minWidth: position?.minWidth, visibility: position ? "visible" : "hidden" }}
               className="fixed z-[80] max-h-[min(320px,60vh)] overflow-y-auto border border-bg-border bg-bg-primary py-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
             >
-              {options.map((o, i) => {
-                const selected = o.value === value;
-                return (
-                  <li
-                    key={o.value}
-                    id={`${id}-${i}`}
-                    role="option"
-                    aria-selected={selected}
-                    aria-disabled={o.disabled || undefined}
-                    data-value={o.value}
-                    // keep focus on the pill, which owns the keyboard
-                    onPointerDown={(e) => e.preventDefault()}
-                    onPointerEnter={() => {
-                      if (!o.disabled) setActive(i);
-                    }}
-                    onClick={() => choose(i)}
-                    className={cn(
-                      "flex items-center gap-2 whitespace-nowrap px-3 py-2",
-                      o.disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer",
-                      i === active && !o.disabled && "bg-action-primary"
-                    )}
-                  >
-                    {o.icon}
-                    <span className={selected ? "text-accent-secondary" : "text-content-primary"}>{o.label}</span>
-                    {o.detail ? <span className="ml-auto pl-6 text-content-secondary">{o.detail}</span> : <span className="ml-auto" />}
-                    <Check aria-hidden="true" className={cn("ml-2 h-3.5 w-3.5 shrink-0 text-accent-secondary", !selected && "invisible")} />
-                  </li>
-                );
-              })}
+              {groupRuns(options).map((run, r) => (
+                <React.Fragment key={`${run.group ?? "run"}-${r}`}>
+                  {run.group ? (
+                    <li role="presentation" className={cn("px-3 pb-1 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-content-tertiary", r === 0 ? "pt-1.5" : "pt-3")}>
+                      {run.group}
+                    </li>
+                  ) : null}
+                  {run.items.map(({ option: o, index: i }) => {
+                    const selected = o.value === value;
+                    return (
+                      <li
+                        key={o.value}
+                        id={`${id}-${i}`}
+                        role="option"
+                        aria-selected={selected}
+                        aria-disabled={o.disabled || undefined}
+                        data-value={o.value}
+                        // keep focus on the pill, which owns the keyboard
+                        onPointerDown={(e) => e.preventDefault()}
+                        onPointerEnter={() => {
+                          if (!o.disabled) setActive(i);
+                        }}
+                        onClick={() => choose(i)}
+                        className={cn(
+                          "flex items-center gap-2 whitespace-nowrap px-3 py-2",
+                          o.disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer",
+                          i === active && !o.disabled && "bg-action-primary"
+                        )}
+                      >
+                        {o.icon}
+                        <span className={selected ? "text-accent-secondary" : "text-content-primary"}>{o.label}</span>
+                        {o.meta ? <span className="pl-2 tabular-nums text-content-tertiary">{o.meta}</span> : null}
+                        {o.detail ? <span className="ml-auto pl-6 tabular-nums text-content-secondary">{o.detail}</span> : <span className="ml-auto" />}
+                        <Check aria-hidden="true" className={cn("ml-2 h-3.5 w-3.5 shrink-0 text-accent-secondary", !selected && "invisible")} />
+                      </li>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
             </ul>,
             document.body
           )

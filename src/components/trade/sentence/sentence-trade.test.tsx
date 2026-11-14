@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { EarnAssetSummary, TokenMarketsInfoData } from "@/lib/rfq-client";
 import { getTokenMint } from "@/lib/tokens";
-import { SentenceTrade } from "./sentence-trade";
+import { SentenceTrade, splitOutcome } from "./sentence-trade";
 
 const mocks = vi.hoisted(() => ({
   context: {} as Record<string, unknown>,
@@ -26,6 +26,7 @@ vi.mock("@/components/market/rfq-flow-modal", () => ({
   },
 }));
 vi.mock("./thesis-chart", () => ({ ThesisChart: ({ title }: { title?: ReactNode }) => title ?? null }));
+
 
 const now = 1_800_000_000;
 const day = 86400;
@@ -76,6 +77,11 @@ function select(name: string) {
   return screen.getByRole("combobox", { name }) as HTMLSelectElement;
 }
 
+/** The direction is a one-click switch; its accessible name starts with the current value. */
+function direction() {
+  return screen.getByRole("button", { name: /^Direction: / });
+}
+
 function connectWallet() {
   mocks.account = { address: "11111111111111111111111111111111" };
   mocks.context = { ...mocks.context, isAuthenticated: true, connectionState: "authenticated", referralStatus: "redeemed" };
@@ -104,17 +110,39 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("outcome line break", () => {
+  it("breaks a sell outcome at one fixed point, whatever the numbers", () => {
+    expect(splitOutcome("Buy 0.1 BTC at $66,500")).toEqual(["Buy 0.1 BTC", "at $66,500"]);
+    expect(splitOutcome("Buy 1.0204 jitoSOL at $98")).toEqual(["Buy 1.0204 jitoSOL", "at $98"]);
+    expect(splitOutcome("Sold for 6,650.00 USDC")).toEqual(["Sold for", "6,650.00 USDC"]);
+    expect(splitOutcome("Keep 99.75 USDC")).toEqual(["Keep", "99.75 USDC"]);
+    expect(splitOutcome("Keep 6,650.00 USDC")).toEqual(["Keep", "6,650.00 USDC"]);
+    expect(splitOutcome("Keep")).toBeNull();
+  });
+});
+
 describe("sentence trade", () => {
   it("opens Earn on a complete thesis with the premium in the facts and one Trade button", () => {
     render(<SentenceTrade mode="yield" />);
     expect(select("Asset").value).toBe("SOL");
-    expect(select("Direction").value).toBe("above");
+    expect(direction().textContent).toContain("above");
     expect(select("Strike").value).toBe(String(95e9));
     expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
     // 1.1 SOL locked at $95, $1 premium per SOL — the premium now reads in the facts block
     // beside the size, not as a risk sentence above the CTA
     expect(screen.getByText(/≈ \$1\.10/)).toBeTruthy();
+    // the ticket leads with the payout and does not repeat the sentence's strike or the size
+    expect(screen.getByText("You earn")).toBeTruthy();
+    // the outcomes sit under how far off the expiry is
+    expect(screen.getByText("Now")).toBeTruthy();
+    expect(screen.getByTestId("ticket-when").textContent).toBe("In 7 days");
+    expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.10");
+    expect(screen.queryByText("Strike")).toBeNull();
+    expect(screen.queryByText("Size")).toBeNull();
+    expect(screen.queryByText("Expiry")).toBeNull();
+    expect(screen.getByTestId("trade-headline-note").textContent).toMatch(/^Return |^Confirmed on quote$/);
+    expect(screen.getByTestId("ticket-right").textContent).toBe("Keep 104.50 USDC");
     expect(screen.getByText("SOL can fall 5.0% in 7 days and you're still right")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect wallet to trade" })).toBeTruthy();
     expect(screen.queryByText(/I get paid/)).toBeNull();
@@ -127,7 +155,7 @@ describe("sentence trade", () => {
 
   it("flips to a covered call, swapping the amount symbol and strikes", () => {
     render(<SentenceTrade mode="yield" />);
-    fireEvent.change(select("Direction"), { target: { value: "below" } });
+    fireEvent.click(direction());
     expect(select("Strike").value).toBe(String(105e9));
     expect([...select("Strike").options].map((o) => o.value)).toEqual([String(105e9), String(110e9)]);
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("1");
@@ -169,7 +197,7 @@ describe("sentence trade", () => {
     render(<SentenceTrade mode="yield" />);
     fireEvent.click(screen.getByRole("button", { name: "Jan 29" }));
     expect(select("Strike").value).toBe(String(95e9));
-    fireEvent.change(select("Direction"), { target: { value: "below" } });
+    fireEvent.click(direction());
     expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
   });
 
@@ -190,6 +218,54 @@ describe("sentence trade", () => {
     render(<SentenceTrade mode="yield" />);
     expect(screen.queryByText(/≈\$/)).toBeNull();
     expect((screen.getByRole("button", { name: "Premium unavailable" }) as HTMLButtonElement).disabled).toBe(true);
+    // unpriced, a sell still speaks the sell outcomes and says there is no price
+    expect(screen.getByTestId("trade-headline").textContent).toBe("\u2014");
+    expect(screen.getByTestId("trade-headline-note").textContent).toBe("No price for this strike right now");
+    expect(screen.getByTestId("ticket-right").textContent).toBe("Keep your USDC");
+    expect(screen.getByTestId("ticket-wrong").textContent).toBe("Buy SOL at $95");
+  });
+
+  it("leads Profit's summary with what the trade costs and the buy outcomes", () => {
+    render(<SentenceTrade mode="profit" />);
+    // the fixture lists an indicative for the buy, so the headline names it
+    expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.00");
+    // the note says the quote has the last word, and names the cell for what it is
+    expect(screen.getByText("You pay premium")).toBeTruthy();
+    expect(screen.getByTestId("trade-headline-note").textContent).toBe("Final quote might be different");
+    expect(screen.getByTestId("ticket-wrong").textContent).toBe("Premium lost");
+    expect(screen.getByText("The most you can lose is $1.00")).toBeTruthy();
+    // the winning cell lists the breakeven and what the trade makes at three moves past it
+    expect(screen.getByTestId("ticket-right").textContent).toBe("You profit");
+    // the breakeven is the table's first line, written like the rest, then three profit points
+    const rows = screen.getByTestId("ticket-profit-points").querySelectorAll("dd");
+    expect(rows).toHaveLength(4);
+    expect(rows[0].textContent).toBe("breakeven");
+    expect(screen.getByTestId("ticket-profit-points").textContent).toMatch(/^\+\d+\.\d%at \$/);
+  });
+
+  it("opens the longer profit ladder from More prices without touching the cell's own table", () => {
+    render(<SentenceTrade mode="profit" />);
+    const more = screen.getByRole("button", { name: "More prices" });
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByTestId("ticket-more-prices").className).toContain("hidden");
+    fireEvent.click(more);
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByTestId("ticket-more-prices").className).not.toContain("hidden");
+    // the same ladder, further out: breakeven first, then more steps than the cell shows
+    const ladder = screen.getByTestId("ticket-profit-ladder").querySelectorAll("dd");
+    expect(ladder[0].textContent).toBe("breakeven");
+    expect(ladder.length).toBeGreaterThan(4);
+    expect(screen.getByTestId("ticket-profit-points").querySelectorAll("dd")).toHaveLength(4);
+    fireEvent.click(more);
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("prices Profit from the bare indicative when the fee config is not known yet", () => {
+    mocks.context.protocolFeesBySymbol = new Map();
+    render(<SentenceTrade mode="profit" />);
+    // no SDK preview without fees: the cell falls back to size x indicative instead of a dash
+    expect(screen.getByTestId("trade-headline").textContent).toMatch(/^\u2248 \$\d/);
+    expect(screen.getByTestId("trade-headline-note").textContent).toBe("Final quote might be different");
   });
 
   it("requests a sell quote from Earn's Trade button at the floored quantity", () => {
@@ -217,20 +293,26 @@ describe("sentence trade", () => {
     render(<SentenceTrade mode="profit" />);
     // a buy trades the call market for above; strikes come from the same listings
     expect(select("Strike").value).toBe(String(105e9));
-    // the buy's indicative premium reads in the facts block
-    expect(screen.getByText(/≈ \$1\.00/)).toBeTruthy();
+    // the buy's premium reads in the strip (the strike list carries each strike's cost too)
+    expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.00");
     fireEvent.click(screen.getByRole("button", { name: "Get quote" }));
     expect(mocks.context.submitRfq).toHaveBeenCalledWith({
       market: "call-soon", side: "buy", terms: { type: "covered_call", strike: 105e9 }, quantity: 1_000_000_000, timeoutSeconds: 30,
     });
   });
 
-  it("Profit shows the move from spot in the strike list, not APR", () => {
+  it("Profit lists each strike with its move from spot and what it costs, not APR", () => {
     render(<SentenceTrade mode="profit" />);
+    const rows = () => [...select("Strike").options].map((o) => o.textContent ?? "");
+    const moves = () => rows().map((r) => r.split(" · ").slice(0, 2).join(" · "));
     // a call above spot lists how far the price must rise; a put below how far it must fall
-    expect([...select("Strike").options].map((o) => o.textContent)).toEqual(["$105 · +5.0%", "$110 · +10.0%"]);
-    fireEvent.change(select("Direction"), { target: { value: "below" } });
-    expect([...select("Strike").options].map((o) => o.textContent)).toEqual(["$95 · -5.0%", "$90 · -10.0%", "$80 · -20.0%"]);
+    expect(moves()).toEqual(["$105 · +5.0%", "$110 · +10.0%"]);
+    // and each row ends with that strike's premium at the current size, or says it has no price
+    expect(rows()[0]).toBe("$105 · +5.0% · ≈ $1.00");
+    expect(rows().every((r) => /· (≈ \$[\d,.]+|no price)$/.test(r))).toBe(true);
+    expect(rows().some((r) => r.includes("APR"))).toBe(false);
+    fireEvent.click(direction());
+    expect(moves()).toEqual(["$95 · -5.0%", "$90 · -10.0%", "$80 · -20.0%"]);
   });
 
   it("blocks amounts over the balance or outside the size rule", () => {

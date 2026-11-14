@@ -28,34 +28,38 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Trade page modes", () => {
-  it("opens Yield by default and fetches the earn summary", () => {
+  it("opens Profit by default and fetches the earn summary", () => {
     render(<TradeClient />);
-    expect(screen.getByText("Yield for default")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Yield" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("Profit for default")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Profit" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tablist", { name: "Trading mode" })).toBeTruthy();
     expect(mocks.getEarnSummary).toHaveBeenCalled();
   });
 
-  it("shows Profit for ?mode=profit and switches back to Yield", () => {
-    mocks.search = "mode=profit&asset=JLP";
-    render(<TradeClient />);
-    expect(screen.getByText("Profit for JLP")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Yield" }));
-    expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP", { scroll: false });
-  });
-
-  it("keeps the other params when switching to Profit", () => {
-    mocks.search = "asset=JLP";
+  it("shows Yield for ?mode=yield and switches back to Profit", () => {
+    mocks.search = "mode=yield&asset=JLP";
     render(<TradeClient />);
     expect(screen.getByText("Yield for JLP")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Profit" }));
-    expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP&mode=profit", { scroll: false });
+    expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP", { scroll: false });
   });
 
-  it("treats legacy mode links as Yield", () => {
+  it("keeps the other params when switching to Yield", () => {
+    mocks.search = "asset=JLP";
+    render(<TradeClient />);
+    expect(screen.getByText("Profit for JLP")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Yield" }));
+    expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP&mode=yield", { scroll: false });
+  });
+
+  it("sends legacy and old Profit links to the default", () => {
     mocks.search = "mode=pro";
     render(<TradeClient />);
-    expect(screen.getByText("Yield for default")).toBeTruthy();
+    expect(screen.getByText("Profit for default")).toBeTruthy();
+    cleanup();
+    mocks.search = "mode=profit";
+    render(<TradeClient />);
+    expect(screen.getByText("Profit for default")).toBeTruthy();
   });
 
   it("teaches the shared mechanics and the risk in How it works", () => {
@@ -68,6 +72,7 @@ describe("Trade page modes", () => {
   });
 
   it("explains the side it is on in How it works", () => {
+    mocks.search = "mode=yield";
     render(<TradeClient />);
     fireEvent.click(screen.getByRole("button", { name: "How it works" }));
     expect(screen.getByText("2) Get paid now")).toBeTruthy();

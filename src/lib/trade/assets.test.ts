@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EarnAssetSummary } from "@/lib/rfq-client";
-import { pickAsset, tradeAssets } from "./assets";
+import { pickAsset, tradeAssets, assetsForMenu, type TradeAsset } from "./assets";
 
 function row(symbol: string, mint: string, positionType: string, maxApr: number | null): EarnAssetSummary {
   const apr = maxApr == null ? { type: "unavailable" } : { type: "available", min: maxApr, max: maxApr };
@@ -47,5 +47,19 @@ describe("tradable assets", () => {
     const symbols = tradeAssets(devnet).map((a) => a.symbol).sort();
     // TSLA and XAU are not in the static token list, yet must still be tradable.
     expect(symbols).toEqual(["HYPE", "TSLA", "XAU", "jitoSOL", "SOL"].sort());
+  });
+});
+
+describe("asset picker order", () => {
+  const asset = (symbol: string): TradeAsset => ({ symbol, mint: symbol, hasPut: true, hasCall: true, maxApr: null });
+
+  it("lists crypto first, led by BTC, ETH and SOL, then stocks and gold", () => {
+    const menu = assetsForMenu(["SOL", "jitoSOL", "ETH", "BTC", "HYPE", "QQQ", "TSLA", "XAU"].map(asset));
+    expect(menu.map((a) => a.symbol)).toEqual(["BTC", "ETH", "SOL", "jitoSOL", "HYPE", "QQQ", "TSLA", "XAU"]);
+    expect(menu.map((a) => a.group)).toEqual(["Crypto", "Crypto", "Crypto", "Crypto", "Crypto", "Stocks & gold", "Stocks & gold", "Stocks & gold"]);
+  });
+
+  it("files an unknown ticker under crypto, alphabetically after the leaders", () => {
+    expect(assetsForMenu(["PUMP", "BONK", "SOL"].map(asset)).map((a) => a.symbol)).toEqual(["SOL", "BONK", "PUMP"]);
   });
 });

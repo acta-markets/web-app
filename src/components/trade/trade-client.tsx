@@ -13,8 +13,8 @@ type Mode = "yield" | "profit";
 /** The two ways to trade an option, as genuinely different products: selling optionality
     for yield (a covered call / cash-secured put) or buying it for direction (a long call / put). */
 const MODES: Array<{ value: Mode; label: string }> = [
-  { value: "yield", label: "Yield" },
   { value: "profit", label: "Profit" },
+  { value: "yield", label: "Yield" },
 ];
 
 /** The three option terms, demoted from the front to a quiet reference at the bottom: what the
@@ -86,8 +86,9 @@ const HOW_IT_WORKS: Record<
 export function TradeClient() {
   const router = useRouter();
   const params = useSearchParams();
-  // legacy ?mode=pro and ?mode=easy links fall through to earn, the default
-  const mode: Mode = params.get("mode") === "profit" ? "profit" : "yield";
+  // Profit is where the page lands; Yield is ?mode=yield. Anything else, the old ?mode=profit,
+  // ?mode=pro and ?mode=easy links included, falls through to the default.
+  const mode: Mode = params.get("mode") === "yield" ? "yield" : "profit";
   const [howOpen, setHowOpen] = useState(false);
   const { connectionState, getEarnSummary } = useRfqContext();
 
@@ -100,7 +101,7 @@ export function TradeClient() {
 
   function setMode(next: Mode) {
     const query = new URLSearchParams(params.toString());
-    if (next === "profit") query.set("mode", "profit");
+    if (next === "yield") query.set("mode", "yield");
     else query.delete("mode");
     const qs = query.toString();
     router.replace(qs ? `/trade?${qs}` : "/trade", { scroll: false });

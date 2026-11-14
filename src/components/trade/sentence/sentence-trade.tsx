@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import * as React from "react";
-import { useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useWalletSidebar } from "@/components/wallet/wallet-sidebar";
 import { useTokenBalance } from "@/components/wallet/use-token-balance";
@@ -13,13 +13,14 @@ import { useTokenMarketsSnapshot } from "@/components/rfq/use-token-markets-snap
 import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
+import { Check, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { displayQuoteSymbol, getToken, getTokenMint } from "@/lib/tokens";
 import { grossFromIndicative1e9, previewFill } from "@acta-markets/ts-sdk/ws";
-import { pickAsset, tradeAssets } from "@/lib/trade/assets";
+import { DEFAULT_SIZE_UNITS, assetsForMenu, pickAsset, tradeAssets } from "@/lib/trade/assets";
 import { formatAmount, formatExpiryDay, formatTimeAway, formatUsdAmount } from "@/lib/trade/format";
 import {
   alignQuantityToRule,
@@ -41,6 +42,7 @@ import {
   type StrikeOption,
 } from "@/lib/trade/strikes";
 import {
+  buyBreakEven,
   buyZoneLabels,
   cushionText,
   directionInfo,
@@ -56,12 +58,14 @@ import {
   type Strategy,
 } from "@/lib/trade/thesis";
 import type { TakerSide } from "@/lib/spreads";
+import { ProfitOutlook } from "./profit-table";
+import { TICKET_CELL, TICKET_LABEL, TICKET_NOTE, TICKET_VALUE, TICKET_WHEN } from "./ticket-styles";
+import { ChartSkeleton, TradeSkeleton } from "./trade-skeleton";
 import { ThesisSentence } from "./thesis-sentence";
 import { ThesisChart } from "./thesis-chart";
 
 const PRICE_SCALE = 1_000_000_000;
 const CONTAINER = "mx-auto w-full max-w-[850px] pb-20 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-6";
-
 /** The chosen strike if still listed, else the closest one by price. */
 function nearestStrike(options: StrikeOption[], strike1e9: number): StrikeOption | null {
   let best: StrikeOption | null = null;
@@ -71,13 +75,19 @@ function nearestStrike(options: StrikeOption[], strike1e9: number): StrikeOption
   return best;
 }
 
-function SentenceSkeleton() {
-  return (
-    <div aria-hidden="true" className="flex flex-col gap-4">
-      <div className="h-12 w-full max-w-[720px] animate-pulse bg-action-primary max-md:h-9" />
-      <div className="h-12 w-3/5 max-w-[420px] animate-pulse bg-action-primary max-md:h-9" />
-    </div>
-  );
+/**
+ * Where a sell's outcome line breaks when the strip is four across. Left to the browser, the
+ * line re-wraps as the numbers change ("Keep 99.75 USDC" on one line, "Keep 6,650.00 / USDC" on
+ * two) and the text jumps. Broken at a fixed point it is always the same two lines:
+ * "Buy 0.1 BTC / at $66,500", "Sold for / 6,650.00 USDC", "Keep / 6,650.00 USDC".
+ */
+export function splitOutcome(title: string): [string, string] | null {
+  const at = title.indexOf(" at ");
+  if (at > 0) return [title.slice(0, at), title.slice(at + 1)];
+  const sold = title.indexOf(" for ");
+  if (sold > 0) return [title.slice(0, sold + 4), title.slice(sold + 5)];
+  const space = title.indexOf(" ");
+  return space > 0 ? [title.slice(0, space), title.slice(space + 1)] : null;
 }
 
 /**
@@ -106,6 +116,8 @@ export function SentenceTrade({
   const { isRequesting, failure, request, modalProps } = useQuoteRequest({ cancelOnUnmount: true });
 
   const assets = useMemo(() => tradeAssets(earnSummary), [earnSummary]);
+  // the picker's own order: crypto led by BTC, then stocks and gold
+  const menuAssets = useMemo(() => assetsForMenu(assets), [assets]);
   // Live reference prices for the asset picker: one snapshot per listed underlying, refreshed
   // while the tab is visible. Each snapshot resolves independently; a mint with no markets
   // simply never appears, so the picker shows a dash instead of a stale guess.
@@ -125,6 +137,8 @@ export function SentenceTrade({
   const [directionChoice, setDirectionChoice] = useState<Direction>("above");
   const [expiryChoice, setExpiryChoice] = useState<number | null>(null);
   const [strikeChoice, setStrikeChoice] = useState<number | null>(null);
+  /** the strike being considered in the open strike menu (hovered or arrowed to); the chart previews it */
+  const [strikePreview, setStrikePreview] = useState<number | null>(null);
   /** what the user typed; null follows the suggested amount */
   const [amountInput, setAmountInput] = useState<string | null>(null);
   /** token the amount is entered in; null follows the position's default */
@@ -195,7 +209,12 @@ export function SentenceTrade({
     false,
     decimals
   );
-  const suggested = defaultAmount({ rule: depositRule, isPut: amountInQuote, spot });
+  const suggested = defaultAmount({
+    rule: depositRule,
+    isPut: amountInQuote,
+    spot,
+    targetUnits: asset ? DEFAULT_SIZE_UNITS[asset.symbol.toUpperCase()] : undefined,
+  });
   const amountText = amountInput ?? (suggested != null ? formatInputValue(suggested, inputDecimals) : "");
   const amount = Number(amountText);
 
@@ -227,31 +246,35 @@ export function SentenceTrade({
   const horizon = expiry ? `in ${formatTimeAway(expiry.expiryTs * 1000, Date.now())}` : null;
 
   const quoteDecimalsForPreview = snapshot ? Number(snapshot.quote_decimals) : 6;
-  const preview = useMemo(() => {
-    if (!strike || strike.bestPrice == null || quantity == null || quantity <= 0) return null;
-    const fees =
-      protocolFeesBySymbol?.get(quoteSymbol.trim().toUpperCase()) ??
-      protocolFeesBySymbol?.get("USDC");
-    // Without the quote token's fee config the preview would show a zero fee.
-    if (fees?.type !== "quote") return null;
-    const terms = { type: info.positionType, strike: strike.strike1e9 };
-    const indicative = BigInt(Math.round(strike.bestPrice));
-    try {
-      // A sell indicative already has the fee taken out; previewFill wants the gross price.
-      const gross = side === "sell" ? grossFromIndicative1e9(indicative, "sell", terms, fees) : indicative;
-      return previewFill({
-        terms,
-        side,
-        quantity: BigInt(Math.round(quantity)),
-        price1e9: gross,
-        fees,
-        underlyingDecimals: decimals,
-        quoteDecimals: quoteDecimalsForPreview
-      });
-    } catch {
-      return null;
-    }
-  }, [strike, quantity, side, protocolFeesBySymbol, quoteSymbol, info.positionType, decimals, quoteDecimalsForPreview]);
+  const previewFor = useCallback(
+    (option: { strike1e9: number; bestPrice: number | null } | null) => {
+      if (!option || option.bestPrice == null || quantity == null || quantity <= 0) return null;
+      const fees =
+        protocolFeesBySymbol?.get(quoteSymbol.trim().toUpperCase()) ??
+        protocolFeesBySymbol?.get("USDC");
+      // Without the quote token's fee config the preview would show a zero fee.
+      if (fees?.type !== "quote") return null;
+      const terms = { type: info.positionType, strike: option.strike1e9 };
+      const indicative = BigInt(Math.round(option.bestPrice));
+      try {
+        // A sell indicative already has the fee taken out; previewFill wants the gross price.
+        const gross = side === "sell" ? grossFromIndicative1e9(indicative, "sell", terms, fees) : indicative;
+        return previewFill({
+          terms,
+          side,
+          quantity: BigInt(Math.round(quantity)),
+          price1e9: gross,
+          fees,
+          underlyingDecimals: decimals,
+          quoteDecimals: quoteDecimalsForPreview
+        });
+      } catch {
+        return null;
+      }
+    },
+    [quantity, side, protocolFeesBySymbol, quoteSymbol, info.positionType, decimals, quoteDecimalsForPreview]
+  );
+  const preview = useMemo(() => previewFor(strike), [previewFor, strike]);
   // The chart's profit-zone PnL readout: the side, the underlying units the position controls
   // and the premium in USDC. A buy's premium is only the quote's, so it stays null until then.
   const chartPnl = quantity != null && strike
@@ -387,11 +410,11 @@ export function SentenceTrade({
         {topBar}
         <div className="mt-8 max-md:mt-6">
           {earnSummary ? (
-            <AppCard className="p-6 font-mono text-base text-content-secondary">
+            <AppCard className="border-0 p-6 font-mono text-base text-content-secondary">
               No markets are open right now. Check back soon.
             </AppCard>
           ) : (
-            <SentenceSkeleton />
+            <TradeSkeleton side={side} />
           )}
         </div>
         {modal}
@@ -408,8 +431,6 @@ export function SentenceTrade({
   const premiumText = premiumUsd != null ? `≈ ${formatUsdAmount(premiumUsd)}` : "—";
   // Breakeven only when the preview has one that differs from the strike, so it earns its row.
   const breakevenText = preview ? formatUsdSmart(Number(preview.breakeven1e9) / 1e9) : null;
-  const expiryText = expiry ? `${formatExpiryDay(expiry.expiryTs * 1000)} · ${formatTimeAway(expiry.expiryTs * 1000, Date.now())}` : "—";
-  const sizeText = quantity != null ? `${formatAmount(quantity / 10 ** decimals, assetDisplayDecimals)} ${asset.symbol}` : "—";
   const returnText = (() => {
     if (side !== "sell" || !preview || spot == null || !preview.collateral) return null;
     const net = Number(preview.premium.netAtoms) / 10 ** quoteDecimalsForPreview;
@@ -417,20 +438,88 @@ export function SentenceTrade({
     const locked = c.asset === "quote" ? Number(c.atoms) / 10 ** quoteDecimalsForPreview : (Number(c.atoms) / 10 ** decimals) * spot;
     return locked > 0 ? `${((net / locked) * 100).toFixed(1)}%` : null;
   })();
-  const facts: Array<{ label: string; value: string }> = [
-    { label: "Premium", value: premiumText },
-    { label: "Strike", value: strikeLabel ?? "—" },
-    { label: "Expiry", value: expiryText },
-    { label: "Size", value: sizeText },
-  ];
-  if (returnText != null) facts.push({ label: "Return", value: returnText });
-  if (breakevenText != null) facts.push({ label: "Breakeven", value: breakevenText });
-
+  // The headline is the one number the page sells: what the trade pays now (Yield) or costs
+  // (Profit). The strike, the expiry date and the size are already in the sentence and the
+  // size field, so the rows beneath it carry only what is not said elsewhere.
+  // A buy's price before the quote is the maker's indicative: the SDK preview when the fee
+  // config is known (fee included), else the indicative itself. Either way the quote sets the
+  // final price, and the note under the number says so.
+  const payUsd =
+    premiumUsd ??
+    (side === "buy" && premiumPerUnit != null && quantity != null ? (quantity / 10 ** decimals) * premiumPerUnit : null);
+  // Where a buy starts paying and what it makes further out: its breakeven, then the profit at
+  // the first three round moves from today's price that clear it.
+  const buyBreakeven =
+    side !== "buy" || !strike
+      ? null
+      : preview
+        ? Number(preview.breakeven1e9) / 1e9
+        : premiumPerUnit != null
+          ? buyBreakEven(info.isPut, strike.strike, premiumPerUnit)
+          : null;
+  /** An outcome's main line. A sell's is set on two fixed lines where the strip is four across; see `splitOutcome`. */
+  const outcomeLine = (title: string) => {
+    const parts = side === "sell" ? splitOutcome(title) : null;
+    if (!parts) return title;
+    return (
+      <>
+        <span className="xl:block xl:whitespace-nowrap">{parts[0]}</span>{" "}
+        <span className="xl:block xl:whitespace-nowrap">{parts[1]}</span>
+      </>
+    );
+  };
+  const headline: { value: string | null; note: string } =
+    side === "sell"
+      ? {
+          value: premiumUsd != null ? premiumText : null,
+          note: premiumPerUnit == null ? "No price for this strike right now" : "Enter a size to see what you earn",
+        }
+      : {
+          value: payUsd != null ? `\u2248 ${formatUsdAmount(payUsd)}` : null,
+          note: premiumPerUnit == null ? "No price for this strike right now" : "Enter a size to see what you pay",
+        };
+  // A sell always speaks the sell outcomes, priced or not: `zoneLabels` has its own copy for a
+  // strike with no indicative yet, so it never borrows the buy side's "premium lost".
   const labels = strike
-    ? side === "sell" && outcome
+    ? side === "sell"
       ? zoneLabels({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: assetDisplayDecimals })
       : buyZoneLabels({ asset: asset.symbol, direction, strike: strike.strike })
     : null;
+  // The ticket reads left to right as one story: what goes in, what is paid now, and the two
+  // ways it can end. Every fact the page shows about the trade sits in one of those four cells.
+  const loseSide = direction === "above" ? "below" : "above";
+  const ticketOutcomes = labels && strikeLabel
+    ? side === "sell"
+      ? {
+          right: { when: `${direction} ${strikeLabel}`, what: labels.right.title, note: "and the premium" },
+          wrong: {
+            when: `${loseSide} ${strikeLabel}`,
+            what: labels.wrong.title,
+            note: breakevenText ? `Breakeven ${breakevenText}` : "You keep the premium",
+          },
+        }
+      : {
+          // A buy profits past its breakeven, not at the strike: the table under "You profit"
+          // opens with the breakeven as its zero line, then lists what the trade makes further out.
+          right: {
+            when: `${direction} ${strikeLabel}`,
+            what: "You profit",
+            note: buyBreakeven != null ? `Breakeven at ${formatUsdSmart(buyBreakeven)}` : "Once it clears the premium you paid",
+          },
+          wrong: {
+            when: `${loseSide} ${strikeLabel}`,
+            what: "Premium lost",
+            note: "The most you can lose",
+          },
+        }
+    : { right: { when: null, what: "\u2014", note: "" }, wrong: { when: null, what: "\u2014", note: "" } };
+  const headlineNote = headline.value
+    ? side === "buy"
+      ? "Final quote might be different"
+      : returnText != null
+        ? `Return ${returnText}`
+        : "Confirmed on quote"
+    : headline.note;
   const amountHint = sizeViolation
     ? { text: sizeViolation, error: true }
     : lockedText != null && amountInput != null && lockedText !== amountText
@@ -477,6 +566,21 @@ export function SentenceTrade({
     { value: "underlying", label: asset.symbol },
   ];
 
+  /** What a strike costs at the current size, priced the way the headline prices the chosen one. */
+  const strikeCost = (o: { strike1e9: number; bestPrice: number | null }) => {
+    const filled = previewFor(o);
+    const usd = filled
+      ? Number(filled.premium.netAtoms) / 10 ** quoteDecimalsForPreview
+      : o.bestPrice != null && quantity != null
+        ? (quantity / 10 ** decimals) * (o.bestPrice / PRICE_SCALE)
+        : null;
+    return usd != null ? `\u2248 ${formatUsdAmount(usd)}` : o.bestPrice == null ? "no price" : undefined;
+  };
+  // the strike being considered in the menu, unless it is the one already chosen
+  const previewedStrike = strikePreview != null && strikePreview !== strike?.strike1e9
+    ? (strikeOptions.find((o) => o.strike1e9 === strikePreview)?.strike ?? null)
+    : null;
+
   // The thesis sentence is the chart's header: it lives above the plot, next to the range
   // control, so editing the belief and reading the chart happen in one glance and update together.
   const sentence = (
@@ -490,9 +594,10 @@ export function SentenceTrade({
       move={cushionText(asset.symbol, direction, distance, horizon)}
       expiryValue={expiry ? String(expiry.expiryTs) : ""}
       options={{
-        assets: assets.map((a) => ({
+        assets: menuAssets.map((a) => ({
           value: a.symbol,
           label: a.symbol,
+          group: a.group,
           icon: getTokenLogoSrc(a.symbol) ? (
             <img
               src={getTokenLogoSrc(a.symbol)}
@@ -510,15 +615,13 @@ export function SentenceTrade({
             return price != null ? formatUsdSmart(price) : "—";
           })(),
         })),
+        // Each strike with how far it is from today's price, and the number you would choose it
+        // by: what it costs at the current size (Profit) or what it pays as APR (Yield).
         strikes: strikeOptions.map((o) => ({
           value: String(o.strike1e9),
           label: formatStrikePrice(o.strike),
-          detail:
-            side === "buy"
-              ? (movePctText(o.strike, spot) ?? undefined)
-              : o.apr != null
-                ? `${Math.round(o.apr * 100)}% APR`
-                : "no price",
+          meta: movePctText(o.strike, spot) ?? undefined,
+          detail: side === "buy" ? strikeCost(o) : o.apr != null ? `${Math.round(o.apr * 100)}% APR` : "no price",
         })),
         expiries: expiries.map((e) => ({
           value: String(e.expiryTs),
@@ -533,6 +636,7 @@ export function SentenceTrade({
       onAsset={chooseAsset}
       onDirection={chooseDirection}
       onStrike={(v) => setStrikeChoice(Number(v))}
+      onStrikePreview={(v) => setStrikePreview(v == null ? null : Number(v))}
       onExpiry={(v) => setExpiryChoice(Number(v))}
     />
   );
@@ -544,7 +648,7 @@ export function SentenceTrade({
       <section aria-label="Your trade" className="mt-8 flex flex-col gap-4 max-md:mt-6">
         {/* one coherent surface: the sentence is the chart's header, the size + summary read as a
             compact controller beneath it, closed by the CTA */}
-        <AppCard className="p-4 max-md:p-3">
+        <AppCard className="border-0 p-4 max-md:p-3">
           {spot != null && strike && expiry && labels ? (
             <ThesisChart
               frameless
@@ -561,17 +665,19 @@ export function SentenceTrade({
               strikes={strikeOptions.map((o) => ({ strike: o.strike, strike1e9: o.strike1e9 }))}
               onStrike={(v) => setStrikeChoice(v)}
               pnl={chartPnl}
+              legend={false}
+              previewStrike={previewedStrike}
             />
           ) : !snapshot ? (
-            <div className="flex flex-col gap-4">
+            <div>
               {sentence}
-              <div aria-hidden="true" className="h-[290px] animate-pulse border border-bg-border bg-action-primary/40" />
+              <ChartSkeleton />
             </div>
           ) : (
             // loaded, but no complete trade selected yet: never collapse to nothing
-            <div className="flex flex-col gap-4">
+            <div>
               {sentence}
-              <div className="flex h-[290px] items-center justify-center border border-bg-border bg-action-primary/20">
+              <div className="mt-3 flex h-[280px] items-center justify-center bg-action-primary/20">
                 <span className="font-mono text-sm text-content-secondary">
                   Pick an expiry and strike to see the projection
                 </span>
@@ -579,27 +685,31 @@ export function SentenceTrade({
             </div>
           )}
 
-          {/* the controller beneath the chart: size on the left, the key trade facts beside it —
-              two quiet columns with no divider — closed by the risk line and one full-width CTA.
-              The grid is inset on the right by the chart's 64px return-% rail (md:pr-16) so its
-              two halves line up with the chart's PLOT edges, not the card or the rail. */}
-          <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-6 md:pr-16">
-            {/* the size/amount control */}
-            <div className="flex w-full flex-col gap-2">
-              {/* one bare amount field: SIZE + the numeral + the unit selector at the far
-                  end, so it reads "1.00 ▾USDC" — no tabs on the left */}
-              <div
-                className={cn(
-                  "flex items-stretch border bg-action-primary transition-colors focus-within:border-content-primary",
-                  sizeViolation || insufficientBalance
-                    ? "border-error"
-                    : "border-bg-border hover:border-content-secondary"
-                )}
-              >
-                <span aria-hidden="true" className="flex shrink-0 items-center pl-3 font-mono text-[11px] font-medium leading-[1.2] tracking-[0.08em] text-content-tertiary">
-                  SIZE
+          {/* The ticket: one strip that reads left to right as the whole trade — what goes in,
+              what is paid now, and the two ways it can end — closed by the one button that sends
+              it. No frames and no dividers: the columns are set by spacing alone. The amount is
+              a tinted pill, the same idiom as the asset, direction and strike in the sentence
+              above, so everything you can change on the page looks the same way. */}
+          <div className="mt-4">
+            {/* Two moments, as on the chart: what happens now (left) and what happens by the
+                expiry (right). Where the card has its full width the headings share the top row
+                and the four cells the row beneath; on anything narrower, laptops included, each
+                heading sits right above its own pair, so no cell is ever too narrow for its line. */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 xl:grid-cols-[1.05fr_0.9fr_1.1fr_1.05fr]">
+              <p className={cn(TICKET_WHEN, "xl:order-1")}>Now</p>
+              {/* 1. what goes in */}
+              <div className={cn(TICKET_CELL, "xl:order-3")}>
+                <span aria-hidden="true" className={TICKET_LABEL}>
+                  {side === "sell" ? "You deposit" : "Size"}
                 </span>
-
+                <div
+                  className={cn(
+                    "flex w-full cursor-text items-center border px-2 transition-colors",
+                    sizeViolation || insufficientBalance
+                      ? "border-error bg-accent-primary/15"
+                      : "border-accent-primary/20 bg-accent-primary/15 hover:border-accent-primary focus-within:border-accent-primary"
+                  )}
+                >
                 <input
                   id="trade-size"
                   aria-label={side === "sell" ? "Deposit" : "Amount"}
@@ -614,7 +724,7 @@ export function SentenceTrade({
                     const next = e.target.value.replace(",", ".");
                     if (sizePattern.test(next)) setAmountInput(next);
                   }}
-                  className="min-w-0 flex-1 bg-transparent py-3 pl-3 pr-2 text-right font-mono text-xl font-semibold leading-[1.2] tabular-nums text-content-primary outline-none placeholder:text-content-secondary disabled:cursor-not-allowed"
+                  className={cn(TICKET_VALUE, "min-w-0 flex-1 bg-transparent py-0.5 tabular-nums text-content-primary outline-none placeholder:text-content-secondary disabled:cursor-not-allowed")}
                 />
 
                 {/* the unit as a compact dropdown after the number: ▾USDC / ▾SOL */}
@@ -624,7 +734,7 @@ export function SentenceTrade({
                     value={amountInQuote ? "quote" : "underlying"}
                     disabled={isRequesting}
                     onChange={(e) => chooseToken(e.target.value === "quote")}
-                    className="cursor-pointer appearance-none bg-transparent py-3 pl-5 pr-3 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary outline-none [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="cursor-pointer appearance-none bg-transparent py-1 pl-5 pr-0 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary outline-none [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {tokenOptions.map((o) => (
                       <option key={o.value} value={o.value} className="bg-bg-primary text-content-primary">
@@ -641,11 +751,22 @@ export function SentenceTrade({
                     <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-              </div>
-
-              {/* the step slider: same value as the field, snapped onto the deposit step; the
-                  dots are a quiet scale, not extra controls. Hidden when the range collapses
-                  (a loaded zero balance) */}
+                </div>
+                {/* one slot: the size feedback takes the conversion's place instead of adding a line */}
+                <span className={cn(TICKET_NOTE, "whitespace-nowrap tabular-nums", amountHint?.error && "text-error")}>
+                  {amountHint
+                    ? // "Locks 997.5 USDC (size steps of 9.5)" always breaks before the bracket, so the
+                      // number's length never decides where it wraps
+                      amountHint.text.includes(" (")
+                      ? (
+                        <>
+                          {amountHint.text.slice(0, amountHint.text.indexOf(" ("))} <br />
+                          {amountHint.text.slice(amountHint.text.indexOf(" (") + 1)}
+                        </>
+                      )
+                      : amountHint.text
+                    : (conversionHint ?? "\u2014")}
+                </span>
               {depositRule && sliderMax > 0 ? (
                 <div className="px-1">
                   <input
@@ -666,15 +787,10 @@ export function SentenceTrade({
                   </div>
                 </div>
               ) : null}
-
-              {/* one slim caption: conversion + balance on the left, quiet presets on the right.
-                  Both slots always render — "—" while a value is unknown — so switching assets
-                  never collapses the row and the control does not visibly reflow. */}
-              <div className="flex items-center justify-between gap-3 px-0.5 font-mono text-xs leading-[1.2] tracking-[-0.28px] text-content-secondary">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate tabular-nums">{conversionHint ?? "—"}</span>
-                  <span aria-hidden="true" className="text-content-tertiary">·</span>
-                  <span className="flex shrink-0 items-center gap-1 tabular-nums">
+                {/* the balance belongs to a wallet: the row appears once one is connected */}
+                {walletAddress ? (
+                  <div className={cn(TICKET_NOTE, "flex items-center justify-between gap-2")}>
+                    <span className="flex min-w-0 items-center gap-1 tabular-nums">
                     <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="shrink-0 text-content-secondary" aria-hidden="true">
                       <path
                         d="M6.75 10h6.5M15 5H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2z"
@@ -685,11 +801,9 @@ export function SentenceTrade({
                       />
                       <circle cx="14" cy="10" r="0.75" fill="currentColor" />
                     </svg>
-                    <span className="truncate">{balanceText}</span>
-                  </span>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-1">
+                      <span className="truncate">{balanceText}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
                   {onHalf ? (
                     <button
                       type="button"
@@ -710,37 +824,104 @@ export function SentenceTrade({
                       MAX
                     </button>
                   ) : null}
-                </div>
+                    </span>
+                  </div>
+                ) : null}
               </div>
 
-              {amountHint ? (
-                <p className={cn("font-mono text-sm leading-[1.2] tracking-[-0.28px]", amountHint.error ? "text-error" : "text-content-secondary")}>
-                  {amountHint.text}
-                </p>
-              ) : null}
+              {/* 2. what is paid now */}
+              <div className={cn(TICKET_CELL, "xl:order-4")}>
+                <span className={TICKET_LABEL}>{side === "sell" ? "You earn" : "You pay premium"}</span>
+                <span
+                  data-testid="trade-headline"
+                  className={cn(
+                    TICKET_VALUE,
+                    "py-0.5 tabular-nums",
+                    headline.value ? (side === "sell" ? "text-accent-secondary" : "text-content-primary") : "text-content-tertiary"
+                  )}
+                >
+                  {headline.value ?? "\u2014"}
+                </span>
+                <span data-testid="trade-headline-note" className={TICKET_NOTE}>{headlineNote}</span>
+              </div>
+
+              {/* the second moment: how far off the expiry is, so the outcomes read "In 6 days: if
+                  above ..., if below ..."; the date itself is in the sentence above */}
+              <p data-testid="ticket-when" className={cn(TICKET_WHEN, "max-xl:mt-2 xl:order-2")}>
+                {horizon ? `${horizon.charAt(0).toUpperCase()}${horizon.slice(1)}` : "At expiry"}
+              </p>
+              {/* 3 and 4. the two ways it ends, in the chart's own green and red */}
+              <div className={cn(TICKET_CELL, "xl:order-5")}>
+                <span className={cn(TICKET_LABEL, "flex items-center gap-1 whitespace-nowrap")}>
+                  <Check aria-hidden="true" className="h-3 w-3 shrink-0 text-additional-green-primary-deep" />
+                  {/* the ticker is a name, so it keeps its own casing inside the uppercase label */}
+                  {ticketOutcomes.right.when ? (
+                    <span>
+                      If <span className="normal-case">{asset.symbol}</span> {ticketOutcomes.right.when}
+                    </span>
+                  ) : (
+                    "If right"
+                  )}
+                </span>
+                <span data-testid="ticket-right" className={cn(TICKET_VALUE, "py-0.5 text-content-primary", side === "sell" && "xl:min-h-[54px]")}>
+                  {outcomeLine(ticketOutcomes.right.what)}
+                </span>
+                {/* In Profit this block is always as tall as the table and its link, so prices
+                    arriving or dropping out never move the button. */}
+                <div className={cn("flex flex-col gap-2", side === "buy" && "min-h-[91px]")}>
+                {side === "buy" && buyBreakeven != null && strike && spot != null ? (
+                  <ProfitOutlook
+                    asset={asset.symbol}
+                    direction={direction}
+                    strike={strike.strike}
+                    spot={spot}
+                    breakeven={buyBreakeven}
+                    premiumUsd={payUsd}
+                    units={quantity != null ? quantity / 10 ** decimals : null}
+                    emptyNote={ticketOutcomes.right.note}
+                  />
+                ) : (
+                  <span className={TICKET_NOTE}>{ticketOutcomes.right.note}</span>
+                )}
+                </div>
+              </div>
+              <div className={cn(TICKET_CELL, "xl:order-6")}>
+                <span className={cn(TICKET_LABEL, "flex items-center gap-1 whitespace-nowrap")}>
+                  <X aria-hidden="true" className="h-3 w-3 shrink-0 text-additional-red-primary" />
+                  {ticketOutcomes.wrong.when ? (
+                    <span>
+                      If <span className="normal-case">{asset.symbol}</span> {ticketOutcomes.wrong.when}
+                    </span>
+                  ) : (
+                    "If wrong"
+                  )}
+                </span>
+                <span data-testid="ticket-wrong" className={cn(TICKET_VALUE, "py-0.5 text-content-primary", side === "sell" && "xl:min-h-[54px]")}>
+                  {outcomeLine(ticketOutcomes.wrong.what)}
+                </span>
+                <span className={cn(TICKET_NOTE, "whitespace-nowrap")}>
+                  {side === "buy" && payUsd != null ? (
+                    // The words come first and the amount last, so a longer amount never pushes
+                    // the words sideways; and it breaks at one fixed point where the cell is narrow.
+                    <>
+                      The most you can lose is <br className="max-xl:hidden" />
+                      {formatUsdAmount(payUsd)}
+                    </>
+                  ) : (
+                    ticketOutcomes.wrong.note
+                  )}
+                </span>
+              </div>
             </div>
 
-            {/* the key trade facts: a definition list that owns the right half of the plot —
-                right edge on the plot's edge (inside the return-% rail), not the card edge —
-                top-aligned with the size field, so the two halves read as one summary row. Muted
-                keys on the left, values right-aligned on one tabular rail — the app's key/value
-                idiom (see vault-card), not a data table. */}
-            <div className="flex w-full flex-col gap-2">
-              <dl className="w-full divide-y divide-bg-border font-mono text-sm leading-[1.2] tracking-[-0.28px]">
-                {facts.map((f) => (
-                  <div key={f.label} className="flex items-baseline justify-between gap-4 py-2 first:pt-0">
-                    <dt className="shrink-0 text-content-secondary">{f.label}</dt>
-                    <dd className="text-right tabular-nums text-content-primary">{f.value}</dd>
-                  </div>
-                ))}
-              </dl>
+            {/* the ticket's last row: nothing renders after the button */}
+            <div className="mt-3">
+              <AppButton size="lg" className="w-full whitespace-nowrap font-mono max-md:px-4 max-md:text-base" disabled={cta.action == null} onClick={onCta}>
+                {cta.label}
+                <img src="/chevron-right-duo-dark.svg" alt="" className="h-6 w-6" />
+              </AppButton>
             </div>
           </div>
-
-          <AppButton size="lg" className="mt-4 w-full font-mono" disabled={cta.action == null} onClick={onCta}>
-            {cta.label}
-            <img src="/chevron-right-duo-dark.svg" alt="" className="h-6 w-6" />
-          </AppButton>
         </AppCard>
 
         {failure ? (

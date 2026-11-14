@@ -89,6 +89,10 @@ describe("preset and default amounts", () => {
 
   it("has no default before the rule or, for a call, the spot is known", () => {
     expect(defaultAmount({ rule: null, isPut: true, spot: 160 })).toBeNull();
+    // a set starting size is taken in the asset's own units, and still obeys the rule
+    expect(defaultAmount({ rule: { min: 0.0001, max: 0.13, step: 0.0001 }, isPut: false, spot: 68000, targetUnits: 0.1 })).toBeCloseTo(0.1);
+    expect(defaultAmount({ rule: { min: 10, max: 9000, step: 10 }, isPut: true, spot: 68000, targetUnits: 0.1 })).toBe(6800);
+    expect(defaultAmount({ rule: { min: 0.0001, max: 0.05, step: 0.0001 }, isPut: false, spot: 68000, targetUnits: 0.1 })).toBeCloseTo(0.05);
     expect(defaultAmount({ rule, isPut: false, spot: null })).toBeNull();
   });
 });

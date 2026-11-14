@@ -40,8 +40,6 @@ export function rangeForExpiry(expiryMs: number, nowMs: number): Range {
 }
 
 const CHART_HEIGHT = 280;
-/** Slim column on the right that pairs each price tick with the return at that price. */
-const PRICE_COLUMN_WIDTH = 64;
 /** Fixed number of right-axis ticks: the grid count stays put while the labels recompute. */
 const TICK_COUNT = 5;
 const FALLBACK_STRIKE_Y = 130;
@@ -264,10 +262,9 @@ const NOW_LINE = "rgba(240,240,240,0.35)";
 const PROFIT = "rgba(92,168,124,0.60)";
 const LOSS = "rgba(194,104,104,0.60)";
 
-/** Collision: lift the NOW tag vertically off the strike line when the two would overlap. */
+/** The NOW tag's half height, and how far its centre sits from the live-price dot it names. */
 const NOW_TAG_HALF = 9;
-const STRIKE_TAG_HALF = 13;
-const TAG_CLEARANCE = NOW_TAG_HALF + STRIKE_TAG_HALF + 6;
+const NOW_TAG_OFFSET = NOW_TAG_HALF + 9;
 
 /** The projection fan re-randomizes on this cadence so the future keeps re-drawing. */
 const PROJECTION_REFRESH_MS = 5500;
@@ -407,10 +404,11 @@ function FlipAffordance({
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap rounded-full border border-[rgba(240,240,240,0.08)] bg-[rgba(18,18,18,0.55)] px-2 py-0.5 font-mono text-[9px] leading-none text-content-tertiary backdrop-blur-[3px]"
+      // dressed exactly as the NOW tag, so the chart's labels are one family
+      className="pointer-events-none absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[10px] font-semibold uppercase leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
     >
       <span
-        className="inline-block text-[10px] transition-transform duration-300 ease-out"
+        className="inline-block transition-transform duration-300 ease-out"
         style={{ transform: swapping ? "rotate(180deg)" : "none" }}
         onTransitionEnd={onSwapEnd}
       >
@@ -490,6 +488,8 @@ export function ThesisChart({
   onStrike,
   pnl,
   frameless = false,
+  legend = true,
+  previewStrike = null,
   title,
 }: {
   symbol: string;
@@ -510,6 +510,10 @@ export function ThesisChart({
   pnl?: PnlContext | null;
   /** Render only the chart body; the parent supplies the card frame (summary + chart in one card). */
   frameless?: boolean;
+  /** Show the two-outcome caption under the plot; off when the parent states the outcomes itself. */
+  legend?: boolean;
+  /** A strike being considered but not chosen (hovered in the strike menu): drawn as a ghost line. */
+  previewStrike?: number | null;
   /** Optional header title (the thesis sentence); falls back to "SYMBOL price last N". */
   title?: React.ReactNode;
 }) {
@@ -868,19 +872,19 @@ export function ThesisChart({
   const topZoneCenterY = strikeY != null ? strikeY / 2 : 0;
   const bottomZoneCenterY = strikeY != null ? strikeY + (CHART_HEIGHT - strikeY) / 2 : 0;
 
-  // Keep the NOW tag legible: when the strike line drifts into the live price, lift the tag
-  // off it (with a leader line back to the spot) so the two tags never collide.
-  let nowTagY: number | null = spotY;
-  let nowTagDisplaced = false;
-  if (spotY != null && strikeY != null) {
-    const dy = spotY - strikeY;
-    if (Math.abs(dy) < TAG_CLEARANCE) {
-      nowTagDisplaced = true;
-      nowTagY = dy >= 0 ? strikeY + TAG_CLEARANCE : strikeY - TAG_CLEARANCE;
-      const minY = NOW_TAG_HALF + 4;
-      const maxY = (geometry?.paneHeight ?? CHART_HEIGHT) - NOW_TAG_HALF - 4;
-      nowTagY = Math.min(Math.max(nowTagY, minY), maxY);
-    }
+  // The NOW tag sits just off the live-price dot instead of on it, so the end of the line and
+  // the start of the projection stay visible: above the dot by default, below it when the
+  // strike line or the pane's top edge is in the way.
+  let nowTagY: number | null = null;
+  if (spotY != null) {
+    const paneHeight = geometry?.paneHeight ?? CHART_HEIGHT;
+    const blocked = (y: number) =>
+      y < NOW_TAG_HALF + 4 ||
+      y > paneHeight - NOW_TAG_HALF - 4 ||
+      (strikeY != null && Math.abs(y - strikeY) < NOW_TAG_HALF + 4);
+    const above = spotY - NOW_TAG_OFFSET;
+    const below = spotY + NOW_TAG_OFFSET;
+    nowTagY = !blocked(above) ? above : !blocked(below) ? below : above;
   }
 
   // The projection fan: two plausible price paths from the now price toward expiry — one that ends
@@ -922,10 +926,10 @@ export function ThesisChart({
       `geometry`, so it tracks size, premium and strike without an effect. */
   const rightAxis = (() => {
     if (!geometry || !seriesRef.current) {
-      return { ticks: [] as Array<{ y: number; price: string; readout: string | null }> };
+      return { ticks: [] as Array<{ y: number; price: string; readout: string | null }>, readoutLabel: null as string | null };
     }
     const [lo, hi] = domainRef.current;
-    if (!(hi > lo)) return { ticks: [] };
+    if (!(hi > lo)) return { ticks: [], readoutLabel: null };
     // When the premium is priced the readout is a return %, and while a buy's quote is still
     // unknown it falls back to the gross dollar payout at that price — a number, never a dash.
     const sized = pnl && pnl.quantity > 0 && (pnl.side === "sell" ? pnl.premium != null : true) ? pnl : null;
@@ -946,7 +950,7 @@ export function ThesisChart({
           : null,
       });
     }
-    return { ticks };
+    return { ticks, readoutLabel: sized ? (priced ? "Return" : "Payout") : null };
   })();
 
   /** The wrong-zone overlay label: a short option keeps its premium, so going wrong means the
@@ -979,7 +983,7 @@ export function ThesisChart({
         <div
           role="tablist"
           aria-label="Price history range"
-          className="absolute left-1.5 top-1.5 z-20 flex items-center gap-0.5 rounded-md border border-bg-border bg-bg-primary/80 p-0.5 font-mono backdrop-blur-[4px]"
+          className="absolute left-1.5 top-1.5 z-20 flex items-center gap-0.5 border border-bg-border bg-bg-primary/80 p-0.5 font-mono backdrop-blur-[4px]"
         >
           {RANGES.map((o) => {
             const active = o.value === range;
@@ -991,7 +995,7 @@ export function ThesisChart({
                 aria-selected={active}
                 onClick={() => setManual({ expiryMs, range: o.value })}
                 className={cn(
-                  "rounded px-1.5 py-0.5 text-[10px] leading-none tracking-[-0.28px] transition-colors",
+                  "px-1.5 py-0.5 text-[10px] leading-none tracking-[-0.28px] transition-colors",
                   active ? "bg-accent-primary/20 text-content-primary" : "text-content-secondary hover:text-content-primary"
                 )}
               >
@@ -1112,17 +1116,16 @@ export function ThesisChart({
                   style={{ transition: "y1 180ms ease-out, y2 180ms ease-out" }}
                 />
               ) : null}
-              {/* leader from the lifted NOW tag back to the live price, drawn only on collision */}
-              {nowTagDisplaced && nowTagY != null && spotY != null ? (
-                <line
-                  x1={nowX}
-                  y1={spotY}
-                  x2={nowX}
-                  y2={nowTagY}
-                  stroke={SPOT}
-                  strokeWidth={1}
-                  strokeDasharray="2 3"
-                  style={{ transition: "y1 180ms ease-out, y2 180ms ease-out" }}
+              {/* the live price itself: the dot where the history line ends and the projection starts */}
+              {spotY != null ? (
+                <circle
+                  cx={nowX}
+                  cy={spotY}
+                  r={3.5}
+                  fill={LINE}
+                  stroke="rgba(18,18,18,0.9)"
+                  strokeWidth={1.5}
+                  style={{ transition: "cy 180ms ease-out" }}
                 />
               ) : null}
               {/* projection fan: several plausible price paths from the now price toward expiry,
@@ -1143,11 +1146,36 @@ export function ThesisChart({
           </>
         ) : null}
 
-        {/* "now" (spot) reference tag — pinned to the now boundary at the live price, so it
-            sits closer to the centre instead of duplicating the right-edge axis label. */}
+        {/* a strike being considered in the menu: a dashed ghost of the strike line with its price,
+            so the choice can be read against the chart before it is made. Off the pane, it is not drawn. */}
+        {(() => {
+          if (previewStrike == null || !geometry || !seriesRef.current) return null;
+          const y = seriesRef.current.priceToCoordinate(previewStrike);
+          if (y == null || y < 0 || y > geometry.paneHeight) return null;
+          return (
+            <>
+              <div
+                aria-hidden="true"
+                data-testid="chart-strike-preview"
+                className="pointer-events-none absolute inset-x-0 z-[16] border-t border-dashed border-accent-primary"
+                style={{ top: y }}
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute right-1.5 z-[17] -translate-y-1/2 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary px-2 py-1 font-mono text-[10px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)]"
+                style={{ top: y }}
+              >
+                {formatStrikePrice(previewStrike)}
+              </span>
+            </>
+          );
+        })()}
+
+        {/* "now" (spot) reference tag — pinned to the now boundary, just off the live-price
+            dot, so it names the price without covering the end of the line. */}
         {geometry && nowX != null && spotY != null ? (
           <span
-            className="pointer-events-none absolute z-[17] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[10px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
+            className="pointer-events-none absolute z-[17] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[10px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
             style={{ left: nowX, top: nowTagY ?? spotY, transition: "top 180ms ease-out, left 180ms ease-out" }}
             aria-hidden="true"
           >
@@ -1167,8 +1195,9 @@ export function ThesisChart({
             aria-valuetext={formatStrikePrice(strike)}
             tabIndex={0}
             title="Drag to change the strike"
-            className="group absolute z-[18] flex -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none select-none items-center gap-2 rounded-md border border-accent-primary/30 bg-accent-primary/20 px-3 py-2 font-mono shadow-[0_2px_16px_rgba(0,0,0,0.7)] backdrop-blur-[4px] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary"
-            style={{ left: leftSectionCenterX, top: geometry.strikeY, animation: pulse ? "strike-pulse 1.4s ease-out 2" : undefined }}
+            className="group absolute z-[18] flex -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none select-none items-center gap-2 border border-accent-primary/30 bg-accent-primary/20 px-3 py-2 font-mono shadow-[0_2px_16px_rgba(0,0,0,0.7)] backdrop-blur-[4px] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary max-md:gap-1 max-md:px-2 max-md:py-1.5"
+            // on a phone the history half is narrow: a compact handle, kept inside the pane's left edge
+            style={{ left: Math.max(leftSectionCenterX, 44), top: geometry.strikeY, animation: pulse ? "strike-pulse 1.4s ease-out 2" : undefined }}
             onPointerDown={onDragPointerDown}
             onPointerMove={onDragPointerMove}
             onPointerUp={onDragPointerEnd}
@@ -1177,14 +1206,14 @@ export function ThesisChart({
           >
             <span className="flex items-center gap-0.5" aria-hidden="true">
               <MoveVertical className="h-4 w-4 shrink-0 text-content-primary" />
-              <Grab className="h-4 w-4 shrink-0 text-content-primary" />
+              <Grab className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
             </span>
-            <span className="text-[9px] uppercase tracking-widest text-content-primary">Strike</span>
+            <span className="text-[9px] uppercase tracking-widest text-content-primary max-md:hidden">Strike</span>
             <span className="text-[12px] font-semibold tabular-nums text-content-primary">{formatStrikePrice(strike)}</span>
           </div>
         ) : geometry ? (
           <span
-            className="pointer-events-none absolute z-[16] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-md border border-accent-primary/30 bg-accent-primary/20 px-3 py-2 font-mono text-[10px] font-semibold leading-[1.2] text-content-primary shadow-[0_2px_12px_rgba(0,0,0,0.7)] backdrop-blur-[4px]"
+            className="pointer-events-none absolute z-[16] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-accent-primary/30 bg-accent-primary/20 px-3 py-2 font-mono text-[10px] font-semibold leading-[1.2] text-content-primary shadow-[0_2px_12px_rgba(0,0,0,0.7)] backdrop-blur-[4px]"
             style={{ left: leftSectionCenterX, top: geometry.strikeY }}
             aria-hidden="true"
           >
@@ -1203,26 +1232,31 @@ export function ThesisChart({
         {/* right axis: price + PnL at each tick, sharing the price's own line */}
         {rightAxis.ticks.length > 0 ? (
           <div
-            className="relative shrink-0 border-l border-bg-border"
-            style={{ width: PRICE_COLUMN_WIDTH }}
+            className="relative w-12 shrink-0 border-l border-bg-border md:w-16"
             aria-hidden="true"
           >
             {rightAxis.ticks.map((t, i) => (
               <div
                 key={i}
-                className="pointer-events-none absolute right-1.5 -translate-y-1/2 text-right font-mono text-[9px] leading-[1.15] tabular-nums"
+                className="pointer-events-none absolute right-1.5 -translate-y-1/2 text-right font-mono text-[9px] leading-[1.15] tabular-nums md:text-[10px]"
                 style={{ top: t.y }}
               >
                 <div className="text-content-secondary">{t.price}</div>
                 {t.readout ? <div className={readoutTone(t.readout)}>{t.readout}</div> : null}
               </div>
             ))}
+            {/* what the two numbers at each tick are, in the free strip beside the time axis */}
+            <div className="pointer-events-none absolute bottom-1 right-1.5 text-right font-mono text-[8px] uppercase leading-[1.25] tracking-[0.08em] text-content-tertiary">
+              <div>Price</div>
+              {rightAxis.readoutLabel ? <div>{rightAxis.readoutLabel}</div> : null}
+            </div>
           </div>
         ) : null}
       </div>
 
       {/* the two outcomes, one plain compact caption below the plot — kept out of the data
           instead of floated over it. The strike already reads on the chart and in the terms. */}
+      {legend ? (
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs leading-[1.35] text-content-primary">
         <span className="flex items-center gap-1.5">
           <Check aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-additional-green-primary-deep" />
@@ -1233,6 +1267,7 @@ export function ThesisChart({
           {wrong.title}
         </span>
       </div>
+      ) : null}
     </>
   );
 
