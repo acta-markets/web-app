@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { Loader2, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Chevron } from "@/components/app-ui/chevron";
 import { RedeemInviteForm } from "@/components/referral/redeem-invite-form";
 
 export type GateState = "loading" | "redeem";
@@ -46,7 +47,7 @@ export function ReferralGateModal({
           onClick={onClose}
           className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center text-content-tertiary hover:text-content-primary"
         >
-          <X className="h-4 w-4" aria-hidden="true" />
+          <Chevron kind="close" className="h-5 w-5" />
         </button>
         {state === "loading" && <LoadingBody />}
         {state === "redeem" && <RedeemBody />}

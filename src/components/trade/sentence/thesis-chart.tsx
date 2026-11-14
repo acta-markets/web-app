@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { Check, Grab, MoveVertical, X } from "lucide-react";
+import { Check, Grab, X } from "lucide-react";
 import { AreaSeries, createChart, ColorType, LineStyle, type IChartApi, type ISeriesApi, type UTCTimestamp } from "lightweight-charts";
 import { AppCard } from "@/components/app-ui/app-card";
+import { Chevron } from "@/components/app-ui/chevron";
 import { cn } from "@/lib/cn";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
+import { loadPriceHistory } from "@/lib/trade/price-history";
 import type { Direction, ZoneLabel } from "@/lib/trade/thesis";
 
 type Point = { t: number; v: number };
@@ -59,23 +61,12 @@ function usePriceHistory(symbol: string, range: Range) {
   const [state, setState] = useState<{ symbol: string; range: Range; points: Point[] } | null>(null);
 
   useEffect(() => {
-    let alive = true;
-    fetch(`/api/market/history?symbol=${encodeURIComponent(symbol)}&range=${range}`)
-      .then((res) => res.json() as Promise<{ points?: Array<[number, number]> }>)
-      .then((data) => {
-        if (!alive) return;
-        const points = (data.points ?? [])
-          .filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]))
-          .map(([ms, v]) => ({ t: ms / 1000, v }))
-          .sort((a, b) => a.t - b.t);
-        setState({ symbol, range, points: downsample(points, MAX_POINTS) });
-      })
-      .catch(() => {
-        if (alive) setState({ symbol, range, points: [] });
-      });
-    return () => {
-      alive = false;
-    };
+    const ctl = new AbortController();
+    // retries a rate-limited source on its own, so the state is set once: with a series, or empty
+    void loadPriceHistory(symbol, range, ctl.signal).then((points) => {
+      if (!ctl.signal.aborted) setState({ symbol, range, points: downsample(points, MAX_POINTS) });
+    });
+    return () => ctl.abort();
   }, [symbol, range]);
 
   const sameAsset = state?.symbol === symbol;
@@ -414,7 +405,7 @@ function FlipAffordance({
         style={{ transform: swapping ? "rotate(180deg)" : "none" }}
         onTransitionEnd={onSwapEnd}
       >
-        ⇄
+        <Chevron kind="switch" className="block h-3 w-3" />
       </span>
       <span className="max-md:hidden">click the chart to flip</span>
       <span className="md:hidden">tap to flip</span>
@@ -475,9 +466,7 @@ function ZoneChip({
       style={{ left: x, top: y }}
     >
       {text}
-      <span aria-hidden="true" className="ml-1 opacity-50">
-        ⇄
-      </span>
+      <Chevron kind="switch" className="ml-1 inline h-3 w-3 opacity-50" />
     </button>
   );
 }
@@ -1155,7 +1144,8 @@ export function ThesisChart({
               className="pointer-events-none absolute right-1.5 top-1 z-[17] font-mono text-[10px] text-content-secondary"
               aria-hidden="true"
             >
-              → {formatExpiryDay(expiryMs)}
+              <Chevron kind="go" className="mr-0.5 inline h-3 w-3 -translate-y-px" />
+              {formatExpiryDay(expiryMs)}
             </span>
           </>
         ) : null}
@@ -1219,7 +1209,7 @@ export function ThesisChart({
             onKeyDown={onDragKeyDown}
           >
             <span className="flex items-center gap-0.5" aria-hidden="true">
-              <MoveVertical className="h-4 w-4 shrink-0 text-content-primary" />
+              <Chevron kind="switch" className="h-4 w-4 shrink-0 text-content-primary" />
               <Grab className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
             </span>
             <span className="text-[9px] uppercase tracking-widest text-content-primary max-md:hidden">Strike</span>

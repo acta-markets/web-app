@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useConnectWallet, usePrivy, useWallets } from "@privy-io/react-auth";
 import { AppButton } from "@/components/app-ui/app-button";
+import { Chevron } from "@/components/app-ui/chevron";
 import { Loader2, Unlink } from "lucide-react";
 
 function shortAddress(addr: string, left = 4, right = 4) {
@@ -71,8 +72,7 @@ export function PrivyConnectButton() {
         title={disabledTitle}
       >
         {label}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/chevron-right-duo-dark.svg" alt="" className="h-5 w-5" />
+        <Chevron kind="go" className="h-5 w-5" />
       </AppButton>
     );
   }

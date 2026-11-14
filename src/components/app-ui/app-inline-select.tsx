@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown } from "lucide-react";
+import { Check } from "lucide-react";
+import { Chevron } from "./chevron";
 import { cn } from "@/lib/cn";
 
 export type AppInlineSelectOption = {
@@ -22,6 +23,9 @@ export type AppInlineSelectOption = {
 /** Phones keep the platform picker; wider screens get the styled menu. */
 const MENU_QUERY = "(min-width: 768px)";
 const MENU_GAP = 6;
+/** The menu's tallest, and the shortest it is squeezed to when the window is short. */
+const MENU_MAX_HEIGHT = 320;
+const MENU_MIN_HEIGHT = 140;
 
 /** One face of a pill; faces stacked in one grid cell let the pill keep its widest value's width. */
 export const INLINE_PILL_FACE = "col-start-1 row-start-1 inline-flex items-center gap-[0.15em]";
@@ -109,7 +113,7 @@ export function AppInlineSelect({
       ) : (
         children
       )}
-      <ChevronDown aria-hidden="true" className={INLINE_PILL_GLYPH} />
+      <Chevron kind="menu" className={INLINE_PILL_GLYPH} />
     </>
   );
 
@@ -180,7 +184,7 @@ function MenuSelect({
 }) {
   const [open, setOpen] = React.useState(false);
   const [active, setActive] = React.useState(-1);
-  const [position, setPosition] = React.useState<{ left: number; top: number; minWidth: number } | null>(null);
+  const [position, setPosition] = React.useState<{ left: number; top: number; minWidth: number; maxHeight: number } | null>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const listRef = React.useRef<HTMLUListElement>(null);
   const id = React.useId();
@@ -213,7 +217,8 @@ function MenuSelect({
     if (option.value !== value) onChange(option.value);
   };
 
-  // below the pill, or above it when there is no room, kept inside the viewport
+  // Always below the pill, like every menu on the page: where there is little room it gets
+  // shorter and scrolls, rather than jumping above and covering what is over the sentence.
   useIsomorphicLayoutEffect(() => {
     if (!open) {
       setPosition(null);
@@ -223,15 +228,20 @@ function MenuSelect({
       const trigger = buttonRef.current?.getBoundingClientRect();
       const list = listRef.current;
       if (!trigger || !list) return;
-      const roomBelow = window.innerHeight - trigger.bottom - MENU_GAP;
-      const top = roomBelow >= list.offsetHeight || trigger.top < list.offsetHeight + MENU_GAP
-        ? trigger.bottom + MENU_GAP
-        : trigger.top - MENU_GAP - list.offsetHeight;
+      const roomBelow = window.innerHeight - trigger.bottom - MENU_GAP * 2;
+      const maxHeight = Math.min(MENU_MAX_HEIGHT, Math.max(MENU_MIN_HEIGHT, roomBelow));
       const width = Math.max(list.offsetWidth, trigger.width);
       const left = Math.min(Math.max(MENU_GAP, trigger.left), window.innerWidth - width - MENU_GAP);
-      setPosition({ left, top, minWidth: trigger.width });
+      setPosition({ left, top: trigger.bottom + MENU_GAP, minWidth: trigger.width, maxHeight });
     };
     place();
+    // With too little room under the pill even for the shortest menu, bring the page up by
+    // what is missing, once: the menu follows the pill as the page scrolls.
+    const trigger = buttonRef.current?.getBoundingClientRect();
+    if (trigger) {
+      const missing = MENU_MIN_HEIGHT - (window.innerHeight - trigger.bottom - MENU_GAP * 2);
+      if (missing > 0) window.scrollBy?.({ top: missing, behavior: "smooth" });
+    }
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
     return () => {
@@ -329,8 +339,8 @@ function MenuSelect({
               id={listId}
               role="listbox"
               aria-label={label}
-              style={{ left: position?.left ?? 0, top: position?.top ?? 0, minWidth: position?.minWidth, visibility: position ? "visible" : "hidden" }}
-              className="fixed z-[80] max-h-[min(320px,60vh)] overflow-y-auto border border-bg-border bg-bg-primary py-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
+              style={{ left: position?.left ?? 0, top: position?.top ?? 0, minWidth: position?.minWidth, maxHeight: position?.maxHeight ?? MENU_MAX_HEIGHT, visibility: position ? "visible" : "hidden" }}
+              className="fixed z-[80] overflow-y-auto border border-bg-border bg-bg-primary py-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
             >
               {groupRuns(options).map((run, r) => (
                 <React.Fragment key={`${run.group ?? "run"}-${r}`}>

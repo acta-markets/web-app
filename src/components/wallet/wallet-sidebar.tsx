@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { X, Wallet, ChevronRight, Loader2, Check, Users } from "lucide-react";
+import { Wallet, Loader2, Check, Users } from "lucide-react";
+import { Chevron } from "@/components/app-ui/chevron";
 import { useSolana, type Wallet as WalletType } from "@/components/solana/solana-wallet-provider";
 import { cn } from "@/lib/cn";
 
@@ -126,7 +127,7 @@ function WalletSidebar() {
             className="p-2 text-content-secondary transition-colors hover:bg-action-primary hover:text-content-primary"
             aria-label="Close sidebar"
           >
-            <X className="h-5 w-5" />
+            <Chevron kind="close" className="h-5 w-5" />
           </button>
         </header>
 
@@ -236,7 +237,7 @@ function ConnectedView({
           <div className="font-mono font-medium text-content-primary">Referrals</div>
           <div className="font-mono text-xs text-content-tertiary">Manage your invite code and stats</div>
         </div>
-        <ChevronRight className="h-5 w-5 text-content-tertiary transition-transform group-hover:translate-x-1 group-hover:text-accent-primary" />
+        <Chevron kind="next" className="h-5 w-5 text-content-tertiary transition-transform group-hover:translate-x-1 group-hover:text-accent-primary" />
       </button>
 
       {                       }
@@ -312,7 +313,7 @@ function WalletListView({
               {isLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin text-accent-primary" />
               ) : (
-                <ChevronRight className="h-5 w-5 text-content-tertiary transition-transform group-hover:translate-x-1 group-hover:text-accent-primary" />
+                <Chevron kind="next" className="h-5 w-5 text-content-tertiary transition-transform group-hover:translate-x-1 group-hover:text-accent-primary" />
               )}
             </button>
           );
@@ -359,7 +360,7 @@ function EmptyWalletsView() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={wallet.icon} alt={wallet.name} className="h-10 w-10" />
             <span className="flex-1 font-mono font-medium text-content-primary">{wallet.name}</span>
-            <ChevronRight className="h-5 w-5 text-content-tertiary" />
+            <Chevron kind="next" className="h-5 w-5 text-content-tertiary" />
           </a>
         ))}
       </div>

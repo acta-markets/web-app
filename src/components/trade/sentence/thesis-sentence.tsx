@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import * as React from "react";
-import { ArrowUpDown } from "lucide-react";
+import { Chevron } from "@/components/app-ui/chevron";
 import {
   AppInlineSelect,
   INLINE_PILL,
@@ -208,7 +208,9 @@ function DirectionToggle({
           </span>
         ))}
       </span>
-      {blocked ? null : <ArrowUpDown aria-hidden="true" className={INLINE_PILL_GLYPH} />}
+      {/* a stacked chevron, the two-way sibling of the menus' chevron: a second arrow beside the
+          direction arrow read as part of the direction */}
+      {blocked ? null : <Chevron kind="switch" className={INLINE_PILL_GLYPH} />}
     </button>
   );
 }

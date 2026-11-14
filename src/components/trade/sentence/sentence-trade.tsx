@@ -11,6 +11,7 @@ import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useQuoteRequest } from "@/components/rfq/use-quote-request";
 import { useTokenMarketsSnapshot } from "@/components/rfq/use-token-markets-snapshot";
 import { RfqFlowModal } from "@/components/market/rfq-flow-modal";
+import { Chevron } from "@/components/app-ui/chevron";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
 import { Check, X } from "lucide-react";
@@ -65,7 +66,8 @@ import { ThesisSentence } from "./thesis-sentence";
 import { ThesisChart } from "./thesis-chart";
 
 const PRICE_SCALE = 1_000_000_000;
-const CONTAINER = "mx-auto w-full max-w-[850px] pb-20 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-6";
+// no top padding: the page's title sits right above and brings its own
+const CONTAINER = "mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6 max-md:px-3";
 /** The chosen strike if still listed, else the closest one by price. */
 function nearestStrike(options: StrikeOption[], strike1e9: number): StrikeOption | null {
   let best: StrikeOption | null = null;
@@ -98,15 +100,13 @@ export function splitOutcome(title: string): [string, string] | null {
 export function SentenceTrade({
   mode,
   initialAsset,
-  modeSwitch,
-  howItWorks,
+  footer,
 }: {
   /** "yield" sells the belief, "profit" pays for it */
   mode: "yield" | "profit";
   initialAsset?: string | null;
-  /** Yield | Profit, first on the left so it holds its place across modes */
-  modeSwitch?: React.ReactNode;
-  howItWorks?: React.ReactNode;
+  /** a quiet line under the card, e.g. the link to how this works */
+  footer?: React.ReactNode;
 }) {
   const side: TakerSide = mode === "yield" ? "sell" : "buy";
   const { earnSummary, referralStatus, openReferralGate, isAuthenticated, assetSnapshots, getAssetSnapshots, protocolFeesBySymbol } = useRfqContext();
@@ -121,7 +121,10 @@ export function SentenceTrade({
   // Live reference prices for the asset picker: one snapshot per listed underlying, refreshed
   // while the tab is visible. Each snapshot resolves independently; a mint with no markets
   // simply never appears, so the picker shows a dash instead of a stale guess.
-  const assetMints = useMemo(() => assets.map((a) => a.mint), [assets]);
+  // Keyed by content, not identity: a refreshed earn summary listing the same assets must not
+  // restart the refresh below, which costs one snapshot request per asset.
+  const assetMintsKey = assets.map((a) => a.mint).join(",");
+  const assetMints = useMemo(() => (assetMintsKey ? assetMintsKey.split(",") : []), [assetMintsKey]);
   useEffect(() => {
     if (assetMints.length === 0) return;
     const refresh = () => { if (!document.hidden) getAssetSnapshots(assetMints); };
@@ -380,6 +383,7 @@ export function SentenceTrade({
         strikeDisplay: formatStrikePrice(strike.strike),
         quantityDisplay: `${formatAmount(lockedDeposit, inputDecimals)} ${symbol}`,
         thesis: thesisText({ asset: asset.symbol, direction, strike: strike.strike, expiryMs: expiry.expiryTs * 1000 }),
+        expiryTs: expiry.expiryTs,
         lockedAprPct: side === "sell" && strike.apr != null ? strike.apr * 100 : undefined,
       }
     );
@@ -397,18 +401,10 @@ export function SentenceTrade({
     />
   );
 
-  const topBar = (
-    <div className="flex flex-wrap items-center gap-3">
-      {modeSwitch}
-      <div className="ml-auto">{howItWorks}</div>
-    </div>
-  );
-
   if (!earnSummary || !asset) {
     return (
       <div className={CONTAINER}>
-        {topBar}
-        <div className="mt-8 max-md:mt-6">
+        <div>
           {earnSummary ? (
             <AppCard className="border-0 p-6 font-mono text-base text-content-secondary">
               No markets are open right now. Check back soon.
@@ -417,6 +413,7 @@ export function SentenceTrade({
             <TradeSkeleton side={side} />
           )}
         </div>
+        {footer}
         {modal}
       </div>
     );
@@ -643,9 +640,7 @@ export function SentenceTrade({
 
   return (
     <div className={CONTAINER}>
-      {topBar}
-
-      <section aria-label="Your trade" className="mt-8 flex flex-col gap-4 max-md:mt-6">
+      <section aria-label="Your trade" className="flex flex-col gap-4">
         {/* one coherent surface: the sentence is the chart's header, the size + summary read as a
             compact controller beneath it, closed by the CTA */}
         <AppCard className="border-0 p-4 max-md:p-3">
@@ -918,7 +913,7 @@ export function SentenceTrade({
             <div className="mt-3">
               <AppButton size="lg" className="w-full whitespace-nowrap font-mono max-md:px-4 max-md:text-base" disabled={cta.action == null} onClick={onCta}>
                 {cta.label}
-                <img src="/chevron-right-duo-dark.svg" alt="" className="h-6 w-6" />
+                <Chevron kind="go" className="h-6 w-6" />
               </AppButton>
             </div>
           </div>
@@ -931,6 +926,7 @@ export function SentenceTrade({
         ) : null}
       </section>
 
+      {footer}
       {modal}
     </div>
   );

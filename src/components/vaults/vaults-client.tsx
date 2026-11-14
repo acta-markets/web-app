@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { ChevronDown } from "lucide-react";
+import { Chevron } from "@/components/app-ui/chevron";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { AppButton } from "@/components/app-ui/app-button";
@@ -68,7 +68,7 @@ function SortSelect({ value, onChange }: { value: VaultSort; onChange: (next: Va
       <span aria-hidden="true">
         Sort by <span className="text-content-primary">{current.label}</span>
       </span>
-      <ChevronDown aria-hidden="true" className="h-4 w-4" />
+      <Chevron kind="menu" className="h-4 w-4" />
       <select
         aria-label="Sort vaults"
         value={value}
@@ -183,7 +183,7 @@ export function VaultsClient({ initialCategory }: { initialCategory: CategoryFil
               className="inline-flex items-center gap-0.5 text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary"
             >
               How vaults work
-              <img src="/chevron-right-duo.svg" alt="" className="h-5 w-5" />
+              <Chevron kind="go" className="h-5 w-5" />
             </Link>
           </div>
         </div>

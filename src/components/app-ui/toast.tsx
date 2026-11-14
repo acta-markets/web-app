@@ -10,7 +10,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Check, X, AlertTriangle } from "lucide-react";
+import { Check, AlertTriangle } from "lucide-react";
+import { Chevron } from "./chevron";
 import { cn } from "@/lib/cn";
 
 type ToastVariant = "success" | "info" | "error";
@@ -128,7 +129,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
         aria-label="Dismiss"
         className="text-content-tertiary transition-colors hover:text-content-primary"
       >
-        <X className="h-4 w-4" aria-hidden="true" />
+        <Chevron kind="close" className="h-4 w-4" />
       </button>
     </div>
   );

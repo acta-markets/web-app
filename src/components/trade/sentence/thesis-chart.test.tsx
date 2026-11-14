@@ -30,7 +30,8 @@ afterEach(() => {
 });
 
 function mockHistory(points: Array<[number, number]>) {
-  return vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true, points })));
+  // a fresh Response per call: a body can be read only once
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ ok: true, points })));
 }
 
 const props = {

@@ -3,83 +3,105 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { INLINE_PILL, INLINE_PILL_FACE, INLINE_PILL_GLYPH } from "@/components/app-ui/app-inline-select";
 import { AppModal } from "@/components/app-ui/app-modal";
-import { AppSegmented } from "@/components/app-ui/app-segmented";
+import { Chevron } from "@/components/app-ui/chevron";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
+import { cn } from "@/lib/cn";
 import { SentenceTrade } from "@/components/trade/sentence/sentence-trade";
 
 type Mode = "yield" | "profit";
 
-/** The two ways to trade an option, as genuinely different products: selling optionality
-    for yield (a covered call / cash-secured put) or buying it for direction (a long call / put). */
-const MODES: Array<{ value: Mode; label: string }> = [
-  { value: "profit", label: "Profit" },
-  { value: "yield", label: "Yield" },
+/** The two ways to trade an option, as genuinely different products: buying optionality for
+    direction (a long call / put) or selling it for yield (a covered call / cash-secured put).
+    `word` completes the page title, "Get ___ on your thesis". */
+const MODES: Array<{ value: Mode; word: string }> = [
+  { value: "profit", word: "profit" },
+  { value: "yield", word: "yield" },
 ];
 
-/** The three option terms, demoted from the front to a quiet reference at the bottom: what the
-    trade is measured against (strike), when it settles (expiry) and how its price is set (quote). */
-const OPTION_TERMS: Array<{ k: string; v: string }> = [
-  { k: "Strike", v: "The price you pick — the line the final price is measured against." },
-  { k: "Expiry", v: "When the trade settles; the final price decides the outcome." },
-  { k: "Premium", v: "The option's price, set by a quote when you trade." },
-];
+/**
+ * The mode, set inside the page title. It has two values, so it is a switch, not a menu: one
+ * click flips it. It keeps the width of its wider word, so flipping never reflows the title.
+ */
+function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => void }) {
+  const other = MODES.find((m) => m.value !== mode)!;
+  return (
+    <button
+      type="button"
+      aria-label={`Trading mode: ${mode}. Switch to ${other.word}`}
+      title={`Switch to ${other.word}`}
+      onClick={() => onChange(other.value)}
+      className={cn(
+        INLINE_PILL,
+        "cursor-pointer border-accent-primary/60 bg-accent-primary/25 text-content-primary hover:border-accent-primary hover:bg-accent-primary/40",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
+      )}
+    >
+      <span className="inline-grid">
+        {MODES.map((m) => (
+          <span key={m.value} aria-hidden={m.value !== mode} className={cn(INLINE_PILL_FACE, "justify-center", m.value !== mode && "invisible")}>
+            {m.word}
+          </span>
+        ))}
+      </span>
+      <Chevron kind="switch" className={INLINE_PILL_GLYPH} />
+    </button>
+  );
+}
 
-/** How each mode works, for the "How it works" modal: what it is (the lead), the two setup steps,
-    the expiry outcome and the risk (max gain / max loss). Yield sells optionality for a premium;
-    profit buys it. */
+/**
+ * What is behind each mode, for the "How it works" modal. It does not walk through the page
+ * again: it names the thing being traded (an option), what the premium is and what happens at
+ * the date, in a few short points, and hands the rest to the guide. `terms` ties the page's
+ * own words, above and below, to the option's names.
+ */
 const HOW_IT_WORKS: Record<
   Mode,
   {
-    lead: string;
-    steps: Array<{ n: string; t: string }>;
-    outcome: { n: string; right: string; wrong: string };
-    risk: Array<{ k: string; v: string }>;
+    title: string;
+    points: Array<{ title: string; text: string }>;
+    terms: string;
+    guide: { label: string; href: string };
   }
 > = {
-  yield: {
-    lead: "Yield means selling a covered option: you lock a deposit, get paid a premium now, and at expiry the deposit comes back or converts at your strike.",
-    steps: [
-      {
-        n: "1) Say what you believe",
-        t: "Pick an asset, a strike and an expiry — whether the price ends above or below that strike on that date.",
-      },
-      {
-        n: "2) Get paid now",
-        t: "Market makers quote a premium and pay it upfront for taking that view. You keep it either way.",
-      },
-    ],
-    outcome: {
-      n: "3) On the date",
-      right: "the price stays on your side of the strike — your deposit comes back and you keep the premium.",
-      wrong: "it crosses the strike — your deposit converts at that price (USDC buys the asset, or your asset is sold). You keep the premium and what it became.",
-    },
-    risk: [
-      { k: "Max gain", v: "The premium — paid upfront, fixed, yours either way." },
-      { k: "Max loss", v: "Uncapped: if the price crosses your strike, your deposit converts and your downside is what that asset does next." },
-    ],
-  },
   profit: {
-    lead: "Profit means buying an option: you pay a premium for the right to buy or sell at your strike, and the most you can lose is that premium.",
-    steps: [
+    title: "How profit works",
+    points: [
       {
-        n: "1) Say what you believe",
-        t: "Pick an asset, a strike and an expiry — whether the price ends above or below that strike on that date.",
+        title: "You buy an option",
+        text: "An option is the right, not the obligation, to buy or sell an asset at a set price on a set date.",
       },
       {
-        n: "2) Pay the premium",
-        t: "You pay the quoted premium upfront for that view. It is the most you can lose.",
+        title: "You pay a premium",
+        text: "That is the option's price, quoted by market makers. It is the most you can lose.",
+      },
+      {
+        title: "You use it, or let it go",
+        text: "If the price ends past yours, deposit before the date and trade at your price. If not, it expires and the premium is gone.",
       },
     ],
-    outcome: {
-      n: "3) On the date",
-      right: "the option is in the money — deposit before expiry to exercise (buy the asset for a call, sell it for a put).",
-      wrong: "it expires unused and you lose the premium.",
-    },
-    risk: [
-      { k: "Max loss", v: "The premium — paid upfront and capped." },
-      { k: "Max gain", v: "The move past your strike when you exercise, beyond the premium you paid." },
+    terms: "Above buys a call, the right to buy. Below buys a put, the right to sell.",
+    guide: { label: "Read the guide to buying options", href: "/docs/guide/buying-options" },
+  },
+  yield: {
+    title: "How yield works",
+    points: [
+      {
+        title: "You sell an option",
+        text: "An option is the right to buy or sell an asset at a set price on a set date. A market maker buys that right from you.",
+      },
+      {
+        title: "You get the premium",
+        text: "It is paid when the trade opens and is yours either way.",
+      },
+      {
+        title: "You back it with a deposit",
+        text: "If the price ends on your side, the deposit comes back. If it crosses your price, the deposit is exchanged at that price, and from then on you hold what it became.",
+      },
     ],
+    terms: "Above sells a put and locks USDC. Below sells a call and locks the asset.",
+    guide: { label: "Read the options guide", href: "/docs/guide/options" },
   },
 };
 
@@ -107,89 +129,59 @@ export function TradeClient() {
     router.replace(qs ? `/trade?${qs}` : "/trade", { scroll: false });
   }
 
-  const modeSwitch = (
-    <AppSegmented
-      ariaLabel="Trading mode"
-      value={mode}
-      onChange={setMode}
-      options={MODES.map(({ value, label }) => ({ value, label }))}
-    />
-  );
-  const howItWorks = (
-    <button
-      type="button"
-      onClick={() => setHowOpen(true)}
-      className="font-mono text-sm text-accent-secondary hover:text-accent-primary"
-    >
-      How it works
-    </button>
-  );
-
   return (
     <div>
-      <h1 className="sr-only">Trade</h1>
+      {/* the page's title, set like Earn's, with the mode as the one word in it you can change */}
+      <div className="px-6 pb-10 pt-16 max-md:px-3 max-md:pb-6 max-md:pt-8">
+        <h1 className="w-full text-center font-space text-[64px] font-semibold leading-[1.2] tracking-[-1.28px] text-content-primary max-md:text-[40px]">
+          Get <ModeToggle mode={mode} onChange={setMode} /> <span className="whitespace-nowrap">on your thesis</span>
+        </h1>
+      </div>
+
       <SentenceTrade
         mode={mode}
         initialAsset={params.get("asset")}
-        modeSwitch={modeSwitch}
-        howItWorks={howItWorks}
+        // out of the title's way, still one click away: a quiet line under the card
+        footer={
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setHowOpen(true)}
+              className="inline-flex items-center gap-0.5 font-mono text-sm leading-[1.2] text-content-secondary transition-colors hover:text-content-primary"
+            >
+              How it works
+              <Chevron kind="go" className="h-4 w-4" />
+            </button>
+          </div>
+        }
       />
 
-      <AppModal open={howOpen} onClose={() => setHowOpen(false)} title="Acta Trade">
-        <div className="space-y-4 text-sm leading-snug">
-          <p className="text-content-primary/90">{HOW_IT_WORKS[mode].lead}</p>
-
-          {/* the two setup steps side by side on wide screens */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {HOW_IT_WORKS[mode].steps.map((s) => (
-              <div key={s.n} className="border border-bg-border bg-action-primary p-3">
-                <div className="font-medium text-content-primary">{s.n}</div>
-                <div className="mt-1 text-content-secondary">{s.t}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* at expiry: right vs wrong on one row */}
-          <div className="border border-bg-border bg-action-primary p-3">
-            <div className="font-medium text-content-primary">{HOW_IT_WORKS[mode].outcome.n}</div>
-            <div className="mt-1 grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-4">
-              <div>
-                <span className="font-medium text-content-primary">Right</span>
-                <span className="text-content-secondary"> — {HOW_IT_WORKS[mode].outcome.right}</span>
-              </div>
-              <div>
-                <span className="font-medium text-content-primary">Wrong</span>
-                <span className="text-content-secondary"> — {HOW_IT_WORKS[mode].outcome.wrong}</span>
-              </div>
+      <AppModal
+        open={howOpen}
+        onClose={() => setHowOpen(false)}
+        title={HOW_IT_WORKS[mode].title}
+        showHowItWorks={false}
+        className="max-w-md"
+      >
+        {/* a few short points, each a plain heading and one or two sentences: no boxes, no steps */}
+        <dl className="space-y-5">
+          {HOW_IT_WORKS[mode].points.map((point) => (
+            <div key={point.title}>
+              <dt className="font-space text-xl font-semibold leading-[1.2] tracking-[-0.03em] text-content-primary">{point.title}</dt>
+              <dd className="mt-1 font-mono text-sm leading-[1.45] text-content-secondary">{point.text}</dd>
             </div>
-          </div>
+          ))}
+        </dl>
 
-          {/* the payoff asymmetry: gain and loss side by side */}
-          <dl className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {HOW_IT_WORKS[mode].risk.map((r) => (
-              <div key={r.k} className="border border-bg-border p-3">
-                <dt className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-content-secondary">{r.k}</dt>
-                <dd className="mt-1 text-content-secondary">{r.v}</dd>
-              </div>
-            ))}
-          </dl>
+        <p className="font-mono text-sm leading-[1.45] text-content-tertiary">{HOW_IT_WORKS[mode].terms}</p>
 
-          {/* the three terms, demoted to a quiet reference instead of leading */}
-          <div className="border-t border-bg-border pt-3">
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-3">
-              {OPTION_TERMS.map((t) => (
-                <div key={t.k}>
-                  <dt className="font-mono text-xs text-content-secondary">{t.k}</dt>
-                  <dd className="mt-0.5 text-content-tertiary">{t.v}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-
-          <Link href="/docs/guide/options" className="inline-block text-sm text-content-secondary hover:text-accent-secondary">
-            Read the options guide
-          </Link>
-        </div>
+        <Link
+          href={HOW_IT_WORKS[mode].guide.href}
+          className="inline-flex items-center gap-0.5 font-mono text-sm leading-[1.2] text-accent-secondary hover:text-accent-primary"
+        >
+          {HOW_IT_WORKS[mode].guide.label}
+          <Chevron kind="go" className="h-4 w-4" />
+        </Link>
       </AppModal>
     </div>
   );

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
+import { Chevron } from "./chevron";
 
 export function AppModal({
   open,
@@ -73,9 +74,10 @@ export function AppModal({
             type="button"
             onClick={onClose}
             disabled={!dismissible}
-            className="px-3 py-2 font-mono text-sm font-medium text-content-secondary hover:bg-action-primary hover:text-content-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            aria-label="Close"
+            className="-mr-2 -mt-1 p-2 text-content-secondary transition-colors hover:bg-action-primary hover:text-content-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-content-secondary"
           >
-            Close
+            <Chevron kind="close" className="h-5 w-5" />
           </button>
         </div>
 
