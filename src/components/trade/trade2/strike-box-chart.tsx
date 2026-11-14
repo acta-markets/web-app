@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatPct, formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
+import { loadPriceHistory } from "@/lib/trade/price-history";
 import { priceDomain } from "@/components/trade/sentence/thesis-chart";
 import type { StrikeOption } from "@/lib/trade/strikes";
 
@@ -37,29 +38,14 @@ function usePriceHistory(symbol: string) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let alive = true;
+    const ctl = new AbortController();
     setLoading(true);
-    fetch(`/api/market/history?symbol=${encodeURIComponent(symbol)}&range=1w`)
-      .then((res) => res.json() as Promise<{ points?: Array<[number, number]> }>)
-      .then((data) => {
-        if (!alive) return;
-        setPoints(
-          (data.points ?? [])
-            .filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]))
-            .map(([ms, v]) => ({ t: ms / 1000, v }))
-            .sort((a, b) => a.t - b.t)
-        );
-        setLoading(false);
-      })
-      .catch(() => {
-        if (alive) {
-          setPoints([]);
-          setLoading(false);
-        }
-      });
-    return () => {
-      alive = false;
-    };
+    void loadPriceHistory(symbol, "1w", ctl.signal).then((loaded) => {
+      if (ctl.signal.aborted) return;
+      setPoints(loaded);
+      setLoading(false);
+    });
+    return () => ctl.abort();
   }, [symbol]);
 
   return { points, loading };

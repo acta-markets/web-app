@@ -12,8 +12,12 @@ export const COINGECKO_IDS: Readonly<Record<string, string>> = {
   USDC: "usd-coin",
   HYPE: "hyperliquid",
   ZEC: "zcash",
+  // Stocks and ETFs have no coin of their own; their xStock tokens track them 1:1.
+  NVDA: "nvidia-xstock",
   NVDAX: "nvidia-xstock",
+  SPY: "sp500-xstock",
   SPYX: "sp500-xstock",
+  QQQ: "nasdaq-xstock",
   TSLA: "tesla-xstock",
   // XAU has no coin of its own; PAXG is the closest 1:1 gold-backed series.
   XAU: "pax-gold",
