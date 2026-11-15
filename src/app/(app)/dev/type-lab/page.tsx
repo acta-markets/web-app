@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Type lab — mono candidates",
@@ -30,7 +31,9 @@ function Sample({ stack, size, weight }: { stack: string; size: number; weight: 
   );
 }
 
+/** Review harness: the mono candidates side by side at the scale's small sizes. Not served in production. */
 export default function TypeLab() {
+  if (process.env.NODE_ENV === "production") notFound();
   return (
     <div className="min-h-screen bg-bg-primary px-6 py-10 text-content-primary">
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}
