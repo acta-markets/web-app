@@ -107,7 +107,7 @@ export function DocsShell({
       </div>
       {navigation.filter((group) => group.audience === audience).map((group) => (
         <section key={group.title} className="mb-8">
-          <h2 className="mb-2 px-3 font-mono text-[12px] uppercase tracking-[0.14em] text-content-tertiary">
+          <h2 className="mb-2 px-3 font-mono text-[12px] text-content-tertiary">
             {group.title}
           </h2>
           <ul className="space-y-0.5">
@@ -151,7 +151,7 @@ export function DocsShell({
             aria-label="Back to Acta"
           >
             <ActaLogo className="h-7" />
-            <span className="border-l border-bg-border pl-3 font-mono text-xs uppercase tracking-[0.12em] text-content-secondary max-sm:hidden">
+            <span className="border-l border-bg-border pl-3 font-mono text-xs text-content-secondary max-sm:hidden">
               Docs
             </span>
           </Link>
@@ -217,7 +217,7 @@ export function DocsShell({
                       onClick={() => { setSearchOpen(false); setQuery(""); }}
                       className={`block px-3 py-2.5 hover:bg-white/[0.05] ${activeResult === index ? "bg-white/[0.07]" : ""}`}
                     >
-                      <span className="mb-1 block text-[12px] uppercase tracking-wide text-content-secondary">
+                      <span className="mb-1 block text-[12px] tracking-wide text-content-secondary">
                         {item.audience === "user" ? "User guide" : "Protocol & integrations"}
                       </span>
                       <span className="block text-sm font-medium text-content-primary">

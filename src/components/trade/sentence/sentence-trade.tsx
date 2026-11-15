@@ -871,7 +871,7 @@ export function SentenceTrade({
               <div className={cn(TICKET_CELL, "xl:order-5")}>
                 <span className={cn(TICKET_LABEL, "flex items-center gap-1 whitespace-nowrap")}>
                   <Check aria-hidden="true" className="h-3 w-3 shrink-0 text-additional-green-primary-deep" />
-                  {/* the ticker is a name, so it keeps its own casing inside the uppercase label */}
+                  {/* the ticker is a name, so it keeps its own casing inside the label */}
                   {ticketOutcomes.right.when ? (
                     <span>
                       If <span className="normal-case">{asset.symbol}</span> {ticketOutcomes.right.when}

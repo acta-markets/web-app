@@ -127,7 +127,7 @@ export function DocsArticle({
             href={docsHref(previous.slug)}
             className="rounded-none border border-bg-border p-4 transition-colors hover:border-accent-secondary/50 hover:bg-white/[0.025]"
           >
-            <span className="block font-mono text-[12px] uppercase tracking-[0.12em] text-content-tertiary">
+            <span className="block font-mono text-[12px] text-content-tertiary">
               Previous
             </span>
             <span className="mt-2 block text-sm font-medium text-content-primary">
@@ -143,7 +143,7 @@ export function DocsArticle({
             href={docsHref(next.slug)}
             className="rounded-none border border-bg-border p-4 text-right transition-colors hover:border-accent-secondary/50 hover:bg-white/[0.025]"
           >
-            <span className="block font-mono text-[12px] uppercase tracking-[0.12em] text-content-tertiary">
+            <span className="block font-mono text-[12px] text-content-tertiary">
               Next
             </span>
             <span className="mt-2 block text-sm font-medium text-content-primary">

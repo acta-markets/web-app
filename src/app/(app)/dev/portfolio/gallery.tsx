@@ -195,7 +195,7 @@ export function PortfolioGallery() {
 
   return (
     <div className="mx-auto w-full max-w-[850px] pb-16 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-8">
-      <p className="font-mono text-xs uppercase tracking-[0.12em] text-content-tertiary">Dev harness · portfolio states from fixtures</p>
+      <p className="font-mono text-xs text-content-tertiary">Dev harness · portfolio states from fixtures</p>
       <div className="-mx-1 mt-3 overflow-x-auto px-1 pb-1">
         <AppSegmented value={scene} onChange={setScene} options={SCENES} stretch={false} ariaLabel="Scene" />
       </div>

@@ -60,7 +60,7 @@ export function LandingPartnersStack() {
               style={{ background: "#121212" }}
             >
               <dt
-                className="mb-3 font-mono text-[12px] uppercase text-content-secondary"
+                className="mb-3 font-mono text-[12px] text-content-secondary"
                 style={{ letterSpacing: "0.18em" }}
               >
                 {spec.label}

@@ -8,7 +8,7 @@ import { formatUsdSmart } from "@/lib/markets";
 import { formatSignedUsd, type OpenWrittenApr, type PnlSummary, type TradingStats } from "@/lib/portfolio-pnl";
 
 const DASH = "—";
-const LABEL = "font-mono text-[12px] font-medium uppercase leading-[1.2] tracking-[0.12em] text-content-tertiary";
+const LABEL = "font-mono text-[12px] font-medium leading-[1.2] text-content-tertiary";
 
 function tone(n: number): string {
   if (n > 0) return "text-additional-green-primary";

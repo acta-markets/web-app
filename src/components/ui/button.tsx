@@ -15,7 +15,7 @@ export type ButtonLinkProps = React.AnchorHTMLAttributes<HTMLAnchorElement> & {
 };
 
 const base =
-  "inline-flex items-center justify-center border-[3px] border-bg-border font-bold uppercase transition-all duration-100 select-none active:translate-x-1 active:translate-y-1 active:shadow-none text-content-primary";
+  "inline-flex items-center justify-center border-[3px] border-bg-border font-bold transition-all duration-100 select-none active:translate-x-1 active:translate-y-1 active:shadow-none text-content-primary";
 
 const variants: Record<ButtonVariant, string> = {
   primary: "bg-accent-primary hover:bg-accent-deep shadow-neo",

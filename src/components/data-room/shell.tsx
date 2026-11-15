@@ -258,7 +258,7 @@ export function DataRoomShell({ tree, config, children }: DataRoomShellProps) {
 
   const sidebarContent = searching ? (
     <div>
-      <div className="mb-3 px-3 font-mono text-[12px] uppercase tracking-[0.14em] text-content-tertiary">
+      <div className="mb-3 px-3 font-mono text-[12px] text-content-tertiary">
         Results
       </div>
       {hits.length > 0 ? (
@@ -324,7 +324,7 @@ export function DataRoomShell({ tree, config, children }: DataRoomShellProps) {
         <div className="flex h-full items-center gap-4 px-5 max-md:px-3">
           <Link href="/data-room" className="flex shrink-0 items-center gap-3" aria-label="Data room home">
             <ActaLogo className="h-7" />
-            <span className="border-l border-bg-border pl-3 font-mono text-xs uppercase tracking-[0.12em] text-content-secondary max-sm:hidden">
+            <span className="border-l border-bg-border pl-3 font-mono text-xs text-content-secondary max-sm:hidden">
               Data Room
             </span>
           </Link>
@@ -358,7 +358,7 @@ export function DataRoomShell({ tree, config, children }: DataRoomShellProps) {
       <div className="pt-16">
         <aside className="fixed bottom-0 left-0 top-16 z-30 w-72 overflow-y-auto border-r border-bg-border bg-bg-primary max-lg:hidden">
           <div className="border-b border-bg-border px-5 py-4">
-            <p className="truncate font-mono text-[12px] uppercase tracking-[0.12em] text-content-tertiary">
+            <p className="truncate font-mono text-[12px] text-content-tertiary">
               {config.title}
             </p>
           </div>
@@ -376,7 +376,7 @@ export function DataRoomShell({ tree, config, children }: DataRoomShellProps) {
             />
             <aside className="fixed bottom-0 left-0 top-16 z-30 w-[min(86vw,320px)] overflow-y-auto border-r border-bg-border bg-bg-primary lg:hidden">
               <div className="border-b border-bg-border px-5 py-4">
-                <p className="truncate font-mono text-[12px] uppercase tracking-[0.12em] text-content-tertiary">
+                <p className="truncate font-mono text-[12px] text-content-tertiary">
                   {config.title}
                 </p>
               </div>

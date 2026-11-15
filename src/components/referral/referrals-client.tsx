@@ -132,7 +132,7 @@ function YourCodeCard({
         <h2 className="font-mono text-sm text-content-secondary">Your code</h2>
         <AppPill active={status === "active"}>{status === "active" ? "Active" : "Pending"}</AppPill>
       </div>
-      <div className="mb-5 break-all font-mono text-3xl font-semibold tracking-[0.1em] text-content-primary">
+      <div className="mb-5 break-all font-mono text-3xl font-semibold text-content-primary">
         {code}
       </div>
       <div className="flex flex-wrap gap-2">
@@ -253,7 +253,7 @@ function ClaimVanityCard({
           spellCheck={false}
           autoComplete="off"
           placeholder="Pick a code"
-          className="w-full border border-bg-border bg-bg-tertiary px-4 py-3 font-mono text-lg font-semibold tracking-[0.15em] text-content-primary placeholder:tracking-normal placeholder:text-content-tertiary/60 focus:border-accent-primary/60 focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
+          className="w-full border border-bg-border bg-bg-tertiary px-4 py-3 font-mono text-lg font-semibold text-content-primary placeholder:tracking-normal placeholder:text-content-tertiary/60 focus:border-accent-primary/60 focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
         />
         {referralError && (
           <p role="alert" className="font-mono text-sm text-additional-red-primary">

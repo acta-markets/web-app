@@ -390,7 +390,7 @@ function FlipAffordance({
     <span
       aria-hidden="true"
       // dressed exactly as the NOW tag, so the chart's labels are one family
-      className="pointer-events-none absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] font-semibold uppercase leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
+      className="pointer-events-none absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
     >
       <span
         className="inline-block transition-transform duration-300 ease-out"
@@ -434,7 +434,7 @@ function ZoneChip({
   onFlip: () => void;
 }) {
   const base = cn(
-    "absolute z-[17] -translate-y-1/2 whitespace-nowrap border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono font-semibold uppercase tracking-wider backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)] transition-colors",
+    "absolute z-[17] -translate-y-1/2 whitespace-nowrap border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono font-semibold tracking-wider backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)] transition-colors",
     compact ? "-translate-x-full text-[12px]" : "-translate-x-1/2 text-xs"
   );
   if (!interactive) {
@@ -1206,7 +1206,7 @@ export function ThesisChart({
               <Chevron kind="switch" className="h-4 w-4 shrink-0 text-content-primary" />
               <Grab className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
             </span>
-            <span className="text-[12px] uppercase tracking-widest text-content-primary max-md:hidden">Strike</span>
+            <span className="text-[12px] tracking-widest text-content-primary max-md:hidden">Strike</span>
             <span className="text-[12px] font-semibold tabular-nums text-content-primary">{formatStrikePrice(strike)}</span>
           </div>
         ) : geometry ? (
@@ -1248,7 +1248,7 @@ export function ThesisChart({
             ))}
             {/* what the two numbers at each tick are, in the free strip beside the time axis:
                 set like a tick itself, each word in its own number's colour */}
-            <div className="pointer-events-none absolute bottom-1 right-1.5 text-right font-mono text-[12px] uppercase leading-[1.25] tracking-[0.08em]">
+            <div className="pointer-events-none absolute bottom-1 right-1.5 text-right font-mono text-[12px] leading-[1.25]">
               <div className="text-content-secondary">Price</div>
               {rightAxis.readoutLabel ? <div className="text-accent-primary">{rightAxis.readoutLabel}</div> : null}
             </div>

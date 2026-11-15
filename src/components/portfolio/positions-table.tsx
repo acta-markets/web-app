@@ -64,7 +64,7 @@ const COLUMNS: Record<PositionsVariant, Column[]> = {
   ],
 };
 
-const LABEL = "font-mono text-[12px] font-medium uppercase leading-[1.2] tracking-[0.12em] text-content-tertiary";
+const LABEL = "font-mono text-[12px] font-medium leading-[1.2] text-content-tertiary";
 const FOCUS = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary";
 const DASH = "—";
 
@@ -434,7 +434,7 @@ export function PositionsTable({
                     <button
                       type="button"
                       onClick={() => setSort((prev) => nextSort(prev, column.sort!))}
-                      className={cn("group inline-flex items-center gap-1 whitespace-nowrap uppercase transition-colors hover:text-content-primary", FOCUS)}
+                      className={cn("group inline-flex items-center gap-1 whitespace-nowrap transition-colors hover:text-content-primary", FOCUS)}
                     >
                       {column.label}
                       <span

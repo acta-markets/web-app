@@ -21,7 +21,7 @@ const BUTTONS: Array<{ label: string; state: WalletButtonState }> = [
 function Frame({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section data-frame={title} className="flex flex-col gap-3">
-      <h2 className="font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-content-tertiary">{title}</h2>
+      <h2 className="font-mono text-[12px] font-medium text-content-tertiary">{title}</h2>
       {children}
     </section>
   );
@@ -49,7 +49,7 @@ export function WalletGallery() {
 
   return (
     <div className="mx-auto flex w-full max-w-[850px] flex-col gap-10 pb-20 pt-10 max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-      <p className="font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-content-tertiary">
+      <p className="font-mono text-[12px] font-medium text-content-tertiary">
         Dev harness · wallet button and panel from fixtures · opened {opened}×
       </p>
 

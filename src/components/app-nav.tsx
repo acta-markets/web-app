@@ -54,7 +54,7 @@ export function AppNav() {
             >
               {t.label}
               {t.soon ? (
-                <span className="text-[12px] uppercase tracking-[0.08em] text-content-tertiary">Soon</span>
+                <span className="text-[12px] text-content-tertiary">Soon</span>
               ) : null}
             </Link>
           );

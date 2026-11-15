@@ -11,7 +11,7 @@ import { formatExpiryDay } from "@/lib/trade/format";
 import { cn } from "@/lib/cn";
 import { Cell } from "./performance-strip";
 
-const LABEL = "font-mono text-[12px] font-medium uppercase leading-[1.2] tracking-[0.12em] text-content-tertiary";
+const LABEL = "font-mono text-[12px] font-medium leading-[1.2] text-content-tertiary";
 
 /** "6,900.00 USDC": dollars to the cent for the quote, up to four places for an asset. */
 function amountText({ symbol, amount }: { symbol: string; amount: number }): string {

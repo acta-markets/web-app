@@ -18,7 +18,7 @@ export function LandingStats() {
             }`}
           >
             <div
-              className="mb-3.5 font-mono text-[12px] uppercase text-accent-secondary"
+              className="mb-3.5 font-mono text-[12px] text-accent-secondary"
               style={{ letterSpacing: "0.08em" }}
             >
               <span

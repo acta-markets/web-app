@@ -89,7 +89,7 @@ export function QuoteFlowGallery() {
       <div className="mt-8 grid grid-cols-1 items-start gap-x-6 gap-y-10 lg:grid-cols-2 2xl:grid-cols-3">
         {STATES.map(({ name, props }) => (
           <section key={name} data-state={name}>
-            <h2 className="mb-2 font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-content-tertiary">{name}</h2>
+            <h2 className="mb-2 font-mono text-[12px] font-medium text-content-tertiary">{name}</h2>
             {/* the modal's own panel and header, as AppModal draws them */}
             <div className="w-full max-w-lg border border-bg-border bg-bg-primary p-6 text-content-primary shadow-2xl">
               <div className="flex items-start justify-between gap-4">

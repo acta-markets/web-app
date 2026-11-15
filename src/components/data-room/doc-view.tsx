@@ -23,7 +23,7 @@ export function DataRoomDocView({ doc }: { doc: DataRoomDoc }) {
     <div className="mx-auto w-full max-w-[920px] px-8 py-10 max-md:px-5 max-md:py-7">
       <nav
         aria-label="Breadcrumb"
-        className="mb-5 flex flex-wrap items-center gap-1.5 font-mono text-[12px] uppercase tracking-[0.08em] text-content-tertiary"
+        className="mb-5 flex flex-wrap items-center gap-1.5 font-mono text-[12px] text-content-tertiary"
       >
         {crumbs.map((crumb, index) => {
           const isLast = index === crumbs.length - 1;

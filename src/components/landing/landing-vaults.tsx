@@ -42,7 +42,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
     >
       <div>
         <div
-          className="mb-5 font-mono text-[12px] uppercase text-content-secondary"
+          className="mb-5 font-mono text-[12px] text-content-secondary"
           style={{ letterSpacing: "0.12em" }}
         >
           {vault.type}
@@ -74,7 +74,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
                   ~{total}%
                 </span>
                 <span
-                  className="font-mono text-[12px] uppercase text-content-secondary"
+                  className="font-mono text-[12px] text-content-secondary"
                   style={{ letterSpacing: "0.12em" }}
                 >
                   APY

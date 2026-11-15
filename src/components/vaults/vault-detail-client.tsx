@@ -132,7 +132,7 @@ export function VaultDetailClient({ pda }: { pda: string }) {
               <p className="font-mono text-base leading-[1.4] tracking-[-0.02em] text-content-primary [overflow-wrap:anywhere]">{meta.strategy}</p>
             ) : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
-              <span className="text-[12px] uppercase tracking-[0.12em]">{meta.category}</span>
+              <span className="text-[12px]">{meta.category}</span>
               <span>
                 Deposit <span className="text-content-primary">{meta.assetSymbol}</span>
               </span>
