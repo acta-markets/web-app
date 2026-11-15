@@ -64,7 +64,7 @@ const COLUMNS: Record<PositionsVariant, Column[]> = {
   ],
 };
 
-const LABEL = "font-mono text-[12px] font-medium leading-[1.2] text-content-tertiary";
+const LABEL = "font-mono text-[11px] font-medium uppercase leading-[1.2] tracking-[0.12em] text-content-tertiary";
 const FOCUS = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary";
 const DASH = "—";
 
@@ -190,7 +190,7 @@ function GroupToggle({ symbol, count, open, onToggle }: { symbol: string; count:
         "flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:text-content-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent-primary",
       )}
     >
-      <span aria-hidden="true" className={cn("inline-block w-2 text-[12px] transition-transform", open ? "rotate-90" : "rotate-0")}>
+      <span aria-hidden="true" className={cn("inline-block w-2 text-[9px] transition-transform", open ? "rotate-90" : "rotate-0")}>
         {"▶"}
       </span>
       <TokenLogo symbol={symbol} className="mr-1.5 h-3.5 w-3.5" />
@@ -305,7 +305,7 @@ export function PositionsTable({
                   )}
                 >
                   {column.label}
-                  {active ? <span aria-hidden="true" className="ml-1 text-[12px]">{sortArrow(sort, column.sort)}</span> : null}
+                  {active ? <span aria-hidden="true" className="ml-1 text-[9px]">{sortArrow(sort, column.sort)}</span> : null}
                 </button>
               );
             })}
@@ -408,7 +408,7 @@ export function PositionsTable({
   return (
     <div>
       <div className="border border-bg-border bg-bg-primary">
-        <table className="w-full table-fixed border-collapse text-[14px]">
+        <table className="w-full table-fixed border-collapse text-[13px]">
           <colgroup>
             {columns.map((column) => (
               <col key={column.id} style={column.width ? { width: column.width } : undefined} />
@@ -434,12 +434,12 @@ export function PositionsTable({
                     <button
                       type="button"
                       onClick={() => setSort((prev) => nextSort(prev, column.sort!))}
-                      className={cn("group inline-flex items-center gap-1 whitespace-nowrap transition-colors hover:text-content-primary", FOCUS)}
+                      className={cn("group inline-flex items-center gap-1 whitespace-nowrap uppercase transition-colors hover:text-content-primary", FOCUS)}
                     >
                       {column.label}
                       <span
                         aria-hidden="true"
-                        className={cn("w-2 text-[12px] leading-none", sort.key !== column.sort && "opacity-0 transition-opacity group-hover:opacity-60")}
+                        className={cn("w-2 text-[9px] leading-none", sort.key !== column.sort && "opacity-0 transition-opacity group-hover:opacity-60")}
                       >
                         {sortArrow(sort, column.sort) || "▼"}
                       </span>

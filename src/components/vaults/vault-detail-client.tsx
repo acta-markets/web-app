@@ -45,7 +45,7 @@ function DetailSkeleton() {
     <div className="mt-6 flex flex-col gap-10" aria-hidden="true">
       <div className="flex items-center gap-4">
         <div className="h-16 w-16 animate-pulse rounded-full bg-action-primary" />
-        <div className="h-12 w-64 animate-pulse rounded-none bg-action-primary" />
+        <div className="h-12 w-64 animate-pulse rounded bg-action-primary" />
       </div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-8 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -132,7 +132,7 @@ export function VaultDetailClient({ pda }: { pda: string }) {
               <p className="font-mono text-base leading-[1.4] tracking-[-0.02em] text-content-primary [overflow-wrap:anywhere]">{meta.strategy}</p>
             ) : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
-              <span className="text-[12px]">{meta.category}</span>
+              <span className="text-[11px] uppercase tracking-[0.12em]">{meta.category}</span>
               <span>
                 Deposit <span className="text-content-primary">{meta.assetSymbol}</span>
               </span>
