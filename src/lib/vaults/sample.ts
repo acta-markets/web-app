@@ -217,6 +217,9 @@ export function parseSampleData(file: unknown, nowSecs: number): SampleData {
     const where = `vault "${entry.key}" position`;
     const v = entry.vault;
     data.vaults.push({
+      // the file leaves out fields that are the same for every fixture (no staging, generation 0);
+      // the neutral defaults fill them in, so a fixture is a whole Vault like a served one
+      ...makeVault(),
       ...v,
       active_expiry_ts: shifted(v.active_expiry_ts, shift),
       last_hwm_update_at: shifted(v.last_hwm_update_at, shift),

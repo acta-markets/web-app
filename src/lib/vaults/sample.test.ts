@@ -3,7 +3,8 @@ import { getToken } from "@/lib/tokens";
 import { depositorPerformance } from "@acta-markets/ts-sdk/http";
 import { finishedCycles } from "./metrics";
 import { resolveVaultMeta } from "./registry";
-import { isSampleModeEnabled, loadSampleData, parseSampleData, peekSampleData } from "./sample";
+import { stagingText } from "./presentation";
+import { isSampleModeEnabled, loadSampleData, makeVault, parseSampleData, peekSampleData } from "./sample";
 import sampleFile from "./sample-data.json";
 
 const DAY = 86_400;
@@ -26,6 +27,17 @@ describe("sample mode", () => {
 describe("sample-data.json", () => {
   const data = parseSampleData(sampleFile, NOW);
   const usdc = data.keys.usdc;
+
+  it("makes every fixture a whole vault, so no page that reads a served vault breaks on one", () => {
+    const fields = Object.keys(makeVault());
+    for (const vault of data.vaults) {
+      // the file leaves out fields every fixture shares; the loader fills them in
+      expect(fields.filter((field) => (vault as Record<string, unknown>)[field] === undefined)).toEqual([]);
+      // the vault page's cycle card read `staging.type` and crashed on a fixture without it
+      expect(vault.staging).toEqual({ type: "none" });
+      expect(stagingText(vault)).toBeNull();
+    }
+  });
 
   it("gives every vault a name, cycles and a wallet position", () => {
     expect(data.vaults).toHaveLength(7);
