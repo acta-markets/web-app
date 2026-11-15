@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { mapLimit, withRetry } from "./async-pool";
+import { isRateLimited, isTransportError, mapLimit, withRetry } from "./async-pool";
 
 describe("mapLimit", () => {
   it("keeps the order and never runs more than the limit at once", async () => {
@@ -55,5 +55,42 @@ describe("withRetry", () => {
     const fn = vi.fn().mockRejectedValue(new Error("stopped"));
     await expect(withRetry(fn, { delayMs: 1, signal: controller.signal })).rejects.toThrow("stopped");
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits out a refusal for rate with more tries than a dropped request gets", async () => {
+    const limited = new Error("HTTP error (429): Too Many Requests");
+    const fn = vi.fn().mockRejectedValue(limited);
+    await expect(withRetry(fn, { tries: 3, delayMs: 1, rateLimitDelayMs: 1 })).rejects.toThrow("429");
+    expect(fn).toHaveBeenCalledTimes(7);
+    // the fifth try gets through: with three tries it would have failed
+    const eventually = vi.fn().mockRejectedValueOnce(limited).mockRejectedValueOnce(limited).mockRejectedValueOnce(limited).mockRejectedValueOnce(limited).mockResolvedValue("ok");
+    await expect(withRetry(eventually, { tries: 3, delayMs: 1, rateLimitDelayMs: 1 })).resolves.toBe("ok");
+    expect(eventually).toHaveBeenCalledTimes(5);
+  });
+
+  it("only tries again what `when` lets through", async () => {
+    const rejected = vi.fn().mockRejectedValue(new Error("Transaction simulation failed: custom program error"));
+    await expect(withRetry(rejected, { delayMs: 1, when: isTransportError })).rejects.toThrow("simulation failed");
+    expect(rejected).toHaveBeenCalledTimes(1);
+    const dropped = vi.fn().mockRejectedValueOnce(new TypeError("fetch failed")).mockResolvedValue("ok");
+    await expect(withRetry(dropped, { delayMs: 1, when: isTransportError })).resolves.toBe("ok");
+    expect(dropped).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("isRateLimited and isTransportError", () => {
+  it("knows a 429 by its status or its message", () => {
+    expect(isRateLimited(Object.assign(new Error("HTTP error"), { context: { statusCode: 429 } }))).toBe(true);
+    expect(isRateLimited(new Error("HTTP error (429): Too Many Requests"))).toBe(true);
+    expect(isRateLimited(new Error("HTTP error (500): Internal Server Error"))).toBe(false);
+    expect(isRateLimited(new Error("custom program error: 0x429"))).toBe(false);
+  });
+
+  it("tells a request that got no answer from an answer that says no", () => {
+    expect(isTransportError(new Error("HTTP error (429): Too Many Requests"))).toBe(true);
+    expect(isTransportError(new Error("HTTP error (502): Bad Gateway"))).toBe(true);
+    expect(isTransportError(new TypeError("Failed to fetch"))).toBe(true);
+    expect(isTransportError(new Error("Transaction simulation failed: Error processing Instruction 1"))).toBe(false);
+    expect(isTransportError(new Error("User rejected the request"))).toBe(false);
   });
 });
