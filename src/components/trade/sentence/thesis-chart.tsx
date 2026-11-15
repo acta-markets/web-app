@@ -1202,11 +1202,10 @@ export function ThesisChart({
             onPointerCancel={onDragPointerEnd}
             onKeyDown={onDragKeyDown}
           >
-            <span className="flex items-center gap-0.5" aria-hidden="true">
+            <span className="flex items-center gap-1" aria-hidden="true">
               <Chevron kind="switch" className="h-4 w-4 shrink-0 text-content-primary" />
               <Grab className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
             </span>
-            <span className="text-[12px] tracking-widest text-content-primary max-md:hidden">Strike</span>
             <span className="text-[12px] font-semibold tabular-nums text-content-primary">{formatStrikePrice(strike)}</span>
           </div>
         ) : geometry ? (
@@ -1215,7 +1214,7 @@ export function ThesisChart({
             style={{ left: leftSectionCenterX, top: geometry.strikeY }}
             aria-hidden="true"
           >
-            STRIKE {formatStrikePrice(strike)}
+            {formatStrikePrice(strike)}
           </span>
         ) : null}
 
