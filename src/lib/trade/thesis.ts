@@ -16,7 +16,7 @@
  */
 import { formatStrikePrice } from "@/lib/markets";
 import { isCashSettled, type ProductTerms, type TakerSide } from "@/lib/spreads";
-import { formatAmount, formatExpiryDay, formatPrice, formatUsdc } from "@/lib/trade/format";
+import { formatAmount, formatAmountFixed, formatExpiryDay, formatPrice, formatUsdc } from "@/lib/trade/format";
 
 export type Direction = "above" | "below";
 export type PositionType = "covered_call" | "cash_secured_put";
@@ -346,14 +346,18 @@ export function zoneLabels({
   strike,
   scenario: s,
   assetDecimals = 4,
+  fixedDecimals = false,
 }: {
   asset: string;
   direction: Direction;
   strike: number;
   scenario: Scenario | null;
   assetDecimals?: number;
+  /** always show `assetDecimals` digits, so the ticker after the amount does not move as the amount changes */
+  fixedDecimals?: boolean;
 }): { right: ZoneLabel; wrong: ZoneLabel } {
   const price = formatStrikePrice(strike);
+  const amount = (value: number) => (fixedDecimals ? formatAmountFixed(value, assetDecimals) : formatAmount(value, assetDecimals));
   if (!s) {
     return direction === "above"
       ? { right: { title: "Keep your USDC", premium: null }, wrong: { title: `Buy ${asset} at ${price}`, premium: null } }
@@ -363,11 +367,11 @@ export function zoneLabels({
   if (direction === "above") {
     return {
       right: { title: `Keep ${formatUsdc(s.deposit)}`, premium },
-      wrong: { title: `Buy ${formatAmount(s.converted, assetDecimals)} ${asset} at ${price}`, premium },
+      wrong: { title: `Buy ${amount(s.converted)} ${asset} at ${price}`, premium },
     };
   }
   return {
-    right: { title: `Keep ${formatAmount(s.deposit, assetDecimals)} ${asset}`, premium },
+    right: { title: `Keep ${amount(s.deposit)} ${asset}`, premium },
     wrong: { title: `Sold for ${formatUsdc(s.converted)}`, premium },
   };
 }

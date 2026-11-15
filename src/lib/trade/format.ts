@@ -82,6 +82,15 @@ export function formatAmount(value: number, maxDecimals = 4) {
   return numberFormat({ maximumFractionDigits: maxDecimals }).format(value);
 }
 
+/**
+ * A token amount with grouping and exactly `decimals` fraction digits: "0.1000", not "0.1".
+ * For a number that changes in place with text after it (a ticker), so the text holds still.
+ */
+export function formatAmountFixed(value: number, decimals = 4) {
+  if (!Number.isFinite(value)) return "—";
+  return numberFormat({ minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
+}
+
 /** Time to expiry: in hours inside the last day, whole days before that. */
 export function formatTerm(expiryMs: number, nowMs: number): { long: string; short: string } {
   const msToExpiry = expiryMs - nowMs;

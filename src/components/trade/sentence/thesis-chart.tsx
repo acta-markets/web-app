@@ -150,18 +150,10 @@ export function returnPctAtPrice(
   return (pnlAtPrice(side, direction, strike, quantity, premium, price) / premium) * 100;
 }
 
-/** A signed percentage for the return readout: "+100%", "-42%", "0%". */
-function formatReturnPct(pct: number): string {
-  const abs = Math.abs(pct);
-  if (abs < 0.05) return "0%";
-  const body = `${abs >= 100 ? `${Math.round(abs)}` : abs.toFixed(1).replace(/\.0$/, "")}%`;
-  return pct > 0 ? `+${body}` : `-${body}`;
-}
-
-/** A signed dollar readout for the gross-payout fallback: "+$42.00", "$0.00". The gross payout
-    is never negative, so only the positive sign is added — zero stays plain. */
+/** A signed dollar readout for the rail: "+$42.00", "-$250", and zero plain, "$0.00". */
 function formatSignedUsd(usd: number): string {
-  return usd > 0 ? `+${formatUsdSmart(usd)}` : formatUsdSmart(usd);
+  if (usd > 0) return `+${formatUsdSmart(usd)}`;
+  return usd < 0 ? `-${formatUsdSmart(-usd)}` : formatUsdSmart(0);
 }
 
 /** Profit → brand green, loss → red, break-even → neutral. */
@@ -920,8 +912,9 @@ export function ThesisChart({
 
   /** The right axis: a fixed number of evenly-spaced price ticks spanning the domain, each paired
       with its own money readout — "at this price, I make this much" in one place, the readout
-      sharing the price's own tick line. A sized position shows the return on premium; a buy whose
-      quote is still unknown falls back to the gross dollar payout instead of a dash. No title — the
+      sharing the price's own tick line. A sized position shows its profit or loss in dollars at
+      that price (a percentage of the premium read as a riddle); a buy whose premium is still
+      unknown falls back to the gross dollar payout instead of a dash. No title — the
       numbers stand alone. The tick COUNT is pinned so the grid never jumps between 3 and 5 lines as
       the strike moves; only the labels recompute. Recomputed every render from `pnl` and
       `geometry`, so it tracks size, premium and strike without an effect. */
@@ -931,8 +924,8 @@ export function ThesisChart({
     }
     const [lo, hi] = domainRef.current;
     if (!(hi > lo)) return { ticks: [], readoutLabel: null };
-    // When the premium is priced the readout is a return %, and while a buy's quote is still
-    // unknown it falls back to the gross dollar payout at that price — a number, never a dash.
+    // When the premium is known the readout is the profit or loss at that price, and while a
+    // buy's premium is still unknown it falls back to the gross payout: a number, never a dash.
     const sized = pnl && pnl.quantity > 0 && (pnl.side === "sell" ? pnl.premium != null : true) ? pnl : null;
     const priced = sized && !(sized.side === "buy" && sized.premium == null);
     const premium = sized?.premium ?? 0;
@@ -946,17 +939,18 @@ export function ThesisChart({
         price: formatUsdSmart(p),
         readout: sized
           ? priced
-            ? formatReturnPct(returnPctAtPrice(sized.side, direction, strike, sized.quantity, premium, p))
+            ? formatSignedUsd(pnlAtPrice(sized.side, direction, strike, sized.quantity, premium, p))
             : formatSignedUsd(optionPayout(direction, strike, sized.quantity, p))
           : null,
       });
     }
-    return { ticks, readoutLabel: sized ? (priced ? "Return" : "Payout") : null };
+    return { ticks, readoutLabel: sized ? (priced ? "Profit" : "Payout") : null };
   })();
 
-  /** The wrong-zone overlay label: a short option keeps its premium, so going wrong means the
-      option is exercised against you ("assigned"); a long option forfeits the premium it paid. */
-  const wrongZone = side === "sell" ? "ASSIGNED" : "PREMIUM LOST";
+  /** The wrong-zone overlay label, in the outcome's own words. A short option that goes wrong is
+      exercised against you: the deposit buys the asset (above) or the asset is sold (below).
+      A long option forfeits the premium it paid. */
+  const wrongZone = side === "sell" ? `YOU ${direction === "above" ? "BUY" : "SELL"} ${symbol}` : "PREMIUM LOST";
 
   const body = (
     <>
@@ -1252,10 +1246,11 @@ export function ThesisChart({
                 {t.readout ? <div className={readoutTone(t.readout)}>{t.readout}</div> : null}
               </div>
             ))}
-            {/* what the two numbers at each tick are, in the free strip beside the time axis */}
-            <div className="pointer-events-none absolute bottom-1 right-1.5 text-right font-mono text-[8px] uppercase leading-[1.25] tracking-[0.08em] text-content-tertiary">
-              <div>Price</div>
-              {rightAxis.readoutLabel ? <div>{rightAxis.readoutLabel}</div> : null}
+            {/* what the two numbers at each tick are, in the free strip beside the time axis:
+                set like a tick itself, each word in its own number's colour */}
+            <div className="pointer-events-none absolute bottom-1 right-1.5 text-right font-mono text-[8px] uppercase leading-[1.25] tracking-[0.08em]">
+              <div className="text-content-secondary">Price</div>
+              {rightAxis.readoutLabel ? <div className="text-accent-primary">{rightAxis.readoutLabel}</div> : null}
             </div>
           </div>
         ) : null}

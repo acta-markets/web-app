@@ -20,7 +20,7 @@ import { getRfqBackendUrl } from "@/lib/rfq-client";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { displayQuoteSymbol, getToken, getTokenMint } from "@/lib/tokens";
-import { grossFromIndicative1e9, previewFill } from "@acta-markets/ts-sdk/ws";
+import { annualizeYield, grossFromIndicative1e9, previewFill } from "@acta-markets/ts-sdk/ws";
 import { DEFAULT_SIZE_UNITS, assetsForMenu, pickAsset, tradeAssets } from "@/lib/trade/assets";
 import { formatAmount, formatExpiryDay, formatTimeAway, formatUsdAmount } from "@/lib/trade/format";
 import {
@@ -278,16 +278,6 @@ export function SentenceTrade({
     [quantity, side, protocolFeesBySymbol, quoteSymbol, info.positionType, decimals, quoteDecimalsForPreview]
   );
   const preview = useMemo(() => previewFor(strike), [previewFor, strike]);
-  // The chart's profit-zone PnL readout: the side, the underlying units the position controls
-  // and the premium in USDC. A buy's premium is only the quote's, so it stays null until then.
-  const chartPnl = quantity != null && strike
-    ? {
-        side,
-        quantity: quantity / 10 ** decimals,
-        premium: side === "sell" ? (outcome?.premium ?? null) : null,
-      }
-    : null;
-
   // Balance is keyed on the market's actual mint (server-authoritative), never the symbol
   // looked up in the static list — that list's devnet mints are wrong (HYPE, JITOSOL). The
   // entered token is USDC when sizing in quote, else the underlying asset.
@@ -331,7 +321,8 @@ export function SentenceTrade({
     insufficientBalance: side === "sell" && insufficientBalance,
     connecting: !!walletAddress && !isAuthenticated,
     requesting: isRequesting,
-    ctaLabel: side === "buy" ? "Get quote" : "Trade",
+    // one label for both modes: the click asks for a quote, and the modal that follows confirms it
+    ctaLabel: "Take trade",
   });
 
   function chooseAsset(next: string) {
@@ -428,12 +419,18 @@ export function SentenceTrade({
   const premiumText = premiumUsd != null ? `≈ ${formatUsdAmount(premiumUsd)}` : "—";
   // Breakeven only when the preview has one that differs from the strike, so it earns its row.
   const breakevenText = preview ? formatUsdSmart(Number(preview.breakeven1e9) / 1e9) : null;
-  const returnText = (() => {
-    if (side !== "sell" || !preview || spot == null || !preview.collateral) return null;
+  // What the premium is worth as a yearly rate: the trade's own yield (net premium over what is
+  // locked) compounded over the time to expiry, the SDK's APY. Vaults quote APY too.
+  const apyText = (() => {
+    if (side !== "sell" || !preview || spot == null || !preview.collateral || !expiry) return null;
     const net = Number(preview.premium.netAtoms) / 10 ** quoteDecimalsForPreview;
     const c = preview.collateral;
     const locked = c.asset === "quote" ? Number(c.atoms) / 10 ** quoteDecimalsForPreview : (Number(c.atoms) / 10 ** decimals) * spot;
-    return locked > 0 ? `${((net / locked) * 100).toFixed(1)}%` : null;
+    const secondsToExpiry = expiry.expiryTs - nowSec;
+    if (!(locked > 0) || !(net >= 0) || secondsToExpiry <= 0) return null;
+    const apyPct = annualizeYield({ termYield: net / locked, secondsToExpiry }).apy * 100;
+    if (!Number.isFinite(apyPct)) return null;
+    return `${apyPct >= 100 ? Math.round(apyPct).toLocaleString("en-US") : apyPct.toFixed(1)}%`;
   })();
   // The headline is the one number the page sells: what the trade pays now (Yield) or costs
   // (Profit). The strike, the expiry date and the size are already in the sentence and the
@@ -444,6 +441,15 @@ export function SentenceTrade({
   const payUsd =
     premiumUsd ??
     (side === "buy" && premiumPerUnit != null && quantity != null ? (quantity / 10 ** decimals) * premiumPerUnit : null);
+  // The chart rail's profit readout: the side, the underlying units the position controls and
+  // the premium in USDC. A buy uses the same indicative premium the page shows as "You pay".
+  const chartPnl = quantity != null && strike
+    ? {
+        side,
+        quantity: quantity / 10 ** decimals,
+        premium: side === "sell" ? (outcome?.premium ?? null) : payUsd,
+      }
+    : null;
   // Where a buy starts paying and what it makes further out: its breakeven, then the profit at
   // the first three round moves from today's price that clear it.
   const buyBreakeven =
@@ -479,7 +485,7 @@ export function SentenceTrade({
   // strike with no indicative yet, so it never borrows the buy side's "premium lost".
   const labels = strike
     ? side === "sell"
-      ? zoneLabels({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: assetDisplayDecimals })
+      ? zoneLabels({ asset: asset.symbol, direction, strike: strike.strike, scenario: outcome, assetDecimals: assetDisplayDecimals, fixedDecimals: true })
       : buyZoneLabels({ asset: asset.symbol, direction, strike: strike.strike })
     : null;
   // The ticket reads left to right as one story: what goes in, what is paid now, and the two
@@ -491,7 +497,8 @@ export function SentenceTrade({
           right: { when: `${direction} ${strikeLabel}`, what: labels.right.title, note: "and the premium" },
           wrong: {
             when: `${loseSide} ${strikeLabel}`,
-            what: labels.wrong.title,
+            // "Buy 0.1 BTC", not "Buy 0.1 BTC at $63,500": the heading over it already names the price
+            what: labels.wrong.title.split(" at ")[0],
             note: breakevenText ? `Breakeven ${breakevenText}` : "You keep the premium",
           },
         }
@@ -513,8 +520,8 @@ export function SentenceTrade({
   const headlineNote = headline.value
     ? side === "buy"
       ? "Final quote might be different"
-      : returnText != null
-        ? `Return ${returnText}`
+      : apyText != null
+        ? `APY ${apyText}`
         : "Confirmed on quote"
     : headline.note;
   const amountHint = sizeViolation
@@ -826,7 +833,7 @@ export function SentenceTrade({
 
               {/* 2. what is paid now */}
               <div className={cn(TICKET_CELL, "xl:order-4")}>
-                <span className={TICKET_LABEL}>{side === "sell" ? "You earn" : "You pay premium"}</span>
+                <span className={TICKET_LABEL}>{side === "sell" ? "You earn premium" : "You pay premium"}</span>
                 <span
                   data-testid="trade-headline"
                   className={cn(

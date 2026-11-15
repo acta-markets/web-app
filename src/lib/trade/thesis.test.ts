@@ -297,3 +297,16 @@ describe("strategies", () => {
     expect(easyCta(base)).toEqual({ label: "Get quote", action: "quote" });
   });
 });
+
+describe("zoneLabels with fixed decimals", () => {
+  it("keeps the amount the same length as it changes, so the ticker after it holds still", () => {
+    const scenario = (converted: number) => ({ deposit: converted * 95, converted, premium: 1 }) as Parameters<typeof zoneLabels>[0]["scenario"];
+    const title = (converted: number) =>
+      zoneLabels({ asset: "SOL", direction: "above", strike: 95, scenario: scenario(converted), assetDecimals: 4, fixedDecimals: true }).wrong.title;
+    expect(title(0.1)).toBe("Buy 0.1000 SOL at $95");
+    expect(title(0.1004)).toBe("Buy 0.1004 SOL at $95");
+    expect(title(0.1).length).toBe(title(0.1004).length);
+    // without the option the amount is as short as it can be, as before
+    expect(zoneLabels({ asset: "SOL", direction: "above", strike: 95, scenario: scenario(0.1) }).wrong.title).toBe("Buy 0.1 SOL at $95");
+  });
+});

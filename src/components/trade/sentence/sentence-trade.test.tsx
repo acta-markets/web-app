@@ -133,7 +133,7 @@ describe("sentence trade", () => {
     // beside the size, not as a risk sentence above the CTA
     expect(screen.getByText(/≈ \$1\.10/)).toBeTruthy();
     // the ticket leads with the payout and does not repeat the sentence's strike or the size
-    expect(screen.getByText("You earn")).toBeTruthy();
+    expect(screen.getByText("You earn premium")).toBeTruthy();
     // the outcomes sit under how far off the expiry is
     expect(screen.getByText("Now")).toBeTruthy();
     expect(screen.getByTestId("ticket-when").textContent).toBe("In 7 days");
@@ -141,7 +141,7 @@ describe("sentence trade", () => {
     expect(screen.queryByText("Strike")).toBeNull();
     expect(screen.queryByText("Size")).toBeNull();
     expect(screen.queryByText("Expiry")).toBeNull();
-    expect(screen.getByTestId("trade-headline-note").textContent).toMatch(/^Return |^Confirmed on quote$/);
+    expect(screen.getByTestId("trade-headline-note").textContent).toMatch(/^APY [\d,.]+%$|^Confirmed on quote$/);
     expect(screen.getByTestId("ticket-right").textContent).toBe("Keep 104.50 USDC");
     expect(screen.getByText("SOL can fall 5.0% in 7 days and you're still right")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect wallet to trade" })).toBeTruthy();
@@ -222,7 +222,8 @@ describe("sentence trade", () => {
     expect(screen.getByTestId("trade-headline").textContent).toBe("\u2014");
     expect(screen.getByTestId("trade-headline-note").textContent).toBe("No price for this strike right now");
     expect(screen.getByTestId("ticket-right").textContent).toBe("Keep your USDC");
-    expect(screen.getByTestId("ticket-wrong").textContent).toBe("Buy SOL at $95");
+    // the heading over it names the price, so the line is just what happens
+    expect(screen.getByTestId("ticket-wrong").textContent).toBe("Buy SOL");
   });
 
   it("leads Profit's summary with what the trade costs and the buy outcomes", () => {
@@ -274,7 +275,7 @@ describe("sentence trade", () => {
     fireEvent.change(screen.getByLabelText("Deposit"), { target: { value: "1000" } });
     // 1000 USDC at $95 is 10.526 SOL; the 0.1 SOL step floors it to 10.5 SOL, 997.50 USDC
     expect(screen.getByText("Locks 997.5 USDC (size steps of 9.5)")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Trade" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take trade" }));
     expect(mocks.context.submitRfq).toHaveBeenCalledWith({
       market: "put-soon", side: "sell", terms: { type: "cash_secured_put", strike: 95e9 }, quantity: 10_500_000_000, timeoutSeconds: 30,
     });
@@ -295,7 +296,7 @@ describe("sentence trade", () => {
     expect(select("Strike").value).toBe(String(105e9));
     // the buy's premium reads in the strip (the strike list carries each strike's cost too)
     expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.00");
-    fireEvent.click(screen.getByRole("button", { name: "Get quote" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take trade" }));
     expect(mocks.context.submitRfq).toHaveBeenCalledWith({
       market: "call-soon", side: "buy", terms: { type: "covered_call", strike: 105e9 }, quantity: 1_000_000_000, timeoutSeconds: 30,
     });
@@ -329,7 +330,7 @@ describe("sentence trade", () => {
     vi.setSystemTime(now * 1000);
     connectWallet();
     render(<SentenceTrade mode="yield" />);
-    fireEvent.click(screen.getByRole("button", { name: "Trade" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take trade" }));
     act(() => vi.advanceTimersByTime(30_000));
     expect(mocks.context.cancelRfq).toHaveBeenCalledOnce();
     expect(screen.getByRole("alert").textContent).toBe("No quote came back in 30 seconds. Try again.");
