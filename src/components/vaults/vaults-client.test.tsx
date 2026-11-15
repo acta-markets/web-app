@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { getTokenMint } from "@/lib/tokens";
 import { makePerformance, makeVault, parseSampleData } from "@/lib/vaults/sample";
 import sampleFile from "@/lib/vaults/sample-data.json";
+import { VAULT_ACCESS_URL } from "@/lib/landing-vaults";
+import type { LineupEntry } from "@/lib/vaults/lineup";
 import type { Vault } from "@/lib/vaults/types";
 
 const NOW = 1_800_000_000;
@@ -32,8 +34,8 @@ vi.mock("./use-vaults", () => ({
 }));
 
 vi.mock("./vault-deposit-modal-lazy", () => ({
-  LazyVaultDepositModal: ({ vault, initialTab }: { vault: Vault; initialTab: string }) => (
-    <div data-testid="vault-modal" data-pda={vault.vault_pda} data-tab={initialTab} />
+  LazyVaultDepositModal: ({ vault, meta, initialTab }: { vault: Vault; meta: { name: string }; initialTab: string }) => (
+    <div data-testid="vault-modal" data-pda={vault.vault_pda} data-tab={initialTab} data-name={meta.name} />
   ),
   usePrefetchVaultModal: () => {},
 }));
@@ -49,12 +51,19 @@ vi.mock("@/lib/vaults/registry", async (importOriginal) => {
 
 import { VaultsClient } from "./vaults-client";
 
+// the lineup once two of its vaults have addresses: jitoSOL and USDC live, TSLA not open yet
+const LINEUP: LineupEntry[] = [
+  { id: "jitosol", asset: "jitoSOL", type: "Majors", pda: { devnet: SAMPLE.keys.jitosol, mainnet: SAMPLE.keys.jitosol }, state: "open", assumedApr: { staking: 7, premium: 11 } },
+  { id: "usdc", asset: "USDC", type: "Stables", pda: { devnet: SAMPLE.keys.usdc, mainnet: SAMPLE.keys.usdc }, state: "open", assumedApr: { staking: 0, premium: 20 } },
+  { id: "tsla", asset: "TSLA", type: "Stocks", pda: { devnet: null, mainnet: null }, state: "soon" },
+];
+
 const cardNames = () => screen.queryAllByRole("article").map((card) => card.getAttribute("aria-label"));
 const card = (name: string) => within(screen.getByRole("article", { name }));
+const show = (lineup: readonly LineupEntry[] = LINEUP) => render(<VaultsClient lineup={lineup} />);
 
 beforeEach(() => {
   state.vaults = { data: SAMPLE.vaults, error: null, loading: false, refresh: vi.fn() };
-  window.history.replaceState(null, "", "/earn");
 });
 
 afterEach(() => {
@@ -62,90 +71,171 @@ afterEach(() => {
 });
 
 describe("VaultsClient", () => {
-  it("lists the highest proven APY first and vaults winding down last", () => {
+  it("shows the lineup and the partner cell, in order, and none of the other vaults the backend serves", () => {
     state.vaults = { ...state.vaults, data: [CLOSING, ...SAMPLE.vaults] };
-    render(<VaultsClient initialCategory="all" />);
-    expect(cardNames()).toEqual(["HYPE", "SPCX", "jitoSOL", "NVDAx", "USDC", "SPYx", "ZEC", "USDC / SOL vault · Wind…1111"]);
+    show();
+    expect(cardNames()).toEqual(["jitoSOL", "USDC", "TSLA", "Your vaults"]);
+    // seven fixtures and a closing vault are served; only the two the lineup names are listed
+    expect(screen.queryByText("HYPE")).toBeNull();
+    expect(screen.queryByText(/Wind/)).toBeNull();
+    // no filter and no sort for three vaults
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("group", { name: /Filter/ })).toBeNull();
   });
 
-  it("filters by section and keeps the URL shareable", async () => {
+  it("ships with jitoSOL, USDC and TSLA open on assumed rates, each said to come from backtesting", async () => {
     const user = userEvent.setup();
-    render(<VaultsClient initialCategory="all" />);
-    expect(screen.getAllByRole("button", { pressed: false }).map((b) => b.textContent)).toEqual(["Crypto3", "Stocks3", "Stables1"]);
-
-    await user.click(screen.getByRole("button", { name: /^Stocks/ }));
-    expect(cardNames()).toEqual(["SPCX", "NVDAx", "SPYx"]);
-    expect(window.location.search).toBe("?category=stocks");
-
-    await user.click(screen.getByRole("button", { name: /^All/ }));
-    expect(cardNames()).toHaveLength(7);
-    expect(window.location.search).toBe("");
+    render(<VaultsClient />);
+    expect(cardNames()).toEqual(["jitoSOL", "USDC", "TSLA", "Your vaults"]);
+    expect(screen.queryByText("Not open yet")).toBeNull();
+    // the sum of its parts, with the parts drawn as on the landing page
+    const jito = card("jitoSOL");
+    expect(jito.getByText("~18%")).toBeTruthy();
+    expect(jito.getByText("staking + premium")).toBeTruthy();
+    expect(jito.getByText("Staking rewards ~7%")).toBeTruthy();
+    expect(jito.getByText("Premium ~11%")).toBeTruthy();
+    expect(card("USDC").getByText("~20%")).toBeTruthy();
+    expect(card("TSLA").getByText("~25%")).toBeTruthy();
+    expect(card("TSLA").getByText("Premium ~25%")).toBeTruthy();
+    // an assumed rate is never passed off as a live one
+    await user.click(card("TSLA").getByRole("button", { name: "Where this APY comes from" }));
+    expect(screen.getByRole("tooltip").textContent).toBe("An estimate from backtesting. It is not this vault's live result and not a promise.");
+    // no vault behind it: no TVL, no curator, no status, and Deposit leads where the landing page's does
+    expect(card("TSLA").queryByText("TVL")).toBeNull();
+    expect(card("TSLA").queryByText("Accepting deposits")).toBeNull();
+    const deposit = card("TSLA").getByRole("link", { name: "Deposit" });
+    expect(deposit.getAttribute("href")).toBe(VAULT_ACCESS_URL);
+    expect(deposit.getAttribute("target")).toBe("_blank");
+    expect(screen.queryByTestId("vault-modal")).toBeNull();
   });
 
-  it("keeps a linked section with no vaults and offers the way back", async () => {
-    const user = userEvent.setup();
-    const stocks = new Set([SAMPLE.keys.nvdax, SAMPLE.keys.spyx, SAMPLE.keys.spcx]);
-    state.vaults = { ...state.vaults, data: SAMPLE.vaults.filter((v) => !stocks.has(v.vault_pda)) };
-    render(<VaultsClient initialCategory="Stocks" />);
-    expect(screen.getByRole("button", { name: /^Stocks/ }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("Nothing in Stocks yet.")).toBeTruthy();
-
-    await user.click(screen.getByRole("button", { name: "Show all vaults" }));
-    expect(cardNames()).toEqual(["HYPE", "jitoSOL", "USDC", "ZEC"]);
+  it("names a listed vault by its asset and calls it an income vault, whatever its operator named it", () => {
+    show();
+    const jito = card("jitoSOL");
+    expect(jito.getByRole("heading", { name: "jitoSOL" })).toBeTruthy();
+    expect(jito.getByRole("link", { name: "jitoSOL" }).getAttribute("href")).toBe(`/earn/${SAMPLE.keys.jitosol}`);
+    expect(jito.getByText("Income vault")).toBeTruthy();
+    // the lineup's label, in the landing page's words, not the vault's category
+    expect(jito.getByText("Majors")).toBeTruthy();
+    expect(card("USDC").getByText("Stables")).toBeTruthy();
+    // the operator's own line for the USDC fixture stays off the card
+    expect(card("USDC").queryByText(/Sells weekly puts/)).toBeNull();
   });
 
-  it("sorts by TVL or name, and keeps the order inside a section", async () => {
-    const user = userEvent.setup();
-    state.vaults = { ...state.vaults, data: [CLOSING, ...SAMPLE.vaults] };
-    render(<VaultsClient initialCategory="all" />);
-    const sort = screen.getByRole("combobox", { name: "Sort vaults" });
-
-    await user.selectOptions(sort, "TVL");
-    expect(cardNames()).toEqual(["ZEC", "HYPE", "USDC", "SPYx", "SPCX", "NVDAx", "jitoSOL", "USDC / SOL vault · Wind…1111"]);
-
-    await user.selectOptions(sort, "Name");
-    expect(cardNames()).toEqual(["HYPE", "jitoSOL", "NVDAx", "SPCX", "SPYx", "USDC", "USDC / SOL vault · Wind…1111", "ZEC"]);
-
-    await user.click(screen.getByRole("button", { name: /^Stocks/ }));
-    expect(cardNames()).toEqual(["NVDAx", "SPCX", "SPYx"]);
+  it("draws a live vault the landing page's way: the rate, its parts as bars, the buttons last", () => {
+    show();
+    const jito = card("jitoSOL");
+    // jitoSOL earns staking on top of premium: the rate names both and draws a bar for each
+    expect(jito.getByText("staking + premium")).toBeTruthy();
+    expect(jito.getByText(/^Staking [\d.]+%$/)).toBeTruthy();
+    expect(jito.getByText(/^Premium [\d.]+%$/)).toBeTruthy();
+    expect(jito.getAllByText(/^[\d.]+%$/)[0].className).not.toContain("text-additional-red-primary");
+    // nothing renders after the buttons
+    const article = screen.getByRole("article", { name: "jitoSOL" });
+    expect(article.lastElementChild!.lastElementChild!.textContent).toBe("DepositDetails");
   });
 
-  it("shows the backend's dollar TVL, and the asset itself without one", () => {
-    state.vaults = {
-      ...state.vaults,
-      data: SAMPLE.vaults.map((v) => (v.vault_pda === SAMPLE.keys.zec ? { ...v, tvl_usd_1e9: null } : v)),
-    };
-    render(<VaultsClient initialCategory="all" />);
+  it("shows the backend's dollar TVL with the asset amount beside it, and the asset alone without a price", () => {
+    state.vaults = { ...state.vaults, data: SAMPLE.vaults.map((v) => (v.vault_pda === SAMPLE.keys.usdc ? { ...v, tvl_usd_1e9: null } : v)) };
+    show();
     expect(card("jitoSOL").getByText("$102K")).toBeTruthy();
-    expect(card("USDC").getByText("$2.11M")).toBeTruthy();
-    expect(card("ZEC").getAllByText("7,238 ZEC")).toHaveLength(2);
+    expect(card("jitoSOL").getByText(/^[\d,.]+[KM]? jitoSOL$/)).toBeTruthy();
+    expect(card("USDC").getAllByText(/^[\d,.]+[KM]? USDC$/)).toHaveLength(1);
+    expect(card("USDC").queryByText("Balance")).toBeNull();
   });
 
-  it("opens deposits on Deposit, and a closing vault on Withdraw", async () => {
-    const user = userEvent.setup();
-    state.vaults = { ...state.vaults, data: [CLOSING, ...SAMPLE.vaults] };
-    render(<VaultsClient initialCategory="all" />);
+  it("marks a negative rate and draws no bars for it", () => {
+    state.vaults = { ...state.vaults, data: SAMPLE.vaults.map((v) => (v.vault_pda === SAMPLE.keys.usdc ? { ...v, performance: makePerformance({ apy_30d: -12.5 }) } : v)) };
+    show();
+    expect(card("USDC").getByText("-12.50%").className).toContain("text-additional-red-primary");
+    expect(card("USDC").queryByText(/^Premium /)).toBeNull();
+  });
 
+  it("says why a young vault has no rate yet, where the parts would be", () => {
+    state.vaults = { ...state.vaults, data: SAMPLE.vaults.map((v) => (v.vault_pda === SAMPLE.keys.usdc ? { ...v, performance: makePerformance() } : v)) };
+    show();
+    expect(card("USDC").getByText("New")).toBeTruthy();
+    expect(card("USDC").getByText("Projected APY shows after 20 days of history.")).toBeTruthy();
+  });
+
+  it("shows a vault that is not open yet as the landing page does: dimmed, in words, with nothing to press and no invented rate", () => {
+    show();
+    const tsla = screen.getByRole("article", { name: "TSLA" });
+    expect(tsla.className).toContain("opacity-[0.55]");
+    expect(within(tsla).getByText("Stocks")).toBeTruthy();
+    expect(within(tsla).getByText("Income vault")).toBeTruthy();
+    expect(within(tsla).getByText("Not open yet")).toBeTruthy();
+    expect(within(tsla).getByText("Opening soon")).toBeTruthy();
+    expect(within(tsla).queryByRole("button")).toBeNull();
+    expect(within(tsla).queryByRole("link")).toBeNull();
+    expect(tsla.textContent).not.toMatch(/%/);
+  });
+
+  it("carries a rate for an unopened vault only when the lineup has been given one", () => {
+    show([{ id: "tsla", asset: "TSLA", type: "Stocks", pda: { devnet: null, mainnet: null }, state: "soon", assumedApr: { staking: 0, premium: 70 } }]);
+    const tsla = card("TSLA");
+    expect(tsla.getByText("~70%")).toBeTruthy();
+    expect(tsla.getByText("premium")).toBeTruthy();
+    expect(tsla.getByText("Premium ~70%")).toBeTruthy();
+    // still not open: the rate does not bring a button with it
+    expect(tsla.queryByRole("link", { name: "Deposit" })).toBeNull();
+  });
+
+  it("falls back to the lineup's own words for a vault the backend does not serve", () => {
+    state.vaults = { ...state.vaults, data: SAMPLE.vaults.filter((v) => v.vault_pda !== SAMPLE.keys.usdc) };
+    show();
+    // USDC is open in the lineup, so it shows its assumed rate; jitoSOL is still live
+    expect(card("USDC").getByText("~20%")).toBeTruthy();
+    expect(card("USDC").getByRole("link", { name: "Deposit" }).getAttribute("href")).toBe(VAULT_ACCESS_URL);
+    expect(card("jitoSOL").getByRole("button", { name: "Deposit" })).toBeTruthy();
+  });
+
+  it("replaces the assumed rate with the vault's own figures once it has an address", () => {
+    show();
+    const jito = card("jitoSOL");
+    expect(jito.queryByText("~18%")).toBeNull();
+    expect(jito.getByText("Accepting deposits")).toBeTruthy();
+    expect(jito.getByText("TVL")).toBeTruthy();
+  });
+
+  it("keeps the landing page's partner cell as the last one", () => {
+    show();
+    const partner = card("Your vaults");
+    expect(partner.getByText("Partners")).toBeTruthy();
+    expect(partner.getByRole("link", { name: "Partner with us" }).getAttribute("href")).toBe("/partners");
+  });
+
+  it("opens deposits on Deposit, and a vault that takes none on Withdraw, under the lineup name", async () => {
+    const user = userEvent.setup();
+    state.vaults = { ...state.vaults, data: SAMPLE.vaults.map((v) => (v.vault_pda === SAMPLE.keys.usdc ? { ...v, safety: "closing" as const } : v)) };
+    show();
     const jito = screen.getByRole("article", { name: "jitoSOL" });
     await user.click(within(jito).getByRole("button", { name: "Deposit" }));
-    expect(screen.getByTestId("vault-modal").dataset).toMatchObject({ pda: SAMPLE.keys.jitosol, tab: "deposit" });
-
-    const closing = screen.getByRole("article", { name: "USDC / SOL vault · Wind…1111" });
-    await user.click(within(closing).getByRole("button", { name: "Manage" }));
-    expect(screen.getByTestId("vault-modal").dataset).toMatchObject({ pda: CLOSING.vault_pda, tab: "withdraw" });
-
+    expect(screen.getByTestId("vault-modal").getAttribute("data-pda")).toBe(SAMPLE.keys.jitosol);
+    expect(screen.getByTestId("vault-modal").getAttribute("data-tab")).toBe("deposit");
+    expect(screen.getByTestId("vault-modal").getAttribute("data-name")).toBe("jitoSOL");
+    await user.click(card("USDC").getByRole("button", { name: "Manage" }));
+    expect(screen.getByTestId("vault-modal").getAttribute("data-tab")).toBe("withdraw");
     expect(within(jito).getByRole("link", { name: "Details" }).getAttribute("href")).toBe(`/earn/${SAMPLE.keys.jitosol}`);
   });
 
   it("shows skeletons first and a retry when nothing could load", async () => {
     const user = userEvent.setup();
     state.vaults = { data: [], error: null, loading: true, refresh: vi.fn() };
-    const { rerender } = render(<VaultsClient initialCategory="all" />);
+    const { rerender } = show();
     expect(cardNames()).toHaveLength(0);
 
-    state.vaults = { data: [], error: new Error("down"), loading: false, refresh: vi.fn() };
-    rerender(<VaultsClient initialCategory="all" />);
+    const refresh = vi.fn();
+    state.vaults = { data: [], error: new Error("down"), loading: false, refresh };
+    rerender(<VaultsClient lineup={LINEUP} />);
     await user.click(screen.getByRole("button", { name: "Try again" }));
-    expect(state.vaults.refresh).toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the last loaded lineup on screen when a refresh fails", () => {
+    state.vaults = { ...state.vaults, error: new Error("down") };
+    show();
+    expect(screen.getByRole("status").textContent).toContain("Couldn't refresh");
+    expect(cardNames()).toEqual(["jitoSOL", "USDC", "TSLA", "Your vaults"]);
   });
 });

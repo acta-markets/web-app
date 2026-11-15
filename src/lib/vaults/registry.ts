@@ -51,7 +51,10 @@ export function getRegisteredVaultMeta(pda: string): VaultMeta | undefined {
 }
 
 export type ResolvedVaultMeta = {
+  /** What the vault is called. Never joined to anything: a card and a page title show it whole. */
   name: string;
+  /** One short line on what the vault does, set by its operator next to the name. */
+  tagline?: string;
   curator: string;
   /** true when the curator is the governance address, not a registered name */
   curatorIsAddress: boolean;
@@ -82,8 +85,8 @@ export function resolveVaultMeta(
   const legs = [knownSymbol ?? tokenDisplayName(vault.main_mint)];
   if (vault.second_mint && vault.second_mint !== vault.main_mint) legs.push(tokenDisplayName(vault.second_mint));
   return {
-    name: [served?.name ?? meta?.name ?? `${legs.join(" / ")} vault · ${shortAddress(vault.vault_pda)}`, served?.description]
-      .filter(Boolean).join(" · "),
+    name: served?.name ?? meta?.name ?? `${legs.join(" / ")} vault · ${shortAddress(vault.vault_pda)}`,
+    tagline: served?.description?.trim() || undefined,
     curator: curator ?? shortAddress(vault.governance),
     curatorIsAddress: curator === undefined,
     legs,

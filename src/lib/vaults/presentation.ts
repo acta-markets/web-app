@@ -18,6 +18,8 @@ export type AprSource = { label: "Staking" | "Premium"; pct: number };
 
 export type AprView = {
   value: string;
+  /** The figure behind `value`, in percent; null when there is none to show ("New", not covered). */
+  pct: number | null;
   muted: boolean;
   /** the parts the headline adds up, when there are figures to show */
   sources: AprSource[];
@@ -45,6 +47,7 @@ export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0
   if (premium !== null) {
     return {
       value: formatPercent(stakingAprPct + premium),
+      pct: stakingAprPct + premium,
       muted: false,
       sources: [...staking, { label: "Premium", pct: premium }],
       note: staking.length ? `${STAKING_NOTE} ${PREMIUM_NOTE}` : PREMIUM_NOTE,
@@ -53,14 +56,15 @@ export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0
   const all = performance?.returns.all ?? null;
   const young =
     performance?.covered === true && (all === null || Number(performance.computed_at) - Number(all.window_start_at) < APY_WINDOW_SECS);
-  if (!young) return { value: NONE, muted: true, sources: [], note: "Not available." };
+  if (!young) return { value: NONE, pct: null, muted: true, sources: [], note: "Not available." };
   const days = all === null ? 0 : (Number(all.window_end_at) - Number(all.window_start_at)) / 86_400;
   if (all === null || days < PROJECTED_MIN_DAYS) {
-    return { value: "New", muted: true, sources: staking, note: "Projected APY shows after 20 days of history." };
+    return { value: "New", pct: null, muted: true, sources: staking, note: "Projected APY shows after 20 days of history." };
   }
   const projected = projectedApy(all.return_pct, days);
   return {
     value: formatPercent(stakingAprPct + projected),
+    pct: stakingAprPct + projected,
     muted: true,
     sources: [...staking, { label: "Premium", pct: projected }],
     note: `Annualized from ${Math.floor(days)} days of history, not yet 30. A short history can swing a lot.`,

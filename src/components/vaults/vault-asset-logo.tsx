@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { cn } from "@/lib/cn";
-import { getToken } from "@/lib/tokens";
+import { getTokenLogo } from "@/lib/tokens";
 
 /**
  * Deposit asset logo. Unknown assets get their initials, case kept as is,
@@ -19,7 +19,8 @@ export function VaultAssetLogo({
   label?: string;
   className?: string;
 }) {
-  const logo = getToken(symbol)?.logo;
+  // the token list first, then the logos kept for assets it does not list (a stock such as TSLA)
+  const logo = getTokenLogo(symbol) || undefined;
   return (
     <div
       className={cn(

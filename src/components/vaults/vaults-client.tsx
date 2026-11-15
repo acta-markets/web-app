@@ -1,132 +1,55 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
-
-import { Chevron } from "@/components/app-ui/chevron";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppPageHeader, AppPageHeaderLink } from "@/components/app-ui/app-page-header";
-import { cn } from "@/lib/cn";
-import { VAULT_SORTS, type VaultModalTab, type VaultSort } from "@/lib/vaults/presentation";
-import {
-  VAULT_CATEGORIES,
-  categoryHref,
-  resolveVaultMeta,
-  type CategoryFilter,
-  type ResolvedVaultMeta,
-  type VaultCategory,
-} from "@/lib/vaults/registry";
-import type { Vault } from "@/lib/vaults/types";
+import { getNetwork } from "@/lib/tokens";
+import { VAULT_LINEUP, resolveLineup, withLineupName, type LineupEntry } from "@/lib/vaults/lineup";
+import type { VaultModalTab } from "@/lib/vaults/presentation";
+import { resolveVaultMeta } from "@/lib/vaults/registry";
+import { VAULTS_SAMPLE_MODE } from "@/lib/vaults/sample";
 import { useNowSecs, useVaults } from "./use-vaults";
-import { VaultCard, VaultCardSkeleton } from "./vault-card";
+import { VaultCard, VaultCardSkeleton, VaultGrid, VaultLineupCard, VaultPartnerCard } from "./vault-card";
 import { LazyVaultDepositModal as VaultDepositModal, usePrefetchVaultModal } from "./vault-deposit-modal-lazy";
 
-type Entry = { vault: Vault; meta: ResolvedVaultMeta };
-
-const CHIP = "flex h-10 items-center gap-2 whitespace-nowrap border px-4 py-2.5 font-mono text-sm leading-none tracking-tight transition-colors max-md:h-8 max-md:px-3";
-
-function CategoryChip({
-  label,
-  count,
-  active,
-  onClick,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        CHIP,
-        active
-          ? "border-accent-primary/30 bg-accent-primary/20 text-content-primary"
-          : "border-bg-border text-content-secondary hover:text-content-primary",
-      )}
-    >
-      {label}
-      <span className="tabular-nums text-content-secondary">{count}</span>
-    </button>
-  );
-}
-
-// a native select under a styled face, so the whole chip opens the picker and phones get their own
-function SortSelect({ value, onChange }: { value: VaultSort; onChange: (next: VaultSort) => void }) {
-  const current = VAULT_SORTS.find((s) => s.value === value) ?? VAULT_SORTS[0];
-  return (
-    <div
-      className={cn(
-        CHIP,
-        "relative border-bg-border pr-3 text-content-secondary hover:text-content-primary has-[:focus-visible]:border-accent-primary max-md:ml-auto max-md:pr-2.5",
-      )}
-    >
-      <span aria-hidden="true">
-        Sort by <span className="text-content-primary">{current.label}</span>
-      </span>
-      <Chevron kind="menu" className="h-4 w-4" />
-      <select
-        aria-label="Sort vaults"
-        value={value}
-        onChange={(e) => onChange(e.target.value as VaultSort)}
-        className="absolute inset-0 cursor-pointer appearance-none opacity-0 [color-scheme:dark]"
-      >
-        {VAULT_SORTS.map((s) => (
-          <option key={s.value} value={s.value}>
-            {s.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-export function VaultsClient({ initialCategory }: { initialCategory: CategoryFilter }) {
+/**
+ * Earn: the vault lineup, drawn as the landing page draws it. The page shows the lineup's
+ * three income vaults and the partner cell, never the backend's whole list: a served vault
+ * appears only as the live half of a lineup entry that names it, and an entry with no vault
+ * behind it yet is drawn from the lineup's own words and assumed rate.
+ *
+ * `lineup` is the lineup to show; tests pass their own.
+ */
+export function VaultsClient({ lineup = VAULT_LINEUP }: { lineup?: readonly LineupEntry[] }) {
   const { data: vaults, error, loading, refresh } = useVaults();
   const nowSecs = useNowSecs();
-  const [category, setCategory] = useState<CategoryFilter>(initialCategory);
-  const [sort, setSort] = useState<VaultSort>("apy");
   const [open, setOpen] = useState<{ pda: string; tab: VaultModalTab } | null>(null);
   usePrefetchVaultModal();
 
-  const resolved = useMemo(() => vaults.map((vault) => ({ vault, meta: resolveVaultMeta(vault) })), [vaults]);
-  const entries = useMemo<Entry[]>(() => {
-    const compare = (VAULT_SORTS.find((s) => s.value === sort) ?? VAULT_SORTS[0]).compare;
-    return [...resolved].sort(compare);
-  }, [resolved, sort]);
+  const slots = useMemo(() => {
+    const served = vaults.map((vault) => ({ vault, meta: resolveVaultMeta(vault) }));
+    // fixture vaults have made-up addresses, so in sample mode an entry takes the fixture on its asset
+    return resolveLineup(served, { network: getNetwork(), byAsset: VAULTS_SAMPLE_MODE, lineup }).map(({ entry, bound }) => ({
+      entry,
+      bound: bound ? { vault: bound.vault, meta: withLineupName(bound.meta, entry) } : null,
+    }));
+  }, [vaults, lineup]);
 
-  const counts = useMemo(() => {
-    const byCategory = new Map<VaultCategory, number>();
-    for (const e of entries) byCategory.set(e.meta.category, (byCategory.get(e.meta.category) ?? 0) + 1);
-    return byCategory;
-  }, [entries]);
-
-  // only categories that have vaults, plus the selected one so a deep link never hides its own chip
-  const chips = VAULT_CATEGORIES.filter((c) => (counts.get(c) ?? 0) > 0 || c === category);
-  const visible = category === "all" ? entries : entries.filter((e) => e.meta.category === category);
-
-  const selectCategory = useCallback((next: CategoryFilter) => {
-    setCategory(next);
-    // keeps the filter shareable without refetching this dynamic route
-    window.history.replaceState(null, "", categoryHref(next));
-  }, []);
-
-  const openEntry = open ? entries.find((e) => e.vault.vault_pda === open.pda) : undefined;
+  const opened = open ? slots.find((slot) => slot.bound?.vault.vault_pda === open.pda)?.bound : undefined;
+  // nothing served and nothing to fall back on: which entries are live is not known yet
+  const unknown = vaults.length === 0 && (loading || !!error);
 
   let content: React.ReactNode;
-  if (vaults.length === 0 && loading) {
+  if (unknown && loading) {
     content = (
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <VaultCardSkeleton key={i} />
+      <VaultGrid>
+        {[...lineup.map((entry) => entry.id), "partner"].map((id) => (
+          <VaultCardSkeleton key={id} />
         ))}
-      </div>
+      </VaultGrid>
     );
-  } else if (vaults.length === 0 && error) {
+  } else if (unknown) {
     content = (
       <AppCard className="flex flex-col items-center gap-4 px-6 py-12 text-center">
         <p className="font-mono text-base text-content-primary">Couldn&apos;t load vaults.</p>
@@ -135,34 +58,20 @@ export function VaultsClient({ initialCategory }: { initialCategory: CategoryFil
         </AppButton>
       </AppCard>
     );
-  } else if (entries.length === 0) {
-    content = (
-      <AppCard className="px-6 py-12 text-center">
-        <p className="font-mono text-base text-content-primary">No vaults are open yet.</p>
-      </AppCard>
-    );
-  } else if (visible.length === 0) {
-    content = (
-      <AppCard className="flex flex-col items-center gap-4 px-6 py-12 text-center">
-        <p className="font-mono text-base text-content-primary">Nothing in {category} yet.</p>
-        <AppButton variant="ghost" onClick={() => selectCategory("all")}>
-          Show all vaults
-        </AppButton>
-      </AppCard>
-    );
   } else {
     content = (
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {visible.map(({ vault, meta }) => (
-          <VaultCard
-            key={vault.vault_pda}
-            vault={vault}
-            meta={meta}
-            nowSecs={nowSecs}
-            onOpen={(pda, tab) => setOpen({ pda, tab })}
-          />
-        ))}
-      </div>
+      <VaultGrid>
+        {[
+          ...slots.map(({ entry, bound }) =>
+            bound ? (
+              <VaultCard key={entry.id} vault={bound.vault} meta={bound.meta} eyebrow={entry.type} nowSecs={nowSecs} onOpen={(pda, tab) => setOpen({ pda, tab })} />
+            ) : (
+              <VaultLineupCard key={entry.id} entry={entry} />
+            ),
+          ),
+          <VaultPartnerCard key="partner" />,
+        ]}
+      </VaultGrid>
     );
   }
 
@@ -176,36 +85,10 @@ export function VaultsClient({ initialCategory }: { initialCategory: CategoryFil
 
       <div className="mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6 max-md:px-3">
         <section className="flex flex-col gap-4" aria-labelledby="vaults-heading">
-          {/* phones: heading and sort on one row, categories below; wider: all three on one row */}
-          <div className="flex flex-wrap items-center gap-3">
-            <h2
-              id="vaults-heading"
-              className="font-space text-[40px] font-semibold leading-[1.2] tracking-[-0.8px] text-content-primary max-md:text-2xl"
-            >
-              Vaults
-            </h2>
-            {entries.length > 0 ? (
-              <>
-                <div
-                  role="group"
-                  aria-label="Filter vaults by category"
-                  className="flex flex-wrap items-center gap-2 max-md:order-last max-md:w-full md:ml-auto"
-                >
-                  <CategoryChip label="All" count={entries.length} active={category === "all"} onClick={() => selectCategory("all")} />
-                  {chips.map((c) => (
-                    <CategoryChip
-                      key={c}
-                      label={c}
-                      count={counts.get(c) ?? 0}
-                      active={category === c}
-                      onClick={() => selectCategory(c)}
-                    />
-                  ))}
-                </div>
-                <SortSelect value={sort} onChange={setSort} />
-              </>
-            ) : null}
-          </div>
+          {/* the page title already says what follows; the heading is kept for a screen reader's outline */}
+          <h2 id="vaults-heading" className="sr-only">
+            Vaults
+          </h2>
 
           {error && vaults.length > 0 ? (
             <p role="status" className="font-mono text-sm text-content-secondary">
@@ -217,10 +100,10 @@ export function VaultsClient({ initialCategory }: { initialCategory: CategoryFil
         </section>
       </div>
 
-      {open && openEntry ? (
+      {open && opened ? (
         <VaultDepositModal
-          vault={openEntry.vault}
-          meta={openEntry.meta}
+          vault={opened.vault}
+          meta={opened.meta}
           initialTab={open.tab}
           onClose={() => setOpen(null)}
           onTransaction={refresh}

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { getTokenMint } from "@/lib/tokens";
 import { makeVault, parseSampleData } from "@/lib/vaults/sample";
@@ -130,5 +130,54 @@ describe("VaultExposureCard", () => {
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Sold" }));
     expect(screen.getAllByRole("row")).toHaveLength(2);
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  const many = (count: number) => Array.from({ length: count }, (_, i) => leg(`p${i}`, "call_spread", "writer", String((i + 1) * 1_000_000_000)));
+
+  it("shows the first ten of a long list and the rest on request, with the total over all of them", () => {
+    const legs = many(13);
+    render(<VaultExposureCard exposure={exposure(legs)} positions={legs.map((l) => detail(l.position_pda, "writer"))} />);
+    // header + ten
+    expect(screen.getAllByRole("row")).toHaveLength(11);
+    const total = screen.getByText("Net P&L at spot").parentElement!.textContent;
+    fireEvent.click(screen.getByRole("button", { name: "Show all 13 positions" }));
+    expect(screen.getAllByRole("row")).toHaveLength(14);
+    expect(screen.getByText("Net P&L at spot").parentElement!.textContent).toBe(total);
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+    expect(screen.getAllByRole("row")).toHaveLength(11);
+  });
+
+  it("offers no Show all for a short list", () => {
+    render(<VaultExposureCard exposure={exposure(many(3))} />);
+    expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
+  });
+
+  describe("on a phone", () => {
+    const real = window.matchMedia;
+    beforeEach(() => {
+      window.matchMedia = ((query: string) => ({ matches: query.includes("max-width: 767px"), media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    });
+    afterEach(() => {
+      window.matchMedia = real;
+    });
+
+    it("stacks each position in two lines, with no table to scroll sideways, and keeps sort and filters", () => {
+      render(
+        <VaultExposureCard
+          exposure={exposure([leg("a", "call_spread", "writer", "1000000000"), leg("b", "call_spread", "holder", "3000000000")])}
+          positions={[detail("a", "writer"), detail("b", "holder")]}
+        />,
+      );
+      expect(screen.queryByRole("table")).toBeNull();
+      expect(screen.getAllByRole("listitem")).toHaveLength(2);
+      const sort = within(screen.getByRole("group", { name: "Sort positions" }));
+      fireEvent.click(sort.getByRole("button", { name: "Size" }));
+      expect(screen.getAllByRole("listitem")[0].textContent).toContain("1 SOL");
+      fireEvent.click(sort.getByRole("button", { name: /Size/ }));
+      expect(screen.getAllByRole("listitem")[0].textContent).toContain("3 SOL");
+      fireEvent.click(screen.getByRole("button", { name: "Filter by side" }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: "Sold" }));
+      expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    });
   });
 });

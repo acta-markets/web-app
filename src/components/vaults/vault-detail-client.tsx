@@ -10,6 +10,8 @@ import { shortAddress } from "@/lib/vaults/format";
 import { CuratorLogo } from "./curator-logo";
 import { primaryVaultAction, vaultStatus } from "@/lib/vaults/presentation";
 import { resolveVaultMeta } from "@/lib/vaults/registry";
+import { lineupEntryFor, withLineupName } from "@/lib/vaults/lineup";
+import { getNetwork } from "@/lib/tokens";
 import { useNowSecs, useUnsettledVaultPositions, useVault, useVaultCycles, useVaultExposure } from "./use-vaults";
 import { VaultAssetLogo } from "./vault-asset-logo";
 import { VaultCurrentCycle, VaultExposureCard, VaultSpot } from "./vault-cycle";
@@ -45,7 +47,7 @@ function DetailSkeleton() {
     <div className="mt-6 flex flex-col gap-10" aria-hidden="true">
       <div className="flex items-center gap-4">
         <div className="h-16 w-16 animate-pulse rounded-full bg-action-primary" />
-        <div className="h-12 w-64 animate-pulse rounded bg-action-primary" />
+        <div className="h-12 w-64 animate-pulse rounded-none bg-action-primary" />
       </div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-8 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -65,7 +67,8 @@ export function VaultDetailClient({ pda }: { pda: string }) {
   const nowSecs = useNowSecs();
 
   const vault = vaultState.data;
-  const meta = useMemo(() => (vault ? resolveVaultMeta(vault) : null), [vault]);
+  // a vault in the lineup goes by its lineup name here too, so the page and its card agree
+  const meta = useMemo(() => (vault ? withLineupName(resolveVaultMeta(vault), lineupEntryFor(vault.vault_pda, getNetwork())) : null), [vault]);
   const cycles = useMemo(() => cyclesState.data?.cycles ?? [], [cyclesState.data]);
   // charts never compound across a share-price reset
   const generation = vault?.capital_generation;
@@ -122,17 +125,28 @@ export function VaultDetailClient({ pda }: { pda: string }) {
       <div className="mt-5 grid min-w-0 grid-cols-1 border border-bg-border bg-bg-primary lg:grid-cols-2">
         <div className="min-w-0 border-b border-bg-border p-5 max-md:p-4 lg:border-b-0 lg:border-r">
           <header className="flex min-w-0 flex-col gap-3">
+            {/* as on a card and on the landing page: the category as a small label, with the status beside it */}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <span className="font-mono text-[12px] leading-[1.2] text-content-secondary">{meta.category}</span>
+              {/* the page has room for the whole status, so it is never cut short here */}
+              <VaultStatusLabel status={status} wrap />
+            </div>
             <div className="flex min-w-0 items-center gap-4">
               <VaultAssetLogo symbol={meta.assetSymbol} size={40} />
-              <h1 className="min-w-0 break-words font-space text-[32px] font-semibold leading-[1.1] tracking-[-0.64px] text-content-primary max-md:text-2xl">
-                {meta.name}
-              </h1>
+              <div className="flex min-w-0 flex-col gap-1">
+                <h1 className="min-w-0 break-words font-space text-[32px] font-semibold leading-[1.1] tracking-[-0.64px] text-content-primary max-md:text-2xl">
+                  {meta.name}
+                </h1>
+                {/* what the vault does, in its operator's words: under the name, not run into it */}
+                {meta.tagline ? (
+                  <p className="font-mono text-sm leading-[1.4] tracking-[-0.02em] text-content-secondary [overflow-wrap:anywhere]">{meta.tagline}</p>
+                ) : null}
+              </div>
             </div>
             {meta.strategy ? (
               <p className="font-mono text-base leading-[1.4] tracking-[-0.02em] text-content-primary [overflow-wrap:anywhere]">{meta.strategy}</p>
             ) : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
-              <span className="text-[11px] uppercase tracking-[0.12em]">{meta.category}</span>
               <span>
                 Deposit <span className="text-content-primary">{meta.assetSymbol}</span>
               </span>
@@ -152,7 +166,6 @@ export function VaultDetailClient({ pda }: { pda: string }) {
                   X
                 </a>
               ) : null}
-              <VaultStatusLabel status={status} />
             </div>
             {meta.description ? (
               <p className="max-w-[560px] font-mono text-sm leading-[1.5] tracking-[-0.02em] text-content-secondary [overflow-wrap:anywhere]">

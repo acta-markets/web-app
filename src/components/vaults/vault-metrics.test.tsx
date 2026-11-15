@@ -8,7 +8,8 @@ afterEach(cleanup);
 describe("VaultCapacity", () => {
   it("shows deposits against no cap without a progress value", () => {
     render(<VaultCapacity vault={makeVault({ main_decimals: 0, equity: "99", capacity: { type: "unlimited" } })} symbol="SOL" />);
-    expect(screen.getByText("99 SOL / No cap")).toBeTruthy();
+    // nothing to fill without a cap, so it is said in words and no empty bar is drawn
+    expect(screen.getByRole("region", { name: "Vault capacity" }).textContent).toBe("Capacity99 SOL deposited, no cap");
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 

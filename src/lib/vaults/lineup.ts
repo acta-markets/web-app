@@ -1,0 +1,95 @@
+import { LANDING_VAULTS, VAULT_ACCESS_URL } from "@/lib/landing-vaults";
+import type { ResolvedVaultMeta } from "./registry";
+import type { Vault } from "./types";
+
+/**
+ * The vaults Earn offers: a short, curated lineup named by what goes in, the way the landing
+ * page names them. A vault can sell, buy and write, so its strategy is not its name; to a
+ * depositor each of these is an income vault on one asset.
+ *
+ * The backend serves every open vault, test ones included. Only a vault named here by its
+ * address is listed with its live figures. An entry with no address yet is shown from what is
+ * written here: open, with its assumed rate and the landing page's way in, or not open yet.
+ */
+export type LineupNetwork = "devnet" | "mainnet";
+
+export type LineupEntry = {
+  id: string;
+  /** The deposit asset, exactly as it is written. This is the cell's title. */
+  asset: string;
+  /** The small label over the title, in the landing page's words. */
+  type: string;
+  /**
+   * The vault behind this entry on each network; null until one is opened and named here.
+   * TODO(tim): the addresses of the jitoSOL, USDC and TSLA income vaults.
+   */
+  pda: Record<LineupNetwork, string | null>;
+  /**
+   * How the entry reads while no vault address is set for the network: `open` shows it open,
+   * with `assumedApr` and a Deposit button that goes where the landing page's does; `soon`
+   * shows it dimmed, with nothing to press.
+   */
+  state: "open" | "soon";
+  /**
+   * The rate shown until a vault's own figures replace it: an assumption from backtesting, in
+   * its parts, never a live result. The headline is always the sum of the parts.
+   */
+  assumedApr?: { staking: number; premium: number };
+};
+
+/** Where Deposit leads for a vault with no address yet: the landing page's access link. */
+export const LINEUP_ACCESS_URL = VAULT_ACCESS_URL;
+/** Said under the (i) beside an assumed rate, so it is never taken for a live one. */
+export const ASSUMED_APR_NOTE = "An estimate from backtesting. It is not this vault's live result and not a promise.";
+
+/** The landing page's own figures for an asset, so the two pages cannot drift apart. */
+function landingApr(id: string): { staking: number; premium: number } | undefined {
+  return LANDING_VAULTS.find((vault) => vault.id === id)?.apr;
+}
+
+/** What every vault in the lineup is, said once under its name. */
+export const LINEUP_TAGLINE = "Income vault";
+
+/** In the landing page's order: the major, the stable, then the stock. */
+export const VAULT_LINEUP: readonly LineupEntry[] = [
+  // staking plus premium: the landing page's SOL figures, which are an LST's
+  { id: "jitosol", asset: "jitoSOL", type: "Majors", pda: { devnet: null, mainnet: null }, state: "open", assumedApr: landingApr("sol") },
+  { id: "usdc", asset: "USDC", type: "Stables", pda: { devnet: null, mainnet: null }, state: "open", assumedApr: landingApr("usdc") },
+  // Tim, 2026-11-15: around 25% from backtesting. The landing page still shows ~70% for xTSLA.
+  { id: "tsla", asset: "TSLA", type: "Stocks", pda: { devnet: null, mainnet: null }, state: "open", assumedApr: { staking: 0, premium: 25 } },
+];
+
+export type LineupSlot<T> = { entry: LineupEntry; bound: T | null };
+
+/**
+ * Pairs each lineup entry with the served vault it names, in lineup order. A vault is bound
+ * by address and by nothing else, so a test vault on the same asset can never stand in for
+ * the real one. `byAsset` is for fixture data only, whose addresses are made up: there the
+ * first vault that takes the entry's asset is used.
+ */
+export function resolveLineup<T extends { vault: Pick<Vault, "vault_pda">; meta: Pick<ResolvedVaultMeta, "assetSymbol"> }>(
+  served: readonly T[],
+  { network, byAsset = false, lineup = VAULT_LINEUP }: { network: LineupNetwork; byAsset?: boolean; lineup?: readonly LineupEntry[] },
+): LineupSlot<T>[] {
+  return lineup.map((entry) => {
+    const pda = entry.pda[network];
+    const bound =
+      (pda ? served.find((item) => item.vault.vault_pda === pda) : undefined) ??
+      (byAsset ? served.find((item) => item.meta.assetSymbol === entry.asset) : undefined) ??
+      null;
+    return { entry, bound };
+  });
+}
+
+/** The lineup entry a vault is listed under, by its address; undefined for any other vault. */
+export function lineupEntryFor(pda: string, network: LineupNetwork, lineup: readonly LineupEntry[] = VAULT_LINEUP): LineupEntry | undefined {
+  return lineup.find((entry) => entry.pda[network] === pda);
+}
+
+/**
+ * A listed vault goes by its lineup name everywhere it is shown: the asset as its name and
+ * "Income vault" under it, in place of whatever its operator called it.
+ */
+export function withLineupName(meta: ResolvedVaultMeta, entry: LineupEntry | undefined): ResolvedVaultMeta {
+  return entry ? { ...meta, name: entry.asset, tagline: LINEUP_TAGLINE } : meta;
+}

@@ -13,15 +13,16 @@ export function VaultDetailTabs({ tabs }: { tabs: VaultDetailTab[] }) {
   const active = tabs.find((tab) => tab.value === selected) ?? tabs[0];
   return (
     <AppCard className="min-w-0">
-      <div className="flex items-center justify-between gap-4 border-b border-bg-border px-5 max-md:px-4">
+      {/* phones: the aside takes its own line above the tabs, and the tabs spread over the full width, so all five fit down to 360px and none scrolls sideways */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 border-b border-bg-border px-5 max-md:px-4">
         <AppTextTabs
           ariaLabel="Vault details"
-          className="-mb-px min-w-0"
+          className="-mb-px min-w-0 max-md:w-full max-md:justify-between max-md:gap-2"
           value={active?.value ?? ""}
           onChange={setSelected}
           options={tabs.map(({ value, label }) => ({ value, label }))}
         />
-        {active?.aside ? <div className="shrink-0">{active.aside}</div> : null}
+        {active?.aside ? <div className="shrink-0 max-md:order-first max-md:w-full max-md:pt-3">{active.aside}</div> : null}
       </div>
       <div className="p-5 max-md:p-4">{active?.content}</div>
     </AppCard>

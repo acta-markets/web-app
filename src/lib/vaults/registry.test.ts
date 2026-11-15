@@ -52,14 +52,18 @@ describe("resolveVaultMeta", () => {
     });
   });
 
-  it("appends the served description to the name", () => {
+  it("keeps the served description beside the name as a tagline, never inside it", () => {
     const vault = { vault_pda: "pda-1", main_mint: SOL_MINT, governance: GOVERNANCE };
     const fixture = { "pda-1": { name: "SOL desk", curator: "Acta", description: "Registry text" } };
     expect(resolveVaultMeta({ ...vault, metadata: md({ name: "SOL income", description: "Weekly calls" }) }, fixture)).toMatchObject({
-      name: "SOL income · Weekly calls",
+      name: "SOL income",
+      tagline: "Weekly calls",
       description: "Registry text",
     });
-    expect(resolveVaultMeta({ ...vault, metadata: null }, fixture).name).toBe("SOL desk");
+    const plain = resolveVaultMeta({ ...vault, metadata: null }, fixture);
+    expect(plain.name).toBe("SOL desk");
+    expect(plain.tagline).toBeUndefined();
+    expect(resolveVaultMeta({ ...vault, metadata: md({ name: "SOL income", description: "  " }) }, fixture).tagline).toBeUndefined();
   });
 
   it("passes curator links only when they are https URLs and a bare handle", () => {
