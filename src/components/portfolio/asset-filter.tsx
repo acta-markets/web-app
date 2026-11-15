@@ -44,7 +44,7 @@ export function AssetFilter({
       options={options}
       onChange={(next) => onChange(next === ALL ? null : next)}
       // the app's chip, as Earn's sort control; the glyph is sized here because a chip's text is small
-      className="h-10 gap-2 border-bg-border px-4 py-2.5 font-mono text-sm leading-none tracking-tight text-content-secondary hover:text-content-primary max-md:h-8 max-md:px-3 [&>svg]:h-4 [&>svg]:w-4"
+      className="h-10 gap-2 border-bg-border px-4 py-2.5 font-mono text-sm leading-none tracking-[-0.02em] text-content-secondary hover:text-content-primary max-md:h-8 max-md:px-3 [&>svg]:h-4 [&>svg]:w-4"
     >
       <span className="inline-flex items-center gap-2">
         {shown ? <TokenLogo symbol={shown[0]} /> : null}

@@ -1,5 +1,7 @@
 "use client";
 
+import { TYPE_LINK } from "@/components/app-ui/type-styles";
+import { Chevron } from "@/components/app-ui/chevron";
 import { useMemo, useState } from "react";
 import { AppColumnFilter } from "@/components/app-ui/app-column-filter";
 import { useIsNarrow } from "@/components/app-ui/use-is-narrow";
@@ -93,7 +95,7 @@ export function VaultCurrentCycle({ vault, cycles = [], nowSecs }: { vault: Vaul
   return (
     <section aria-label="Current cycle" className="border border-t-0 border-bg-border bg-bg-primary p-5 backdrop-blur-[4px] max-md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-space text-lg font-semibold leading-[1.2] tracking-[-0.36px] text-content-primary">
+        <h2 className="font-space text-xl font-semibold leading-[1.2] tracking-[-0.02em] text-content-primary">
           Current cycle{current ? ` · ${Number(current.cycle_number) + 1}` : ""}
         </h2>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-sm">
@@ -119,7 +121,7 @@ export function VaultCurrentCycle({ vault, cycles = [], nowSecs }: { vault: Vaul
               index > stage && "border-bg-border bg-bg-primary",
             )} />
             <div className={cn("font-mono text-sm", index === stage ? "text-content-primary" : "text-content-secondary")}>{step.label}</div>
-            <div className="mt-1 font-mono text-xs tabular-nums text-content-secondary">{step.detail}</div>
+            <div className="mt-1 font-mono text-[14px] leading-[1.45] tabular-nums text-content-secondary">{step.detail}</div>
           </li>
         ))}
       </ol>
@@ -232,7 +234,7 @@ export function VaultExposureCard({ exposure, positions = [] }: { exposure: Vaul
             <span>ITM / OTM{moneynessFilter}</span>
           </div>
           <div role="group" aria-label="Sort positions" className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-bg-border py-3 text-content-secondary">
-            <span className="text-[12px] font-medium text-content-tertiary">Sort</span>
+            <span className="text-[14px] font-medium text-content-tertiary">Sort</span>
             {COLUMNS.map((column) => {
               const active = sort.key === column.key;
               return (
@@ -289,9 +291,10 @@ export function VaultExposureCard({ exposure, positions = [] }: { exposure: Vaul
           type="button"
           aria-expanded={showAll}
           onClick={() => setShowAll((was) => !was)}
-          className="mt-3 font-mono text-sm font-medium text-accent-secondary transition-colors hover:text-accent-primary"
+          className={cn(TYPE_LINK, "mt-3 text-sm")}
         >
           {showAll ? "Show fewer" : `Show all ${visible.length} positions`}
+          <Chevron kind="go" className="h-4 w-4" />
         </button>
       ) : null}
       {totals.length ? (
@@ -303,7 +306,7 @@ export function VaultExposureCard({ exposure, positions = [] }: { exposure: Vaul
           </Row>
         </dl>
       ) : null}
-      <p className="mt-1 font-mono text-xs leading-[1.5] text-content-secondary">
+      <p className="mt-1 font-mono text-[14px] leading-[1.45] text-content-secondary">
         If every position expired at the current price: premium plus payoff. Bought positions exclude the protocol fee.
       </p>
     </div>

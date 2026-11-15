@@ -1,9 +1,11 @@
 "use client";
 
+import { TYPE_LABEL, TYPE_LINK } from "@/components/app-ui/type-styles";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
+import { Chevron } from "@/components/app-ui/chevron";
 import { formatUsdSmart } from "@/lib/markets";
 import { numberFormat } from "@/lib/number-format";
 import { formatExpiryCountdown, type FundingSummary } from "@/lib/portfolio-positions";
@@ -11,7 +13,7 @@ import { formatExpiryDay } from "@/lib/trade/format";
 import { cn } from "@/lib/cn";
 import { Cell } from "./performance-strip";
 
-const LABEL = "font-mono text-[12px] font-medium leading-[1.2] text-content-tertiary";
+const LABEL = `${TYPE_LABEL} text-content-tertiary`;
 
 /** "6,900.00 USDC": dollars to the cent for the quote, up to four places for an asset. */
 function amountText({ symbol, amount }: { symbol: string; amount: number }): string {
@@ -143,10 +145,11 @@ function FundBreakdown({ totals, totalUsd, count }: { totals: FundingSummary["to
         onBlur={(e) => {
           if (e.relatedTarget && !panelRef.current?.contains(e.relatedTarget)) close();
         }}
-        // the app's quiet action link, as "More prices"
-        className="font-mono text-xs font-medium leading-[1.3] tracking-[-0.24px] text-accent-secondary transition-colors hover:text-accent-primary focus-visible:text-accent-primary focus-visible:outline-none"
+        // clickable text, as "More prices": grey, the note's own size, the forward chevron
+        className={cn(TYPE_LINK, "text-[14px] leading-[1.45]")}
       >
         {totals.length} assets
+        <Chevron kind="go" className="h-4 w-4" />
       </button>
       {open
         ? createPortal(
@@ -162,11 +165,11 @@ function FundBreakdown({ totals, totalUsd, count }: { totals: FundingSummary["to
               }}
               style={{ left: position?.left ?? 0, top: position?.top ?? 0, visibility: position ? "visible" : "hidden" }}
               // the app's floating surface, above modals (90) and below toasts (200), as the info tooltip
-              className="fixed z-[150] w-max min-w-[240px] max-w-[calc(100vw-16px)] border border-bg-border bg-bg-primary p-3 text-left shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
+              className="app-type fixed z-[150] w-max min-w-[240px] max-w-[calc(100vw-16px)] border border-bg-border bg-bg-primary p-3 text-left shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
             >
               <div className={cn(LABEL, "whitespace-nowrap")}>To fund {count} options</div>
               {/* past its height the list scrolls, so the panel is the same size for 10 assets or 100 */}
-              <div ref={listRef} style={{ maxHeight: position?.listMax ?? LIST_HEIGHT }} className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 overflow-y-auto overscroll-contain whitespace-nowrap pr-1 font-mono text-xs leading-[1.3] tabular-nums text-content-primary">
+              <div ref={listRef} style={{ maxHeight: position?.listMax ?? LIST_HEIGHT }} className="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 overflow-y-auto overscroll-contain whitespace-nowrap pr-1 font-mono text-[14px] leading-[1.45] tracking-[-0.02em] tabular-nums text-content-primary">
                 {sorted.map((total) => (
                   <div key={total.symbol} className="contents">
                     <span>{amountText(total)}</span>
@@ -175,12 +178,12 @@ function FundBreakdown({ totals, totalUsd, count }: { totals: FundingSummary["to
                 ))}
               </div>
               {totalUsd != null ? (
-                <div className="mt-2 flex justify-between gap-6 border-t border-bg-border pt-2 font-mono text-xs font-medium leading-[1.3] tabular-nums text-content-primary">
+                <div className="mt-2 flex justify-between gap-6 border-t border-bg-border pt-2 font-mono text-[14px] font-medium leading-[1.45] tracking-[-0.02em] tabular-nums text-content-primary">
                   <span>Total</span>
                   <span>{approxUsd(totalUsd)}</span>
                 </div>
               ) : null}
-              <p className="mt-2 max-w-[260px] whitespace-normal font-mono text-[12px] leading-[1.4] text-content-tertiary">
+              <p className="mt-2 max-w-[260px] whitespace-normal font-mono text-[14px] leading-[1.45] tracking-[-0.02em] text-content-tertiary">
                 A call is funded in the quote token at its strike, a put in the asset itself, valued here at the current price.
               </p>
             </div>,

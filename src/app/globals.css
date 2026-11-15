@@ -398,3 +398,12 @@
 @media (prefers-reduced-motion: reduce) {
   .strike-ring { animation: none; }
 }
+
+/* App pages: all text carries the handoff's -0.02em tracking unless something says otherwise.
+   It is set on each element, so it is -0.02em of that element's own size, and it has no
+   specificity, so any tracking utility wins. Text under an element that sets its own tracking
+   (a class or an inline style) is left to inherit from it, as before. Portals carry the class
+   themselves, since they render outside the app's root. */
+:where(.app-type) :where(*):not(:where([class*="tracking-"] *, [style*="letter-spacing"] *)) {
+  letter-spacing: -0.02em;
+}

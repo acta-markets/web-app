@@ -1,3 +1,4 @@
+import { TYPE_LABEL } from "@/components/app-ui/type-styles";
 import { Fragment } from "react";
 import Link from "next/link";
 import { AppButton, AppButtonLink } from "@/components/app-ui/app-button";
@@ -20,7 +21,7 @@ export function vaultHref(pda: string): string {
 }
 
 /** The small label over a title or a figure, at the type scale's floor: 12px, as written, no wide tracking. */
-const EYEBROW = "font-mono text-[12px] leading-[1.2] text-content-secondary";
+const EYEBROW = `${TYPE_LABEL} text-content-secondary`;
 /** Lifts a control over the card-wide link, so it takes its own clicks. */
 const ABOVE_LINK = "relative z-[2]";
 // The landing page's two bar colours (STYLE.md): staking, then premium.
@@ -79,7 +80,7 @@ export function VaultCard({
       <div>
         <div className="mb-5 flex items-center justify-between gap-3">
           <span className={EYEBROW}>{eyebrow ?? meta.category}</span>
-          <VaultStatusLabel status={vaultStatus(vault, nowSecs)} showDetail={false} className="text-xs" />
+          <VaultStatusLabel status={vaultStatus(vault, nowSecs)} showDetail={false} />
         </div>
 
         <div className="flex items-center gap-3">
@@ -199,7 +200,7 @@ export function VaultLineupCard({ entry }: { entry: LineupEntry }) {
       <div>
         <div className="mb-5 flex items-center justify-between gap-3">
           <span className={EYEBROW}>{entry.type}</span>
-          {open ? null : <VaultStatusLabel status={{ label: "Not open yet", tone: "neutral" }} showDetail={false} className="text-xs" />}
+          {open ? null : <VaultStatusLabel status={{ label: "Not open yet", tone: "neutral" }} showDetail={false} />}
         </div>
         <div className="flex items-center gap-3">
           <VaultAssetLogo symbol={entry.asset} size={28} />

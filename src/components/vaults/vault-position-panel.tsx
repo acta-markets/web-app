@@ -52,7 +52,7 @@ function RequestRow({
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div className="min-w-0">
           <div className="font-mono text-sm font-medium leading-[1.3] text-content-primary">{title}</div>
-          <div className="mt-1 font-mono text-xs leading-[1.3] text-content-secondary">
+          <div className="mt-1 font-mono text-[14px] leading-[1.45] text-content-secondary">
             Requested {formatDate(Number(createdAt), { time: true })}
           </div>
         </div>
@@ -67,10 +67,10 @@ function RequestRow({
         ) : null}
       </div>
       {cancelBlock !== null && buttons.length === 0 ? (
-        <p className="mt-2 font-mono text-xs leading-[1.4] text-content-secondary">{cancelBlockMessage(cancelBlock)}</p>
+        <p className="mt-2 font-mono text-[14px] leading-[1.45] text-content-secondary">{cancelBlockMessage(cancelBlock)}</p>
       ) : null}
       {selfProcess.kind === "waiting" ? (
-        <p className="mt-2 font-mono text-xs leading-[1.4] text-content-secondary">
+        <p className="mt-2 font-mono text-[14px] leading-[1.45] text-content-secondary">
           If the manager has not processed it, you can process it yourself in{" "}
           {formatCountdown(selfProcess.availableAt, nowSecs)}.
         </p>
@@ -133,7 +133,7 @@ export function VaultPositionPanel({
                 Since entry <span className="text-content-primary">{formatPercent(entryReturn, { signed: true })}</span>
               </p>
             ) : null}
-            <p className="mt-1 font-mono text-xs leading-[1.4] text-content-secondary">
+            <p className="mt-1 font-mono text-[14px] leading-[1.45] text-content-secondary">
               At the last share price. A withdrawal pays the price set when it is processed.
             </p>
           </>

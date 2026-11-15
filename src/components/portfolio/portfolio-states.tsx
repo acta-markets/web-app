@@ -55,7 +55,7 @@ export function PortfolioEmpty() {
   return (
     <AppCard className="flex flex-col items-center px-6 py-12 text-center">
       <p className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">Nothing here yet</p>
-      <p className="mt-2 max-w-md font-mono text-sm leading-[1.5] text-content-secondary">
+      <p className="mt-2 max-w-md font-mono text-sm leading-[1.5] tracking-[-0.02em] text-content-secondary">
         Your positions, the premium you collect and your P&L appear here after your first trade.
       </p>
       <AppButtonLink href="/trade" className="mt-6">
@@ -70,7 +70,7 @@ export function PortfolioSignIn() {
   return (
     <AppCard className="px-6 py-10 text-center">
       <p className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">Sign in to see your positions</p>
-      <p className="mx-auto mt-2 max-w-md font-mono text-sm leading-[1.5] text-content-secondary">
+      <p className="mx-auto mt-2 max-w-md font-mono text-sm leading-[1.5] tracking-[-0.02em] text-content-secondary">
         Approve the sign-in message in your wallet. It is a signature only: it costs nothing and moves no funds.
       </p>
     </AppCard>

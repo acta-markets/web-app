@@ -29,8 +29,8 @@ export function AppSegmented<T extends string>({
 }) {
   const sizing = stretch ? "flex-1" : "shrink-0";
   const btn = size === "lg"
-    ? `relative min-w-0 ${sizing} flex items-center justify-center whitespace-nowrap backdrop-blur-[4px] px-4 py-2.5 text-base font-normal leading-none tracking-tight transition-colors`
-    : `relative min-w-0 ${sizing} flex items-center justify-center whitespace-nowrap backdrop-blur-[4px] px-4 py-2.5 text-sm font-normal leading-none tracking-tight transition-colors`;
+    ? `relative min-w-0 ${sizing} flex items-center justify-center whitespace-nowrap backdrop-blur-[4px] px-4 py-2.5 text-base font-normal leading-none tracking-[-0.02em] transition-colors`
+    : `relative min-w-0 ${sizing} flex items-center justify-center whitespace-nowrap backdrop-blur-[4px] px-4 py-2.5 text-sm font-normal leading-none tracking-[-0.02em] transition-colors`;
 
   return (
     <div

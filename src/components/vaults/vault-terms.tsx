@@ -56,7 +56,7 @@ function Capacity({ vault, symbol }: { vault: Vault; symbol: string }) {
       <div className="flex h-2.5 w-[120px] bg-accent-primary/20" aria-hidden="true">
         <div className="h-full bg-accent-primary" style={{ width: `${usedPct}%` }} />
       </div>
-      <span className="text-xs tabular-nums text-content-secondary">
+      <span className="text-[14px] tabular-nums text-content-secondary">
         {formatTokenAmount(remaining, decimals, { compact: true })} {symbol} left
       </span>
     </div>

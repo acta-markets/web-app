@@ -88,11 +88,11 @@ export function IncomeCard({
         {state === "pending" ? (
           <div aria-hidden="true" className="h-full w-full animate-pulse bg-action-primary opacity-50" />
         ) : state === "unavailable" || (summary && !series) ? (
-          <p className="font-mono text-sm text-content-secondary">Income unavailable</p>
+          <p className="font-mono text-sm tracking-[-0.02em] text-content-secondary">Income unavailable</p>
         ) : series ? (
           <PortfolioEarningsChart points={series} now={nowSec} range={range} formatValue={formatValue} />
         ) : (
-          <p className="max-w-sm text-center font-mono text-sm leading-[1.5] text-content-secondary">
+          <p className="max-w-sm text-center font-mono text-sm leading-[1.5] tracking-[-0.02em] text-content-secondary">
             No premium collected yet. What you earn from the positions you sell adds up here.
           </p>
         )}

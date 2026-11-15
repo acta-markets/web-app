@@ -31,19 +31,19 @@ export function VaultMetrics({ vault, symbol, stakingAprPct }: { vault: Vault; s
           <div key={i} className="min-w-0">
             {/* the landing card's pairing: a small label over a figure in the heading face.
                 On a phone "Projected APY" takes two lines; every label keeps that height so the three figures share a line. */}
-            <dt className="font-mono text-[12px] leading-[1.3] text-content-secondary max-md:min-h-[2.6em]">{metric.label}</dt>
+            <dt className="font-mono text-[14px] font-medium leading-[1.3] text-content-secondary max-md:min-h-[2.6em]">{metric.label}</dt>
             <dd
               className={cn("mt-2 break-words font-space font-medium tabular-nums max-md:text-2xl", metric.tone ?? "text-content-primary")}
               style={{ fontSize: "clamp(24px, 2.6vw, 32px)", lineHeight: 1.05, letterSpacing: "-0.03em" }}
             >
               {metric.value}
             </dd>
-            {metric.sub ? <dd className="mt-1 font-mono text-xs text-content-secondary">{metric.sub}</dd> : null}
+            {metric.sub ? <dd className="mt-1 font-mono text-[14px] leading-[1.45] text-content-secondary">{metric.sub}</dd> : null}
           </div>
         ))}
       </dl>
       {pendingDeposits > 0n ? (
-        <p className="mt-2 font-mono text-xs text-content-secondary">
+        <p className="mt-2 font-mono text-[14px] leading-[1.45] text-content-secondary">
           {formatTokenAmount(pendingDeposits, vault.main_decimals, { compact: true })} {symbol} pending
         </p>
       ) : null}
@@ -64,7 +64,7 @@ export function VaultCapacity({ vault, symbol }: { vault: Vault; symbol: string 
   // No cap, so nothing to fill: a line of words, not an empty bar.
   if (!limit) {
     return (
-      <section aria-label="Vault capacity" className="min-w-0 font-mono text-xs">
+      <section aria-label="Vault capacity" className="min-w-0 font-mono text-[14px] leading-[1.45]">
         <p className="flex justify-between gap-3 tabular-nums text-content-secondary">
           <span>Capacity</span>
           <span>
@@ -78,7 +78,7 @@ export function VaultCapacity({ vault, symbol }: { vault: Vault; symbol: string 
   const used = cap > remaining ? cap - remaining : 0n;
   const pct = cap === 0n ? 0 : Math.min(100, Number(used * 10_000n / cap) / 100);
   return (
-    <section aria-label="Vault capacity" className="min-w-0 font-mono text-xs">
+    <section aria-label="Vault capacity" className="min-w-0 font-mono text-[14px] leading-[1.45]">
       <p className="mb-2 text-content-secondary">Capacity</p>
       <div
         role="progressbar"

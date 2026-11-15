@@ -1,5 +1,8 @@
 "use client";
 
+import { cn } from "@/lib/cn";
+import { TYPE_LINK } from "@/components/app-ui/type-styles";
+import { Chevron } from "@/components/app-ui/chevron";
 import { flows } from "@acta-markets/ts-sdk/chain";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
@@ -278,9 +281,10 @@ function VaultDepositFlow({
               href={solscanUrl("tx", requested.signature)}
               target="_blank"
               rel="noreferrer noopener"
-              className="mt-3 inline-block font-mono text-sm text-accent-secondary hover:text-accent-primary"
+              className={cn(TYPE_LINK, "mt-3 text-sm")}
             >
-              View on Solscan ↗
+              View on Solscan
+              <Chevron kind="go" className="h-4 w-4" />
             </a>
           </div>
           <AppButton className="w-full" onClick={() => surface.presentation === "modal" ? surface.onClose() : setTx({ kind: "idle" })}>
@@ -388,7 +392,7 @@ function VaultDepositFlow({
             </p>
           ) : null}
 
-          <p className="font-mono text-xs leading-[1.5] text-content-secondary">
+          <p className="font-mono text-[14px] leading-[1.45] text-content-secondary">
             Requests complete at the end of the cycle, at the share price calculated then. The manager can make bad trades
             and you carry the losses.{" "}
             <Link prefetch={false} href="/docs/guide/returns-and-risks" className="text-accent-secondary hover:text-accent-primary">
@@ -397,7 +401,7 @@ function VaultDepositFlow({
           </p>
 
           {pending ? (
-            <p className="font-mono text-xs leading-[1.4] text-content-secondary">Approve the request in your wallet.</p>
+            <p className="font-mono text-[14px] leading-[1.45] text-content-secondary">Approve the request in your wallet.</p>
           ) : null}
 
           <AppButton size="lg" className="w-full" disabled={cta.disabled} onClick={cta.onClick}>

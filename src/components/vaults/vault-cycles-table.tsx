@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AppButton } from "@/components/app-ui/app-button";
+import { Chevron } from "@/components/app-ui/chevron";
+import { TYPE_LINK } from "@/components/app-ui/type-styles";
+import { cn } from "@/lib/cn";
 import { AppTable, AppTd, AppTh } from "@/components/app-ui/app-table";
 import { NONE, formatDate, formatPercent, formatSharePrice, formatTokenAmount } from "@/lib/vaults/format";
 import type { VaultCycle } from "@/lib/vaults/types";
@@ -64,9 +66,10 @@ export function VaultCyclesTable({
         </tbody>
       </AppTable>
       {rows.length > limit ? (
-        <AppButton variant="ghost" className="self-start pl-0" onClick={() => setLimit((n) => n + PAGE)}>
+        <button type="button" className={cn(TYPE_LINK, "self-start text-sm")} onClick={() => setLimit((n) => n + PAGE)}>
           Show more
-        </AppButton>
+          <Chevron kind="go" className="h-4 w-4" />
+        </button>
       ) : null}
     </section>
   );

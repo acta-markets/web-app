@@ -1,5 +1,6 @@
 "use client";
 
+import { AppPageHeader } from "@/components/app-ui/app-page-header";
 import { useEffect, useMemo, useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { AppCard } from "@/components/app-ui/app-card";
@@ -44,13 +45,10 @@ export function ReferralsClient() {
   }, [referralInfo?.referral_code]);
 
   return (
-    <div className="mx-auto w-full max-w-[850px] px-6 pb-20 pt-10 max-md:px-3 max-md:pt-6">
-      <header className="mb-6 space-y-1">
-        <h1 className="font-mono text-2xl font-semibold tracking-tight text-content-primary">Referrals</h1>
-        <p className="font-mono text-sm text-content-tertiary">
-          Invite takers to Acta. Share your code to earn slots over time.
-        </p>
-      </header>
+    <div>
+      {/* the same title block as Trade, Earn and Portfolio */}
+      <AppPageHeader title="Referrals" subtitle="Invite takers to Acta. Share your code to earn slots over time" />
+      <div className="mx-auto w-full max-w-[850px] px-6 pb-20 max-md:px-3">
 
       {!walletConnected && (
         <AppCard className="p-6">
@@ -72,7 +70,7 @@ export function ReferralsClient() {
       {walletConnected && isAuthenticated && referralStatus === "required" && (
         <AppCard className="p-6">
           <div className="space-y-4">
-            <h2 className="font-mono text-lg font-semibold tracking-tight text-content-primary">
+            <h2 className="font-mono text-xl font-semibold tracking-[-0.02em] text-content-primary">
               Redeem invite
             </h2>
             <p className="text-sm text-content-secondary">
@@ -101,6 +99,7 @@ export function ReferralsClient() {
           <p className="text-sm text-content-secondary">Loading referral info...</p>
         </AppCard>
       )}
+      </div>
     </div>
   );
 }
@@ -253,7 +252,7 @@ function ClaimVanityCard({
           spellCheck={false}
           autoComplete="off"
           placeholder="Pick a code"
-          className="w-full border border-bg-border bg-bg-tertiary px-4 py-3 font-mono text-lg font-semibold text-content-primary placeholder:tracking-normal placeholder:text-content-tertiary/60 focus:border-accent-primary/60 focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
+          className="w-full border border-bg-border bg-bg-tertiary px-4 py-3 font-mono text-xl font-semibold text-content-primary placeholder:tracking-normal placeholder:text-content-tertiary/60 focus:border-accent-primary/60 focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
         />
         {referralError && (
           <p role="alert" className="font-mono text-sm text-additional-red-primary">

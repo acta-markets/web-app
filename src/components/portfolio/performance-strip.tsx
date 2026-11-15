@@ -1,5 +1,6 @@
 "use client";
 
+import { TYPE_LABEL, TYPE_NOTE, TYPE_VALUE } from "@/components/app-ui/type-styles";
 import * as React from "react";
 import { AppCard } from "@/components/app-ui/app-card";
 import { InfoTooltip } from "@/components/app-ui/info-tooltip";
@@ -8,7 +9,7 @@ import { formatUsdSmart } from "@/lib/markets";
 import { formatSignedUsd, type OpenWrittenApr, type PnlSummary, type TradingStats } from "@/lib/portfolio-pnl";
 
 const DASH = "—";
-const LABEL = "font-mono text-[12px] font-medium leading-[1.2] text-content-tertiary";
+const LABEL = `${TYPE_LABEL} text-content-tertiary`;
 
 function tone(n: number): string {
   if (n > 0) return "text-additional-green-primary";
@@ -44,14 +45,14 @@ export function Cell({
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       {/* a fixed height, so a label with an (i) and one without put their values on the same line */}
-      <div className={cn(LABEL, "flex h-4 items-center gap-1")}>
+      <div className={cn(LABEL, "flex h-5 items-center gap-1")}>
         {label}
         {hint ? <InfoTooltip label={hintLabel ?? `About ${label}`}>{hint}</InfoTooltip> : null}
       </div>
-      <div className={cn(wrap ? "break-words" : "truncate", "font-mono text-xl font-semibold leading-[1.25] tracking-[-0.02em] tabular-nums", valueClassName ?? "text-content-primary")}>
+      <div className={cn(wrap ? "break-words" : "truncate", TYPE_VALUE, "tabular-nums", valueClassName ?? "text-content-primary")}>
         {value}
       </div>
-      <div className="font-mono text-xs leading-[1.3] tracking-[-0.24px] tabular-nums text-content-secondary">{note}</div>
+      <div className={cn(TYPE_NOTE, "tabular-nums text-content-secondary")}>{note}</div>
     </div>
   );
 }
@@ -77,7 +78,7 @@ export function PerformanceStrip({
 }) {
   if (unavailable || !pnl || !apr || !trading) {
     return (
-      <AppCard className="p-5 font-mono text-sm text-content-secondary">
+      <AppCard className="p-5 font-mono text-[14px] leading-[1.45] tracking-[-0.02em] text-content-secondary">
         Performance unavailable.
       </AppCard>
     );
@@ -92,7 +93,7 @@ export function PerformanceStrip({
     <section aria-label="Performance" className="flex flex-col gap-2">
       <AppCard className="p-5">
         <div className={LABEL}>Net P&L</div>
-        <div className={cn("mt-2 font-mono text-[40px] font-medium leading-[1.1] tabular-nums max-md:text-[32px]", hasPnl ? tone(net) : "text-content-primary")}>
+        <div className={cn("mt-2 font-mono text-[40px] font-semibold leading-[1.1] tracking-[-0.02em] tabular-nums max-md:text-[32px]", hasPnl ? tone(net) : "text-content-primary")}>
           {hasPnl ? formatSignedUsd(net) : DASH}
         </div>
 
@@ -127,7 +128,7 @@ export function PerformanceStrip({
         </div>
       </AppCard>
       {incomplete ? (
-        <p className="font-mono text-xs leading-[1.4] text-content-secondary">
+        <p className="font-mono text-[14px] leading-[1.45] tracking-[-0.02em] text-content-secondary">
           Realised figures cover the history loaded so far. Open History and use Show more to include the rest.
         </p>
       ) : null}

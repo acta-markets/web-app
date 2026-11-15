@@ -340,7 +340,7 @@ function MenuSelect({
               role="listbox"
               aria-label={label}
               style={{ left: position?.left ?? 0, top: position?.top ?? 0, minWidth: position?.minWidth, maxHeight: position?.maxHeight ?? MENU_MAX_HEIGHT, visibility: position ? "visible" : "hidden" }}
-              className="fixed z-[80] overflow-y-auto border border-bg-border bg-bg-primary py-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
+              className="app-type fixed z-[80] overflow-y-auto border border-bg-border bg-bg-primary py-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
             >
               {groupRuns(options).map((run, r) => (
                 <React.Fragment key={`${run.group ?? "run"}-${r}`}>

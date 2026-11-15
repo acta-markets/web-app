@@ -81,13 +81,13 @@ export function VaultPerformanceCard({ vault, symbol, cycles, finished, nowSecs,
           <VaultPerformanceChart key={selectedSeries} points={points} kind={selectedSeries === "return" ? "percent" : "amount"} rangeStart={since} />
         )}
       </div>
-      {!loading && !(unavailable && points.length === 0) ? <p className="font-mono text-xs leading-[1.5] text-content-secondary">
+      {!loading && !(unavailable && points.length === 0) ? <p className="font-mono text-[14px] leading-[1.45] text-content-secondary">
         {selectedSeries === "return"
           ? `${finished.length} completed ${finished.length === 1 ? "cycle" : "cycles"}. Compounded return in ${symbol}${since === null ? " for the current capital generation" : " over the selected range"}.`
           : `Booked equity in ${symbol} at cycle boundaries, including deposits and withdrawals.`}
       </p> : null}
-      {unavailable && points.length >= 2 ? <p role="status" className="font-mono text-xs text-content-secondary">Couldn&apos;t refresh history. Showing the last loaded cycles.</p> : null}
-      {truncated ? <p className="font-mono text-xs text-content-secondary">Showing the latest 200 cycles.</p> : null}
+      {unavailable && points.length >= 2 ? <p role="status" className="font-mono text-[14px] leading-[1.45] text-content-secondary">Couldn&apos;t refresh history. Showing the last loaded cycles.</p> : null}
+      {truncated ? <p className="font-mono text-[14px] leading-[1.45] text-content-secondary">Showing the latest 200 cycles.</p> : null}
       <dl className="mt-auto grid grid-cols-2 gap-4 border-t border-bg-border pt-4 font-mono text-sm">
         <div>
           <dt className="text-content-secondary">Max drawdown</dt>

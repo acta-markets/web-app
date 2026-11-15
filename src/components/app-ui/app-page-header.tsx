@@ -1,3 +1,4 @@
+import { TYPE_LINK } from "@/components/app-ui/type-styles";
 import * as React from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
@@ -41,13 +42,13 @@ export function AppPageHeader({
   );
 }
 
-/** The "how it works" link a page header carries: accent text and the forward chevron. */
+/** The "how it works" link a page header carries, dressed as all clickable text: grey, regular, the forward chevron. */
 export function AppPageHeaderLink({ href, prefetch, children }: { href: string; prefetch?: boolean; children: React.ReactNode }) {
   return (
     <Link
       href={href}
       prefetch={prefetch}
-      className="inline-flex items-center gap-0.5 font-mono text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary"
+      className={cn(TYPE_LINK, "text-base leading-[1.2]")}
     >
       {children}
       <Chevron kind="go" className="h-5 w-5" />

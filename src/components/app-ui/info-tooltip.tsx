@@ -133,7 +133,7 @@ export function InfoTooltip({
               id={id}
               role="tooltip"
               style={{ left: position?.left ?? 0, top: position?.top ?? 0, visibility: position ? "visible" : "hidden" }}
-              className="pointer-events-none fixed z-[150] w-max max-w-[260px] border border-bg-border bg-bg-primary p-3 text-left font-mono text-xs font-normal normal-case leading-[1.4] tracking-normal text-content-primary shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
+              className="app-type pointer-events-none fixed z-[150] w-max max-w-[260px] border border-bg-border bg-bg-primary p-3 text-left font-mono text-[14px] font-normal normal-case leading-[1.45] tracking-[-0.02em] text-content-primary shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
             >
               {children}
             </div>,

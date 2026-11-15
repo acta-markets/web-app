@@ -52,7 +52,7 @@ export function VaultsClient({ lineup = VAULT_LINEUP }: { lineup?: readonly Line
   } else if (unknown) {
     content = (
       <AppCard className="flex flex-col items-center gap-4 px-6 py-12 text-center">
-        <p className="font-mono text-base text-content-primary">Couldn&apos;t load vaults.</p>
+        <p className="font-mono text-base tracking-[-0.02em] text-content-primary">Couldn&apos;t load vaults.</p>
         <AppButton variant="secondary" onClick={refresh}>
           Try again
         </AppButton>
@@ -91,7 +91,7 @@ export function VaultsClient({ lineup = VAULT_LINEUP }: { lineup?: readonly Line
           </h2>
 
           {error && vaults.length > 0 ? (
-            <p role="status" className="font-mono text-sm text-content-secondary">
+            <p role="status" className="font-mono text-sm tracking-[-0.02em] text-content-secondary">
               Couldn&apos;t refresh. Showing the last loaded vaults.
             </p>
           ) : null}

@@ -124,6 +124,23 @@ micro/caption   12px  tracking -0.02em
 eyebrow/label   11px  uppercase  tracking 0.12em
 ```
 
+Those are the landing page's scales. The app pages (Trade, Earn, Portfolio) share one set of
+small type, in `src/components/app-ui/type-styles.ts`; use its constants, do not restate them:
+
+```
+TYPE_LABEL   14px medium    what a figure is; table column heads
+TYPE_NOTE    14px regular   the line under a figure, small running text
+TYPE_VALUE   24px semibold  a figure
+TYPE_DENSE   12px           chart axes, a table row's second line, small badges only
+TYPE_LINK    regular, grey  clickable text; always ends in the `go` chevron
+```
+
+All text in the app carries `-0.02em` tracking: a rule in `globals.css` sets it on everything
+inside `.app-type` that does not set tracking itself. The app's root has that class, and so
+must anything rendered through a portal (modals, tooltips, menus, toasts, the wallet panel).
+Sizes come from 12/14/16/20/24 and the heading sizes: nothing under 12px, no 13px, no 18px. Labels are sentence case; capitals are for the tags drawn on a chart, at `0.08em`.
+The display face is for headings only. A main button ends in the `go` chevron too.
+
 ### Colour
 
 Use the CSS variables in `globals.css` through Tailwind utilities: `bg-bg-primary`,

@@ -1,5 +1,8 @@
 "use client";
 
+import { cn } from "@/lib/cn";
+import { TYPE_LINK } from "@/components/app-ui/type-styles";
+import { Chevron } from "@/components/app-ui/chevron";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppButton } from "@/components/app-ui/app-button";
@@ -54,7 +57,7 @@ function PageHeader() {
     <AppPageHeader
       title="Portfolio"
       subtitle="Track all your positions and earnings"
-      action={<AppPageHeaderLink href="/docs">How it works</AppPageHeaderLink>}
+      action={<AppPageHeaderLink href="/docs">How protocol works</AppPageHeaderLink>}
     />
   );
 }
@@ -198,7 +201,7 @@ export function PortfolioClient() {
         <div className={SHELL}>
         <AppCard className="mx-auto w-full max-w-md p-6">
           <h2 className="font-space text-2xl font-semibold text-content-primary">Connect wallet</h2>
-          <p className="mt-2 font-mono text-sm leading-[1.5] text-content-secondary">
+          <p className="mt-2 font-mono text-sm leading-[1.5] tracking-[-0.02em] text-content-secondary">
             Connect your wallet to see your positions, income and P&L.
           </p>
           <div className="mt-5">
@@ -218,7 +221,7 @@ export function PortfolioClient() {
       <div className={SHELL}>
 
       {failed ? (
-        <p role="alert" className="mb-6 text-center font-mono text-sm text-error">
+        <p role="alert" className="mb-6 text-center font-mono text-sm tracking-[-0.02em] text-error">
           Couldn&apos;t load your positions. The figures below may be incomplete.
         </p>
       ) : null}
@@ -246,7 +249,7 @@ export function PortfolioClient() {
           </section>
 
           <section className="mt-8 flex flex-col gap-4">
-            {buyDeposit.error ? <p role="alert" className="font-mono text-sm text-error">{buyDeposit.error}</p> : null}
+            {buyDeposit.error ? <p role="alert" className="font-mono text-sm tracking-[-0.02em] text-error">{buyDeposit.error}</p> : null}
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">Positions</h2>
               <AppSegmented
@@ -291,21 +294,22 @@ export function PortfolioClient() {
                     nowMs={nowMs}
                     grouped={false}
                     empty={
-                      <p className="border border-bg-border p-8 text-center font-mono text-sm text-content-secondary">
+                      <p className="border border-bg-border p-8 text-center font-mono text-sm tracking-[-0.02em] text-content-secondary">
                         {history.loading || firstLoad ? "Loading positions..." : history.failed ? "Positions unavailable" : "No closed positions yet."}
                       </p>
                     }
                   />
                 </div>
                 {history.nextCursor ? (
-                  <AppButton variant="ghost" disabled={history.loading} onClick={() => void history.loadMore()}>
+                  <button type="button" disabled={history.loading} onClick={() => void history.loadMore()} className={cn(TYPE_LINK, "self-start text-sm disabled:opacity-50")}>
                     {history.loading ? "Loading..." : "Show more"}
-                  </AppButton>
+                    <Chevron kind="go" className="h-4 w-4" />
+                  </button>
                 ) : null}
               </div>
             )}
             {signedOut ? (
-              <p className="font-mono text-xs text-content-secondary">
+              <p className="font-mono text-[14px] leading-[1.45] tracking-[-0.02em] text-content-secondary">
                 Reconnecting. These are your last loaded positions.
               </p>
             ) : null}

@@ -1,5 +1,6 @@
 "use client";
 
+import { TYPE_LINK } from "@/components/app-ui/type-styles";
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Wallet, Loader2, Check, Copy, Users } from "lucide-react";
@@ -135,7 +136,7 @@ function WalletSidebar() {
       <aside
         ref={panelRef}
         className={cn(
-          "fixed right-0 top-0 z-[101] h-full w-full max-w-md",
+          "app-type fixed right-0 top-0 z-[101] h-full w-full max-w-md",
           "bg-bg-primary border-l border-bg-border",
           "transform transition-transform duration-300 ease-out",
           "flex flex-col",
@@ -152,7 +153,7 @@ function WalletSidebar() {
               <Wallet className="h-5 w-5 text-accent-primary" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="font-mono text-lg font-semibold tracking-tight text-content-primary">{title}</h2>
+              <h2 className="font-mono text-xl font-semibold tracking-[-0.02em] text-content-primary">{title}</h2>
               <p className="font-mono text-xs text-content-tertiary">
                 {isConnected ? `Connected with ${selectedWallet!.name}` : "Select a wallet to continue"}
               </p>
@@ -312,7 +313,7 @@ export function ConnectedView({
           <button
             type="button"
             onClick={() => void copy()}
-            className={cn("inline-flex items-center gap-1.5 font-mono text-sm font-medium text-accent-secondary transition-colors hover:text-accent-primary", FOCUS)}
+            className={cn(TYPE_LINK, "gap-1.5 text-sm", FOCUS)}
           >
             {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
             <span aria-live="polite">{copied ? "Copied" : "Copy address"}</span>
@@ -321,7 +322,7 @@ export function ConnectedView({
             href={solscanUrl("account", account.address)}
             target="_blank"
             rel="noopener noreferrer"
-            className={cn("inline-flex items-center gap-0.5 font-mono text-sm font-medium text-accent-secondary transition-colors hover:text-accent-primary", FOCUS)}
+            className={cn(TYPE_LINK, "text-sm", FOCUS)}
           >
             View on Solscan
             <Chevron kind="go" className="h-4 w-4" />

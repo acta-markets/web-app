@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/cn";
+import { TYPE_LABEL } from "@/components/app-ui/type-styles";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
@@ -127,7 +129,7 @@ export function VaultDetailClient({ pda }: { pda: string }) {
           <header className="flex min-w-0 flex-col gap-3">
             {/* as on a card and on the landing page: the category as a small label, with the status beside it */}
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <span className="font-mono text-[12px] leading-[1.2] text-content-secondary">{meta.category}</span>
+              <span className={cn(TYPE_LABEL, "text-content-secondary")}>{meta.category}</span>
               {/* the page has room for the whole status, so it is never cut short here */}
               <VaultStatusLabel status={status} wrap />
             </div>

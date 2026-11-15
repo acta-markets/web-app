@@ -1,5 +1,6 @@
 "use client";
 
+import { TYPE_LABEL } from "@/components/app-ui/type-styles";
 import * as React from "react";
 import { cn } from "@/lib/cn";
 import { AppButtonLink } from "@/components/app-ui/app-button";
@@ -65,7 +66,7 @@ const COLUMNS: Record<PositionsVariant, Column[]> = {
   ],
 };
 
-const LABEL = "font-mono text-[12px] font-medium leading-[1.2] text-content-tertiary";
+const LABEL = `${TYPE_LABEL} text-content-tertiary`;
 const FOCUS = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary";
 const DASH = "—";
 
@@ -207,8 +208,8 @@ function Pnl({ row, className }: { row: PositionsTableRow; className?: string })
 function EmptyOpen() {
   return (
     <div className="flex flex-col items-center border border-bg-border p-8 text-center">
-      <p className="font-space text-lg font-medium text-content-primary">No open positions</p>
-      <p className="mt-2 max-w-md font-mono text-sm leading-[1.5] text-content-secondary">
+      <p className="font-space text-xl font-semibold leading-[1.2] tracking-[-0.02em] text-content-primary">No open positions</p>
+      <p className="mt-2 max-w-md font-mono text-sm leading-[1.5] tracking-[-0.02em] text-content-secondary">
         Positions you open on the trade page appear here with their live P&L.
       </p>
       <AppButtonLink href="/trade" variant="secondary" className="mt-5">
@@ -265,7 +266,7 @@ export function PositionsTable({
   const hidden = (symbol: string) => grouped && collapsed.has(symbol);
   const note =
     variant === "open" ? (
-      <p className="mt-2 font-mono text-xs leading-[1.4] text-content-secondary">
+      <p className="mt-2 font-mono text-[14px] leading-[1.45] tracking-[-0.02em] text-content-secondary">
         uPnL values each position at the current price (Now) against its strike. It leaves out time value.
       </p>
     ) : null;
@@ -285,7 +286,7 @@ export function PositionsTable({
                   aria-pressed={active}
                   onClick={() => setSort((prev) => nextSort(prev, column.sort))}
                   className={cn(
-                    "shrink-0 px-2 py-1.5 font-mono text-xs transition-colors",
+                    "shrink-0 px-2 py-1.5 font-mono text-xs tracking-[-0.02em] transition-colors",
                     FOCUS,
                     active ? "bg-accent-primary/20 text-content-primary" : "text-content-secondary hover:text-content-primary",
                   )}
@@ -296,7 +297,7 @@ export function PositionsTable({
               );
             })}
           </div>
-          <ul>
+          <ul className="text-[14px] tracking-[-0.02em]">
             {items.map((item) => {
               if (item.kind === "header") {
                 return (
@@ -320,7 +321,7 @@ export function PositionsTable({
                     <span className="flex min-w-0 items-center gap-2 text-sm">
                       <TokenLogo symbol={row.symbol} />
                       <span className="shrink-0 font-medium text-content-primary">{row.symbol}</span>
-                      <span className="truncate font-mono text-xs text-content-secondary" title={row.sentence}>
+                      <span className="truncate font-mono text-[14px] text-content-secondary" title={row.sentence}>
                         {claimOf(row)}
                       </span>
                     </span>
@@ -381,7 +382,7 @@ export function PositionsTable({
         return (
           <span className="flex min-w-0 items-center gap-1.5">
             <span aria-hidden="true" className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotTone(row))} />
-            <span className="truncate text-xs text-content-primary">{row.outcome ?? row.state}</span>
+            <span className="truncate text-content-primary">{row.outcome ?? row.state}</span>
           </span>
         );
       case "action":
@@ -394,7 +395,7 @@ export function PositionsTable({
   return (
     <div>
       <div className="border border-bg-border bg-bg-primary">
-        <table className="w-full table-fixed border-collapse text-[14px]">
+        <table className="w-full table-fixed border-collapse text-[14px] tracking-[-0.02em]">
           <colgroup>
             {columns.map((column) => (
               <col key={column.id} style={column.width ? { width: column.width } : undefined} />
@@ -460,7 +461,7 @@ export function PositionsTable({
                           <span className="min-w-0 flex-1">
                             <span className="flex min-w-0 items-baseline gap-2">
                               <span className="shrink-0 font-medium text-content-primary">{row.symbol}</span>
-                              <span className="truncate font-mono text-xs text-content-primary" title={row.sentence}>
+                              <span className="truncate font-mono text-[14px] text-content-primary" title={row.sentence}>
                                 {claimOf(row)}
                               </span>
                             </span>

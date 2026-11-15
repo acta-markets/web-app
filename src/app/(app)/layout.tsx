@@ -14,7 +14,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <WalletSidebarProvider>
         <ToastProvider>
           <RfqProvider>
-            <div className="relative flex min-h-screen flex-col bg-bg-primary text-content-primary">
+            <div className="app-type relative flex min-h-screen flex-col bg-bg-primary text-content-primary">
               <HeroBg />
               <AppNav />
               <main className="relative z-[1] flex-1">{children}</main>

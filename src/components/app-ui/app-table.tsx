@@ -24,7 +24,7 @@ export function AppTh({
   return (
     <th
       className={cn(
-        "whitespace-nowrap px-5 py-3 text-left text-sm font-medium tracking-tight text-content-secondary",
+        "whitespace-nowrap px-5 py-3 text-left text-sm font-medium tracking-[-0.02em] text-content-secondary",
         className
       )}
       {...props}

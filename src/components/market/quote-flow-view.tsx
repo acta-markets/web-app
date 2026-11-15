@@ -1,5 +1,6 @@
 "use client";
 
+import { TYPE_LABEL } from "@/components/app-ui/type-styles";
 import { Fragment } from "react";
 import { Check, Loader2, X } from "lucide-react";
 import { AppButton, AppButtonLink } from "@/components/app-ui/app-button";
@@ -243,7 +244,7 @@ export function QuoteFlowView({
             <p className="font-space text-xl font-semibold leading-[1.2] tracking-[-0.03em] text-content-primary">{order.thesis}</p>
           ) : null}
           <div>
-            <div className={cn(LABEL, "text-content-tertiary")}>{order.premiumLabel}</div>
+            <div className={cn(TYPE_LABEL, "text-content-tertiary")}>{order.premiumLabel}</div>
             {/* a bone the size of the number while it is awaited, so its arrival moves nothing */}
             <div className="mt-2 flex h-9 items-center font-mono text-[32px] font-semibold leading-none tracking-[-0.02em] tabular-nums text-content-primary">
               {order.premium ?? <span data-testid="quote-premium-pending" className={cn(BONE, "h-8 w-40")} />}

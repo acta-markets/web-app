@@ -43,7 +43,7 @@ export function AppModal({
   // modal can open on top of itself.
   return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+      className="app-type fixed inset-0 z-[90] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-label={title}
