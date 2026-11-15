@@ -57,6 +57,82 @@ function nativeLabel(o: AppInlineSelectOption) {
   return [o.label, o.meta, o.detail].filter(Boolean).join(" · ");
 }
 
+/** The height one menu row is counted at when the menu is cut into columns: an option, or a group's heading. */
+const MENU_ROW_HEIGHT = 33;
+/** The menu's own top and bottom padding. */
+const MENU_PADDING = 8;
+/** The fewest rows a column is given, however short the window. */
+const MENU_MIN_ROWS = 3;
+/** The room a column is assumed to need, to decide how many fit across the window. */
+const MENU_COLUMN_WIDTH = 190;
+
+export type MenuCell = { col: number; row: number };
+export type MenuLayout = {
+  /** where each option sits, by its index in `options` */
+  options: MenuCell[];
+  /** where each run's heading sits; null for a run without one */
+  headings: Array<MenuCell | null>;
+  columns: number;
+  rows: number;
+};
+
+/**
+ * Lays the menu out in columns, so a long list gets wider in place of scrolling. Rows fill a
+ * column from the top; a named group starts a column of its own with its heading on top, and
+ * a group too long for one column runs on into the next, under an empty heading row so its
+ * options stay level with their neighbours. `maxColumns` is how many fit across the window:
+ * when the list needs more, the columns get longer instead, and only then does the menu scroll.
+ */
+export function menuLayout(
+  runs: ReadonlyArray<{ group: string | undefined; items: ReadonlyArray<{ index: number }> }>,
+  rowsPerColumn: number,
+  maxColumns = Infinity,
+): MenuLayout {
+  const place = (perColumn: number): MenuLayout => {
+    const options: MenuCell[] = [];
+    const headings: Array<MenuCell | null> = [];
+    let col = 1;
+    let row = 1;
+    let rows = 0;
+    runs.forEach((run, r) => {
+      // a heading always tops a column
+      if (run.group && row > 1) {
+        col += 1;
+        row = 1;
+      }
+      // an ungrouped run after a grouped one would otherwise read as part of that group
+      if (!run.group && r > 0 && runs[r - 1].group && row > 1) {
+        col += 1;
+        row = 1;
+      }
+      if (run.group) {
+        headings[r] = { col, row };
+        row += 1;
+      } else {
+        headings[r] = null;
+      }
+      for (const item of run.items) {
+        if (row > perColumn) {
+          col += 1;
+          row = run.group ? 2 : 1;
+        }
+        options[item.index] = { col, row };
+        rows = Math.max(rows, row);
+        row += 1;
+      }
+    });
+    return { options, headings, columns: col, rows };
+  };
+  let perColumn = Math.max(1, Math.floor(rowsPerColumn));
+  let layout = place(perColumn);
+  // too many columns for the window: lengthen them until they fit
+  while (layout.columns > maxColumns && perColumn < 10_000) {
+    perColumn += 1;
+    layout = place(perColumn);
+  }
+  return layout;
+}
+
 /** Options in runs of the same group, in order; ungrouped options form runs of their own. */
 function groupRuns(options: ReadonlyArray<AppInlineSelectOption>) {
   const runs: Array<{ group: string | undefined; items: Array<{ option: AppInlineSelectOption; index: number }> }> = [];
@@ -83,6 +159,7 @@ export function AppInlineSelect({
   className,
   reserve,
   onPreview,
+  overflow = "scroll",
   children
 }: {
   /** accessible name of the select */
@@ -96,6 +173,12 @@ export function AppInlineSelect({
   reserve?: ReadonlyArray<{ key: string; face: React.ReactNode }>;
   /** called with the option under the pointer or the keyboard while the menu is open, and with null when it closes */
   onPreview?: (value: string | null) => void;
+  /**
+   * What a menu too long for its height does. `scroll` keeps one column and scrolls, right for
+   * a list read in order, such as prices. `columns` lays it out in columns and gets wider,
+   * right for a set to pick from at a glance, such as assets.
+   */
+  overflow?: "scroll" | "columns";
   children: React.ReactNode;
 }) {
   const menu = useMenuMode();
@@ -119,7 +202,7 @@ export function AppInlineSelect({
 
   if (menu) {
     return (
-      <MenuSelect label={label} value={value} options={options} onChange={onChange} disabled={disabled} className={className} onPreview={onPreview}>
+      <MenuSelect label={label} value={value} options={options} onChange={onChange} disabled={disabled} className={className} onPreview={onPreview} columns={overflow === "columns"}>
         {face}
       </MenuSelect>
     );
@@ -171,6 +254,7 @@ function MenuSelect({
   disabled,
   className,
   onPreview,
+  columns,
   children
 }: {
   label: string;
@@ -180,16 +264,28 @@ function MenuSelect({
   disabled?: boolean;
   className?: string;
   onPreview?: (value: string | null) => void;
+  /** lay a long menu out in columns in place of scrolling it */
+  columns: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
   const [active, setActive] = React.useState(-1);
-  const [position, setPosition] = React.useState<{ left: number; top: number; minWidth: number; maxHeight: number } | null>(null);
+  const [position, setPosition] = React.useState<{ left: number; top: number; minWidth: number; maxHeight: number; rows: number; maxColumns: number } | null>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const listRef = React.useRef<HTMLUListElement>(null);
   const id = React.useId();
   const listId = `${id}-list`;
   const selectedIndex = options.findIndex((o) => o.value === value);
+  const runs = React.useMemo(() => groupRuns(options), [options]);
+  // One column that scrolls, unless the menu is one that widens. Before the first measure
+  // the menu is hidden, so the tallest column is a safe guess.
+  const layout = React.useMemo(
+    () =>
+      columns
+        ? menuLayout(runs, position?.rows ?? Math.floor((MENU_MAX_HEIGHT - MENU_PADDING) / MENU_ROW_HEIGHT), position?.maxColumns)
+        : menuLayout(runs, Infinity),
+    [columns, runs, position?.rows, position?.maxColumns],
+  );
 
   // the next enabled option from `from` in direction `step`, wrapping; `from` itself when none is
   const step = React.useCallback(
@@ -217,8 +313,10 @@ function MenuSelect({
     if (option.value !== value) onChange(option.value);
   };
 
-  // Always below the pill, like every menu on the page: where there is little room it gets
-  // shorter and scrolls, rather than jumping above and covering what is over the sentence.
+  // Always below the pill, like every menu on the page. A long list is laid out in columns
+  // and gets wider; where there is little room under the pill its columns get shorter, so it
+  // gets wider still, rather than jumping above and covering what is over the sentence. It
+  // scrolls only when the window is too narrow for the columns that would take.
   useIsomorphicLayoutEffect(() => {
     if (!open) {
       setPosition(null);
@@ -231,8 +329,14 @@ function MenuSelect({
       const roomBelow = window.innerHeight - trigger.bottom - MENU_GAP * 2;
       const maxHeight = Math.min(MENU_MAX_HEIGHT, Math.max(MENU_MIN_HEIGHT, roomBelow));
       const width = Math.max(list.offsetWidth, trigger.width);
-      const left = Math.min(Math.max(MENU_GAP, trigger.left), window.innerWidth - width - MENU_GAP);
-      setPosition({ left, top: trigger.bottom + MENU_GAP, minWidth: trigger.width, maxHeight });
+      const left = Math.max(MENU_GAP, Math.min(trigger.left, window.innerWidth - width - MENU_GAP));
+      const rows = Math.max(MENU_MIN_ROWS, Math.floor((maxHeight - MENU_PADDING) / MENU_ROW_HEIGHT));
+      const maxColumns = Math.max(1, Math.floor((window.innerWidth - MENU_GAP * 2) / MENU_COLUMN_WIDTH));
+      setPosition((was) =>
+        was && was.left === left && was.top === trigger.bottom + MENU_GAP && was.minWidth === trigger.width && was.maxHeight === maxHeight && was.rows === rows && was.maxColumns === maxColumns
+          ? was
+          : { left, top: trigger.bottom + MENU_GAP, minWidth: trigger.width, maxHeight, rows, maxColumns },
+      );
     };
     place();
     // With too little room under the pill even for the shortest menu, bring the page up by
@@ -248,7 +352,8 @@ function MenuSelect({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open]);
+    // the column count changes the menu's width, so it is placed again when that changes
+  }, [open, layout.columns]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -285,6 +390,20 @@ function MenuSelect({
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       setActive((i) => step(i, e.key === "ArrowDown" ? 1 : -1));
+    } else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && layout.columns > 1) {
+      // across the columns: the nearest enabled option in the next column over, on or above this row
+      e.preventDefault();
+      setActive((i) => {
+        const from = layout.options[i];
+        if (!from) return i;
+        const col = from.col + (e.key === "ArrowRight" ? 1 : -1);
+        let best = -1;
+        layout.options.forEach((cell, index) => {
+          if (cell.col !== col || options[index].disabled) return;
+          if (best < 0 || Math.abs(cell.row - from.row) < Math.abs(layout.options[best].row - from.row)) best = index;
+        });
+        return best < 0 ? i : best;
+      });
     } else if (e.key === "Home" || e.key === "End") {
       e.preventDefault();
       setActive(e.key === "Home" ? step(-1, 1) : step(options.length, -1));
@@ -339,13 +458,27 @@ function MenuSelect({
               id={listId}
               role="listbox"
               aria-label={label}
-              style={{ left: position?.left ?? 0, top: position?.top ?? 0, minWidth: position?.minWidth, maxHeight: position?.maxHeight ?? MENU_MAX_HEIGHT, visibility: position ? "visible" : "hidden" }}
-              className="app-type fixed z-[80] overflow-y-auto border border-bg-border bg-bg-primary py-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
+              data-columns={layout.columns}
+              style={{
+                left: position?.left ?? 0,
+                top: position?.top ?? 0,
+                minWidth: position?.minWidth,
+                maxHeight: position?.maxHeight ?? MENU_MAX_HEIGHT,
+                visibility: position ? "visible" : "hidden",
+                display: "grid",
+                gridTemplateColumns: `repeat(${layout.columns}, auto)`,
+              }}
+              className="app-type fixed z-[80] max-w-[calc(100vw-12px)] content-start overflow-y-auto border border-bg-border bg-bg-primary py-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
             >
-              {groupRuns(options).map((run, r) => (
+              {runs.map((run, r) => (
                 <React.Fragment key={`${run.group ?? "run"}-${r}`}>
                   {run.group ? (
-                    <li role="presentation" className={cn("px-3 pb-1 font-mono text-[12px] font-medium text-content-tertiary", r === 0 ? "pt-1.5" : "pt-3")}>
+                    <li
+                      role="presentation"
+                      style={{ gridColumn: layout.headings[r]?.col, gridRow: layout.headings[r]?.row }}
+                      // a heading always tops its column, so every one sits at the same height
+                      className="flex h-[33px] items-end px-3 pb-1.5 font-mono text-[12px] font-medium text-content-tertiary"
+                    >
                       {run.group}
                     </li>
                   ) : null}
@@ -359,6 +492,7 @@ function MenuSelect({
                         aria-selected={selected}
                         aria-disabled={o.disabled || undefined}
                         data-value={o.value}
+                        style={{ gridColumn: layout.options[i]?.col, gridRow: layout.options[i]?.row }}
                         // keep focus on the pill, which owns the keyboard
                         onPointerDown={(e) => e.preventDefault()}
                         onPointerEnter={() => {

@@ -330,6 +330,8 @@ export function ThesisSentence({
             onChange={onAsset}
             disabled={disabled}
             className={PILL.violet}
+            // assets are a set to pick from at a glance: the menu widens, a column per group, and does not scroll
+            overflow="columns"
           >
             <AssetFace symbol={asset} />
           </AppInlineSelect>
