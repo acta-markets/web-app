@@ -29,7 +29,8 @@ export function AppNav() {
   return (
     <nav className="relative z-50 mx-auto flex w-full max-w-[850px] flex-wrap items-center justify-between gap-y-3 pt-10 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-4">
       <div className="h-9 w-[129px]">
-        <Link href="/earn">
+        {/* the logo goes home, and the app's home is Trade */}
+        <Link href="/trade">
           <ActaLogo className="h-9 w-[120px]" />
         </Link>
       </div>

@@ -16,6 +16,8 @@ function isAppEnabled() {
 }
 
 const BLOCKED_PAGE_PREFIXES = ["/earn", "/trade", "/trade2", "/portfolio", "/market"];
+/** Where the site root sends a person while the app is on: the app opens on Trade, not on the landing page. */
+export const APP_HOME = "/trade";
 const MARKDOWN_PATHS = new Set(["/", "/earn", "/trade"]);
 const DOCS_HOSTNAME = "docs.acta.markets";
 const DOCS_RESERVED_PATHS = [
@@ -197,6 +199,17 @@ export function middleware(req: NextRequest) {
 
       return withDiscoveryHeaders(response, pathname, true);
     }
+  }
+
+  // A person who opens the site root goes straight to Trade and skips the landing page.
+  // An agent asking for markdown has already been given the home document above, and the
+  // docs host never gets here. With the app switched off the root stays the landing page:
+  // app routes redirect to it, so sending it on to Trade would loop.
+  // 307, not 308: browsers cache a permanent redirect, and this is a choice that may change.
+  if (!docsHost && pathname === "/" && isAppEnabled()) {
+    const url = req.nextUrl.clone();
+    url.pathname = APP_HOME;
+    return withDiscoveryHeaders(NextResponse.redirect(url, 307), pathname, true);
   }
 
   return withDiscoveryHeaders(

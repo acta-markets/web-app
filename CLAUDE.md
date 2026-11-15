@@ -72,7 +72,7 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 ## Architecture
 
 **Next.js 14 App Router** with two route groups:
-- `(marketing)` - Landing page at `/`
+- `(marketing)` - Landing page at `/`. While the app is enabled the middleware sends a browser that opens `/` on to `/trade` (307), so people skip the landing page; an agent asking for markdown still gets the home document, and with the app disabled `/` is the landing page.
 - `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (Easy mode; `?mode=pro` is a placeholder), `/portfolio`, `/market/[asset]` (the previous market page, reached by direct URL)
 
 **Middleware** (`middleware.ts`) gates app routes based on `NEXT_PUBLIC_APP_ENABLED`. When disabled, app routes redirect to landing but `/api/whitelist` remains accessible.
