@@ -385,3 +385,16 @@
     animation: marquee 20s linear infinite;
   }
 }
+
+/* The strike handle: a slow ring that says "grab me" without shouting. Continuous
+   because the affordance is permanent; slow and low-contrast because it shares the
+   screen with live prices. Stilled entirely when motion is reduced. */
+@keyframes strike-ring {
+  0%, 100% { box-shadow: 0 2px 14px rgba(0,0,0,0.55), 0 0 0 0 rgba(42,162,134,0.28); }
+  50%      { box-shadow: 0 2px 14px rgba(0,0,0,0.55), 0 0 0 7px rgba(42,162,134,0); }
+}
+.strike-ring { animation: strike-ring 3.2s ease-in-out infinite; }
+.strike-ring:hover, .strike-ring:focus-visible, .strike-ring:active { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .strike-ring { animation: none; }
+}

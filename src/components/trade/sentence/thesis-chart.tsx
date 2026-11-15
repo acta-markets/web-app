@@ -1193,9 +1193,9 @@ export function ThesisChart({
             aria-valuetext={formatStrikePrice(strike)}
             tabIndex={0}
             title="Drag to change the strike"
-            className="group absolute z-[18] flex min-h-[44px] min-w-[128px] -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center gap-2 border border-accent-primary/30 bg-accent-primary/20 px-4 py-3 font-mono shadow-[0_2px_16px_rgba(0,0,0,0.7)] backdrop-blur-[4px] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary max-md:gap-1 max-md:px-3 max-md:py-2"
+            className="strike-ring group absolute z-[18] flex min-h-[44px] min-w-[128px] -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center gap-2 border border-accent-primary/30 bg-accent-primary/20 px-4 py-3 font-mono shadow-[0_2px_16px_rgba(0,0,0,0.7)] backdrop-blur-[4px] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary max-md:gap-1 max-md:px-3 max-md:py-2"
             // on a phone the history half is narrow: a compact handle, kept inside the pane's left edge
-            style={{ left: Math.max(leftSectionCenterX, 44), top: geometry.strikeY, animation: pulse ? "strike-pulse 1.4s ease-out 2" : undefined }}
+            style={{ left: Math.max(leftSectionCenterX, 44), top: geometry.strikeY }}
             onPointerDown={onDragPointerDown}
             onPointerMove={onDragPointerMove}
             onPointerUp={onDragPointerEnd}
