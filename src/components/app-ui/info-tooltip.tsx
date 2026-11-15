@@ -37,38 +37,58 @@ export function InfoTooltip({
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const tipRef = React.useRef<HTMLDivElement>(null);
   const lastPointer = React.useRef("");
+  /** when the tip last moved the page to make room for itself; that scroll must not close it */
+  const madeRoomAt = React.useRef(0);
   const id = React.useId();
 
-  // measure once the tip is in the DOM: centred above the (i), below it when there is no room, kept on screen
+  // Measure once the tip is in the DOM. It opens below the (i) and runs to the right from its
+  // left edge, never above it (STYLE.md), and is kept on screen: short of room on the right it
+  // slides left; short of room below it stays as low as it fits and steps to the right of the
+  // (i), so it does not sit on top of the thing it explains.
   useIsomorphicLayoutEffect(() => {
     if (!open) {
       setPosition(null);
       return;
     }
-    const trigger = triggerRef.current?.getBoundingClientRect();
     const tip = tipRef.current;
-    if (!trigger || !tip) return;
-    const top = trigger.top - tip.offsetHeight - GAP >= GAP ? trigger.top - tip.offsetHeight - GAP : trigger.bottom + GAP;
-    const centred = trigger.left + trigger.width / 2 - tip.offsetWidth / 2;
-    const left = Math.min(Math.max(centred, GAP), window.innerWidth - tip.offsetWidth - GAP);
+    if (!triggerRef.current || !tip) return;
+    let trigger = triggerRef.current.getBoundingClientRect();
+    // Opened by a tap or a key with no room underneath: the page moves up just enough for the
+    // tip to fit below, as a selector's menu does. A mouse is left alone, since moving the page
+    // under the pointer would close the tip it just opened.
+    const short = trigger.bottom + GAP + tip.offsetHeight + GAP - window.innerHeight;
+    if (short > 0 && lastPointer.current !== "mouse") {
+      madeRoomAt.current = performance.now();
+      window.scrollBy({ top: short, behavior: "instant" });
+      trigger = triggerRef.current.getBoundingClientRect();
+    }
+    const below = trigger.bottom + GAP;
+    const top = Math.min(below, Math.max(GAP, window.innerHeight - tip.offsetHeight - GAP));
+    const maxLeft = window.innerWidth - tip.offsetWidth - GAP;
+    const beside = trigger.right + GAP;
+    const wanted = top < below && beside <= maxLeft ? beside : trigger.left;
+    const left = Math.max(GAP, Math.min(wanted, maxLeft));
     setPosition({ left, top });
   }, [open]);
 
   React.useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
+    const onScroll = () => {
+      if (performance.now() - madeRoomAt.current > 300) close();
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
     };
     const onPointer = (e: PointerEvent) => {
       if (!triggerRef.current?.contains(e.target as Node)) close();
     };
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", close);
     window.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onPointer);
     return () => {
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", close);
       window.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointer);

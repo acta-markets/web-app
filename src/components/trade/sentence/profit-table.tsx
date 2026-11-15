@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { buildProfitLadder, type ProfitRow } from "@/lib/trade/profit-ladder";
 import type { Direction } from "@/lib/trade/thesis";
@@ -66,6 +66,12 @@ export const ProfitOutlook = memo(function ProfitOutlook({
   emptyNote: string;
 }) {
   const [open, setOpen] = useState(false);
+  // The panel opens under its link, so on a short window it can land below the fold: when it
+  // is opened by a click or a tap, the page moves just enough to show all of it.
+  const panel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) panel.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, [open]);
   const ladder = useMemo(
     () => buildProfitLadder({ direction, strike, spot, breakeven, premiumUsd, units }),
     [direction, strike, spot, breakeven, premiumUsd, units],
@@ -88,10 +94,12 @@ export const ProfitOutlook = memo(function ProfitOutlook({
             More prices
           </button>
           <div
+            ref={panel}
             data-testid="ticket-more-prices"
             className={cn(
-              // the app's floating surface, as the info tooltip and the sentence's menus
-              "absolute bottom-full left-0 z-30 mb-1 w-max min-w-[220px] border border-bg-border bg-bg-primary p-3 shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)] group-hover:block",
+              // the app's floating surface, as the info tooltip and the sentence's menus; like
+              // them it opens under its trigger, never above (STYLE.md, "Menus and hover panels open downward")
+              "absolute left-0 top-full z-30 mt-1 w-max min-w-[220px] border border-bg-border bg-bg-primary p-3 shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)] group-hover:block",
               open ? "block" : "hidden",
             )}
           >
