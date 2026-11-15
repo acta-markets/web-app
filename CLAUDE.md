@@ -98,6 +98,12 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 - `docs/vaults-integration.md` - data sources, polling budget and UI rules
 - `NEXT_PUBLIC_VAULTS_SAMPLE=1` swaps in fixture vaults from `src/lib/vaults/sample-data.json` in development (loaded on demand by `sample.ts`); production builds ignore it
 
+**Share cards**: A confirmed trade and the Portfolio's Net P&L card each have a Share button that draws a 1200x675 PNG in the browser (canvas, no server route) and offers Download, Copy image and Share on X; a touch device that can share files gets the system share sheet instead.
+- `src/lib/share/` - `card.ts` (what a card says: `tradeShareCard`, `pnlShareCard`), `render.ts` (the canvas drawing, reads the page's CSS tokens and fonts), `actions.ts` (clipboard, download, X post link, referral link)
+- `src/components/share/share-card.tsx` - `ShareButton`, `ShareCardPanel`, `ShareCardModal`
+- A card made on devnet is tagged "Devnet" on the image and in the post text; keep that, test funds must not read as real money
+- `/dev/share` shows every card
+
 **Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
 - Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)
 - Token metadata (decimals, logos)

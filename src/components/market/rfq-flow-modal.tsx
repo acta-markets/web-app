@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AppModal } from "@/components/app-ui/app-modal";
+import { ShareCardPanel } from "@/components/share/share-card";
 import { RFQ_TTL_SECONDS, useRfqContext } from "@/components/rfq/rfq-provider";
 import type { QuoteReceivedMessage } from "@/lib/rfq-client";
 import { QuoteFlowView, quoteFlowTitle, type QuoteFlowOrder, type QuoteFlowStep } from "./quote-flow-view";
@@ -10,7 +11,9 @@ import type { VersionedTransaction } from "@solana/web3.js";
 import { IS_MAINNET } from "@/lib/tokens";
 
 import { BUY_PRODUCT_NAME, isCashSettled, lowerStrike, productLabel, quoteMatchesProduct, type ProductTerms, type TakerSide } from "@/lib/spreads";
-import { formatExpiryUtc, formatPrice, formatUsdc } from "@/lib/trade/format";
+import { shareLink } from "@/lib/share/actions";
+import { tradeShareCard, type ShareCard, type TradeShareInput } from "@/lib/share/card";
+import { formatExpiryDay, formatExpiryUtc, formatPrice, formatUsdc } from "@/lib/trade/format";
 import { BUY_FUND_REMINDER, SPREAD_SETTLEMENT_NOTE, buyBreakEven, exerciseDepositText, spreadBounds, spreadBreakEven, spreadMaxGain } from "@/lib/trade/thesis";
 
 export type RfqOrderPreview = {
@@ -101,6 +104,7 @@ export function RfqFlowModal({
     cancelRfq,
     getClient,
     rfqTerms,
+    referralInfo,
   } = useRfqContext();
 
   const [quoteStep, setStep] = useState<"idle" | "requesting_quote" | "quote_received" | "failed">("idle");
@@ -110,6 +114,8 @@ export function RfqFlowModal({
   const [priceUpdate, setPriceUpdate] = useState<{ from: number; at: number } | null>(null);
   const [, tick] = useState(0);
   const [recoveredOpen, setRecoveredOpen] = useState(false);
+  /** The confirmed trade's share card, with and without amounts, while it is on screen in place of the confirmation. */
+  const [share, setShare] = useState<{ card: ShareCard; privateCard: ShareCard } | null>(null);
   const { flow, accept, accepting, abandon, canAbandon, reset, checkStatus, txSignature, restored } = useRfqOrder({
     getClient, acceptQuote, submitSignedTx, signTransaction, signTransactionBytes, rpc,
     scope: { walletAddress, backendUrl },
@@ -117,6 +123,10 @@ export function RfqFlowModal({
   const step: FlowStep = flow.type === "idle" ? quoteStep
     : flow.type === "awaiting_signature" ? "accepting_quote" : flow.type;
   const positionPda = flow.type === "confirmed" ? flow.positionPda : null;
+  // the card belongs to one confirmed trade: any other step puts it away
+  useEffect(() => {
+    if (flow.type !== "confirmed") setShare(null);
+  }, [flow.type]);
   const flowError = flow.type === "failed" ? flow.message : error;
   const isRestoredOrder = restored;
   const modalOpen = open || recoveredOpen;
@@ -240,6 +250,8 @@ export function RfqFlowModal({
   const closable = flow.type === "idle" || flow.type === "confirmed" || flow.type === "failed";
   const handleClose = () => {
     if (!closable) return;
+    // closing the share card goes back to the confirmation, which may still have a next step to read
+    if (share) return setShare(null);
     if (flow.type !== "confirmed") cancelRfq();
     reset();
     setRecoveredOpen(false);
@@ -270,6 +282,31 @@ export function RfqFlowModal({
         : null;
   const displayedAprPct = preview?.lockedAprPct ?? null;
 
+  const buyFacts = preview && isBuy ? buyQuoteFacts(preview, quoteQuantity, quoteUnitPremium) : [];
+
+  const handleShare = () => {
+    if (!preview) return;
+    const fact = (label: string) => {
+      const value = buyFacts.find(([name]) => name === label)?.[1];
+      return value && value !== PENDING ? value : null;
+    };
+    const input: TradeShareInput = {
+      asset: preview.asset,
+      thesis: preview.thesis ?? null,
+      side: isBuy ? "buy" : "sell",
+      typeLabel: isBuy ? BUY_PRODUCT_NAME[preview.terms.type] : productLabel(preview.terms.type),
+      aprPct: isBuy ? null : displayedAprPct,
+      premium: totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : null,
+      deposit: isBuy ? null : preview.quantityDisplay,
+      breakEven: fact("Break-even"),
+      maxGain: fact("Max gain"),
+      expires: preview.expiryTs != null ? formatExpiryDay(preview.expiryTs * 1000) : null,
+      devnet: !IS_MAINNET,
+      nowMs: Date.now(),
+    };
+    setShare({ card: tradeShareCard(input, { amounts: true }), privateCard: tradeShareCard(input, { amounts: false }) });
+  };
+
   const order: QuoteFlowOrder | null = preview && !isRestoredOrder ? {
     thesis: preview.thesis ?? null,
     premiumLabel: isBuy ? "You pay premium" : "You earn premium",
@@ -279,7 +316,7 @@ export function RfqFlowModal({
       [isBuy ? "Size" : "You deposit", preview.quantityDisplay],
       // the thesis already names the strike; without one the row carries it
       ...(preview.thesis ? [] : [["Strike", preview.strikeDisplay] as [string, string]]),
-      ...(isBuy ? buyQuoteFacts(preview, quoteQuantity, quoteUnitPremium) : []),
+      ...buyFacts,
       ...(!isBuy && displayedAprPct != null ? [["APR", `${displayedAprPct.toFixed(2)}%`] as [string, string]] : []),
       ...(preview.expiryTs != null ? [["Expires", formatExpiryUtc(preview.expiryTs * 1000)] as [string, string]] : []),
       ["Type", isBuy ? BUY_PRODUCT_NAME[preview.terms.type] : productLabel(preview.terms.type)],
@@ -292,11 +329,14 @@ export function RfqFlowModal({
     <AppModal
       open={modalOpen}
       onClose={handleClose}
-      title={quoteFlowTitle(step, isRestoredOrder)}
+      title={share ? "Share your trade" : quoteFlowTitle(step, isRestoredOrder)}
       showHowItWorks={false}
       dismissible={closable}
       className="max-w-lg"
     >
+      {share ? (
+        <ShareCardPanel card={share.card} privateCard={share.privateCard} url={shareLink(window.location.origin, referralInfo?.referral_code)} />
+      ) : (
       <QuoteFlowView
         step={step}
         order={order}
@@ -314,7 +354,9 @@ export function RfqFlowModal({
         onAbandon={abandon}
         onCheckStatus={checkStatus}
         onRequote={handleRequote}
+        onShare={order ? handleShare : undefined}
       />
+      )}
     </AppModal>
   );
 }

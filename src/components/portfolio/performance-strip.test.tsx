@@ -1,7 +1,14 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PerformanceStrip } from "./performance-strip";
 import type { OpenWrittenApr, PnlSummary, TradingStats } from "@/lib/portfolio-pnl";
+
+vi.mock("@/lib/share/render", () => ({
+  SHARE_CARD_SIZE: { width: 1200, height: 675 },
+  renderShareCard: async () => new Blob(["png"], { type: "image/png" }),
+}));
+URL.createObjectURL = () => "blob:card";
+URL.revokeObjectURL = () => {};
 
 const pnl: PnlSummary = { realized: -6, unrealized: 4.5, hasUnrealizedMark: true, wins: 1, losses: 2, breakEven: 0, settledCount: 3 };
 const apr: OpenWrittenApr = { aprPct: 18.4, collateralUsd: 300, writtenCount: 3 };
@@ -9,6 +16,24 @@ const trading: TradingStats = { collectedUsd: 20, paidUsd: 7, openSells: 2, open
 
 describe("PerformanceStrip", () => {
   afterEach(cleanup);
+
+  it("shares the card's figures as an image once there is a P&L to show", async () => {
+    render(<PerformanceStrip pnl={pnl} apr={apr} trading={trading} unavailable={false} referralCode="TIM" />);
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    const dialog = screen.getByRole("dialog", { name: "Share your P&L" });
+    const img = await within(dialog).findByRole("img");
+    expect(img.getAttribute("alt")).toMatch(/^Net P&L -\$1\.50\. Realised -\$6\.00, Unrealised \+\$4\.50, APR 18\.40%, Premium collected \$20\.00/);
+    const post = new URL(within(dialog).getByRole("link", { name: "Share on X" }).getAttribute("href")!);
+    expect(post.searchParams.get("url")).toBe(`${window.location.origin}/?ref=TIM`);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("offers no Share before there is a P&L figure", () => {
+    const none: PnlSummary = { realized: 0, unrealized: null, hasUnrealizedMark: false, wins: 0, losses: 0, breakEven: 0, settledCount: 0 };
+    render(<PerformanceStrip pnl={none} apr={apr} trading={trading} unavailable={false} />);
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
+  });
 
   it("leads with net P&L and shows the realised/unrealised split", () => {
     render(<PerformanceStrip pnl={pnl} apr={apr} trading={trading} unavailable={false} />);

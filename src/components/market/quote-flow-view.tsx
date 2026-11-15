@@ -4,6 +4,7 @@ import { TYPE_LABEL } from "@/components/app-ui/type-styles";
 import { Fragment } from "react";
 import { Check, Loader2, X } from "lucide-react";
 import { AppButton, AppButtonLink } from "@/components/app-ui/app-button";
+import { ShareButton } from "@/components/share/share-card";
 import { BONE } from "@/components/trade/sentence/ticket-styles";
 import { cn } from "@/lib/cn";
 
@@ -61,6 +62,8 @@ export type QuoteFlowViewProps = {
   onCheckStatus: () => void;
   /** asks for a new quote on the same terms; without it an expired or failed quote can only be closed */
   onRequote?: () => void;
+  /** opens the share card for a confirmed trade; without it the trade cannot be shared from here */
+  onShare?: () => void;
 };
 
 const LABEL = "font-mono text-[12px] font-medium leading-[1.2]";
@@ -136,10 +139,13 @@ function Stages({ step }: { step: QuoteFlowStep }) {
 function Status({
   tone,
   title,
+  action,
   children,
 }: {
   tone: "busy" | "done" | "failed" | "idle";
   title: string;
+  /** a small control at the right end of the line, e.g. Share on a confirmed trade */
+  action?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
@@ -155,8 +161,12 @@ function Status({
           <span className="h-1.5 w-1.5 bg-content-tertiary" />
         )}
       </span>
-      <div className="min-w-0">
-        <p className="font-mono text-sm font-semibold leading-[1.4] text-content-primary">{title}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-mono text-sm font-semibold leading-[1.4] text-content-primary">{title}</p>
+          {/* pulled into the line's own height: a control here must not make the block taller and move the buttons */}
+          {action ? <div className="-my-1.5 shrink-0">{action}</div> : null}
+        </div>
         {children ? <div className="mt-1 font-mono text-sm leading-[1.4] text-content-secondary">{children}</div> : null}
       </div>
     </div>
@@ -224,6 +234,7 @@ export function QuoteFlowView({
   onAbandon,
   onCheckStatus,
   onRequote,
+  onShare,
 }: QuoteFlowViewProps) {
   const expired = step === "quote_received" && secondsRemaining === 0;
   const processing = step === "accepting_quote" || step === "signing" || step === "submitting";
@@ -284,7 +295,7 @@ export function QuoteFlowView({
             This usually takes a few seconds.
           </Status>
         ) : step === "confirmed" ? (
-          <Status tone="done" title="Your trade is confirmed">
+          <Status tone="done" title="Your trade is confirmed" action={onShare ? <ShareButton onClick={onShare} /> : null}>
             {order?.nextStep ? <p>{order.nextStep}</p> : null}
             {txLink ? <p className={order?.nextStep ? "mt-1" : undefined}>{txLink}</p> : null}
           </Status>

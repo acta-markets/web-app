@@ -4,9 +4,13 @@ import { TYPE_LABEL, TYPE_NOTE, TYPE_VALUE } from "@/components/app-ui/type-styl
 import * as React from "react";
 import { AppCard } from "@/components/app-ui/app-card";
 import { InfoTooltip } from "@/components/app-ui/info-tooltip";
+import { ShareButton, ShareCardModal } from "@/components/share/share-card";
 import { cn } from "@/lib/cn";
 import { formatUsdSmart } from "@/lib/markets";
+import { IS_MAINNET } from "@/lib/network";
 import { formatSignedUsd, type OpenWrittenApr, type PnlSummary, type TradingStats } from "@/lib/portfolio-pnl";
+import { shareLink } from "@/lib/share/actions";
+import { hasShareablePnl, pnlShareCard, type ShareCard } from "@/lib/share/card";
 
 const DASH = "—";
 const LABEL = `${TYPE_LABEL} text-content-tertiary`;
@@ -61,6 +65,8 @@ export function Cell({
  * "How am I doing": net P&L as the one headline, then the four figures it is made of or sits
  * beside, each a labelled cell: realised, unrealised, the APR on what was sold, and premium in
  * and out. A figure that cannot be computed is an em dash, never a zero.
+ *
+ * Once there is a P&L figure the card can be shared: Share draws the same numbers as an image.
  */
 export function PerformanceStrip({
   pnl,
@@ -68,6 +74,7 @@ export function PerformanceStrip({
   trading,
   unavailable,
   incomplete,
+  referralCode,
 }: {
   pnl: PnlSummary | null;
   apr: OpenWrittenApr | null;
@@ -75,7 +82,12 @@ export function PerformanceStrip({
   unavailable: boolean;
   /** More settled history exists than has been loaded, so realised figures are partial. */
   incomplete?: boolean;
+  /** The user's referral code, carried by the link in a shared card's post. */
+  referralCode?: string | null;
 }) {
+  /** The card as it stood when Share was pressed: the image does not redraw while the page ticks. */
+  const [share, setShare] = React.useState<{ card: ShareCard; url: string } | null>(null);
+
   if (unavailable || !pnl || !apr || !trading) {
     return (
       <AppCard className="p-5 font-mono text-[14px] leading-[1.45] tracking-[-0.02em] text-content-secondary">
@@ -85,14 +97,27 @@ export function PerformanceStrip({
   }
 
   const net = pnl.realized + (pnl.unrealized ?? 0);
-  const hasPnl = pnl.settledCount > 0 || pnl.hasUnrealizedMark;
+  const hasPnl = hasShareablePnl(pnl);
   const hasRealised = pnl.settledCount > 0;
   const openCount = trading.openSells + trading.openBuys;
 
   return (
     <section aria-label="Performance" className="flex flex-col gap-2">
       <AppCard className="p-5">
-        <div className={LABEL}>Net P&L</div>
+        {/* the row is as tall as the button with or without it, so the figure does not move when it appears */}
+        <div className="flex min-h-8 items-center justify-between gap-4">
+          <div className={LABEL}>Net P&L</div>
+          {hasPnl ? (
+            <ShareButton
+              onClick={() =>
+                setShare({
+                  card: pnlShareCard({ pnl, apr, trading, devnet: !IS_MAINNET, nowMs: Date.now() }),
+                  url: shareLink(window.location.origin, referralCode),
+                })
+              }
+            />
+          ) : null}
+        </div>
         <div className={cn("mt-2 font-mono text-[40px] font-semibold leading-[1.1] tracking-[-0.02em] tabular-nums max-md:text-[32px]", hasPnl ? tone(net) : "text-content-primary")}>
           {hasPnl ? formatSignedUsd(net) : DASH}
         </div>
@@ -133,6 +158,7 @@ export function PerformanceStrip({
           Realised figures cover the history loaded so far. Open History and use Show more to include the rest.
         </p>
       ) : null}
+      {share ? <ShareCardModal open onClose={() => setShare(null)} title="Share your P&L" card={share.card} url={share.url} /> : null}
     </section>
   );
 }

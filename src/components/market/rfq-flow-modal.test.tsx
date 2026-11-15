@@ -22,6 +22,12 @@ vi.mock("@/lib/sponsored-tx", () => ({
   // The wallet here is a stub with no real signatures, so the graft is a pass-through.
 }));
 vi.mock("@solana/web3.js", () => ({ VersionedTransaction: { deserialize: vi.fn(() => ({})) } }));
+vi.mock("@/lib/share/render", () => ({
+  SHARE_CARD_SIZE: { width: 1200, height: 675 },
+  renderShareCard: async () => new Blob(["png"], { type: "image/png" }),
+}));
+URL.createObjectURL = () => "blob:card";
+URL.revokeObjectURL = () => {};
 beforeEach(() => localStorage.clear());
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
@@ -329,6 +335,27 @@ describe("Buy", () => {
       expect(screen.getByText("To exercise, fund it in Portfolio before expiry.")).toBeTruthy();
       expect(screen.getByRole("link", { name: "Fund in Portfolio" }).getAttribute("href")).toBe("/portfolio");
       expect(screen.queryByRole("link", { name: "View in Portfolio" })).toBeNull();
+    });
+
+    it("shares a confirmed trade as a card, and closing the card returns to the confirmation", async () => {
+      const h = setup({ ...buyPreview, thesis: "SOL will be above $150 on Nov 7" }, buyQuote);
+      await h.send();
+      expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
+      h.emit("orderConfirmed", "order", "position", 3);
+      fireEvent.click(screen.getByRole("button", { name: "Share" }));
+      expect(screen.getByRole("dialog", { name: "Share your trade" })).toBeTruthy();
+      const img = await screen.findByRole("img");
+      expect(img.getAttribute("alt")).toMatch(/^I believe SOL will be above \$150 on Nov 7\. Break-even \$155/);
+      expect(img.getAttribute("alt")).toContain("Premium paid 10.00 USDC");
+      // the card without amounts keeps the view and the break-even price, and drops what was paid
+      fireEvent.click(screen.getByRole("tab", { name: "Without amounts" }));
+      await waitFor(() => expect(screen.getByRole("img").getAttribute("alt")).not.toContain("10.00 USDC"));
+      expect(screen.getByRole("img").getAttribute("alt")).toContain("Break-even $155");
+      // Close puts the card away; the confirmation and its next step are still there
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+      expect(h.props.onClose).not.toHaveBeenCalled();
+      expect(screen.getByText("Your trade is confirmed")).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Fund in Portfolio" })).toBeTruthy();
     });
 
     it("mirrors break-even and the exercise deposit for a put", async () => {
