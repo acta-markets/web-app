@@ -15,7 +15,7 @@
  * All Easy copy lives here.
  */
 import { formatStrikePrice } from "@/lib/markets";
-import { isCashSettled, type ProductTerms, type TakerSide } from "@/lib/spreads";
+import { isCashSettled, wireAmount, type ProductTerms, type TakerSide } from "@/lib/spreads";
 import { formatAmount, formatAmountFixed, formatExpiryDay, formatPrice, formatUsdc } from "@/lib/trade/format";
 
 export type Direction = "above" | "below";
@@ -376,13 +376,14 @@ export function zoneLabels({
   };
 }
 
-export const BUY_DEPOSIT_REMINDER = "To exercise, deposit from Portfolio before expiry.";
+/** A bought option is funded, never "deposited": see "One word per action" in STYLE.md. */
+export const BUY_FUND_REMINDER = "To exercise, fund it in Portfolio before expiry.";
 
 export function buyBreakEven(isPut: boolean, strike: number, grossPerUnit: number): number {
   return isPut ? strike - grossPerUnit : strike + grossPerUnit;
 }
 
-/** What a deposit must cover to exercise: USDC for a call, the asset for a put. */
+/** What funding the exercise takes: USDC for a call, the asset for a put. */
 export function exerciseDepositText(isPut: boolean, quantity: number, strike: number, asset: string, assetDecimals = 4): string {
   return isPut ? `${formatAmount(quantity, assetDecimals)} ${asset}` : formatUsdc(quantity * strike);
 }
@@ -405,8 +406,8 @@ export function buyOutcomeCopy({
   return {
     right: {
       when: `If ${asset} ends ${above ? "above" : "below"} ${price}`,
-      result: `If you deposited before expiry, you ${above ? "buy" : "sell"} ${sizeText} at ${price}.`,
-      note: "With no deposit it is not exercised and you lose its value.",
+      result: `If you funded it before expiry, you ${above ? "buy" : "sell"} ${sizeText} at ${price}.`,
+      note: "Unfunded, it is not exercised and you lose its value.",
     },
     wrong: {
       when: `If ${asset} ends at or ${above ? "below" : "above"} ${price}`,
@@ -437,10 +438,10 @@ export function spreadLegs(strikes1e9: ReadonlyArray<number>, strike1e9: number,
 }
 
 export function buySpreadTerms(isPut: boolean, strike1e9: number, leg1e9: number): ProductTerms {
-  if (!isPut) return { type: "call_spread", lower_strike: strike1e9, upper_strike: leg1e9 };
+  if (!isPut) return { type: "call_spread", lower_strike: wireAmount(strike1e9), upper_strike: wireAmount(leg1e9) };
   return leg1e9 === 0
-    ? { type: "cash_put", strike: strike1e9 }
-    : { type: "put_spread", lower_strike: leg1e9, upper_strike: strike1e9 };
+    ? { type: "cash_put", strike: wireAmount(strike1e9) }
+    : { type: "put_spread", lower_strike: wireAmount(leg1e9), upper_strike: wireAmount(strike1e9) };
 }
 
 export function spreadLegLabel(isPut: boolean, leg1e9: number): string {
@@ -460,11 +461,11 @@ export function spreadBreakEven(isPut: boolean, strike: number, grossPerUnit: nu
 export function spreadBounds(terms: ProductTerms): { lower: number; upper: number } | null {
   if (!isCashSettled(terms.type)) return null;
   return terms.type === "cash_put"
-    ? { lower: 0, upper: terms.strike }
-    : { lower: (terms as { lower_strike: number }).lower_strike, upper: (terms as { upper_strike: number }).upper_strike };
+    ? { lower: 0, upper: Number(terms.strike) }
+    : { lower: Number((terms as { lower_strike: string }).lower_strike), upper: Number((terms as { upper_strike: string }).upper_strike) };
 }
 
-export const SPREAD_SETTLEMENT_NOTE = "Settles in USDC at expiry. No deposit.";
+export const SPREAD_SETTLEMENT_NOTE = "Settles in USDC at expiry. Nothing to fund.";
 
 /** Outcome cards for a bought spread: the payoff is the only thing that can come back. */
 export function spreadOutcomeCopy({

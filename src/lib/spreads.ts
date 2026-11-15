@@ -14,19 +14,32 @@ export const isCashSettledTerms = (terms: ProductTerms): terms is Extract<Produc
 export { executionTerms } from "@acta-markets/ts-sdk/ws";
 export const lowerStrike = (terms: ProductTerms) => isSpreadTerms(terms) ? terms.lower_strike : terms.strike;
 
+/**
+ * Whether a value is an amount as the wire carries it: a canonical decimal string ("0", or no
+ * leading zero). Strikes, prices and quantities travel this way, so two equal amounts are
+ * equal strings.
+ */
+export const isWireAmount = (value: unknown): value is string => typeof value === "string" && /^(0|[1-9]\d*)$/.test(value);
+
+/** A whole number as a wire amount; throws on anything the wire cannot carry exactly. */
+export function wireAmount(value: number | bigint): string {
+  if (typeof value === "number" ? !Number.isSafeInteger(value) || value < 0 : value < 0n) throw new Error("Amount is not a whole, non-negative number");
+  return value.toString();
+}
+
 /** A 1e9-scaled strike as a plain number: 180_000_000_000 → "180". */
-export const strikeText = (strike: number) => (strike / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 });
+export const strikeText = (strike: number | string) => (Number(strike) / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 });
 
 /** "SOL 180/200 call": the name a spread goes by in the UI. The symbol is left out when unknown. */
-export function spreadName(symbol: string | null, type: SpreadProduct, lower: number, upper: number): string {
+export function spreadName(symbol: string | null, type: SpreadProduct, lower: number | string, upper: number | string): string {
   return `${symbol ? `${symbol} ` : ""}${strikeText(lower)}/${strikeText(upper)} ${type === "call_spread" ? "call" : "put"}`;
 }
 
 export function quoteMatchesProduct(quote: { terms: ProductTerms; side: string }, request: ProductTerms, side: TakerSide = "sell"): boolean {
   if (quote.side !== side || !quote.terms || quote.terms.type !== request.type) return false;
-  if (!Number.isSafeInteger(lowerStrike(quote.terms)) || lowerStrike(quote.terms) !== lowerStrike(request)) return false;
+  if (!isWireAmount(lowerStrike(quote.terms)) || lowerStrike(quote.terms) !== lowerStrike(request)) return false;
   if (isSpreadTerms(request)) {
-    return isSpreadTerms(quote.terms) && !("strike" in quote.terms) && Number.isSafeInteger(quote.terms.upper_strike)
+    return isSpreadTerms(quote.terms) && !("strike" in quote.terms) && isWireAmount(quote.terms.upper_strike)
       && quote.terms.upper_strike === request.upper_strike;
   }
   return !isSpreadTerms(quote.terms) && !("lower_strike" in quote.terms) && !("upper_strike" in quote.terms);
@@ -62,8 +75,8 @@ export function requireStrikeTick(ticks: ReadonlyMap<string, bigint>, underlying
   return tick;
 }
 
-export function spreadTerms(product: SpreadProduct, lower: number, upper: number, quantity: bigint, underlyingDecimals: number, quoteDecimals: number, strikeTick: bigint): SpreadTerms {
-  if (![lower, upper].every(Number.isSafeInteger)) throw new Error("Invalid strike precision");
+export function spreadTerms(product: SpreadProduct, lower: string, upper: string, quantity: bigint, underlyingDecimals: number, quoteDecimals: number, strikeTick: bigint): SpreadTerms {
+  if (![lower, upper].every(isWireAmount)) throw new Error("Invalid strike precision");
   validateSpreadStrikes(product === "call_spread" ? SpreadType.CallSpread : SpreadType.PutSpread, BigInt(lower), BigInt(upper));
   if (strikeTick <= 0n || BigInt(lower) % strikeTick !== 0n || BigInt(upper) % strikeTick !== 0n) throw new Error("Both strikes must be on the asset's strike tick");
   if (quantity <= 0n) throw new Error("Enter a positive quantity");
@@ -87,8 +100,8 @@ export function spreadCollateralCheck(terms: SpreadTerms, balance: bigint | null
   return { required, sufficient: balance !== null && balance >= required };
 }
 
-export function validSpreadPremium(terms: SpreadTerms, price: number): boolean {
-  if (!Number.isSafeInteger(price)) return false;
+export function validSpreadPremium(terms: SpreadTerms, price: string): boolean {
+  if (!isWireAmount(price)) return false;
   try {
     spreadPremium(terms, BigInt(price), 0, 0);
     return true;

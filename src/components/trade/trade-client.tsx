@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { INLINE_PILL, INLINE_PILL_FACE, INLINE_PILL_GLYPH } from "@/components/app-ui/app-inline-select";
 import { AppModal } from "@/components/app-ui/app-modal";
+import { AppPageHeader } from "@/components/app-ui/app-page-header";
 import { Chevron } from "@/components/app-ui/chevron";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { cn } from "@/lib/cn";
@@ -20,6 +21,13 @@ const MODES: Array<{ value: Mode; word: string }> = [
   { value: "yield", word: "yield" },
 ];
 
+/** The line under the title: what the switch changes, in one breath. Both read the same way,
+    the mode's action and then the one condition they share. */
+const MODE_LINE: Record<Mode, string> = {
+  profit: "Profit if the price ends where you say",
+  yield: "Earn yield if the price ends where you say",
+};
+
 /**
  * The mode, set inside the page title. It has two values, so it is a switch, not a menu: one
  * click flips it. It keeps the width of its wider word, so flipping never reflows the title.
@@ -34,6 +42,9 @@ function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => 
       onClick={() => onChange(other.value)}
       className={cn(
         INLINE_PILL,
+        // The pill's padding and border must not make the title's line taller than a plain
+        // title's: pulled in by a hair, the words sit exactly where Earn's and Portfolio's do.
+        "-my-[0.07em]",
         "cursor-pointer border-accent-primary/60 bg-accent-primary/25 text-content-primary hover:border-accent-primary hover:bg-accent-primary/40",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
       )}
@@ -60,13 +71,17 @@ const HOW_IT_WORKS: Record<
   Mode,
   {
     title: string;
+    /** the whole thing in a breath, in the chart's own words, before any option vocabulary */
+    short: string;
     points: Array<{ title: string; text: string }>;
     terms: string;
     guide: { label: string; href: string };
   }
 > = {
   profit: {
-    title: "How profit works",
+    title: "How it works",
+    short:
+      "You bet on where the price ends. If you are right, you land in the profit zone, and the further the price ends past yours, the more you make. If you are wrong, you lose only the premium, a fixed fee paid up front.",
     points: [
       {
         title: "You buy an option",
@@ -78,14 +93,16 @@ const HOW_IT_WORKS: Record<
       },
       {
         title: "You use it, or let it go",
-        text: "If the price ends past yours, deposit before the date and trade at your price. If not, it expires and the premium is gone.",
+        text: "If the price ends past yours, fund it before the date and trade at your price. If not, it expires and the premium is gone.",
       },
     ],
     terms: "Above buys a call, the right to buy. Below buys a put, the right to sell.",
     guide: { label: "Read the guide to buying options", href: "/docs/guide/buying-options" },
   },
   yield: {
-    title: "How yield works",
+    title: "How it works",
+    short:
+      "You get paid for your view on where the price ends. If you are right, you keep the premium and your deposit comes back. If you are wrong, you still keep the premium, and your deposit buys or sells the asset at your price.",
     points: [
       {
         title: "You sell an option",
@@ -132,11 +149,21 @@ export function TradeClient() {
   return (
     <div>
       {/* the page's title, set like Earn's, with the mode as the one word in it you can change */}
-      <div className="px-6 pb-10 pt-16 max-md:px-3 max-md:pb-6 max-md:pt-8">
-        <h1 className="w-full text-center font-space text-[64px] font-semibold leading-[1.2] tracking-[-1.28px] text-content-primary max-md:text-[40px]">
-          Get <ModeToggle mode={mode} onChange={setMode} /> <span className="whitespace-nowrap">on your thesis</span>
-        </h1>
-      </div>
+      <AppPageHeader
+        title={<>Get <ModeToggle mode={mode} onChange={setMode} /> <span className="whitespace-nowrap">on your thesis</span></>}
+        // Both lines sit in one cell and only the mode's own shows, so the block is always as
+        // tall as the longer one: on a narrow phone one wraps and the other does not, and
+        // flipping the mode must not move the page.
+        subtitle={
+          <span className="grid">
+            {MODES.map((m) => (
+              <span key={m.value} aria-hidden={m.value !== mode} className={cn("col-start-1 row-start-1", m.value !== mode && "invisible")}>
+                {MODE_LINE[m.value]}
+              </span>
+            ))}
+          </span>
+        }
+      />
 
       <SentenceTrade
         mode={mode}
@@ -164,6 +191,8 @@ export function TradeClient() {
         className="max-w-md"
       >
         {/* a few short points, each a plain heading and one or two sentences: no boxes, no steps */}
+        <p className="font-mono text-base leading-[1.45] text-content-primary">{HOW_IT_WORKS[mode].short}</p>
+
         <dl className="space-y-5">
           {HOW_IT_WORKS[mode].points.map((point) => (
             <div key={point.title}>

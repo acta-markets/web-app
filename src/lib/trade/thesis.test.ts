@@ -223,15 +223,15 @@ describe("bought spreads", () => {
   });
 
   it("builds the wire terms of each product", () => {
-    expect(buySpreadTerms(false, 100e9, 110e9)).toEqual({ type: "call_spread", lower_strike: 100e9, upper_strike: 110e9 });
-    expect(buySpreadTerms(true, 100e9, 90e9)).toEqual({ type: "put_spread", lower_strike: 90e9, upper_strike: 100e9 });
-    expect(buySpreadTerms(true, 100e9, 0)).toEqual({ type: "cash_put", strike: 100e9 });
+    expect(buySpreadTerms(false, 100e9, 110e9)).toEqual({ type: "call_spread", lower_strike: "100000000000", upper_strike: "110000000000" });
+    expect(buySpreadTerms(true, 100e9, 90e9)).toEqual({ type: "put_spread", lower_strike: "90000000000", upper_strike: "100000000000" });
+    expect(buySpreadTerms(true, 100e9, 0)).toEqual({ type: "cash_put", strike: "100000000000" });
   });
 
   it("reads the legs back from the terms and refuses physical terms", () => {
-    expect(spreadBounds({ type: "cash_put", strike: 100e9 })).toEqual({ lower: 0, upper: 100e9 });
-    expect(spreadBounds({ type: "put_spread", lower_strike: 90e9, upper_strike: 100e9 })).toEqual({ lower: 90e9, upper: 100e9 });
-    expect(spreadBounds({ type: "covered_call", strike: 100e9 })).toBeNull();
+    expect(spreadBounds({ type: "cash_put", strike: "100000000000" })).toEqual({ lower: 0, upper: 100e9 });
+    expect(spreadBounds({ type: "put_spread", lower_strike: "90000000000", upper_strike: "100000000000" })).toEqual({ lower: 90e9, upper: 100e9 });
+    expect(spreadBounds({ type: "covered_call", strike: "100000000000" })).toBeNull();
   });
 
   it("caps the gain at the width and breaks even past the near strike by the premium", () => {
@@ -253,7 +253,7 @@ describe("bought spreads", () => {
     expect(spreadLegLabel(true, 0)).toBe("To $0 (cash put)");
     const copy = spreadOutcomeCopy({ asset: "SOL", direction: "above", strike1e9: 100e9, leg1e9: 110e9, maxPayout: "$20" });
     expect(copy.right.result).toContain("up to $20");
-    expect(copy.right.note).toContain("No deposit");
+    expect(copy.right.note).toContain("Nothing to fund");
     expect(copy.wrong.note).toBe("You lose the premium.");
   });
 });

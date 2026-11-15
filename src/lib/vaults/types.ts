@@ -25,12 +25,12 @@ export type VaultPremiumFlow = { received: string; paid: string | null };
 export type VaultPremium = { quote_mint: string; cycle: VaultPremiumFlow; generation: VaultPremiumFlow };
 
 /** Net-of-fee booked share price return between two checkpoint times. */
-export type VaultWindowReturn = { return_pct: number; window_start_at: string; window_end_at: string };
+export type VaultWindowReturn = { return_pct: number; window_start_at: number; window_end_at: number };
 
 /** Metrics of `capital_generation` as of `computed_at`; all null unless `covered`. */
 export type VaultPerformance = {
-  capital_generation: string;
-  computed_at: string;
+  capital_generation: number;
+  computed_at: number;
   covered: boolean;
   returns: {
     "7d": VaultWindowReturn | null;
@@ -47,12 +47,12 @@ export type VaultPerformance = {
 };
 
 export type Vault = Omit<Sdk.Vault, "deposit_window" | "tvl_usd" | "stats" | "metadata"> & {
-  deposit_window_set_at: string | null;
-  created_at: string | null;
-  generation_started_at: string | null;
+  deposit_window_set_at: number | null;
+  created_at: number | null;
+  generation_started_at: number | null;
   /** Indicative: booked equity at the main mint's USD price, 1e9 scale, as of `price_published_at`. */
   tvl_usd_1e9: string | null;
-  price_published_at: string | null;
+  price_published_at: number | null;
   premium: VaultPremium[] | null;
   fees: Sdk.VaultFees | null;
   depositors_in_generation: number | null;
@@ -64,7 +64,7 @@ export type Vault = Omit<Sdk.Vault, "deposit_window" | "tvl_usd" | "stats" | "me
 export type VaultPosition = Omit<Sdk.VaultPosition, "funded_amount" | "close" | "transaction"> & {
   funded_amount: string | null;
   is_otm: boolean | null;
-  settled_at: string | null;
+  settled_at: number | null;
   transaction_signature: string | null;
 };
 
@@ -78,7 +78,7 @@ export type VaultExposurePosition = Omit<
   underlying_decimals: number | null;
   quote_decimals: number | null;
   spot: string | null;
-  spot_published_at: string | null;
+  spot_published_at: number | null;
   distance_pct: number | null;
   itm: boolean | null;
   intrinsic: string | null;
@@ -90,15 +90,15 @@ export type VaultExposureTotal = { quote_mint: string; notional_at_strike: strin
 export type VaultExposure = {
   vault_pda: string;
   /** Unix seconds the positions were read; never older than 15 s. */
-  as_of: string;
+  as_of: number;
   positions: VaultExposurePosition[];
   totals: VaultExposureTotal[];
 };
 
 export type VaultCycle = Omit<Sdk.VaultCycle, "capital_generation" | "state"> & {
   /** Null for cycles recorded before generations were tracked. */
-  capital_generation: string | null;
-  finished_at: string | null;
+  capital_generation: number | null;
+  finished_at: number | null;
   share_price_end: string | null;
   equity_end: string | null;
   return_pct: number | null;
@@ -106,7 +106,7 @@ export type VaultCycle = Omit<Sdk.VaultCycle, "capital_generation" | "state"> & 
 
 export type VaultCyclesPage = { cycles: VaultCycle[]; next_cursor: string | null };
 
-type Request<T> = T & { created_at: string; transaction_signature: string | null };
+type Request<T> = T & { created_at: number; transaction_signature: string | null };
 
 export type VaultDepositRequest = Request<{ wallet: string; amount: string }>;
 export type VaultWithdrawRequest = Request<{ wallet: string; shares: string }>;

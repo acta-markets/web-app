@@ -215,6 +215,42 @@ function DirectionToggle({
   );
 }
 
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
+
+/**
+ * Keeps the belief on one line wherever the layout gives it one (md and up). The type already
+ * scales with the card's width; this is the backstop for words wider than that allows for (a
+ * long ticker, a long price, a fifth date): the type steps down just enough to fit, through
+ * `--fit`, instead of the last phrase dropping to a second line and pushing the chart down.
+ * On a phone the sentence wraps by design and is left alone.
+ */
+function useFitOneLine(line: React.RefObject<HTMLElement>, contentKey: string) {
+  useIsomorphicLayoutEffect(() => {
+    const el = line.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.removeProperty("--fit");
+      if (!window.matchMedia?.("(min-width: 768px)").matches) return;
+      const box = el.clientWidth;
+      const wrap = el.style.whiteSpace;
+      el.style.whiteSpace = "nowrap";
+      const natural = el.scrollWidth;
+      el.style.whiteSpace = wrap;
+      if (box > 0 && natural > box) el.style.setProperty("--fit", (Math.floor((box / natural) * 1000) / 1000).toString());
+    };
+    fit();
+    // the card's width changes with the window, and the words' width once the web font is in
+    const observer = typeof ResizeObserver === "undefined" || !el.parentElement ? null : new ResizeObserver(fit);
+    if (observer && el.parentElement) observer.observe(el.parentElement);
+    let live = true;
+    void document.fonts?.ready.then(() => live && fit());
+    return () => {
+      live = false;
+      observer?.disconnect();
+    };
+  }, [line, contentKey]);
+}
+
 function StrikeFace({ label }: { label: string | null }) {
   return label ? <span>{label}</span> : <Pending />;
 }
@@ -265,11 +301,26 @@ export function ThesisSentence({
   // only between the nowrap phrases. The direction and strike pills hold their widest
   // value's width so picking them never reflows the sentence; the asset pill hugs its
   // ticker, so switching assets lets the sentence settle around it.
+  const line = React.useRef<HTMLParagraphElement>(null);
+  // everything that sets the line's width: the ticker, the widest price it reserves, the dates
+  const contentKey = [
+    asset,
+    strikeLabel ?? "",
+    reserve.strikes.map((s) => s.label).join(","),
+    options.expiries.map((o) => o.label).join(","),
+    options.unavailable?.join(",") ?? "",
+  ].join("|");
+  useFitOneLine(line, compact ? contentKey : "");
   return (
-    <div className="flex flex-col gap-2 font-space font-semibold tracking-[-0.03em] text-content-primary max-md:gap-1">
-      <p className={compact
-        ? "text-[clamp(17px,1.72vw,21.5px)] leading-[1.5] max-md:text-[17px] max-md:leading-[1.9]"
-        : "text-[clamp(26px,2.85vw,40px)] leading-[1.45]"}>
+    // a size container, so the belief's type follows the card's width, not the window's: the
+    // card is narrower on a mid-size window than on a small one, and window-sized type broke there
+    <div className="flex flex-col gap-2 font-space font-semibold tracking-[-0.03em] text-content-primary [container-type:inline-size] max-md:gap-1">
+      <p
+        ref={compact ? line : undefined}
+        className={compact
+          ? "text-[length:calc(clamp(17px,2.62cqw,21.5px)*var(--fit,1))] leading-[1.5] max-md:text-[17px] max-md:leading-[1.9]"
+          : "text-[clamp(26px,2.85vw,40px)] leading-[1.45]"}
+      >
         <span className="whitespace-nowrap">
           {SENTENCE.lead}{" "}
           <AppInlineSelect

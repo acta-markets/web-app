@@ -197,7 +197,7 @@ async function loadStrikes(
         type: "GetTokenMarketsInfo",
         data: { request_id: randomUUID(), limit: 200, cursor: { type: "start" }, underlying_mint: address(mint) },
       });
-      referenceByMint.set(mint, info.reference_price);
+      referenceByMint.set(mint, Number(info.reference_price));
       for (const mkt of info.markets) {
         for (const ind of mkt.indicatives) {
           const key = `${mkt.market_pda}:${ind.position_type}`;
@@ -261,12 +261,12 @@ function redeemInvite(client: ActaWsClient, code: string): Promise<{ ok: boolean
   });
 }
 
-function isPhysical(terms: OptionTerms): terms is { type: "covered_call" | "cash_secured_put"; strike: number } {
+function isPhysical(terms: OptionTerms): terms is { type: "covered_call" | "cash_secured_put"; strike: string } {
   return terms.type === "covered_call" || terms.type === "cash_secured_put";
 }
 
 /** The single `strike` on physical and cash-put terms; undefined for spreads. */
-function strikeOf(terms: OptionTerms): number | undefined {
+function strikeOf(terms: OptionTerms): string | undefined {
   return "strike" in terms ? terms.strike : undefined;
 }
 
@@ -332,7 +332,7 @@ class CaseRunner {
         market_pda: address(descriptor.market_descriptor.market_pda),
         terms,
         side,
-        quantity: spec.quantity,
+        quantity: String(spec.quantity),
         timeout_seconds: timeoutSeconds,
         request_id: requestId,
       }).catch((e) => {
@@ -355,7 +355,7 @@ class CaseRunner {
       market_descriptor: descriptor.market_descriptor,
       terms: { type: terms.type, strike: terms.strike },
       side,
-      quantity: spec.quantity,
+      quantity: String(spec.quantity),
       order_options: [{ type: terms.type, strike: terms.strike }],
     };
 
@@ -659,16 +659,16 @@ async function main() {
       const strikes = strikesByMarketType.get(`${d.market_descriptor.market_pda}:covered_call`) ?? [];
       const strike = pickStrike(strikes, reference);
       if (strike) {
-        cases.push({ name: `sell_call  ${sym}`, descriptor: d, terms: { type: "covered_call", strike }, side: "sell", quantity: qty });
-        cases.push({ name: `buy_call   ${sym}`, descriptor: d, terms: { type: "covered_call", strike }, side: "buy", quantity: qty });
+        cases.push({ name: `sell_call  ${sym}`, descriptor: d, terms: { type: "covered_call", strike: String(strike) }, side: "sell", quantity: qty });
+        cases.push({ name: `buy_call   ${sym}`, descriptor: d, terms: { type: "covered_call", strike: String(strike) }, side: "buy", quantity: qty });
       }
     }
     if (d.products.includes("cash_secured_put")) {
       const strikes = strikesByMarketType.get(`${d.market_descriptor.market_pda}:cash_secured_put`) ?? [];
       const strike = pickStrike(strikes, reference);
       if (strike) {
-        cases.push({ name: `sell_put   ${sym}`, descriptor: d, terms: { type: "cash_secured_put", strike }, side: "sell", quantity: qty });
-        cases.push({ name: `buy_put    ${sym}`, descriptor: d, terms: { type: "cash_secured_put", strike }, side: "buy", quantity: qty });
+        cases.push({ name: `sell_put   ${sym}`, descriptor: d, terms: { type: "cash_secured_put", strike: String(strike) }, side: "sell", quantity: qty });
+        cases.push({ name: `buy_put    ${sym}`, descriptor: d, terms: { type: "cash_secured_put", strike: String(strike) }, side: "buy", quantity: qty });
       }
     }
   }

@@ -5,9 +5,9 @@ import { useQuoteRequest } from "./use-quote-request";
 const mocks = vi.hoisted(() => ({ context: {} as Record<string, unknown> }));
 vi.mock("@/components/rfq/rfq-provider", () => ({ RFQ_TTL_SECONDS: 30, useRfqContext: () => mocks.context }));
 
-const rfq = { market: "market", terms: { type: "cash_secured_put" as const, strike: 95e9 }, quantity: 1e9 };
+const rfq = { market: "market", terms: { type: "cash_secured_put" as const, strike: "95000000000" }, quantity: 1000000000 };
 const preview = {
-  asset: "SOL", terms: { type: "cash_secured_put" as const, strike: 95e9 }, quantity: 1e9, underlyingDecimals: 9,
+  asset: "SOL", terms: { type: "cash_secured_put" as const, strike: "95000000000" }, quantity: 1000000000, underlyingDecimals: 9,
   strikeDisplay: "$95", quantityDisplay: "95 USDC",
 };
 
@@ -28,7 +28,7 @@ describe("quote request lifecycle", () => {
     expect(hook.result.current.isRequesting).toBe(true);
     expect(hook.result.current.modalProps).toMatchObject({ open: false, preview });
 
-    mocks.context = { ...mocks.context, bestQuote: { strike: 95e9 } };
+    mocks.context = { ...mocks.context, bestQuote: { strike: "95000000000" } };
     hook.rerender();
     expect(hook.result.current.isRequesting).toBe(false);
     expect(hook.result.current.modalProps).toMatchObject({ open: true, requestNonce: 1 });
@@ -64,7 +64,7 @@ describe("quote request lifecycle", () => {
     expect(mocks.context.submitRfq).not.toHaveBeenCalled(); // nothing to repeat yet
 
     act(() => hook.result.current.request(rfq, preview));
-    mocks.context = { ...mocks.context, bestQuote: { strike: 95e9 } };
+    mocks.context = { ...mocks.context, bestQuote: { strike: "95000000000" } };
     hook.rerender();
     act(() => hook.result.current.modalProps.onRequote());
     expect(mocks.context.submitRfq).toHaveBeenCalledTimes(2);

@@ -2,9 +2,9 @@
 export type BuyStatus = "deposit" | "funded" | "will_exercise" | "deposit_returns" | "not_exercised" | "expired" | "settling";
 
 export const BUY_STATUS_LABEL: Record<Exclude<BuyStatus, "deposit">, string> = {
-  funded: "Deposited",
+  funded: "Funded",
   will_exercise: "Will exercise",
-  deposit_returns: "Deposit returns",
+  deposit_returns: "Funding returns",
   not_exercised: "Not exercised",
   expired: "Expired",
   settling: "Settling",

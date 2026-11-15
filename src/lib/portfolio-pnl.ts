@@ -1,6 +1,7 @@
 import { spreadCollateral, spreadPayoff, SpreadType } from "@acta-markets/ts-sdk/chain";
 import { intrinsicValue1e9 } from "@acta-markets/ts-sdk/ws";
 import type { PositionInfo } from "@/lib/rfq-client";
+import { numberFormat } from "@/lib/number-format";
 import { executionTerms, isCashSettled, isSpreadTerms, lowerStrike } from "@/lib/spreads";
 
 const PRICE_SCALE = 1_000_000_000;
@@ -214,9 +215,8 @@ export function summarizePnl(
 /** Signed money string for a P&L figure: "+$12.00" / "-$12.00" / "$0.00". */
 export function formatSignedUsd(n: number): string {
   const sign = n > 0 ? "+" : n < 0 ? "-" : "";
-  const abs = Math.abs(n);
-  const body = abs.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return n < 0 ? `-${body}` : `${sign}${body}`;
+  const body = numberFormat({ style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(n));
+  return `${sign}${body}`;
 }
 
 export const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;

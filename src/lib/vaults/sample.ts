@@ -34,7 +34,7 @@ export function makeVault(overrides: Partial<Vault> = {}): Vault {
     primary_delegate: PLACEHOLDER_ADDRESS,
     main_mint: MAINNET_USDC_MINT,
     second_mint: NATIVE_SOL_MINT,
-    second_leg_generation: "0",
+    second_leg_generation: 0,
     share_mint: PLACEHOLDER_ADDRESS,
     main_token_program: "legacy_spl",
     second_token_program: "legacy_spl",
@@ -43,12 +43,12 @@ export function makeVault(overrides: Partial<Vault> = {}): Vault {
     phase: "idle",
     safety: "normal",
     capabilities: 0,
-    active_expiry_ts: "0",
-    open_positions: "0",
+    active_expiry_ts: 0,
+    open_positions: 0,
     total_shares: "0",
     share_price: PRICE_SCALE.toString(),
     equity: "0",
-    capital_generation: "0",
+    capital_generation: 0,
     accepting_deposits: true,
     equity_computed: false,
     pending_deposit_count: 0,
@@ -59,17 +59,17 @@ export function makeVault(overrides: Partial<Vault> = {}): Vault {
     management_fee_bps: 200,
     manager_stake_min_bps: 100,
     share_price_hwm: PRICE_SCALE.toString(),
-    last_hwm_update_at: "0",
-    last_hwm_reset_at: "0",
-    last_settlement_at: "0",
+    last_hwm_update_at: 0,
+    last_hwm_reset_at: 0,
+    last_settlement_at: 0,
     capacity: { type: "unlimited" },
-    capital_fallback_delay_seconds: "43200",
+    capital_fallback_delay_seconds: 43200,
     deposit_window_set_at: null,
     balances: { type: "unobserved" },
     staging: { type: "none" },
-    staged_generation: "0",
+    staged_generation: 0,
     policy: { max_open_positions: 4, max_rebalance_drift_bps: 100, min_main_liquidity_bps: 1000 },
-    projection: { version: "1", slot: "1", transaction_index: 0, signature: "1".repeat(88), event_index: 0 },
+    projection: { version: 1, slot: 1, transaction_index: 0, signature: "1".repeat(88), event_index: 0 },
     created_at: null,
     generation_started_at: null,
     tvl_usd_1e9: null,
@@ -86,8 +86,8 @@ export function makeVault(overrides: Partial<Vault> = {}): Vault {
 /** Covered performance with no history yet, for tests. */
 export function makePerformance(overrides: Partial<VaultPerformance> = {}): VaultPerformance {
   return {
-    capital_generation: "0",
-    computed_at: "0",
+    capital_generation: 0,
+    computed_at: 0,
     covered: true,
     returns: { "7d": null, "30d": null, "90d": null, all: null },
     apy_30d: null,
@@ -183,12 +183,12 @@ function validate(file: unknown): RawFile {
   return raw;
 }
 
-// "0" means unset on chain and stays put; everything else moves with the clock.
-function shifted(value: string, shift: number): string {
-  return value === "0" ? value : String(Number(value) + shift);
+// 0 means unset on chain and stays put; everything else moves with the clock.
+function shifted(value: number, shift: number): number {
+  return value === 0 ? value : value + shift;
 }
 
-function shiftedOrNull(value: string | null, shift: number): string | null {
+function shiftedOrNull(value: number | null, shift: number): number | null {
   return value === null ? null : shifted(value, shift);
 }
 

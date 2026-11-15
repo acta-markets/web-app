@@ -33,7 +33,7 @@ export type QuoteFlowOrder = {
   facts: ReadonlyArray<readonly [label: string, value: string]>;
   /** one quiet line under the terms, e.g. how a spread settles */
   note: string | null;
-  /** what is still to do once the trade is confirmed, e.g. deposit to exercise; it also makes Portfolio the main button there */
+  /** what is still to do once the trade is confirmed, e.g. fund the option to exercise; it also makes Portfolio the main button there */
   nextStep: string | null;
 };
 
@@ -45,8 +45,8 @@ export type QuoteFlowViewProps = {
   /** seconds left to confirm, and how many there were when the quote was first shown */
   secondsRemaining: number;
   secondsTotal: number;
-  /** set when the quote under review was replaced by one at another price: what it was, and whether the new one is worse for the user */
-  priceUpdate: { from: string; worse: boolean } | null;
+  /** set when the quote under review was replaced by a worse one for the user: what it was. A better one just shows. */
+  priceUpdate: { from: string } | null;
   /** Confirm is held for a moment after the price moves against the user, so it cannot be clicked unread */
   confirmHeld: boolean;
   error: string | null;
@@ -192,17 +192,10 @@ function QuoteTimer({
           "This quote expired. Get a fresh one to continue."
         )}
       </p>
-      {/* market makers can replace a quote while it is being read: say so instead of swapping the number silently */}
+      {/* market makers can replace a quote while it is being read: a worse one is said, never swapped in silently */}
       {live && priceUpdate ? (
-        <p
-          role="status"
-          className={cn(
-            "mt-1 font-mono text-sm leading-[1.4]",
-            priceUpdate.worse ? "text-additional-orange-primary-deep" : "text-accent-primary"
-          )}
-        >
-          {priceUpdate.worse ? "The quote changed. It was " : "A better quote came in. It was "}
-          <span className="tabular-nums">{priceUpdate.from}</span>
+        <p role="status" className="mt-1 font-mono text-sm leading-[1.4] text-additional-orange-primary-deep">
+          The quote changed. It was <span className="tabular-nums">{priceUpdate.from}</span>
         </p>
       ) : null}
     </div>
@@ -323,7 +316,9 @@ export function QuoteFlowView({
         ) : null}
       </div>
 
-      <div className="flex gap-2 max-md:flex-col-reverse">
+      {/* Two buttons split the row exactly in half whatever their padding or border, and a label
+          never breaks onto a second line: the row looks the same at every step. */}
+      <div className="flex gap-2 max-md:flex-col-reverse [&>*]:basis-1/2 [&>*]:whitespace-nowrap">
         {step === "requesting_quote" ? (
           <AppButton variant="secondary" className="flex-1" onClick={onClose}>
             Cancel
@@ -361,8 +356,9 @@ export function QuoteFlowView({
                 Cancel trade
               </AppButton>
             ) : null}
-            <AppButton className="flex-1" disabled>
-              <Loader2 aria-hidden="true" className="mr-2 h-4 w-4 animate-spin" />
+            {/* tighter sides: the spinner and the longest label fit in half the row, next to Cancel trade */}
+            <AppButton className="flex-1 px-3" disabled>
+              <Loader2 aria-hidden="true" className="mr-1.5 h-4 w-4 shrink-0 animate-spin" />
               {step === "accepting_quote" ? "Locking in" : step === "signing" ? "Waiting for wallet" : "Sending"}
             </AppButton>
           </>
@@ -382,13 +378,13 @@ export function QuoteFlowView({
         ) : null}
 
         {step === "confirmed" && order?.nextStep ? (
-          // the deposit is the next thing to do, so it is the main button
+          // funding is the next thing to do, so it is the main button
           <>
             <AppButton variant="secondary" className="flex-1" onClick={onClose}>
               Done
             </AppButton>
             <AppButtonLink href="/portfolio" className="flex-1" onClick={onClose}>
-              Deposit in Portfolio
+              Fund in Portfolio
             </AppButtonLink>
           </>
         ) : step === "confirmed" ? (

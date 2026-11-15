@@ -3,9 +3,15 @@ import {
   quoteAmountToQuantity,
   sizeRuleInQuoteTerms,
 } from "@acta-markets/ts-sdk/ws";
+import { wireAmount } from "@/lib/spreads";
 
-/** A market's size rule as sent on the wire, in underlying atomic units. */
+/** A market's size rule in underlying atomic units, as numbers. */
 export type SizeRule = { min_size: number; max_size: number; step: number };
+
+/** The size rule off the wire, where its three amounts are decimal strings. */
+export function sizeRuleFromWire(rule: { min_size: string; max_size: string; step: string } | null | undefined): SizeRule | null {
+  return rule ? { min_size: Number(rule.min_size), max_size: Number(rule.max_size), step: Number(rule.step) } : null;
+}
 
 /** The size rule in what the user deposits: the asset for a call, USDC for a put. */
 export type DepositRule = { min: number; max: number; step: number };
@@ -62,7 +68,15 @@ export function depositRuleFor({
     };
   }
   if (strike1e9 <= 0) return null;
-  return sizeRuleInQuoteTerms(sizeRule, strike1e9, underlyingDecimals);
+  try {
+    return sizeRuleInQuoteTerms(
+      { min_size: wireAmount(sizeRule.min_size), max_size: wireAmount(sizeRule.max_size), step: wireAmount(sizeRule.step) },
+      wireAmount(strike1e9),
+      underlyingDecimals
+    );
+  } catch {
+    return null;
+  }
 }
 
 /** Fraction digits the deposit field accepts: at least cents for USDC. */
@@ -87,7 +101,7 @@ export function depositToQuantity({
   if (isPut && strike1e9 <= 0) return null;
   try {
     return isPut
-      ? quoteAmountToQuantity(amount, strike1e9, underlyingDecimals)
+      ? Number(quoteAmountToQuantity(amount, wireAmount(strike1e9), underlyingDecimals))
       : Math.round(amount * 10 ** underlyingDecimals);
   } catch {
     return null;
@@ -106,9 +120,12 @@ export function quantityToDeposit({
   strike1e9: number;
   underlyingDecimals: number;
 }): number {
-  return isPut
-    ? quantityToQuoteAmount(quantity, strike1e9, underlyingDecimals)
-    : quantity / 10 ** underlyingDecimals;
+  if (!isPut) return quantity / 10 ** underlyingDecimals;
+  try {
+    return quantityToQuoteAmount(wireAmount(Math.round(quantity)), wireAmount(strike1e9), underlyingDecimals);
+  } catch {
+    return NaN;
+  }
 }
 
 /** HALF and MAX: the smaller of the balance and the rule's max, snapped down to the step. */

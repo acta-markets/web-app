@@ -226,6 +226,53 @@ describe("sentence trade", () => {
     expect(screen.getByTestId("ticket-wrong").textContent).toBe("Buy SOL");
   });
 
+  it("keeps the belief on one line from md up by stepping its type down, and leaves a phone alone", () => {
+    const width = (name: "clientWidth" | "scrollWidth", value: number) =>
+      vi.spyOn(HTMLParagraphElement.prototype, name, "get").mockReturnValue(value);
+    const box = width("clientWidth", 600);
+    const words = width("scrollWidth", 800);
+    const media = (wide: boolean) =>
+      vi.stubGlobal("matchMedia", () => ({ matches: wide, addEventListener: () => {}, removeEventListener: () => {} }));
+    const belief = () => screen.getByRole("button", { name: /^Direction/ }).closest("p")!;
+    try {
+      // words a third wider than the card: the type shrinks by exactly that, never a second line
+      media(true);
+      render(<SentenceTrade mode="profit" />);
+      expect(belief().style.getPropertyValue("--fit")).toBe("0.75");
+      cleanup();
+      // words that fit are left at full size
+      words.mockReturnValue(590);
+      render(<SentenceTrade mode="profit" />);
+      expect(belief().style.getPropertyValue("--fit")).toBe("");
+      cleanup();
+      // on a phone the sentence wraps by design
+      words.mockReturnValue(800);
+      media(false);
+      render(<SentenceTrade mode="profit" />);
+      expect(belief().style.getPropertyValue("--fit")).toBe("");
+    } finally {
+      box.mockRestore();
+      words.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("says both outcomes in plain words while the market is still loading, never a dash", () => {
+    mocks.context.tokenMarketsInfo = null;
+    render(<SentenceTrade mode="profit" />);
+    expect(screen.getByTestId("ticket-right").textContent).toBe("You profit");
+    expect(screen.getByText("Grows with the price once the premium is covered")).toBeTruthy();
+    expect(screen.getByTestId("ticket-wrong").textContent).toBe("Premium lost");
+    expect(screen.getByText("A fixed fee, the most you can lose")).toBeTruthy();
+    cleanup();
+
+    render(<SentenceTrade mode="yield" />);
+    expect(screen.getByTestId("ticket-right").textContent).toBe("Keep your USDC");
+    expect(screen.getByText("and the premium")).toBeTruthy();
+    expect(screen.getByTestId("ticket-wrong").textContent).toBe("Buy SOL");
+    expect(screen.getByText("You keep the premium")).toBeTruthy();
+  });
+
   it("leads Profit's summary with what the trade costs and the buy outcomes", () => {
     render(<SentenceTrade mode="profit" />);
     // the fixture lists an indicative for the buy, so the headline names it
@@ -277,11 +324,11 @@ describe("sentence trade", () => {
     expect(screen.getByText("Locks 997.5 USDC (size steps of 9.5)")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Take trade" }));
     expect(mocks.context.submitRfq).toHaveBeenCalledWith({
-      market: "put-soon", side: "sell", terms: { type: "cash_secured_put", strike: 95e9 }, quantity: 10_500_000_000, timeoutSeconds: 30,
+      market: "put-soon", side: "sell", terms: { type: "cash_secured_put", strike: "95000000000" }, quantity: 10_500_000_000, timeoutSeconds: 30,
     });
     const preview = (mocks.modal.mock.lastCall?.[0] as { preview: Record<string, unknown> }).preview;
     expect(preview).toMatchObject({
-      asset: "SOL", terms: { type: "cash_secured_put", strike: 95e9 }, quantity: 10_500_000_000, underlyingDecimals: 9,
+      asset: "SOL", terms: { type: "cash_secured_put", strike: "95000000000" }, quantity: 10_500_000_000, underlyingDecimals: 9,
       thesis: "SOL will be above $95 on Jan 22",
     });
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("997.5");
@@ -298,7 +345,7 @@ describe("sentence trade", () => {
     expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.00");
     fireEvent.click(screen.getByRole("button", { name: "Take trade" }));
     expect(mocks.context.submitRfq).toHaveBeenCalledWith({
-      market: "call-soon", side: "buy", terms: { type: "covered_call", strike: 105e9 }, quantity: 1_000_000_000, timeoutSeconds: 30,
+      market: "call-soon", side: "buy", terms: { type: "covered_call", strike: "105000000000" }, quantity: 1_000_000_000, timeoutSeconds: 30,
     });
   });
 

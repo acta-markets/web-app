@@ -67,6 +67,18 @@ not go stale when a vault is added or pulled.
 - **Never say a depositor is paid weekly.** The desk pays the vault weekly; a depositor's
   return accrues. Cadence belongs only to the desk's side of the trade.
 
+### One word per action
+
+Each thing a user does with money has one word, and that word is used everywhere: buttons,
+labels, notes, tooltips, modals.
+
+- **Fund** (fund, funding, funded, unfunded): paying in for a bought option so it can be
+  exercised. `Fund in Portfolio`, `Fund to exercise`, `Needs funding`. Never `deposit` here.
+- **Deposit**: what a seller locks to back a sold option in Yield, and what goes into a
+  vault in Earn. `You deposit`, `your deposit comes back`. Never `fund` here.
+
+Before adding a new word for an action, check whether one of these already covers it.
+
 ### Names render verbatim
 
 Asset names and tickers are names, not labels. Never apply `uppercase` to them:
@@ -178,6 +190,16 @@ const lgLeft = i % 3 !== 0;   // 3 columns at lg
 A CTA is the last element in its container. Metadata, captions and disclaimers go above
 it, never below. Text trailing a button reads as an afterthought and breaks the block's
 bottom edge.
+
+### Menus and hover panels open downward
+
+A selector's menu, a tooltip and a hover panel open under the thing that opens them, never
+above it. This holds on every page and at every width. When the window is short of room
+below, the panel stays below and gets smaller or scrolls inside; it does not flip upward.
+
+A hover panel or tooltip goes to the bottom right: its left edge lines up with the left edge
+of what opened it and it runs to the right from there. Short of room on the right it slides
+left just enough to stay on screen.
 
 ### Components
 

@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { spreadPositionAmounts, spreadRowView } from "./spread-positions";
 import type { PositionInfo, MarketDescriptorInfo } from "@/lib/rfq-client";
-const position = { side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 }, quantity: 1_000_000, total_premium: 1_980_000, state: "settled", underlying_decimals: 6, quote_decimals: 6, settlement: { type: "cash", settlement_price: 110e9, holder_payoff: 10_000_000, writer_return: 10_000_000 } } as PositionInfo;
+const position = { side: "sell", terms: { type: "put_spread", lower_strike: "100000000000", upper_strike: "120000000000" }, quantity: "1000000", total_premium: "1980000", state: "settled", underlying_decimals: 6, quote_decimals: 6, settlement: { type: "cash", settlement_price: "110000000000", holder_payoff: "10000000", writer_return: "10000000" } } as PositionInfo;
 const descriptor = { underlying_decimals: 6, quote_decimals: 6, underlying_symbol: "TEST", quote_symbol: "USDC" } as MarketDescriptorInfo;
 describe("spread portfolio cash results", () => {
   it("uses token decimals and finalized cash payouts, not physical exercise notional", () => {
@@ -10,17 +10,17 @@ describe("spread portfolio cash results", () => {
   });
   it("keeps absent settlement receipts unknown and accepts a known zero payout", () => {
     expect(spreadPositionAmounts({ ...position, state: "open" }, descriptor)).toMatchObject({ payout: null, returned: null, pnl: null });
-    expect(spreadPositionAmounts({ ...position, state: "settled", settlement: { type: "cash", settlement_price: 120e9, holder_payoff: 0, writer_return: 20_000_000 } }, descriptor)).toMatchObject({ payout: 0n, pnl: 1_980_000n });
+    expect(spreadPositionAmounts({ ...position, state: "settled", settlement: { type: "cash", settlement_price: "120000000000", holder_payoff: "0", writer_return: "20000000" } }, descriptor)).toMatchObject({ payout: 0n, pnl: 1_980_000n });
     expect(spreadPositionAmounts({ ...position, state: "open" }, descriptor)?.payout).toBeNull();
   });
   it("a bought spread costs the gross premium and pays the holder", () => {
-    const bought = { ...position, side: "buy", price: 2_000_000_000 } as PositionInfo;
+    const bought = { ...position, side: "buy", price: "2000000000" } as PositionInfo;
     expect(spreadPositionAmounts(bought, descriptor)).toMatchObject({ premium: 2_000_000n, payout: 10_000_000n, pnl: 8_000_000n, bought: true });
-    const worthless = { ...bought, settlement: { type: "cash", settlement_price: 130e9, holder_payoff: 0, writer_return: 20_000_000 } } as PositionInfo;
+    const worthless = { ...bought, settlement: { type: "cash", settlement_price: "130000000000", holder_payoff: "0", writer_return: "20000000" } } as PositionInfo;
     expect(spreadPositionAmounts(worthless, descriptor)?.pnl).toBe(-2_000_000n);
   });
   it("uses row decimals without a descriptor and rejects incomplete terms", () => {
-    expect(spreadPositionAmounts({ ...position, terms: { type: "put_spread", lower_strike: 100e9 } } as unknown as PositionInfo, descriptor)).toBeNull();
+    expect(spreadPositionAmounts({ ...position, terms: { type: "put_spread", lower_strike: "100000000000" } } as unknown as PositionInfo, descriptor)).toBeNull();
     expect(spreadPositionAmounts(position)).toMatchObject({ collateral: 20_000_000n, payout: 10_000_000n });
   });
 });
@@ -34,7 +34,7 @@ describe("spread positions table", () => {
     expect(spreadRowView(open, [])?.apr).toBe(`${expected.toFixed(2)}%`);
   });
   it("a bought spread earns no APR and locks none of the buyer's capital", () => {
-    const open = { ...position, side: "buy", price: 2_000_000_000, pda: "a", market_pda: "m", state: "open", created_at: 1_793_000_000, expiry_ts: 1_793_000_000 + 86_400 } as PositionInfo;
+    const open = { ...position, side: "buy", price: "2000000000", pda: "a", market_pda: "m", state: "open", created_at: 1_793_000_000, expiry_ts: 1_793_000_000 + 86_400 } as PositionInfo;
     const view = spreadRowView(open, []);
     expect([view?.apr, view?.aprPct, view?.collateralUsd, view?.premium]).toEqual(["\u2014", 0, 0, "$2"]);
   });
@@ -46,7 +46,7 @@ describe("spread positions table", () => {
     expect(JSON.stringify(view)).not.toContain("Mint1");
   });
   it("names a cash put as a put spread from zero with full-width collateral", () => {
-    const cashPut = { ...position, pda: "cash", market_pda: "m", terms: { type: "cash_put", strike: 120e9 }, expiry_ts: 1_793_000_000 } as PositionInfo;
+    const cashPut = { ...position, pda: "cash", market_pda: "m", terms: { type: "cash_put", strike: "120000000000" }, expiry_ts: 1_793_000_000 } as PositionInfo;
     expect(spreadPositionAmounts(cashPut, descriptor)?.collateral).toBe(120_000_000n);
     expect(spreadRowView(cashPut, [{ ...descriptor, market_descriptor: { market_pda: "m" } } as MarketDescriptorInfo])?.label).toBe("TEST 0/120 put");
   });

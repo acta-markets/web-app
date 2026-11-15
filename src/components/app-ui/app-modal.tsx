@@ -58,7 +58,8 @@ export function AppModal({
 
       <div
         className={cn(
-          "relative w-full max-w-2xl border border-bg-border bg-bg-primary p-6 shadow-2xl",
+          // never taller than the screen: a long modal scrolls inside itself instead of being cut off top and bottom
+          "relative max-h-full w-full max-w-2xl overflow-y-auto overscroll-contain border border-bg-border bg-bg-primary p-6 shadow-2xl",
           "text-content-primary",
           className
         )}

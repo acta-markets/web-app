@@ -15,10 +15,11 @@ import {
 import { formatUsdSmart } from "@/lib/markets";
 
 type Point = { t: number; v: number };
-type Range = "24h" | "7d" | "30d";
+/** The series is one point per day, so the shortest range worth drawing is a week. */
+export type IncomeRange = "7d" | "30d";
+type Range = IncomeRange;
 
 function rangeToSec(r: Range) {
-  if (r === "24h") return 24 * 60 * 60;
   if (r === "7d") return 7 * 24 * 60 * 60;
   return 30 * 24 * 60 * 60;
 }

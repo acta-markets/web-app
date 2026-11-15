@@ -58,14 +58,14 @@ describe("web app authentication through the installed SDK", () => {
       products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"],
       market_descriptor: { chain_id: 0, program_id: getActaProgramId(), market_pda: market, underlying_mint: underlyingMint, quote_mint: quoteMint, expiry_ts: expiryTs, is_put: false, collateral_mint: underlyingMint, settlement_mint: quoteMint },
       underlying_symbol: "SOL", quote_symbol: "USDC", underlying_decimals: 9, quote_decimals: 6,
-      size_rule: { min_size: 1, max_size: 1e12, step: 1 }, underlying_oracle_pda: walletAddress, quote_oracle_pda: walletAddress,
+      size_rule: { min_size: "1", max_size: "1000000000000", step: "1" }, underlying_oracle_pda: walletAddress, quote_oracle_pda: walletAddress,
     }] } });
     await descriptorsRequest;
-    const request = { market_pda: market, terms: { type: "call_spread" as const, lower_strike: 100e9, upper_strike: 120e9 }, side: "sell" as const, quantity: 1e9, timeout_seconds: 30, request_id: "00000000-0000-0000-0000-000000000002" };
+    const request = { market_pda: market, terms: { type: "call_spread" as const, lower_strike: "100000000000", upper_strike: "120000000000" }, side: "sell" as const, quantity: "1000000000", timeout_seconds: 30, request_id: "00000000-0000-0000-0000-000000000002" };
     const pending = client.createRfq(request);
     await vi.waitFor(() => expect(socket.sent.some(raw => JSON.parse(raw).type === "RfqRequest")).toBe(true));
     const frame = socket.sent.map(raw => JSON.parse(raw)).find(message => message.type === "RfqRequest");
-    expect(frame.data).toMatchObject({ terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 120e9 }, side: "sell", quantity: 1e9, timeout_seconds: 30 });
+    expect(frame.data).toMatchObject({ terms: { type: "call_spread", lower_strike: "100000000000", upper_strike: "120000000000" }, side: "sell", quantity: "1000000000", timeout_seconds: 30 });
     socket.receive({ type: "CommandAccepted", data: { request_id: request.request_id } });
     await pending;
   });

@@ -1,7 +1,9 @@
 import type { PositionInfo } from "@/lib/rfq-client";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
-import { isCashSettled, isCashSettledTerms, isSpreadTerms } from "@/lib/spreads";
+import { isCashSettled, isCashSettledTerms, isSpreadTerms, strikeText } from "@/lib/spreads";
+import { numberFormat } from "@/lib/number-format";
+import { displayQuoteSymbol } from "@/lib/tokens";
 import { exerciseDepositText } from "@/lib/trade/thesis";
 import {
   entryPremiumUsd,
@@ -82,6 +84,28 @@ export function stateLabel(p: PositionInfo): string {
   }
 }
 
+/**
+ * How a closed position ended, in the product's words. A sold option that finished in the money
+ * "converted" (the deposit was swapped at the strike, as the trade page puts it); a bought one
+ * was "exercised". Null while the position is still open.
+ */
+export function outcomeLabel(p: PositionInfo): string | null {
+  if (p.state === "liquidated") return "Liquidated";
+  if (p.state === "terminal_pending") return "Settling";
+  if (p.state !== "settled") return null;
+  const s = p.settlement;
+  if (s.type === "not_exercised") return "Not exercised";
+  if (s.type === "physical") return s.is_otm ? "Expired" : p.side === "buy" ? "Exercised" : "Converted";
+  return Number(s.holder_payoff) > 0 ? "Paid out" : "Expired";
+}
+
+/** Both strikes of a two-leg product, "100/120"; null for a single-strike option. */
+export function legsTextFor(p: PositionInfo): string | null {
+  if (isSpreadTerms(p.terms)) return `${strikeText(Number(p.terms.lower_strike))}/${strikeText(Number(p.terms.upper_strike))}`;
+  if (p.terms.type === "cash_put") return `0/${strikeText(Number(p.terms.strike))}`;
+  return null;
+}
+
 export type PositionsTableRow = {
   id: string;
   symbol: string;
@@ -91,6 +115,10 @@ export type PositionsTableRow = {
   sentence: string;
   /** The product as a thing, not a lifecycle stage: "Covered call", "Call", "Secured put". */
   productLabel: string;
+  /** Both strikes of a spread, "100/120"; null for a single-strike option. */
+  legsText: string | null;
+  /** How a closed position ended: "Expired", "Converted", "Exercised"...; null while open. */
+  outcome: string | null;
   /** What funding the exercise costs (strike for a call, underlying for a put); null when it does not apply. */
   exerciseText: string | null;
   /** The strike as displayed, so copy can name the delivery price without parsing a sentence. */
@@ -103,15 +131,24 @@ export type PositionsTableRow = {
   sizeText: string;
   premiumNum: number | null;
   premiumLabel: "collected" | "paid" | null;
+  /** Unrealised P&L while open, realised once settled; null when it cannot be priced. */
   pnlNum: number | null;
   pnlText: string;
-  pnlStale: boolean;
   expiryTs: number | null;
   isOpen: boolean;
   state: string;
   createdTs: number;
   /** Present for a bought physical position that can still be exercised (deposit action). */
   buy: { pda: string; market: string } | null;
+  /**
+   * The deposit that exercises a bought physical option, in one token: the quote at the strike
+   * for a call, the asset itself for a put. `usd` values it in dollars: the quote at one
+   * dollar, the asset at the current price (null without one). Null when the position takes
+   * no deposit.
+   */
+  fund: { amount: number; symbol: string; usd: number | null } | null;
+  /** Whether a bought physical option would be exercised at the current price; null without a price. */
+  inTheMoney: boolean | null;
 };
 
 /** What it costs to take delivery: the strike for a call, the underlying for a put. */
@@ -125,11 +162,14 @@ export function exerciseTextFor(p: PositionInfo): string | null {
 
 /** What the position is, in the same words the trade page uses. */
 export function productLabelFor(p: PositionInfo): string {
-  const isPut = p.terms.type === "cash_secured_put" || p.terms.type === "put_spread" || p.terms.type === "cash_put";
-  // Buying is long by definition, so the side badge already says it: a bought call is just a
-  // call. Selling is the case that needs naming, since the writer is the secured party.
-  // "Secured put" keeps the full name in the cell title.
-  if (isPut) return p.side === "buy" ? "Put" : "Secured put";
+  // Two-leg products are their own thing: a put spread is not a secured put.
+  if (p.terms.type === "call_spread") return "Call spread";
+  if (p.terms.type === "put_spread") return "Put spread";
+  if (p.terms.type === "cash_put") return "Cash put";
+  // Buying is long by definition: a bought call is just a call. Selling is the case that needs
+  // naming, since the writer is the secured party. "Secured put" keeps the full name in the
+  // cell title.
+  if (p.terms.type === "cash_secured_put") return p.side === "buy" ? "Put" : "Secured put";
   return p.side === "buy" ? "Call" : "Covered call";
 }
 
@@ -149,7 +189,9 @@ export function buildPositionRows(
     const pnl = isOpen ? unrealizedPnlUsd(p, liveSpot) : realizedPnlUsd(p);
     const markPrice = liveSpot != null ? liveSpot / 1e9 : underlyingMark(p, nowMs)?.priceUsd ?? null;
     const markText = markPrice != null ? formatUsdSmart(markPrice) : null;
-    const stale = isOpen ? (underlyingMark(p, nowMs)?.stale ?? false) : false;
+    const physicalBuy = p.side === "buy" && !isCashSettled(p.terms.type);
+    const isPut = p.terms.type === "cash_secured_put";
+    const strike = thesisStrike1e9(p) / 1e9;
     return {
       id: p.pda,
       symbol,
@@ -158,28 +200,115 @@ export function buildPositionRows(
       direction: directionWord(p),
       side: p.side,
       productLabel: productLabelFor(p),
+      legsText: legsTextFor(p),
+      outcome: outcomeLabel(p),
       exerciseText: exerciseTextFor(p),
       strikeText: formatStrikePrice(thesisStrike1e9(p) / 1e9),
       markText,
 
       sizeNum: quantity,
-      sizeText: `${quantity.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${symbol}`,
+      sizeText: `${numberFormat({ maximumFractionDigits: 4 }).format(quantity)} ${symbol}`,
       premiumNum: premium,
       premiumLabel: premium == null ? null : p.side === "buy" ? "paid" : "collected",
       pnlNum: pnl,
       pnlText: pnl == null ? "\u2014" : formatSignedUsd(pnl),
-      pnlStale: stale,
       expiryTs: thesisExpiryTs(p),
       isOpen,
       state: stateLabel(p),
       createdTs: Number(p.created_at),
-      buy: p.side === "buy" && !isCashSettled(p.terms.type) && isOpen ? { pda: p.pda, market: p.market_pda } : null,
+      buy: physicalBuy && isOpen ? { pda: p.pda, market: p.market_pda } : null,
+      fund: !physicalBuy
+        ? null
+        : isPut
+          ? { amount: quantity, symbol, usd: markPrice != null ? quantity * markPrice : null }
+          : { amount: quantity * strike, symbol: displayQuoteSymbol(), usd: quantity * strike },
+      inTheMoney: physicalBuy && markPrice != null ? (isPut ? markPrice < strike : markPrice > strike) : null,
     };
   });
 }
 
+/** Funded on chain, or deposited in this session and not yet reported back as funded. */
+export function isRowFunded(row: PositionsTableRow, funded?: ReadonlySet<string>): boolean {
+  return row.state === "Funded" || (row.buy != null && !!funded?.has(row.buy.pda));
+}
+
+/** A bought physical option that still takes its deposit: open, unfunded and before expiry. */
+export function canFundRow(row: PositionsTableRow, nowMs: number, funded?: ReadonlySet<string>): boolean {
+  return row.buy != null && !isRowFunded(row, funded) && row.state === "Open" && row.expiryTs != null && row.expiryTs * 1000 > nowMs;
+}
+
+/** Everything about the bought options that still need their deposit, taken together. */
+export type FundingSummary = {
+  /** What to fund, soonest expiry first, so a balance that runs short covers the urgent ones. */
+  positions: Array<{ pda: string; market: string }>;
+  count: number;
+  /**
+   * The deposits added up per token, in the order they fall due: a call takes the quote, a put
+   * the asset. `usd` is that token's total in dollars; null when a position in it has no price.
+   */
+  totals: Array<{ symbol: string; amount: number; usd: number | null }>;
+  /** Everything in dollars, for one headline figure; null when any token has no price. */
+  totalUsd: number | null;
+  /** The first expiry among them, Unix seconds: the nearest deadline. */
+  firstExpiryTs: number;
+  /** How many would be exercised at the current price, out of the `priced` that have one. */
+  inTheMoney: number;
+  priced: number;
+  /** Premium already paid for them, which is what is lost if none is funded; null when unknown. */
+  premiumPaid: number | null;
+};
+
+export function fundingSummary(rows: readonly PositionsTableRow[], nowMs: number, funded?: ReadonlySet<string>): FundingSummary | null {
+  const open = rows
+    .filter((row) => canFundRow(row, nowMs, funded))
+    .sort((a, b) => (a.expiryTs ?? 0) - (b.expiryTs ?? 0));
+  if (open.length === 0) return null;
+  const bySymbol = new Map<string, { amount: number; usd: number | null }>();
+  for (const row of open) {
+    if (!row.fund) continue;
+    const sum = bySymbol.get(row.fund.symbol) ?? { amount: 0, usd: 0 };
+    bySymbol.set(row.fund.symbol, {
+      amount: sum.amount + row.fund.amount,
+      usd: sum.usd != null && row.fund.usd != null ? sum.usd + row.fund.usd : null,
+    });
+  }
+  const totals = [...bySymbol].map(([symbol, sum]) => ({ symbol, ...sum }));
+  const priced = open.filter((row) => row.inTheMoney != null);
+  const premiums = open.map((row) => row.premiumNum).filter((n): n is number => n != null);
+  return {
+    positions: open.map((row) => row.buy!),
+    count: open.length,
+    totals,
+    totalUsd: totals.every((t) => t.usd != null) ? totals.reduce((sum, t) => sum + (t.usd ?? 0), 0) : null,
+    firstExpiryTs: open[0].expiryTs!,
+    inTheMoney: priced.filter((row) => row.inTheMoney).length,
+    priced: priced.length,
+    premiumPaid: premiums.length === open.length ? premiums.reduce((sum, n) => sum + n, 0) : null,
+  };
+}
+
 export type SortKey = "risk" | "expiry" | "size" | "premium" | "pnl";
 export type SortDir = "asc" | "desc";
+export type SortState = { key: SortKey; dir: SortDir };
+
+/** The order the page opens in: most at risk first. */
+export const DEFAULT_SORT: SortState = { key: "risk", dir: "asc" };
+
+/** Amounts open largest first; dates open soonest first. */
+export function defaultSortDir(key: SortKey): SortDir {
+  return key === "size" || key === "premium" || key === "pnl" ? "desc" : "asc";
+}
+
+/**
+ * What a click on a column does: its natural order first, the reverse second, and back to the
+ * default risk order third, so there is always a way out of a custom sort.
+ */
+export function nextSort(prev: SortState, key: SortKey): SortState {
+  const first = defaultSortDir(key);
+  if (prev.key !== key) return { key, dir: first };
+  if (prev.dir === first) return { key, dir: first === "asc" ? "desc" : "asc" };
+  return DEFAULT_SORT;
+}
 
 function rank(r: PositionsTableRow): number {
   if (r.isOpen) return 0;

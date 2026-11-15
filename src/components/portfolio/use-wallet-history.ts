@@ -23,6 +23,9 @@ export function useWalletHistory(wallet: string | null, livePositions: PositionI
   // A newly observed terminal position invalidates the settled-history snapshot.
   const terminalRevision = livePositions.filter(p => p.state === "settled" || p.state === "liquidated")
     .map(p => `${p.pda}:${JSON.stringify(p.revision)}`).sort().join("|");
+  // The summary only moves when a position opens, funds or closes. A price refresh hands over
+  // a new array holding the same positions, and must not refetch it every 15 seconds.
+  const liveKey = livePositions.map(p => `${p.pda}:${p.state}`).sort().join("|");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -52,7 +55,7 @@ export function useWalletHistory(wallet: string | null, livePositions: PositionI
       if (!controller.signal.aborted) setTotals({ wallet, summary: null, failed: true });
     });
     return () => controller.abort();
-  }, [wallet, livePositions, getClient]);
+  }, [wallet, liveKey, getClient]);
 
   const loadMore = useCallback(async () => {
     const current = request.current;

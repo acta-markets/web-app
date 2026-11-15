@@ -29,7 +29,7 @@ const deposit = (shares: bigint, price: string, time: number): VaultDepositorEve
   second_amount: "0",
   shares: shares.toString(),
   boundary_price: { type: "set", share_price: price },
-  occurred_at: String(time),
+  occurred_at: time,
   transaction_signature: `sig${time}`,
 });
 
@@ -42,7 +42,7 @@ const state = (overrides: Partial<VaultDepositorState> = {}): VaultDepositorStat
   ...overrides,
 });
 
-function renderPanel(generationStart: string | null, position = state()) {
+function renderPanel(generationStart: number | null, position = state()) {
   const vault = makeVault({ vault_pda: "v", share_price: "1100000000", generation_started_at: generationStart });
   return render(
     <VaultPositionPanel
@@ -70,7 +70,7 @@ describe("VaultPositionPanel", () => {
   it("feeds the wallet's history, shares in escrow and the generation start to the SDK", async () => {
     // newest first, like the API: 100 shares at 1.00, then 200 at 1.10
     env.history.mockResolvedValue([deposit(200n * USDC, "1100000000", NOW - 100), deposit(100n * USDC, "1000000000", NOW - 200)]);
-    renderPanel(String(NOW - 1_000), state({ shareBalance: 250n * USDC, withdrawRequest: { shares: 50n * USDC, createdAt: 0n } }));
+    renderPanel(NOW - 1_000, state({ shareBalance: 250n * USDC, withdrawRequest: { shares: 50n * USDC, createdAt: 0n } }));
 
     expect(await screen.findByText("+3.33%")).toBeTruthy();
     expect(env.history).toHaveBeenCalledWith("v", WALLET, BigInt(NOW - 1_000), expect.any(AbortSignal));
@@ -78,7 +78,7 @@ describe("VaultPositionPanel", () => {
       history: expect.any(Array),
       shares: 300n * USDC,
       sharePrice: "1100000000",
-      generationStart: String(NOW - 1_000),
+      generationStart: NOW - 1_000,
     });
     expect(screen.getByText("330 USDC")).toBeTruthy();
     expect(screen.getByText("300 shares")).toBeTruthy();
@@ -91,7 +91,7 @@ describe("VaultPositionPanel", () => {
     cleanup();
 
     env.history.mockRejectedValue(new Error("down"));
-    renderPanel(String(NOW - 1_000));
+    renderPanel(NOW - 1_000);
     await waitFor(() => expect(env.history).toHaveBeenCalled());
     expect(screen.queryByText(/Since entry/)).toBeNull();
   });

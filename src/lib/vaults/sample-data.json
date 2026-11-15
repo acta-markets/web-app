@@ -27,12 +27,12 @@
         "phase": "idle",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry_ts": "0",
-        "open_positions": "0",
+        "active_expiry_ts": 0,
+        "open_positions": 0,
         "total_shares": "691979678914",
         "share_price": "1022944333",
         "equity": "707856691097",
-        "capital_generation": "0",
+        "capital_generation": 0,
         "accepting_deposits": true,
         "equity_computed": false,
         "pending_deposit_count": 0,
@@ -43,13 +43,13 @@
         "management_fee_bps": 200,
         "manager_stake_min_bps": 100,
         "share_price_hwm": "1022944333",
-        "last_hwm_update_at": "0",
-        "last_hwm_reset_at": "0",
-        "last_settlement_at": "0",
+        "last_hwm_update_at": 0,
+        "last_hwm_reset_at": 0,
+        "last_settlement_at": 0,
         "capacity": {
           "type": "unlimited"
         },
-        "capital_fallback_delay_seconds": "43200",
+        "capital_fallback_delay_seconds": 43200,
         "deposit_window_set_at": null,
         "policy": {
           "max_open_positions": 4,
@@ -57,16 +57,16 @@
           "min_main_liquidity_bps": 1000
         },
         "projection": {
-          "version": "1",
-          "slot": "1",
+          "version": 1,
+          "slot": 1,
           "transaction_index": 0,
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
-        "created_at": "1784311200",
-        "generation_started_at": "1784484000",
+        "created_at": 1784311200,
+        "generation_started_at": 1784484000,
         "tvl_usd_1e9": "101796870746659",
-        "price_published_at": "1791806380",
+        "price_published_at": 1791806380,
         "premium": [
           {
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -87,25 +87,25 @@
         },
         "depositors_in_generation": 412,
         "performance": {
-          "capital_generation": "0",
-          "computed_at": "1791806400",
+          "capital_generation": 0,
+          "computed_at": 1791806400,
           "covered": true,
           "returns": {
             "7d": {
               "return_pct": 0.3068,
-              "window_start_at": "1791115200",
-              "window_end_at": "1791720000"
+              "window_start_at": 1791115200,
+              "window_end_at": 1791720000
             },
             "30d": {
               "return_pct": 0.866801,
-              "window_start_at": "1788696000",
-              "window_end_at": "1791720000"
+              "window_start_at": 1788696000,
+              "window_end_at": 1791720000
             },
             "90d": null,
             "all": {
               "return_pct": 2.294433,
-              "window_start_at": "1784484000",
-              "window_end_at": "1791720000"
+              "window_start_at": 1784484000,
+              "window_end_at": 1791720000
             }
           },
           "apy_30d": 11.071765,
@@ -122,11 +122,11 @@
       },
       "cycles": [
         {
-          "cycle_number": "11",
-          "capital_generation": "0",
-          "expiry_ts": "1791698400",
-          "started_at": "1791136800",
-          "finished_at": "1791720000",
+          "cycle_number": 11,
+          "capital_generation": 0,
+          "expiry_ts": 1791698400,
+          "started_at": 1791136800,
+          "finished_at": 1791720000,
           "share_price_start": "1019815539",
           "share_price_end": "1022944333",
           "equity_start": "658074798038",
@@ -138,11 +138,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "10",
-          "capital_generation": "0",
-          "expiry_ts": "1791093600",
-          "started_at": "1790532000",
-          "finished_at": "1791115200",
+          "cycle_number": 10,
+          "capital_generation": 0,
+          "expiry_ts": 1791093600,
+          "started_at": 1790532000,
+          "finished_at": 1791115200,
           "share_price_start": "1017714976",
           "share_price_end": "1019815539",
           "equity_start": "601106568510",
@@ -154,11 +154,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "9",
-          "capital_generation": "0",
-          "expiry_ts": "1790488800",
-          "started_at": "1789927200",
-          "finished_at": "1790510400",
+          "cycle_number": 9,
+          "capital_generation": 0,
+          "expiry_ts": 1790488800,
+          "started_at": 1789927200,
+          "finished_at": 1790510400,
           "share_price_start": "1015966498",
           "share_price_end": "1017714976",
           "equity_start": "554547614111",
@@ -170,11 +170,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "8",
-          "capital_generation": "0",
-          "expiry_ts": "1789884000",
-          "started_at": "1789322400",
-          "finished_at": "1789905600",
+          "cycle_number": 8,
+          "capital_generation": 0,
+          "expiry_ts": 1789884000,
+          "started_at": 1789322400,
+          "finished_at": 1789905600,
           "share_price_start": "1013930526",
           "share_price_end": "1015966498",
           "equity_start": "500489916802",
@@ -186,11 +186,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "7",
-          "capital_generation": "0",
-          "expiry_ts": "1789279200",
-          "started_at": "1788717600",
-          "finished_at": "1789300800",
+          "cycle_number": 7,
+          "capital_generation": 0,
+          "expiry_ts": 1789279200,
+          "started_at": 1788717600,
+          "finished_at": 1789300800,
           "share_price_start": "1014153640",
           "share_price_end": "1013930526",
           "equity_start": "454287116186",
@@ -202,11 +202,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "6",
-          "capital_generation": "0",
-          "expiry_ts": "1788674400",
-          "started_at": "1788112800",
-          "finished_at": "1788696000",
+          "cycle_number": 6,
+          "capital_generation": 0,
+          "expiry_ts": 1788674400,
+          "started_at": 1788112800,
+          "finished_at": 1788696000,
           "share_price_start": "1012154635",
           "share_price_end": "1014153640",
           "equity_start": "412917218963",
@@ -218,11 +218,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "5",
-          "capital_generation": "0",
-          "expiry_ts": "1788069600",
-          "started_at": "1787508000",
-          "finished_at": "1788091200",
+          "cycle_number": 5,
+          "capital_generation": 0,
+          "expiry_ts": 1788069600,
+          "started_at": 1787508000,
+          "finished_at": 1788091200,
           "share_price_start": "1014874499",
           "share_price_end": "1012154635",
           "equity_start": "391024462057",
@@ -234,11 +234,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "4",
-          "capital_generation": "0",
-          "expiry_ts": "1787464800",
-          "started_at": "1786903200",
-          "finished_at": "1787486400",
+          "cycle_number": 4,
+          "capital_generation": 0,
+          "expiry_ts": 1787464800,
+          "started_at": 1786903200,
+          "finished_at": 1787486400,
           "share_price_start": "1012436552",
           "share_price_end": "1014874499",
           "equity_start": "356782034224",
@@ -250,11 +250,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "3",
-          "capital_generation": "0",
-          "expiry_ts": "1786860000",
-          "started_at": "1786298400",
-          "finished_at": "1786881600",
+          "cycle_number": 3,
+          "capital_generation": 0,
+          "expiry_ts": 1786860000,
+          "started_at": 1786298400,
+          "finished_at": 1786881600,
           "share_price_start": "1008173993",
           "share_price_end": "1012436552",
           "equity_start": "329432433808",
@@ -266,11 +266,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "2",
-          "capital_generation": "0",
-          "expiry_ts": "1786255200",
-          "started_at": "1785693600",
-          "finished_at": "1786276800",
+          "cycle_number": 2,
+          "capital_generation": 0,
+          "expiry_ts": 1786255200,
+          "started_at": 1785693600,
+          "finished_at": 1786276800,
           "share_price_start": "1005887611",
           "share_price_end": "1008173993",
           "equity_start": "310953409010",
@@ -282,11 +282,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "1",
-          "capital_generation": "0",
-          "expiry_ts": "1785650400",
-          "started_at": "1785088800",
-          "finished_at": "1785672000",
+          "cycle_number": 1,
+          "capital_generation": 0,
+          "expiry_ts": 1785650400,
+          "started_at": 1785088800,
+          "finished_at": 1785672000,
           "share_price_start": "1003956000",
           "share_price_end": "1005887611",
           "equity_start": "277900661317",
@@ -298,11 +298,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "0",
-          "capital_generation": "0",
-          "expiry_ts": "1785045600",
-          "started_at": "1784484000",
-          "finished_at": "1785067200",
+          "cycle_number": 0,
+          "capital_generation": 0,
+          "expiry_ts": 1785045600,
+          "started_at": 1784484000,
+          "finished_at": 1785067200,
           "share_price_start": "1000000000",
           "share_price_end": "1003956000",
           "equity_start": "260000000000",
@@ -324,7 +324,7 @@
       },
       "exposure": {
         "vault_pda": "BBYt9VSPf118Kt2kGhgyH9rapBqiNoQhHvWqtXvdiKAc",
-        "as_of": "1791806396",
+        "as_of": 1791806396,
         "positions": [],
         "totals": []
       }
@@ -353,12 +353,12 @@
         "phase": "active",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry_ts": "1792130400",
-        "open_positions": "3",
+        "active_expiry_ts": 1792130400,
+        "open_positions": 3,
         "total_shares": "76317442301",
         "share_price": "1052447811",
         "equity": "80320125091",
-        "capital_generation": "0",
+        "capital_generation": 0,
         "accepting_deposits": false,
         "equity_computed": false,
         "pending_deposit_count": 0,
@@ -369,13 +369,13 @@
         "management_fee_bps": 200,
         "manager_stake_min_bps": 100,
         "share_price_hwm": "1052447811",
-        "last_hwm_update_at": "0",
-        "last_hwm_reset_at": "0",
-        "last_settlement_at": "0",
+        "last_hwm_update_at": 0,
+        "last_hwm_reset_at": 0,
+        "last_settlement_at": 0,
         "capacity": {
           "type": "unlimited"
         },
-        "capital_fallback_delay_seconds": "43200",
+        "capital_fallback_delay_seconds": 43200,
         "deposit_window_set_at": null,
         "policy": {
           "max_open_positions": 4,
@@ -383,16 +383,16 @@
           "min_main_liquidity_bps": 1000
         },
         "projection": {
-          "version": "1",
-          "slot": "1",
+          "version": 1,
+          "slot": 1,
           "transaction_index": 0,
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
-        "created_at": "1785348000",
-        "generation_started_at": "1785520800",
+        "created_at": 1785348000,
+        "generation_started_at": 1785520800,
         "tvl_usd_1e9": "183025469044861",
-        "price_published_at": "1791806380",
+        "price_published_at": 1791806380,
         "premium": [
           {
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -413,25 +413,25 @@
         },
         "depositors_in_generation": 96,
         "performance": {
-          "capital_generation": "0",
-          "computed_at": "1791806400",
+          "capital_generation": 0,
+          "computed_at": 1791806400,
           "covered": true,
           "returns": {
             "7d": {
               "return_pct": 1.0963,
-              "window_start_at": "1790942400",
-              "window_end_at": "1791547200"
+              "window_start_at": 1790942400,
+              "window_end_at": 1791547200
             },
             "30d": {
               "return_pct": 1.214196,
-              "window_start_at": "1789128000",
-              "window_end_at": "1791547200"
+              "window_start_at": 1789128000,
+              "window_end_at": 1791547200
             },
             "90d": null,
             "all": {
               "return_pct": 5.244781,
-              "window_start_at": "1785520800",
-              "window_end_at": "1791547200"
+              "window_start_at": 1785520800,
+              "window_end_at": 1791547200
             }
           },
           "apy_30d": 15.816575,
@@ -448,10 +448,10 @@
       },
       "cycles": [
         {
-          "cycle_number": "10",
-          "capital_generation": "0",
-          "expiry_ts": "1792130400",
-          "started_at": "1791568800",
+          "cycle_number": 10,
+          "capital_generation": 0,
+          "expiry_ts": 1792130400,
+          "started_at": 1791568800,
           "finished_at": null,
           "share_price_start": "1052447811",
           "share_price_end": "1054552706",
@@ -464,11 +464,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "9",
-          "capital_generation": "0",
-          "expiry_ts": "1791525600",
-          "started_at": "1790964000",
-          "finished_at": "1791547200",
+          "cycle_number": 9,
+          "capital_generation": 0,
+          "expiry_ts": 1791525600,
+          "started_at": 1790964000,
+          "finished_at": 1791547200,
           "share_price_start": "1041034945",
           "share_price_end": "1052447811",
           "equity_start": "73380253519",
@@ -480,11 +480,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "8",
-          "capital_generation": "0",
-          "expiry_ts": "1790920800",
-          "started_at": "1790359200",
-          "finished_at": "1790942400",
+          "cycle_number": 8,
+          "capital_generation": 0,
+          "expiry_ts": 1790920800,
+          "started_at": 1790359200,
+          "finished_at": 1790942400,
           "share_price_start": "1035259234",
           "share_price_end": "1041034945",
           "equity_start": "68416256933",
@@ -496,11 +496,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "7",
-          "capital_generation": "0",
-          "expiry_ts": "1790316000",
-          "started_at": "1789754400",
-          "finished_at": "1790337600",
+          "cycle_number": 7,
+          "capital_generation": 0,
+          "expiry_ts": 1790316000,
+          "started_at": 1789754400,
+          "finished_at": 1790337600,
           "share_price_start": "1043258944",
           "share_price_end": "1035259234",
           "equity_start": "63260290813",
@@ -512,11 +512,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "6",
-          "capital_generation": "0",
-          "expiry_ts": "1789711200",
-          "started_at": "1789149600",
-          "finished_at": "1789732800",
+          "cycle_number": 6,
+          "capital_generation": 0,
+          "expiry_ts": 1789711200,
+          "started_at": 1789149600,
+          "finished_at": 1789732800,
           "share_price_start": "1039822332",
           "share_price_end": "1043258944",
           "equity_start": "57752911929",
@@ -528,11 +528,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "5",
-          "capital_generation": "0",
-          "expiry_ts": "1789106400",
-          "started_at": "1788544800",
-          "finished_at": "1789128000",
+          "cycle_number": 5,
+          "capital_generation": 0,
+          "expiry_ts": 1789106400,
+          "started_at": 1788544800,
+          "finished_at": 1789128000,
           "share_price_start": "1026406177",
           "share_price_end": "1039822332",
           "equity_start": "54490775306",
@@ -544,11 +544,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "4",
-          "capital_generation": "0",
-          "expiry_ts": "1788501600",
-          "started_at": "1787940000",
-          "finished_at": "1788523200",
+          "cycle_number": 4,
+          "capital_generation": 0,
+          "expiry_ts": 1788501600,
+          "started_at": 1787940000,
+          "finished_at": 1788523200,
           "share_price_start": "1020789792",
           "share_price_end": "1026406177",
           "equity_start": "49460190155",
@@ -560,11 +560,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "3",
-          "capital_generation": "0",
-          "expiry_ts": "1787896800",
-          "started_at": "1787335200",
-          "finished_at": "1787918400",
+          "cycle_number": 3,
+          "capital_generation": 0,
+          "expiry_ts": 1787896800,
+          "started_at": 1787335200,
+          "finished_at": 1787918400,
           "share_price_start": "1036147572",
           "share_price_end": "1020789792",
           "equity_start": "47830616119",
@@ -576,11 +576,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "2",
-          "capital_generation": "0",
-          "expiry_ts": "1787292000",
-          "started_at": "1786730400",
-          "finished_at": "1787313600",
+          "cycle_number": 2,
+          "capital_generation": 0,
+          "expiry_ts": 1787292000,
+          "started_at": 1786730400,
+          "finished_at": 1787313600,
           "share_price_start": "1025184252",
           "share_price_end": "1036147572",
           "equity_start": "42883247325",
@@ -592,11 +592,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "1",
-          "capital_generation": "0",
-          "expiry_ts": "1786687200",
-          "started_at": "1786125600",
-          "finished_at": "1786708800",
+          "cycle_number": 1,
+          "capital_generation": 0,
+          "expiry_ts": 1786687200,
+          "started_at": 1786125600,
+          "finished_at": 1786708800,
           "share_price_start": "1018163000",
           "share_price_end": "1025184252",
           "equity_start": "40282486765",
@@ -608,11 +608,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "0",
-          "capital_generation": "0",
-          "expiry_ts": "1786082400",
-          "started_at": "1785520800",
-          "finished_at": "1786104000",
+          "cycle_number": 0,
+          "capital_generation": 0,
+          "expiry_ts": 1786082400,
+          "started_at": 1785520800,
+          "finished_at": 1786104000,
           "share_price_start": "1000000000",
           "share_price_end": "1018163000",
           "equity_start": "38000000000",
@@ -641,14 +641,14 @@
               "type": "set",
               "share_price": "1039822332"
             },
-            "occurred_at": "1789214400",
+            "occurred_at": 1789214400,
             "transaction_signature": "nvda301111111111111111111111111111111111111111111111111111111111111111111111111111111111"
           }
         ]
       },
       "exposure": {
         "vault_pda": "8oDdcWSv5QtSfEE51K7guQL4uy3xbmisoqrjawqmY3Vm",
-        "as_of": "1791806396",
+        "as_of": 1791806396,
         "positions": [
           {
             "position_pda": "NvdaCa11Wr1ter1111111111111111111111111111",
@@ -658,13 +658,13 @@
             "status": "funded",
             "strike": "240000000000",
             "quantity": "15000000000",
-            "expiry_ts": "1792130400",
+            "expiry_ts": 1792130400,
             "underlying_mint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "underlying_decimals": 8,
             "quote_decimals": 6,
             "spot": "227870000000",
-            "spot_published_at": "1791806396",
+            "spot_published_at": 1791806396,
             "distance_pct": 5.323211,
             "itm": false,
             "intrinsic": "0"
@@ -677,13 +677,13 @@
             "status": "funded",
             "strike": "220000000000",
             "quantity": "6000000000",
-            "expiry_ts": "1792130400",
+            "expiry_ts": 1792130400,
             "underlying_mint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh",
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "underlying_decimals": 8,
             "quote_decimals": 6,
             "spot": "227870000000",
-            "spot_published_at": "1791806396",
+            "spot_published_at": 1791806396,
             "distance_pct": -3.453724,
             "itm": true,
             "intrinsic": "-472200000"
@@ -723,12 +723,12 @@
         "phase": "active",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry_ts": "1792216800",
-        "open_positions": "4",
+        "active_expiry_ts": 1792216800,
+        "open_positions": 4,
         "total_shares": "2076180481342",
         "share_price": "1015738030",
         "equity": "2108855472043",
-        "capital_generation": "0",
+        "capital_generation": 0,
         "accepting_deposits": false,
         "equity_computed": false,
         "pending_deposit_count": 6,
@@ -739,15 +739,15 @@
         "management_fee_bps": 200,
         "manager_stake_min_bps": 100,
         "share_price_hwm": "1000000000",
-        "last_hwm_update_at": "0",
-        "last_hwm_reset_at": "0",
-        "last_settlement_at": "0",
+        "last_hwm_update_at": 0,
+        "last_hwm_reset_at": 0,
+        "last_settlement_at": 0,
         "capacity": {
           "type": "limited",
           "cap_limit": "2158855472043",
           "remaining": "20000000000"
         },
-        "capital_fallback_delay_seconds": "43200",
+        "capital_fallback_delay_seconds": 43200,
         "deposit_window_set_at": null,
         "policy": {
           "max_open_positions": 4,
@@ -755,16 +755,16 @@
           "min_main_liquidity_bps": 1000
         },
         "projection": {
-          "version": "1",
-          "slot": "1",
+          "version": 1,
+          "slot": 1,
           "transaction_index": 0,
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
-        "created_at": "1784224800",
-        "generation_started_at": "1784397600",
+        "created_at": 1784224800,
+        "generation_started_at": 1784397600,
         "tvl_usd_1e9": "2108855472043000",
-        "price_published_at": "1791806380",
+        "price_published_at": 1791806380,
         "premium": [
           {
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -785,25 +785,25 @@
         },
         "depositors_in_generation": 1310,
         "performance": {
-          "capital_generation": "0",
-          "computed_at": "1791806400",
+          "capital_generation": 0,
+          "computed_at": 1791806400,
           "covered": true,
           "returns": {
             "7d": {
               "return_pct": 0.147,
-              "window_start_at": "1791028800",
-              "window_end_at": "1791633600"
+              "window_start_at": 1791028800,
+              "window_end_at": 1791633600
             },
             "30d": {
               "return_pct": 0.785547,
-              "window_start_at": "1789214400",
-              "window_end_at": "1791633600"
+              "window_start_at": 1789214400,
+              "window_end_at": 1791633600
             },
             "90d": null,
             "all": {
               "return_pct": 1.573803,
-              "window_start_at": "1784397600",
-              "window_end_at": "1791633600"
+              "window_start_at": 1784397600,
+              "window_end_at": 1791633600
             }
           },
           "apy_30d": 9.988038,
@@ -828,10 +828,10 @@
       },
       "cycles": [
         {
-          "cycle_number": "12",
-          "capital_generation": "0",
-          "expiry_ts": "1792216800",
-          "started_at": "1791655200",
+          "cycle_number": 12,
+          "capital_generation": 0,
+          "expiry_ts": 1792216800,
+          "started_at": 1791655200,
           "finished_at": null,
           "share_price_start": "1015738030",
           "share_price_end": "1016956915",
@@ -844,11 +844,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "11",
-          "capital_generation": "0",
-          "expiry_ts": "1791612000",
-          "started_at": "1791050400",
-          "finished_at": "1791633600",
+          "cycle_number": 11,
+          "capital_generation": 0,
+          "expiry_ts": 1791612000,
+          "started_at": 1791050400,
+          "finished_at": 1791633600,
           "share_price_start": "1014247087",
           "share_price_end": "1015738030",
           "equity_start": "2019581021904",
@@ -860,11 +860,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "10",
-          "capital_generation": "0",
-          "expiry_ts": "1791007200",
-          "started_at": "1790445600",
-          "finished_at": "1791028800",
+          "cycle_number": 10,
+          "capital_generation": 0,
+          "expiry_ts": 1791007200,
+          "started_at": 1790445600,
+          "finished_at": 1791028800,
           "share_price_start": "1011838911",
           "share_price_end": "1014247087",
           "equity_start": "1961648504485",
@@ -876,11 +876,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "9",
-          "capital_generation": "0",
-          "expiry_ts": "1790402400",
-          "started_at": "1789840800",
-          "finished_at": "1790424000",
+          "cycle_number": 9,
+          "capital_generation": 0,
+          "expiry_ts": 1790402400,
+          "started_at": 1789840800,
+          "finished_at": 1790424000,
           "share_price_start": "1008280689",
           "share_price_end": "1011838911",
           "equity_start": "1874442406874",
@@ -892,11 +892,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "8",
-          "capital_generation": "0",
-          "expiry_ts": "1789797600",
-          "started_at": "1789236000",
-          "finished_at": "1789819200",
+          "cycle_number": 8,
+          "capital_generation": 0,
+          "expiry_ts": 1789797600,
+          "started_at": 1789236000,
+          "finished_at": 1789819200,
           "share_price_start": "1007821123",
           "share_price_end": "1008280689",
           "equity_start": "1773730439961",
@@ -908,11 +908,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "7",
-          "capital_generation": "0",
-          "expiry_ts": "1789192800",
-          "started_at": "1788631200",
-          "finished_at": "1789214400",
+          "cycle_number": 7,
+          "capital_generation": 0,
+          "expiry_ts": 1789192800,
+          "started_at": 1788631200,
+          "finished_at": 1789214400,
           "share_price_start": "1006745919",
           "share_price_end": "1007821123",
           "equity_start": "1712969505896",
@@ -924,11 +924,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "6",
-          "capital_generation": "0",
-          "expiry_ts": "1788588000",
-          "started_at": "1788026400",
-          "finished_at": "1788609600",
+          "cycle_number": 6,
+          "capital_generation": 0,
+          "expiry_ts": 1788588000,
+          "started_at": 1788026400,
+          "finished_at": 1788609600,
           "share_price_start": "1003669672",
           "share_price_end": "1006745919",
           "equity_start": "1631652743467",
@@ -940,11 +940,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "5",
-          "capital_generation": "0",
-          "expiry_ts": "1787983200",
-          "started_at": "1787421600",
-          "finished_at": "1788004800",
+          "cycle_number": 5,
+          "capital_generation": 0,
+          "expiry_ts": 1787983200,
+          "started_at": 1787421600,
+          "finished_at": 1788004800,
           "share_price_start": "1004414948",
           "share_price_end": "1003669672",
           "equity_start": "1560473195743",
@@ -956,11 +956,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "4",
-          "capital_generation": "0",
-          "expiry_ts": "1787378400",
-          "started_at": "1786816800",
-          "finished_at": "1787400000",
+          "cycle_number": 4,
+          "capital_generation": 0,
+          "expiry_ts": 1787378400,
+          "started_at": 1786816800,
+          "finished_at": 1787400000,
           "share_price_start": "1009535312",
           "share_price_end": "1004414948",
           "equity_start": "1493657766133",
@@ -972,11 +972,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "3",
-          "capital_generation": "0",
-          "expiry_ts": "1786773600",
-          "started_at": "1786212000",
-          "finished_at": "1786795200",
+          "cycle_number": 3,
+          "capital_generation": 0,
+          "expiry_ts": 1786773600,
+          "started_at": 1786212000,
+          "finished_at": 1786795200,
           "share_price_start": "1006620141",
           "share_price_end": "1009535312",
           "equity_start": "1411291265848",
@@ -988,11 +988,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "2",
-          "capital_generation": "0",
-          "expiry_ts": "1786168800",
-          "started_at": "1785607200",
-          "finished_at": "1786190400",
+          "cycle_number": 2,
+          "capital_generation": 0,
+          "expiry_ts": 1786168800,
+          "started_at": 1785607200,
+          "finished_at": 1786190400,
           "share_price_start": "1005316246",
           "share_price_end": "1006620141",
           "equity_start": "1340051255566",
@@ -1004,11 +1004,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "1",
-          "capital_generation": "0",
-          "expiry_ts": "1785564000",
-          "started_at": "1785002400",
-          "finished_at": "1785585600",
+          "cycle_number": 1,
+          "capital_generation": 0,
+          "expiry_ts": 1785564000,
+          "started_at": 1785002400,
+          "finished_at": 1785585600,
           "share_price_start": "1005069000",
           "share_price_end": "1005316246",
           "equity_start": "1265875693643",
@@ -1020,11 +1020,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "0",
-          "capital_generation": "0",
-          "expiry_ts": "1784959200",
-          "started_at": "1784397600",
-          "finished_at": "1784980800",
+          "cycle_number": 0,
+          "capital_generation": 0,
+          "expiry_ts": 1784959200,
+          "started_at": 1784397600,
+          "finished_at": 1784980800,
           "share_price_start": "1000000000",
           "share_price_end": "1005069000",
           "equity_start": "1200000000000",
@@ -1056,7 +1056,7 @@
               "type": "set",
               "share_price": "1007821123"
             },
-            "occurred_at": "1790078400",
+            "occurred_at": 1790078400,
             "transaction_signature": "usdc201111111111111111111111111111111111111111111111111111111111111111111111111111111111"
           },
           {
@@ -1069,7 +1069,7 @@
               "type": "set",
               "share_price": "1004414948"
             },
-            "occurred_at": "1788350400",
+            "occurred_at": 1788350400,
             "transaction_signature": "usdc401111111111111111111111111111111111111111111111111111111111111111111111111111111111"
           },
           {
@@ -1082,14 +1082,14 @@
               "type": "set",
               "share_price": "1005069000"
             },
-            "occurred_at": "1785758400",
+            "occurred_at": 1785758400,
             "transaction_signature": "usdc701111111111111111111111111111111111111111111111111111111111111111111111111111111111"
           }
         ]
       },
       "exposure": {
         "vault_pda": "4mSySvcVS3W4P6ujLahTNrBnYYLNEvmQUVwUNJ8pm9jB",
-        "as_of": "1791806396",
+        "as_of": 1791806396,
         "positions": [
           {
             "position_pda": "So1Put5o1d111111111111111111111111111111111",
@@ -1099,13 +1099,13 @@
             "status": "funded",
             "strike": "160000000000",
             "quantity": "4000000000000",
-            "expiry_ts": "1792216800",
+            "expiry_ts": 1792216800,
             "underlying_mint": "So11111111111111111111111111111111111111112",
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "underlying_decimals": 9,
             "quote_decimals": 6,
             "spot": "172400000000",
-            "spot_published_at": "1791806396",
+            "spot_published_at": 1791806396,
             "distance_pct": 7.192575,
             "itm": false,
             "intrinsic": "0"
@@ -1118,13 +1118,13 @@
             "status": "funded",
             "strike": "180000000000",
             "quantity": "2500000000000",
-            "expiry_ts": "1792216800",
+            "expiry_ts": 1792216800,
             "underlying_mint": "So11111111111111111111111111111111111111112",
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "underlying_decimals": 9,
             "quote_decimals": 6,
             "spot": "172400000000",
-            "spot_published_at": "1791806396",
+            "spot_published_at": 1791806396,
             "distance_pct": -4.408353,
             "itm": true,
             "intrinsic": "-19000000000"
@@ -1137,13 +1137,13 @@
             "status": "open",
             "strike": "150000000000",
             "quantity": "1500000000000",
-            "expiry_ts": "1792216800",
+            "expiry_ts": 1792216800,
             "underlying_mint": "So11111111111111111111111111111111111111112",
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "underlying_decimals": 9,
             "quote_decimals": 6,
             "spot": "172400000000",
-            "spot_published_at": "1791806396",
+            "spot_published_at": 1791806396,
             "distance_pct": 12.993039,
             "itm": false,
             "intrinsic": "0"
@@ -1182,12 +1182,12 @@
         "phase": "active",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry_ts": "1791957600",
-        "open_positions": "3",
+        "active_expiry_ts": 1791957600,
+        "open_positions": 3,
         "total_shares": "28495937978380",
         "share_price": "1039872792",
         "equity": "29632150586237",
-        "capital_generation": "0",
+        "capital_generation": 0,
         "accepting_deposits": false,
         "equity_computed": false,
         "pending_deposit_count": 0,
@@ -1198,13 +1198,13 @@
         "management_fee_bps": 200,
         "manager_stake_min_bps": 100,
         "share_price_hwm": "1039872792",
-        "last_hwm_update_at": "0",
-        "last_hwm_reset_at": "0",
-        "last_settlement_at": "0",
+        "last_hwm_update_at": 0,
+        "last_hwm_reset_at": 0,
+        "last_settlement_at": 0,
         "capacity": {
           "type": "unlimited"
         },
-        "capital_fallback_delay_seconds": "43200",
+        "capital_fallback_delay_seconds": 43200,
         "deposit_window_set_at": null,
         "policy": {
           "max_open_positions": 4,
@@ -1212,16 +1212,16 @@
           "min_main_liquidity_bps": 1000
         },
         "projection": {
-          "version": "1",
-          "slot": "1",
+          "version": 1,
+          "slot": 1,
           "transaction_index": 0,
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
-        "created_at": "1784570400",
-        "generation_started_at": "1784743200",
+        "created_at": 1784570400,
+        "generation_started_at": 1784743200,
         "tvl_usd_1e9": "2529104052535327",
-        "price_published_at": "1791806380",
+        "price_published_at": 1791806380,
         "premium": [
           {
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -1242,25 +1242,25 @@
         },
         "depositors_in_generation": 2204,
         "performance": {
-          "capital_generation": "0",
-          "computed_at": "1791806400",
+          "capital_generation": 0,
+          "computed_at": 1791806400,
           "covered": true,
           "returns": {
             "7d": {
               "return_pct": 0.9158,
-              "window_start_at": "1790769600",
-              "window_end_at": "1791374400"
+              "window_start_at": 1790769600,
+              "window_end_at": 1791374400
             },
             "30d": {
               "return_pct": 3.390427,
-              "window_start_at": "1788955200",
-              "window_end_at": "1791374400"
+              "window_start_at": 1788955200,
+              "window_end_at": 1791374400
             },
             "90d": null,
             "all": {
               "return_pct": 3.987279,
-              "window_start_at": "1784743200",
-              "window_end_at": "1791374400"
+              "window_start_at": 1784743200,
+              "window_end_at": 1791374400
             }
           },
           "apy_30d": 50.029734,
@@ -1277,10 +1277,10 @@
       },
       "cycles": [
         {
-          "cycle_number": "11",
-          "capital_generation": "0",
-          "expiry_ts": "1791957600",
-          "started_at": "1791396000",
+          "cycle_number": 11,
+          "capital_generation": 0,
+          "expiry_ts": 1791957600,
+          "started_at": 1791396000,
           "finished_at": null,
           "share_price_start": "1039872792",
           "share_price_end": "1041952537",
@@ -1293,11 +1293,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "10",
-          "capital_generation": "0",
-          "expiry_ts": "1791352800",
-          "started_at": "1790791200",
-          "finished_at": "1791374400",
+          "cycle_number": 10,
+          "capital_generation": 0,
+          "expiry_ts": 1791352800,
+          "started_at": 1790791200,
+          "finished_at": 1791374400,
           "share_price_start": "1030436059",
           "share_price_end": "1039872792",
           "equity_start": "28415048961151",
@@ -1309,11 +1309,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "9",
-          "capital_generation": "0",
-          "expiry_ts": "1790748000",
-          "started_at": "1790186400",
-          "finished_at": "1790769600",
+          "cycle_number": 9,
+          "capital_generation": 0,
+          "expiry_ts": 1790748000,
+          "started_at": 1790186400,
+          "finished_at": 1790769600,
           "share_price_start": "1028915323",
           "share_price_end": "1030436059",
           "equity_start": "27378608421542",
@@ -1325,11 +1325,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "8",
-          "capital_generation": "0",
-          "expiry_ts": "1790143200",
-          "started_at": "1789581600",
-          "finished_at": "1790164800",
+          "cycle_number": 8,
+          "capital_generation": 0,
+          "expiry_ts": 1790143200,
+          "started_at": 1789581600,
+          "finished_at": 1790164800,
           "share_price_start": "1014574316",
           "share_price_end": "1028915323",
           "equity_start": "25516203849611",
@@ -1341,11 +1341,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "7",
-          "capital_generation": "0",
-          "expiry_ts": "1789538400",
-          "started_at": "1788976800",
-          "finished_at": "1789560000",
+          "cycle_number": 7,
+          "capital_generation": 0,
+          "expiry_ts": 1789538400,
+          "started_at": 1788976800,
+          "finished_at": 1789560000,
           "share_price_start": "1005772799",
           "share_price_end": "1014574316",
           "equity_start": "23379194663600",
@@ -1357,11 +1357,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "6",
-          "capital_generation": "0",
-          "expiry_ts": "1788933600",
-          "started_at": "1788372000",
-          "finished_at": "1788955200",
+          "cycle_number": 6,
+          "capital_generation": 0,
+          "expiry_ts": 1788933600,
+          "started_at": 1788372000,
+          "finished_at": 1788955200,
           "share_price_start": "1028026489",
           "share_price_end": "1005772799",
           "equity_start": "22174057401454",
@@ -1373,11 +1373,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "5",
-          "capital_generation": "0",
-          "expiry_ts": "1788328800",
-          "started_at": "1787767200",
-          "finished_at": "1788350400",
+          "cycle_number": 5,
+          "capital_generation": 0,
+          "expiry_ts": 1788328800,
+          "started_at": 1787767200,
+          "finished_at": 1788350400,
           "share_price_start": "1022131855",
           "share_price_end": "1028026489",
           "equity_start": "21155980067366",
@@ -1389,11 +1389,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "4",
-          "capital_generation": "0",
-          "expiry_ts": "1787724000",
-          "started_at": "1787162400",
-          "finished_at": "1787745600",
+          "cycle_number": 4,
+          "capital_generation": 0,
+          "expiry_ts": 1787724000,
+          "started_at": 1787162400,
+          "finished_at": 1787745600,
           "share_price_start": "1018236084",
           "share_price_end": "1022131855",
           "equity_start": "19501338329539",
@@ -1405,11 +1405,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "3",
-          "capital_generation": "0",
-          "expiry_ts": "1787119200",
-          "started_at": "1786557600",
-          "finished_at": "1787140800",
+          "cycle_number": 3,
+          "capital_generation": 0,
+          "expiry_ts": 1787119200,
+          "started_at": 1786557600,
+          "finished_at": 1787140800,
           "share_price_start": "1014800983",
           "share_price_end": "1018236084",
           "equity_start": "18416949968602",
@@ -1421,11 +1421,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "2",
-          "capital_generation": "0",
-          "expiry_ts": "1786514400",
-          "started_at": "1785952800",
-          "finished_at": "1786536000",
+          "cycle_number": 2,
+          "capital_generation": 0,
+          "expiry_ts": 1786514400,
+          "started_at": 1785952800,
+          "finished_at": 1786536000,
           "share_price_start": "1018186453",
           "share_price_end": "1014800983",
           "equity_start": "17307711012348",
@@ -1437,11 +1437,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "1",
-          "capital_generation": "0",
-          "expiry_ts": "1785909600",
-          "started_at": "1785348000",
-          "finished_at": "1785931200",
+          "cycle_number": 1,
+          "capital_generation": 0,
+          "expiry_ts": 1785909600,
+          "started_at": 1785348000,
+          "finished_at": 1785931200,
           "share_price_start": "1005653000",
           "share_price_end": "1018186453",
           "equity_start": "16199297793718",
@@ -1453,11 +1453,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "0",
-          "capital_generation": "0",
-          "expiry_ts": "1785304800",
-          "started_at": "1784743200",
-          "finished_at": "1785326400",
+          "cycle_number": 0,
+          "capital_generation": 0,
+          "expiry_ts": 1785304800,
+          "started_at": 1784743200,
+          "finished_at": 1785326400,
           "share_price_start": "1000000000",
           "share_price_end": "1005653000",
           "equity_start": "15000000000000",
@@ -1479,7 +1479,7 @@
       },
       "exposure": {
         "vault_pda": "HcD4rgK6J34wtyQ6NiJXSE8ByTvfy4eVS4kUcCuZQmhn",
-        "as_of": "1791806396",
+        "as_of": 1791806396,
         "positions": [
           {
             "position_pda": "HypeCa11Wr1ter111111111111111111111111111111",
@@ -1489,13 +1489,13 @@
             "status": "funded",
             "strike": "90000000000",
             "quantity": "120000000000000",
-            "expiry_ts": "1791957600",
+            "expiry_ts": 1791957600,
             "underlying_mint": "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "underlying_decimals": 9,
             "quote_decimals": 6,
             "spot": "85350000000",
-            "spot_published_at": "1791806396",
+            "spot_published_at": 1791806396,
             "distance_pct": 5.448155,
             "itm": false,
             "intrinsic": "0"
@@ -1508,7 +1508,7 @@
             "status": "funded",
             "strike": "82000000000",
             "quantity": "60000000000000",
-            "expiry_ts": "1791957600",
+            "expiry_ts": 1791957600,
             "underlying_mint": "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "underlying_decimals": 9,
@@ -1553,12 +1553,12 @@
         "phase": "idle",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry_ts": "0",
-        "open_positions": "0",
+        "active_expiry_ts": 0,
+        "open_positions": 0,
         "total_shares": "687448282714",
         "share_price": "1053003931",
         "equity": "723885744058",
-        "capital_generation": "0",
+        "capital_generation": 0,
         "accepting_deposits": true,
         "equity_computed": false,
         "pending_deposit_count": 0,
@@ -1569,13 +1569,13 @@
         "management_fee_bps": 200,
         "manager_stake_min_bps": 100,
         "share_price_hwm": "1053003931",
-        "last_hwm_update_at": "0",
-        "last_hwm_reset_at": "0",
-        "last_settlement_at": "0",
+        "last_hwm_update_at": 0,
+        "last_hwm_reset_at": 0,
+        "last_settlement_at": 0,
         "capacity": {
           "type": "unlimited"
         },
-        "capital_fallback_delay_seconds": "43200",
+        "capital_fallback_delay_seconds": 43200,
         "deposit_window_set_at": null,
         "policy": {
           "max_open_positions": 4,
@@ -1583,22 +1583,22 @@
           "min_main_liquidity_bps": 1000
         },
         "projection": {
-          "version": "1",
-          "slot": "1",
+          "version": 1,
+          "slot": 1,
           "transaction_index": 0,
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
-        "created_at": "1785434400",
+        "created_at": 1785434400,
         "generation_started_at": null,
         "tvl_usd_1e9": "9301497479698865",
-        "price_published_at": "1791806380",
+        "price_published_at": 1791806380,
         "premium": null,
         "fees": null,
         "depositors_in_generation": null,
         "performance": {
-          "capital_generation": "0",
-          "computed_at": "1791806400",
+          "capital_generation": 0,
+          "computed_at": 1791806400,
           "covered": false,
           "returns": {
             "7d": null,
@@ -1620,11 +1620,11 @@
       },
       "cycles": [
         {
-          "cycle_number": "9",
-          "capital_generation": "0",
-          "expiry_ts": "1791612000",
-          "started_at": "1791050400",
-          "finished_at": "1791633600",
+          "cycle_number": 9,
+          "capital_generation": 0,
+          "expiry_ts": 1791612000,
+          "started_at": 1791050400,
+          "finished_at": 1791633600,
           "share_price_start": "1041242061",
           "share_price_end": "1053003931",
           "equity_start": "671436871227",
@@ -1636,11 +1636,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "8",
-          "capital_generation": "0",
-          "expiry_ts": "1791007200",
-          "started_at": "1790445600",
-          "finished_at": "1791028800",
+          "cycle_number": 8,
+          "capital_generation": 0,
+          "expiry_ts": 1791007200,
+          "started_at": 1790445600,
+          "finished_at": 1791028800,
           "share_price_start": "1034167323",
           "share_price_end": "1041242061",
           "equity_start": "642851527522",
@@ -1652,11 +1652,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "7",
-          "capital_generation": "0",
-          "expiry_ts": "1790402400",
-          "started_at": "1789840800",
-          "finished_at": "1790424000",
+          "cycle_number": 7,
+          "capital_generation": 0,
+          "expiry_ts": 1790402400,
+          "started_at": 1789840800,
+          "finished_at": 1790424000,
           "share_price_start": "1025168395",
           "share_price_end": "1034167323",
           "equity_start": "605937450314",
@@ -1668,11 +1668,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "6",
-          "capital_generation": "0",
-          "expiry_ts": "1789797600",
-          "started_at": "1789236000",
-          "finished_at": "1789819200",
+          "cycle_number": 6,
+          "capital_generation": 0,
+          "expiry_ts": 1789797600,
+          "started_at": 1789236000,
+          "finished_at": 1789819200,
           "share_price_start": "1013460895",
           "share_price_end": "1025168395",
           "equity_start": "560635648870",
@@ -1684,11 +1684,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "5",
-          "capital_generation": "0",
-          "expiry_ts": "1789192800",
-          "started_at": "1788631200",
-          "finished_at": "1789214400",
+          "cycle_number": 5,
+          "capital_generation": 0,
+          "expiry_ts": 1789192800,
+          "started_at": 1788631200,
+          "finished_at": 1789214400,
           "share_price_start": "1011650042",
           "share_price_end": "1013460895",
           "equity_start": "532052405432",
@@ -1700,11 +1700,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "4",
-          "capital_generation": "0",
-          "expiry_ts": "1788588000",
-          "started_at": "1788026400",
-          "finished_at": "1788609600",
+          "cycle_number": 4,
+          "capital_generation": 0,
+          "expiry_ts": 1788588000,
+          "started_at": 1788026400,
+          "finished_at": 1788609600,
           "share_price_start": "1023423507",
           "share_price_end": "1011650042",
           "equity_start": "511851020555",
@@ -1716,11 +1716,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "3",
-          "capital_generation": "0",
-          "expiry_ts": "1787983200",
-          "started_at": "1787421600",
-          "finished_at": "1788004800",
+          "cycle_number": 3,
+          "capital_generation": 0,
+          "expiry_ts": 1787983200,
+          "started_at": 1787421600,
+          "finished_at": 1788004800,
           "share_price_start": "1018909737",
           "share_price_end": "1023423507",
           "equity_start": "488291388949",
@@ -1732,11 +1732,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "2",
-          "capital_generation": "0",
-          "expiry_ts": "1787378400",
-          "started_at": "1786816800",
-          "finished_at": "1787400000",
+          "cycle_number": 2,
+          "capital_generation": 0,
+          "expiry_ts": 1787378400,
+          "started_at": 1786816800,
+          "finished_at": 1787400000,
           "share_price_start": "1010623634",
           "share_price_end": "1018909737",
           "equity_start": "464591692065",
@@ -1748,11 +1748,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "1",
-          "capital_generation": "0",
-          "expiry_ts": "1786773600",
-          "started_at": "1786212000",
-          "finished_at": "1786795200",
+          "cycle_number": 1,
+          "capital_generation": 0,
+          "expiry_ts": 1786773600,
+          "started_at": 1786212000,
+          "finished_at": 1786795200,
           "share_price_start": "1004639000",
           "share_price_end": "1010623634",
           "equity_start": "442126380857",
@@ -1764,11 +1764,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "0",
-          "capital_generation": "0",
-          "expiry_ts": "1786168800",
-          "started_at": "1785607200",
-          "finished_at": "1786190400",
+          "cycle_number": 0,
+          "capital_generation": 0,
+          "expiry_ts": 1786168800,
+          "started_at": 1785607200,
+          "finished_at": 1786190400,
           "share_price_start": "1000000000",
           "share_price_end": "1004639000",
           "equity_start": "420000000000",
@@ -1790,7 +1790,7 @@
       },
       "exposure": {
         "vault_pda": "3DBzpSMK2X4b7WmreYy2ut2JNrCQ4yZUnmuq5UHSPuaX",
-        "as_of": "1791806396",
+        "as_of": 1791806396,
         "positions": [],
         "totals": []
       }
@@ -1819,12 +1819,12 @@
         "phase": "active",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry_ts": "1792216800",
-        "open_positions": "3",
+        "active_expiry_ts": 1792216800,
+        "open_positions": 3,
         "total_shares": "168512415558",
         "share_price": "1015318374",
         "equity": "171093751764",
-        "capital_generation": "0",
+        "capital_generation": 0,
         "accepting_deposits": false,
         "equity_computed": false,
         "pending_deposit_count": 0,
@@ -1835,13 +1835,13 @@
         "management_fee_bps": 200,
         "manager_stake_min_bps": 100,
         "share_price_hwm": "1015318374",
-        "last_hwm_update_at": "0",
-        "last_hwm_reset_at": "0",
-        "last_settlement_at": "0",
+        "last_hwm_update_at": 0,
+        "last_hwm_reset_at": 0,
+        "last_settlement_at": 0,
         "capacity": {
           "type": "unlimited"
         },
-        "capital_fallback_delay_seconds": "43200",
+        "capital_fallback_delay_seconds": 43200,
         "deposit_window_set_at": null,
         "policy": {
           "max_open_positions": 4,
@@ -1849,16 +1849,16 @@
           "min_main_liquidity_bps": 1000
         },
         "projection": {
-          "version": "1",
-          "slot": "1",
+          "version": 1,
+          "slot": 1,
           "transaction_index": 0,
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
-        "created_at": "1784224800",
-        "generation_started_at": "1784397600",
+        "created_at": 1784224800,
+        "generation_started_at": 1784397600,
         "tvl_usd_1e9": "1339031029430593",
-        "price_published_at": "1791806380",
+        "price_published_at": 1791806380,
         "premium": [
           {
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -1879,25 +1879,25 @@
         },
         "depositors_in_generation": 158,
         "performance": {
-          "capital_generation": "0",
-          "computed_at": "1791806400",
+          "capital_generation": 0,
+          "computed_at": 1791806400,
           "covered": true,
           "returns": {
             "7d": {
               "return_pct": 0.0911,
-              "window_start_at": "1791028800",
-              "window_end_at": "1791633600"
+              "window_start_at": 1791028800,
+              "window_end_at": 1791633600
             },
             "30d": {
               "return_pct": 0.741728,
-              "window_start_at": "1789214400",
-              "window_end_at": "1791633600"
+              "window_start_at": 1789214400,
+              "window_end_at": 1791633600
             },
             "90d": null,
             "all": {
               "return_pct": 1.531837,
-              "window_start_at": "1784397600",
-              "window_end_at": "1791633600"
+              "window_start_at": 1784397600,
+              "window_end_at": 1791633600
             }
           },
           "apy_30d": 9.407637,
@@ -1914,10 +1914,10 @@
       },
       "cycles": [
         {
-          "cycle_number": "12",
-          "capital_generation": "0",
-          "expiry_ts": "1792216800",
-          "started_at": "1791655200",
+          "cycle_number": 12,
+          "capital_generation": 0,
+          "expiry_ts": 1792216800,
+          "started_at": 1791655200,
           "finished_at": null,
           "share_price_start": "1015318374",
           "share_price_end": "1017349010",
@@ -1930,11 +1930,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "11",
-          "capital_generation": "0",
-          "expiry_ts": "1791612000",
-          "started_at": "1791050400",
-          "finished_at": "1791633600",
+          "cycle_number": 11,
+          "capital_generation": 0,
+          "expiry_ts": 1791612000,
+          "started_at": 1791050400,
+          "finished_at": 1791633600,
           "share_price_start": "1014394261",
           "share_price_end": "1015318374",
           "equity_start": "159942944160",
@@ -1946,11 +1946,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "10",
-          "capital_generation": "0",
-          "expiry_ts": "1791007200",
-          "started_at": "1790445600",
-          "finished_at": "1791028800",
+          "cycle_number": 10,
+          "capital_generation": 0,
+          "expiry_ts": 1791007200,
+          "started_at": 1790445600,
+          "finished_at": 1791028800,
           "share_price_start": "1011246252",
           "share_price_end": "1014394261",
           "equity_start": "152769895885",
@@ -1962,11 +1962,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "9",
-          "capital_generation": "0",
-          "expiry_ts": "1790402400",
-          "started_at": "1789840800",
-          "finished_at": "1790424000",
+          "cycle_number": 9,
+          "capital_generation": 0,
+          "expiry_ts": 1790402400,
+          "started_at": 1789840800,
+          "finished_at": 1790424000,
           "share_price_start": "1009525012",
           "share_price_end": "1011246252",
           "equity_start": "144618908327",
@@ -1978,11 +1978,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "8",
-          "capital_generation": "0",
-          "expiry_ts": "1789797600",
-          "started_at": "1789236000",
-          "finished_at": "1789819200",
+          "cycle_number": 8,
+          "capital_generation": 0,
+          "expiry_ts": 1789797600,
+          "started_at": 1789236000,
+          "finished_at": 1789819200,
           "share_price_start": "1007842923",
           "share_price_end": "1009525012",
           "equity_start": "139368021196",
@@ -1994,11 +1994,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "7",
-          "capital_generation": "0",
-          "expiry_ts": "1789192800",
-          "started_at": "1788631200",
-          "finished_at": "1789214400",
+          "cycle_number": 7,
+          "capital_generation": 0,
+          "expiry_ts": 1789192800,
+          "started_at": 1788631200,
+          "finished_at": 1789214400,
           "share_price_start": "1013307692",
           "share_price_end": "1007842923",
           "equity_start": "134248212762",
@@ -2010,11 +2010,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "6",
-          "capital_generation": "0",
-          "expiry_ts": "1788588000",
-          "started_at": "1788026400",
-          "finished_at": "1788609600",
+          "cycle_number": 6,
+          "capital_generation": 0,
+          "expiry_ts": 1788588000,
+          "started_at": 1788026400,
+          "finished_at": 1788609600,
           "share_price_start": "1009032422",
           "share_price_end": "1013307692",
           "equity_start": "126232832929",
@@ -2026,11 +2026,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "5",
-          "capital_generation": "0",
-          "expiry_ts": "1787983200",
-          "started_at": "1787421600",
-          "finished_at": "1788004800",
+          "cycle_number": 5,
+          "capital_generation": 0,
+          "expiry_ts": 1787983200,
+          "started_at": 1787421600,
+          "finished_at": 1788004800,
           "share_price_start": "1006630602",
           "share_price_end": "1009032422",
           "equity_start": "119068452046",
@@ -2042,11 +2042,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "4",
-          "capital_generation": "0",
-          "expiry_ts": "1787378400",
-          "started_at": "1786816800",
-          "finished_at": "1787400000",
+          "cycle_number": 4,
+          "capital_generation": 0,
+          "expiry_ts": 1787378400,
+          "started_at": 1786816800,
+          "finished_at": 1787400000,
           "share_price_start": "1005245374",
           "share_price_end": "1006630602",
           "equity_start": "113018944038",
@@ -2058,11 +2058,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "3",
-          "capital_generation": "0",
-          "expiry_ts": "1786773600",
-          "started_at": "1786212000",
-          "finished_at": "1786795200",
+          "cycle_number": 3,
+          "capital_generation": 0,
+          "expiry_ts": 1786773600,
+          "started_at": 1786212000,
+          "finished_at": 1786795200,
           "share_price_start": "1004714885",
           "share_price_end": "1005245374",
           "equity_start": "107444660238",
@@ -2074,11 +2074,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "2",
-          "capital_generation": "0",
-          "expiry_ts": "1786168800",
-          "started_at": "1785607200",
-          "finished_at": "1786190400",
+          "cycle_number": 2,
+          "capital_generation": 0,
+          "expiry_ts": 1786168800,
+          "started_at": 1785607200,
+          "finished_at": 1786190400,
           "share_price_start": "1004553152",
           "share_price_end": "1004714885",
           "equity_start": "101368458245",
@@ -2090,11 +2090,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "1",
-          "capital_generation": "0",
-          "expiry_ts": "1785564000",
-          "started_at": "1785002400",
-          "finished_at": "1785585600",
+          "cycle_number": 1,
+          "capital_generation": 0,
+          "expiry_ts": 1785564000,
+          "started_at": 1785002400,
+          "finished_at": 1785585600,
           "share_price_start": "1002136000",
           "share_price_end": "1004553152",
           "equity_start": "95506453862",
@@ -2106,11 +2106,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "0",
-          "capital_generation": "0",
-          "expiry_ts": "1784959200",
-          "started_at": "1784397600",
-          "finished_at": "1784980800",
+          "cycle_number": 0,
+          "capital_generation": 0,
+          "expiry_ts": 1784959200,
+          "started_at": 1784397600,
+          "finished_at": 1784980800,
           "share_price_start": "1000000000",
           "share_price_end": "1002136000",
           "equity_start": "90000000000",
@@ -2132,7 +2132,7 @@
       },
       "exposure": {
         "vault_pda": "Cqk7VamfWvUDzwRttsHi6qy7Dm8ApQndyRcGqLWQiWk4",
-        "as_of": "1791806396",
+        "as_of": 1791806396,
         "positions": [
           {
             "position_pda": "SpyxCa11Wr1ter11111111111111111111111111111",
@@ -2142,13 +2142,13 @@
             "status": "funded",
             "strike": "800000000000",
             "quantity": "20000000000",
-            "expiry_ts": "1792216800",
+            "expiry_ts": 1792216800,
             "underlying_mint": "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "underlying_decimals": 8,
             "quote_decimals": 6,
             "spot": "782630000000",
-            "spot_published_at": "1791806396",
+            "spot_published_at": 1791806396,
             "distance_pct": 2.21944,
             "itm": false,
             "intrinsic": "0"
@@ -2187,12 +2187,12 @@
         "phase": "idle",
         "safety": "normal",
         "capabilities": 0,
-        "active_expiry_ts": "0",
-        "open_positions": "0",
+        "active_expiry_ts": 0,
+        "open_positions": 0,
         "total_shares": "4768346161",
         "share_price": "1066880647",
         "equity": "5087256238",
-        "capital_generation": "0",
+        "capital_generation": 0,
         "accepting_deposits": true,
         "equity_computed": false,
         "pending_deposit_count": 0,
@@ -2203,13 +2203,13 @@
         "management_fee_bps": 200,
         "manager_stake_min_bps": 100,
         "share_price_hwm": "1066880647",
-        "last_hwm_update_at": "0",
-        "last_hwm_reset_at": "0",
-        "last_settlement_at": "0",
+        "last_hwm_update_at": 0,
+        "last_hwm_reset_at": 0,
+        "last_settlement_at": 0,
         "capacity": {
           "type": "unlimited"
         },
-        "capital_fallback_delay_seconds": "43200",
+        "capital_fallback_delay_seconds": 43200,
         "deposit_window_set_at": null,
         "policy": {
           "max_open_positions": 4,
@@ -2217,16 +2217,16 @@
           "min_main_liquidity_bps": 1000
         },
         "projection": {
-          "version": "1",
-          "slot": "1",
+          "version": 1,
+          "slot": 1,
           "transaction_index": 0,
           "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
           "event_index": 0
         },
-        "created_at": "1785520800",
-        "generation_started_at": "1785693600",
+        "created_at": 1785520800,
+        "generation_started_at": 1785693600,
         "tvl_usd_1e9": "839448151832380",
-        "price_published_at": "1791806380",
+        "price_published_at": 1791806380,
         "premium": [
           {
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
@@ -2247,25 +2247,25 @@
         },
         "depositors_in_generation": 41,
         "performance": {
-          "capital_generation": "0",
-          "computed_at": "1791806400",
+          "capital_generation": 0,
+          "computed_at": 1791806400,
           "covered": true,
           "returns": {
             "7d": {
               "return_pct": 0.7812,
-              "window_start_at": "1791115200",
-              "window_end_at": "1791720000"
+              "window_start_at": 1791115200,
+              "window_end_at": 1791720000
             },
             "30d": {
               "return_pct": 2.805881,
-              "window_start_at": "1788696000",
-              "window_end_at": "1791720000"
+              "window_start_at": 1788696000,
+              "window_end_at": 1791720000
             },
             "90d": null,
             "all": {
               "return_pct": 6.688065,
-              "window_start_at": "1785693600",
-              "window_end_at": "1791720000"
+              "window_start_at": 1785693600,
+              "window_end_at": 1791720000
             }
           },
           "apy_30d": 40.029164,
@@ -2282,11 +2282,11 @@
       },
       "cycles": [
         {
-          "cycle_number": "9",
-          "capital_generation": "0",
-          "expiry_ts": "1791698400",
-          "started_at": "1791136800",
-          "finished_at": "1791720000",
+          "cycle_number": 9,
+          "capital_generation": 0,
+          "expiry_ts": 1791698400,
+          "started_at": 1791136800,
+          "finished_at": 1791720000,
           "share_price_start": "1058610780",
           "share_price_end": "1066880647",
           "equity_start": "4657458823",
@@ -2298,11 +2298,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "8",
-          "capital_generation": "0",
-          "expiry_ts": "1791093600",
-          "started_at": "1790532000",
-          "finished_at": "1791115200",
+          "cycle_number": 8,
+          "capital_generation": 0,
+          "expiry_ts": 1791093600,
+          "started_at": 1790532000,
+          "finished_at": 1791115200,
           "share_price_start": "1046098398",
           "share_price_end": "1058610780",
           "equity_start": "4304719325",
@@ -2314,11 +2314,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "7",
-          "capital_generation": "0",
-          "expiry_ts": "1790488800",
-          "started_at": "1789927200",
-          "finished_at": "1790510400",
+          "cycle_number": 7,
+          "capital_generation": 0,
+          "expiry_ts": 1790488800,
+          "started_at": 1789927200,
+          "finished_at": 1790510400,
           "share_price_start": "1031598253",
           "share_price_end": "1046098398",
           "equity_start": "3910162570",
@@ -2330,11 +2330,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "6",
-          "capital_generation": "0",
-          "expiry_ts": "1789884000",
-          "started_at": "1789322400",
-          "finished_at": "1789905600",
+          "cycle_number": 6,
+          "capital_generation": 0,
+          "expiry_ts": 1789884000,
+          "started_at": 1789322400,
+          "finished_at": 1789905600,
           "share_price_start": "1027261157",
           "share_price_end": "1031598253",
           "equity_start": "3576128027",
@@ -2346,11 +2346,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "5",
-          "capital_generation": "0",
-          "expiry_ts": "1789279200",
-          "started_at": "1788717600",
-          "finished_at": "1789300800",
+          "cycle_number": 5,
+          "capital_generation": 0,
+          "expiry_ts": 1789279200,
+          "started_at": 1788717600,
+          "finished_at": 1789300800,
           "share_price_start": "1037762274",
           "share_price_end": "1027261157",
           "equity_start": "3331821061",
@@ -2362,11 +2362,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "4",
-          "capital_generation": "0",
-          "expiry_ts": "1788674400",
-          "started_at": "1788112800",
-          "finished_at": "1788696000",
+          "cycle_number": 4,
+          "capital_generation": 0,
+          "expiry_ts": 1788674400,
+          "started_at": 1788112800,
+          "finished_at": 1788696000,
           "share_price_start": "1035566873",
           "share_price_end": "1037762274",
           "equity_start": "3180452083",
@@ -2378,11 +2378,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "3",
-          "capital_generation": "0",
-          "expiry_ts": "1788069600",
-          "started_at": "1787508000",
-          "finished_at": "1788091200",
+          "cycle_number": 3,
+          "capital_generation": 0,
+          "expiry_ts": 1788069600,
+          "started_at": 1787508000,
+          "finished_at": 1788091200,
           "share_price_start": "1029207401",
           "share_price_end": "1035566873",
           "equity_start": "2947107217",
@@ -2394,11 +2394,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "2",
-          "capital_generation": "0",
-          "expiry_ts": "1787464800",
-          "started_at": "1786903200",
-          "finished_at": "1787486400",
+          "cycle_number": 2,
+          "capital_generation": 0,
+          "expiry_ts": 1787464800,
+          "started_at": 1786903200,
+          "finished_at": 1787486400,
           "share_price_start": "1023945346",
           "share_price_end": "1029207401",
           "equity_start": "2808848301",
@@ -2410,11 +2410,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "1",
-          "capital_generation": "0",
-          "expiry_ts": "1786860000",
-          "started_at": "1786298400",
-          "finished_at": "1786881600",
+          "cycle_number": 1,
+          "capital_generation": 0,
+          "expiry_ts": 1786860000,
+          "started_at": 1786298400,
+          "finished_at": 1786881600,
           "share_price_start": "1017811000",
           "share_price_end": "1023945346",
           "equity_start": "2680897850",
@@ -2426,11 +2426,11 @@
           "management_fee_assessed": "0"
         },
         {
-          "cycle_number": "0",
-          "capital_generation": "0",
-          "expiry_ts": "1786255200",
-          "started_at": "1785693600",
-          "finished_at": "1786276800",
+          "cycle_number": 0,
+          "capital_generation": 0,
+          "expiry_ts": 1786255200,
+          "started_at": 1785693600,
+          "finished_at": 1786276800,
           "share_price_start": "1000000000",
           "share_price_end": "1017811000",
           "equity_start": "2500000000",
@@ -2452,7 +2452,7 @@
       },
       "exposure": {
         "vault_pda": "4mAkhhMBtkkw3r2ML4sVfuMQD95u8zP4gkwP32RJpDcW",
-        "as_of": "1791806396",
+        "as_of": 1791806396,
         "positions": [],
         "totals": []
       }

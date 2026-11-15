@@ -28,7 +28,7 @@ import {
   type TakerFillRfq,
 } from "@/lib/rfq-client";
 import { ALL_POSITIONS, type TokenProtocolFees } from "@acta-markets/ts-sdk/ws";
-import { isCashSettledTerms, isSpreadTerms, lowerStrike, quoteMatchesProduct, requireStrikeTick, spreadTerms, strikeTicksByMint, validSpreadPremium, type ProductTerms, type TakerSide } from "@/lib/spreads";
+import { isCashSettledTerms, isSpreadTerms, isWireAmount, lowerStrike, quoteMatchesProduct, requireStrikeTick, spreadTerms, strikeTicksByMint, validSpreadPremium, wireAmount, type ProductTerms, type TakerSide } from "@/lib/spreads";
 import { RfqNoMakersError } from "@/lib/rfq-collateral";
 import { rememberReferenceTokens } from "@/lib/tokens";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
@@ -433,7 +433,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
       client.on("error", (serverErr) => {
         if (disposed || clientRef.current !== client) return;
         console.error("[RfqProvider] Error:", serverErr);
-        if (serverErr.type === "invalid_frame" || serverErr.type === "unsupported_protocol_version") {
+        // `incompatible_server` (SDK 0.8.0) is a `Welcome` the client cannot read: the session is over.
+        if (serverErr.type === "invalid_frame" || serverErr.type === "unsupported_protocol_version" || serverErr.type === "incompatible_server") {
           rejectProtocol();
           return;
         }
@@ -963,8 +964,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
       }
 
 
-      if (!Number.isSafeInteger(lowerStrike(params.terms)) || !Number.isSafeInteger(params.quantity)
-        || (isSpreadTerms(params.terms) ? !Number.isSafeInteger(params.terms.upper_strike) || params.terms.upper_strike <= params.terms.lower_strike : false)) {
+      if (!isWireAmount(lowerStrike(params.terms)) || !Number.isSafeInteger(params.quantity) || params.quantity < 0
+        || (isSpreadTerms(params.terms) ? !isWireAmount(params.terms.upper_strike) || BigInt(params.terms.upper_strike) <= BigInt(params.terms.lower_strike) : false)) {
         setError(new Error("Invalid product or strike pair."));
         return;
       }
@@ -973,7 +974,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         market_pda: params.market as any,
         terms: params.terms,
         side,
-        quantity: params.quantity,
+        quantity: wireAmount(params.quantity),
         timeout_seconds: params.timeoutSeconds ?? RFQ_TTL_SECONDS,
       };
       console.log("[RfqProvider] Submitting RFQ:", rfqRequest);
@@ -992,7 +993,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
       }
       let spread: ReturnType<typeof spreadTerms> | null = null;
       try {
-        if (params.terms.type === "cash_put") spread = spreadTerms("put_spread", 0, params.terms.strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market_descriptor.underlying_mint));
+        if (params.terms.type === "cash_put") spread = spreadTerms("put_spread", "0", params.terms.strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market_descriptor.underlying_mint));
         if (isSpreadTerms(params.terms)) spread = spreadTerms(params.terms.type, params.terms.lower_strike, params.terms.upper_strike, BigInt(params.quantity), descriptor.underlying_decimals, descriptor.quote_decimals, requireStrikeTick(strikeTicks, descriptor.market_descriptor.underlying_mint));
       } catch (err) {
         setError(new Error(wsErrorMessage(err)));
@@ -1008,9 +1009,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
         expiresAt: (Date.now() + serverClockOffsetMsRef.current) / 1000 + rfqRequest.timeout_seconds,
         rfq: isCashSettledTerms(params.terms) ? {
           market_descriptor: { ...descriptor.market_descriptor, collateral_mint: descriptor.market_descriptor.quote_mint, settlement_mint: descriptor.market_descriptor.quote_mint },
-          terms: params.terms, side, quantity: params.quantity, order_options: [params.terms],
+          terms: params.terms, side, quantity: rfqRequest.quantity, order_options: [params.terms],
           underlying_decimals: descriptor.underlying_decimals, quote_decimals: descriptor.quote_decimals,
-        } : { market_descriptor: descriptor.market_descriptor, terms: params.terms, side, quantity: params.quantity, order_options: [params.terms] },
+        } : { market_descriptor: descriptor.market_descriptor, terms: params.terms, side, quantity: rfqRequest.quantity, order_options: [params.terms] },
       };
       // The SDK owns the RFQ id: a lost reply is resent with the same id while the RFQ
       // could still be open, so a retry can never create a second RFQ.

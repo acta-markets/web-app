@@ -11,7 +11,7 @@ import { IS_MAINNET } from "@/lib/tokens";
 
 import { BUY_PRODUCT_NAME, isCashSettled, lowerStrike, productLabel, quoteMatchesProduct, type ProductTerms, type TakerSide } from "@/lib/spreads";
 import { formatExpiryUtc, formatPrice, formatUsdc } from "@/lib/trade/format";
-import { BUY_DEPOSIT_REMINDER, SPREAD_SETTLEMENT_NOTE, buyBreakEven, exerciseDepositText, spreadBounds, spreadBreakEven, spreadMaxGain } from "@/lib/trade/thesis";
+import { BUY_FUND_REMINDER, SPREAD_SETTLEMENT_NOTE, buyBreakEven, exerciseDepositText, spreadBounds, spreadBreakEven, spreadMaxGain } from "@/lib/trade/thesis";
 
 export type RfqOrderPreview = {
   asset: string;
@@ -60,7 +60,7 @@ const CONFIRM_HOLD_MS = 1500;
  */
 function buyQuoteFacts(preview: RfqOrderPreview, quantity: number, grossPerUnit: number | null): Array<[string, string]> {
   const isPut = preview.terms.type === "cash_secured_put";
-  const strike = lowerStrike(preview.terms) / 1_000_000_000;
+  const strike = Number(lowerStrike(preview.terms)) / 1_000_000_000;
   const bounds = spreadBounds(preview.terms);
   const priced = grossPerUnit != null;
   if (bounds) {
@@ -73,7 +73,7 @@ function buyQuoteFacts(preview: RfqOrderPreview, quantity: number, grossPerUnit:
   }
   return [
     ["Break-even", priced ? formatPrice(buyBreakEven(isPut, strike, grossPerUnit)) : PENDING],
-    ["Deposit to exercise", exerciseDepositText(isPut, quantity, strike, preview.asset)],
+    ["Fund to exercise", exerciseDepositText(isPut, quantity, strike, preview.asset)],
   ];
 }
 
@@ -107,7 +107,7 @@ export function RfqFlowModal({
   const [error, setError] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteReceivedMessage | null>(null);
   /** The quote under review was replaced by one at another price: what it showed, and when. */
-  const [priceUpdate, setPriceUpdate] = useState<{ from: number; worse: boolean; at: number } | null>(null);
+  const [priceUpdate, setPriceUpdate] = useState<{ from: number; at: number } | null>(null);
   const [, tick] = useState(0);
   const [recoveredOpen, setRecoveredOpen] = useState(false);
   const { flow, accept, accepting, abandon, canAbandon, reset, checkStatus, txSignature, restored } = useRfqOrder({
@@ -146,14 +146,18 @@ export function RfqFlowModal({
   useEffect(() => {
     if (!preview || accepting || flow.type !== "idle" || (quoteStep !== "requesting_quote" && quoteStep !== "quote_received")) return;
     if (bestQuote && quoteMatchesProduct(bestQuote, preview.terms, preview.side)) {
-      // Makers requote, and a better maker can arrive: the modal follows the best live quote,
-      // but never silently. A price that moved is announced, with what it was.
+      // Makers requote, and a better maker can arrive: the modal follows the best live quote.
+      // A price that moved against the user is announced, with what it was; a better one just
+      // shows, and clears an earlier warning.
       if (quote && quote !== bestQuote) {
         const buying = preview.side === "buy";
         const shown = (q: QuoteReceivedMessage) => Number(buying ? q.price : q.net_price ?? q.price);
         const before = shown(quote);
         const after = shown(bestQuote);
-        if (before !== after) setPriceUpdate({ from: before, worse: buying ? after > before : after < before, at: Date.now() });
+        if (before !== after) {
+          const worse = buying ? after > before : after < before;
+          setPriceUpdate(worse ? { from: before, at: Date.now() } : null);
+        }
       }
       setQuote(bestQuote);
       setStep("quote_received");
@@ -226,7 +230,7 @@ export function RfqFlowModal({
   const secondsTotal = quote ? countdownStart.current?.total ?? 0 : 0;
   // After the price moves against the user, Confirm waits a moment: a click already on its way
   // must not accept a number that was not the one being read.
-  const confirmHeld = priceUpdate != null && priceUpdate.worse && Date.now() - priceUpdate.at < CONFIRM_HOLD_MS;
+  const confirmHeld = priceUpdate != null && Date.now() - priceUpdate.at < CONFIRM_HOLD_MS;
   const handleAcceptQuote = () => {
     if (confirmHeld) return;
     if (quote && quoteSecondsRemaining(quote) > 0) void accept(quote, rfqTerms(quote.rfq_id));
@@ -281,7 +285,7 @@ export function RfqFlowModal({
       ["Type", isBuy ? BUY_PRODUCT_NAME[preview.terms.type] : productLabel(preview.terms.type)],
     ],
     note: isBuy && !exercisable ? SPREAD_SETTLEMENT_NOTE : null,
-    nextStep: exercisable ? BUY_DEPOSIT_REMINDER : null,
+    nextStep: exercisable ? BUY_FUND_REMINDER : null,
   } : null;
 
   return (
@@ -299,7 +303,7 @@ export function RfqFlowModal({
         restored={isRestoredOrder}
         secondsRemaining={secondsRemaining}
         secondsTotal={secondsTotal}
-        priceUpdate={priceUpdate ? { from: formatUsdc((priceUpdate.from / 1_000_000_000) * quoteQuantity), worse: priceUpdate.worse } : null}
+        priceUpdate={priceUpdate ? { from: formatUsdc((priceUpdate.from / 1_000_000_000) * quoteQuantity) } : null}
         confirmHeld={confirmHeld}
         error={flowError}
         txUrl={txSignature ? `https://solscan.io/tx/${txSignature}${IS_MAINNET ? "" : "?cluster=devnet"}` : null}

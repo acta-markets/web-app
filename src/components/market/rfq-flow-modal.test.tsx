@@ -26,12 +26,12 @@ beforeEach(() => localStorage.clear());
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 const quote = {
-  rfq_id: "rfq", order_id: "order", maker_owner: "maker", side: "sell", terms: { type: "covered_call", strike: 1_000_000_000 },
-  price: 1_000_000_000, valid_until: 9999999999, nonce: 1n,
+  rfq_id: "rfq", order_id: "order", maker_owner: "maker", side: "sell", terms: { type: "covered_call", strike: "1000000000" },
+  price: "1000000000", valid_until: 9999999999, nonce: 1n,
 } as QuoteReceivedMessage;
 const preview: RfqOrderPreview = {
-  asset: "SOL", terms: { type: "covered_call" as const, strike: 1_000_000_000 },
-  quantity: 1_000_000_000, underlyingDecimals: 9, strikeDisplay: "$1", quantityDisplay: "1 SOL",
+  asset: "SOL", terms: { type: "covered_call" as const, strike: "1000000000" },
+  quantity: 1000000000, underlyingDecimals: 9, strikeDisplay: "$1", quantityDisplay: "1 SOL",
 };
 
 function setup(previewOverrides: Partial<RfqOrderPreview> = {}, bestQuote: QuoteReceivedMessage = quote) {
@@ -50,7 +50,7 @@ function setup(previewOverrides: Partial<RfqOrderPreview> = {}, bestQuote: Quote
   context.read.mockReturnValue({
     bestQuote, quoteSecondsRemaining: (q: QuoteReceivedMessage) => Math.max(0, Math.ceil(Number(q.valid_until) - Date.now() / 1000)), isAuthenticated: true, error: null,
     getClient: () => client, acceptQuote: accept, submitSignedTx: submit, cancelRfq: cancel,
-    rfqTerms: () => ({ rfq_id: "rfq", terms: { type: "covered_call", strike: 1_000_000_000 }, side: "sell", quantity: 1_000_000_000 }) as TakerFillRfq,
+    rfqTerms: () => ({ rfq_id: "rfq", terms: { type: "covered_call", strike: "1000000000" }, side: "sell", quantity: "1000000000" }) as TakerFillRfq,
   });
   const props = {
     preview: { ...preview, ...previewOverrides }, open: true, onClose: vi.fn(), requestNonce: 1,
@@ -79,11 +79,11 @@ describe("RFQ order modal", () => {
     const h = setup();
     await screen.findByRole("button", { name: "Confirm trade" });
     expect(screen.getAllByText("1.00 USDC").length).toBeGreaterThan(0);
-    context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, price: 2_000_000_000 } });
+    context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, price: "2000000000" } });
     h.rerender(<RfqFlowModal {...h.props} />);
     expect(screen.getAllByText("2.00 USDC").length).toBeGreaterThan(0);
-    // the number did not change silently: a seller's higher premium is announced as better, with what it was
-    expect(screen.getByRole("status").textContent).toBe("A better quote came in. It was 1.00 USDC");
+    // a seller's higher premium is better for them: the new number just shows, with no note
+    expect(screen.queryByRole("status")).toBeNull();
     expect((screen.getByRole("button", { name: "Confirm trade" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(h.cancel).toHaveBeenCalledOnce();
@@ -100,7 +100,7 @@ describe("RFQ order modal", () => {
 
   it("prices the premium with the underlying's own decimals", async () => {
     // 2 JLP (6 decimals) at a 1 USDC premium each
-    setup({ asset: "JLP", quantity: 2_000_000, underlyingDecimals: 6, quantityDisplay: "2 JLP" });
+    setup({ asset: "JLP", quantity: 2000000, underlyingDecimals: 6, quantityDisplay: "2 JLP" });
     await screen.findByRole("button", { name: "Confirm trade" });
     expect(screen.getAllByText("2.00 USDC").length).toBeGreaterThan(0);
     expect(screen.queryAllByText("0.00 USDC")).toHaveLength(0);
@@ -117,7 +117,7 @@ describe("RFQ order modal", () => {
     context.makerVault.mockImplementationOnce(() => new Promise(resolve => { lookedUp = resolve; }));
     const h = setup();
     fireEvent.click(await screen.findByRole("button", { name: "Confirm trade" }));
-    context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, order_id: "other", price: 2_000_000_000 } });
+    context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, order_id: "other", price: "2000000000" } });
     h.rerender(<RfqFlowModal {...h.props} />);
     expect(screen.getAllByText("1.00 USDC").length).toBeGreaterThan(0);
     expect(screen.queryAllByText("2.00 USDC")).toHaveLength(0);
@@ -249,7 +249,7 @@ it("says when the quote gets worse while it is being read, and holds Confirm for
   const h = setup();
   expect(screen.queryByRole("status")).toBeNull();
   // the maker replaces its quote with a lower premium for the seller
-  context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, order_id: "requote", price: 500_000_000 } });
+  context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, order_id: "requote", price: "500000000" } });
   h.rerender(<RfqFlowModal {...h.props} />);
   expect(screen.getAllByText("0.50 USDC").length).toBeGreaterThan(0);
   expect(screen.getByRole("status").textContent).toBe("The quote changed. It was 1.00 USDC");
@@ -259,6 +259,12 @@ it("says when the quote gets worse while it is being read, and holds Confirm for
   expect(h.accept).not.toHaveBeenCalled();
   // once there has been time to read it, the new price can be confirmed
   act(() => vi.advanceTimersByTime(1750));
+  expect(confirm().disabled).toBe(false);
+  // a better quote after that just shows, and the warning about the old one goes
+  context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, order_id: "improved", price: "800000000" } });
+  h.rerender(<RfqFlowModal {...h.props} />);
+  expect(screen.getAllByText("0.80 USDC").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("status")).toBeNull();
   expect(confirm().disabled).toBe(false);
 });
 
@@ -296,8 +302,8 @@ describe("asking again from inside the modal", () => {
 });
 
 describe("Buy", () => {
-    const buyPreview = { side: "buy" as const, terms: { type: "covered_call" as const, strike: 150e9 }, strikeDisplay: "$150", quantity: 2e9, quantityDisplay: "2 SOL" };
-    const buyQuote = { ...quote, side: "buy", terms: buyPreview.terms, price: 5e9, net_price: 4.5e9 } as QuoteReceivedMessage;
+    const buyPreview = { side: "buy" as const, terms: { type: "covered_call" as const, strike: "150000000000" }, strikeDisplay: "$150", quantity: 2000000000, quantityDisplay: "2 SOL" };
+    const buyQuote = { ...quote, side: "buy", terms: buyPreview.terms, price: "5000000000", net_price: "4500000000" } as QuoteReceivedMessage;
     /** the value beside a label in the terms list */
     const row = (label: string) => screen.getByText(label).nextElementSibling;
 
@@ -311,7 +317,7 @@ describe("Buy", () => {
       expect(screen.getByText("This is the most you can lose.")).toBeTruthy();
       expect(screen.queryByText("Max loss")).toBeNull();
       expect(row("Break-even")?.textContent).toContain("$155");
-      expect(row("Deposit to exercise")?.textContent).toContain("300");
+      expect(row("Fund to exercise")?.textContent).toContain("300");
       expect(screen.queryByText("APR")).toBeNull();
     });
 
@@ -320,35 +326,35 @@ describe("Buy", () => {
       await h.send();
       h.emit("orderConfirmed", "order", "position", 3);
       expect(screen.getByText("Your trade is confirmed")).toBeTruthy();
-      expect(screen.getByText("To exercise, deposit from Portfolio before expiry.")).toBeTruthy();
-      expect(screen.getByRole("link", { name: "Deposit in Portfolio" }).getAttribute("href")).toBe("/portfolio");
+      expect(screen.getByText("To exercise, fund it in Portfolio before expiry.")).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Fund in Portfolio" }).getAttribute("href")).toBe("/portfolio");
       expect(screen.queryByRole("link", { name: "View in Portfolio" })).toBeNull();
     });
 
     it("mirrors break-even and the exercise deposit for a put", async () => {
-      const terms = { type: "cash_secured_put" as const, strike: 150e9 };
+      const terms = { type: "cash_secured_put" as const, strike: "150000000000" };
       setup({ ...buyPreview, terms }, { ...buyQuote, terms });
       await screen.findByRole("button", { name: "Confirm trade" });
       expect(screen.getByText("Buy a put")).toBeTruthy();
       expect(row("Break-even")?.textContent).toContain("$145");
-      expect(row("Deposit to exercise")?.textContent).toContain("2 SOL");
+      expect(row("Fund to exercise")?.textContent).toContain("2 SOL");
     });
 
     it("shows max gain and break-even for a bought spread, with no deposit", async () => {
-      const terms = { type: "call_spread" as const, lower_strike: 150e9, upper_strike: 160e9 };
+      const terms = { type: "call_spread" as const, lower_strike: "150000000000", upper_strike: "160000000000" };
       setup({ ...buyPreview, terms }, { ...buyQuote, terms });
       await screen.findByRole("button", { name: "Confirm trade" });
       expect(screen.getByText("Buy a call spread")).toBeTruthy();
       expect(screen.getByText("This is the most you can lose.")).toBeTruthy();
       expect(screen.getByText("Max gain").nextElementSibling?.textContent).toBe("10.00 USDC");
       expect(screen.getByText("Break-even").nextElementSibling?.textContent).toBe("$155.00");
-      expect(screen.queryByText("Deposit to exercise")).toBeNull();
+      expect(screen.queryByText("Fund to exercise")).toBeNull();
       expect(screen.queryByRole("alert")).toBeNull();
-      expect(screen.getByText(/No deposit/)).toBeTruthy();
+      expect(screen.getByText(/Nothing to fund/)).toBeTruthy();
     });
 
     it("breaks even under the upper leg of a bought cash put", async () => {
-      const terms = { type: "cash_put" as const, strike: 150e9 };
+      const terms = { type: "cash_put" as const, strike: "150000000000" };
       setup({ ...buyPreview, terms }, { ...buyQuote, terms });
       await screen.findByRole("button", { name: "Confirm trade" });
       expect(screen.getByText("Buy a cash put")).toBeTruthy();
@@ -365,7 +371,7 @@ describe("Buy", () => {
       setup();
       await screen.findByRole("button", { name: "Confirm trade" });
       expect(screen.queryByText("Max loss")).toBeNull();
-      expect(screen.queryByText("Deposit to exercise")).toBeNull();
+      expect(screen.queryByText("Fund to exercise")).toBeNull();
       expect(screen.queryByRole("alert")).toBeNull();
       expect(screen.getByText("You earn premium")).toBeTruthy();
     });

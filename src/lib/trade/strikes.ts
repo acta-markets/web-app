@@ -1,5 +1,6 @@
 import { computeApyFromScaledPrices, quotedPrice } from "@acta-markets/ts-sdk/ws";
 import type { TokenMarketIndicatives, TokenMarketsInfoData } from "@/lib/rfq-client";
+import { wireAmount } from "@/lib/spreads";
 import { isQqqExpiry, restrictsToFridayExpiry } from "./market-hours";
 
 const PRICE_SCALE = 1_000_000_000;
@@ -104,8 +105,8 @@ export function buildStrikeOptions(
       try {
         apr = computeApyFromScaledPrices({
           underlyingAmount: 1,
-          grossPremiumPerUnit1e9: bestPrice,
-          spotPrice1e9: referencePrice1e9,
+          grossPremiumPerUnit1e9: wireAmount(bestPrice),
+          spotPrice1e9: wireAmount(referencePrice1e9),
           secondsToExpiry,
         }).apr;
       } catch {

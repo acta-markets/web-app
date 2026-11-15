@@ -36,13 +36,13 @@ async function setup() {
     (client as unknown as { emit: (event: string, ...args: unknown[]) => void }).emit(event, ...args);
   });
   emit("marketDescriptors", [{ products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], market_descriptor: { market_pda: "market", underlying_mint: "underlying", is_put: false }, underlying_decimals: 6, quote_decimals: 6 }]);
-  emit("tokens", [{ mint: "underlying", symbol: "U", decimals: 6, role: { type: "underlying", strike_tick: 1_000_000_000, size_rule: { min_size: 1, max_size: 1e9, step: 1 }, quote_mints: [] } }]);
+  emit("tokens", [{ mint: "underlying", symbol: "U", decimals: 6, role: { type: "underlying", strike_tick: "1000000000", size_rule: { min_size: "1", max_size: "1000000000", step: "1" }, quote_mints: [] } }]);
   const submit = (side?: "buy" | "sell") => {
-    act(() => hook.result.current.submitRfq({ market: "market", terms: { type: "covered_call", strike: 1 }, side, quantity: 10 }));
+    act(() => hook.result.current.submitRfq({ market: "market", terms: { type: "covered_call", strike: "1" }, side, quantity: 10 }));
     return createOnce.mock.lastCall![0].request_id!;
   };
   const quote = (rfq: string, maker = "maker", price = 1, valid_until = 9999999999) =>
-    ({ rfq_id: rfq, order_id: `order-${maker}`, maker_owner: maker, side: "sell", terms: { type: "covered_call", strike: 1 }, price, valid_until, nonce: 1n } as QuoteReceivedMessage);
+    ({ rfq_id: rfq, order_id: `order-${maker}`, maker_owner: maker, side: "sell", terms: { type: "covered_call", strike: "1" }, price: String(price), valid_until, nonce: 1n } as QuoteReceivedMessage);
   return { ...hook, client, create, createOnce, cancel, emit, submit, quote, metadataRequest };
 }
 
@@ -53,7 +53,7 @@ describe("RFQ request ownership", () => {
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
     expect(h.result.current.rfqTerms("other")).toBeNull();
     expect(h.result.current.rfqTerms("ours")).toEqual({
-      rfq_id: "ours", market_descriptor: { market_pda: "market", underlying_mint: "underlying", is_put: false }, terms: { type: "covered_call", strike: 1 }, side: "sell", quantity: 10, order_options: [{ type: "covered_call", strike: 1 }],
+      rfq_id: "ours", market_descriptor: { market_pda: "market", underlying_mint: "underlying", is_put: false }, terms: { type: "covered_call", strike: "1" }, side: "sell", quantity: "10", order_options: [{ type: "covered_call", strike: "1" }],
     });
   });
   it("only accepts quotes after the matching RfqCreated", async () => {
@@ -62,7 +62,7 @@ describe("RFQ request ownership", () => {
     h.emit("quoteReceived", h.quote("other")); expect(h.result.current.bestQuote).toBeNull();
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
     h.emit("quoteReceived", h.quote("other")); expect(h.result.current.bestQuote).toBeNull();
-    h.emit("quoteReceived", { ...h.quote("ours"), terms: { type: "covered_call", strike: 2 } }); expect(h.result.current.bestQuote).toBeNull();
+    h.emit("quoteReceived", { ...h.quote("ours"), terms: { type: "covered_call", strike: "2" } }); expect(h.result.current.bestQuote).toBeNull();
     h.emit("quoteReceived", h.quote("ours")); expect(h.result.current.bestQuote?.rfq_id).toBe("ours");
   });
   it("ignores stale replies from the previous Deposit action and cancels its RFQ", async () => {
@@ -117,7 +117,7 @@ describe("RFQ request ownership", () => {
   it("ranks Buy quotes by the lowest gross price, whatever their net price", async () => {
     const h = await setup(); const id = h.submit("buy");
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
-    const buy = (maker: string, price: number, net_price: number) => ({ ...h.quote("ours", maker, price), side: "buy", net_price });
+    const buy = (maker: string, price: number, net_price: number) => ({ ...h.quote("ours", maker, price), side: "buy", net_price: String(net_price) });
     h.emit("quoteReceived", buy("a", 5, 1));
     h.emit("quoteReceived", buy("b", 3, 2));
     expect(h.result.current.bestQuote?.maker_owner).toBe("b");
@@ -134,7 +134,7 @@ describe("RFQ request ownership", () => {
     expect(h.result.current.bestQuote?.maker_owner).toBe("a");
     h.emit("quoteReceived", h.quote("ours", "a", 2));
     expect(h.result.current.bestQuote?.maker_owner).toBe("b");
-    h.emit("quotesUpdate", { rfq_id: "ours", quotes: [h.quote("ours", "c", 4), { ...h.quote("ours", "d", 9), terms: { type: "covered_call", strike: 2 } }] });
+    h.emit("quotesUpdate", { rfq_id: "ours", quotes: [h.quote("ours", "c", 4), { ...h.quote("ours", "d", 9), terms: { type: "covered_call", strike: "2" } }] });
     expect(h.result.current.bestQuote?.maker_owner).toBe("c");
     h.emit("quotesUpdate", { rfq_id: "ours", quotes: [] });
     expect(h.result.current.bestQuote).toBeNull();
@@ -280,7 +280,7 @@ describe("token market response ownership", () => {
     act(() => h.result.current.getTokenMarketsInfo("GQ1XdBnJURK2w8fs1jxiTdQATgKSTy3rnx4PfMttvKMs"));
     const id = h.metadataRequest.mock.lastCall![1].data.request_id;
     const data = info(id, "market-A");
-    h.emit("tokenMarketsInfo", { ...data, markets: [{ ...data.markets[0], indicatives: [{ position_type: "covered_call", side: "sell", freshness: { type: "stale", updated_at: 100 }, strikes: [{ strike: 100, price: { type: "quoted", price: 1 } }] }] }] });
+    h.emit("tokenMarketsInfo", { ...data, markets: [{ ...data.markets[0], indicatives: [{ position_type: "covered_call", side: "sell", freshness: { type: "stale", updated_at: 100 }, strikes: [{ strike: "100", price: { type: "quoted", price: "1" } }] }] }] });
     expect(h.result.current.getIndicativePricesCached("market-A", "covered_call", "sell")).toMatchObject({ request_id: id, freshness: { type: "stale", updated_at: 100 } });
   });
 
@@ -383,7 +383,7 @@ describe("spread capability and quote separation", () => {
   it("requires the server strike tick for both spread strikes", async () => {
     const h = await setup();
     h.emit("welcome", { server_now_at_ms: Date.now() });
-    act(() => h.result.current.submitRfq({ market: "market", terms: { type: "call_spread", lower_strike: 100e9, upper_strike: 120.5e9 }, quantity: 1_000_000 }));
+    act(() => h.result.current.submitRfq({ market: "market", terms: { type: "call_spread", lower_strike: "100000000000", upper_strike: "120500000000" }, quantity: 1000000 }));
     expect(h.create).not.toHaveBeenCalled();
     expect(h.result.current.error?.message).toContain("strike tick");
   });
@@ -391,12 +391,12 @@ describe("spread capability and quote separation", () => {
     const h = await setup();
     h.emit("marketDescriptors", [{ products: ["cash_secured_put", "put_spread", "cash_put"], market_descriptor: { market_pda: "market", underlying_mint: "underlying", is_put: true }, underlying_decimals: 6, quote_decimals: 6 }]);
     h.emit("welcome", { server_now_at_ms: Date.now() });
-    act(() => h.result.current.submitRfq({ market: "market", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 }, quantity: 1_000_000 }));
+    act(() => h.result.current.submitRfq({ market: "market", terms: { type: "put_spread", lower_strike: "100000000000", upper_strike: "120000000000" }, quantity: 1000000 }));
     const request = h.createOnce.mock.lastCall![0];
-    expect(request).toMatchObject({ side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 } });
+    expect(request).toMatchObject({ side: "sell", terms: { type: "put_spread", lower_strike: "100000000000", upper_strike: "120000000000" } });
     h.emit("rfqCreated", { rfq_id: "spread", request_id: request.request_id });
-    const quote = { ...h.quote("spread"), side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 }, price: 1e9 };
-    for (const wrong of [{ side: undefined }, { side: "buy" }, { terms: undefined }, { terms: { type: "cash_secured_put", strike: 100e9 } }, { terms: { type: "put_spread", lower_strike: 100e9 } }, { terms: { ...quote.terms, upper_strike: 130e9 } }]) {
+    const quote = { ...h.quote("spread"), side: "sell", terms: { type: "put_spread", lower_strike: "100000000000", upper_strike: "120000000000" }, price: "1000000000" };
+    for (const wrong of [{ side: undefined }, { side: "buy" }, { terms: undefined }, { terms: { type: "cash_secured_put", strike: "100000000000" } }, { terms: { type: "put_spread", lower_strike: "100000000000" } }, { terms: { ...quote.terms, upper_strike: "130000000000" } }]) {
       h.emit("quoteReceived", { ...quote, ...wrong });
       expect(h.result.current.bestQuote).toBeNull();
       h.emit("quotesUpdate", { rfq_id: "spread", quotes: [{ ...quote, ...wrong }] });
@@ -404,11 +404,11 @@ describe("spread capability and quote separation", () => {
     }
     h.emit("quoteReceived", quote);
     expect(h.result.current.bestQuote).toEqual(quote);
-    h.emit("quoteReceived", { ...quote, maker_owner: "invalid", price: 20e9 });
+    h.emit("quoteReceived", { ...quote, maker_owner: "invalid", price: "20000000000" });
     expect(h.result.current.bestQuote).toEqual(quote);
-    h.emit("quotesUpdate", { rfq_id: "spread", quotes: [quote, { ...quote, maker_owner: "invalid", price: 21e9 }] });
+    h.emit("quotesUpdate", { rfq_id: "spread", quotes: [quote, { ...quote, maker_owner: "invalid", price: "21000000000" }] });
     expect(h.result.current.bestQuote).toEqual(quote);
-    expect(h.result.current.rfqTerms("spread")).toMatchObject({ rfq_id: "spread", side: "sell", terms: { type: "put_spread", lower_strike: 100e9, upper_strike: 120e9 } });
+    expect(h.result.current.rfqTerms("spread")).toMatchObject({ rfq_id: "spread", side: "sell", terms: { type: "put_spread", lower_strike: "100000000000", upper_strike: "120000000000" } });
     h.emit("stateChange", "connecting");
     expect(h.result.current.bestQuote).toBeNull();
     h.emit("quoteReceived", quote);
@@ -416,7 +416,7 @@ describe("spread capability and quote separation", () => {
     h.emit("marketDescriptors", [{ products: ["covered_call"], market_descriptor: { market_pda: "market", underlying_mint: "underlying", is_put: false }, underlying_decimals: 6, quote_decimals: 6 }]);
     h.submit();
     h.emit("rfqCreated", { rfq_id: "physical", request_id: h.createOnce.mock.lastCall![0].request_id });
-    h.emit("quoteReceived", { ...quote, rfq_id: "physical", terms: { ...quote.terms, lower_strike: 1 } });
+    h.emit("quoteReceived", { ...quote, rfq_id: "physical", terms: { ...quote.terms, lower_strike: "1" } });
     expect(h.result.current.bestQuote).toBeNull();
   });
 });
@@ -455,6 +455,14 @@ it("disconnects an incompatible backend instead of displaying legacy frames", as
   h.emit("error", { type: "invalid_frame", data: { message_type: "MarketDescriptors", reason: "missing products" } });
   expect(disconnect).toHaveBeenCalledOnce();
   expect(h.result.current.isAuthenticated).toBe(false);
+  expect(document.body.textContent).toContain("Trading temporarily unavailable");
+});
+
+it("shows the same screen when the server's Welcome is unreadable", async () => {
+  const h = await setup();
+  const disconnect = vi.spyOn(h.client, "disconnect");
+  h.emit("error", { type: "incompatible_server", data: { protocol_version: { type: "readable", value: "1.0.0" }, reason: "Welcome.server_time must be u64" } });
+  expect(disconnect).toHaveBeenCalledOnce();
   expect(document.body.textContent).toContain("Trading temporarily unavailable");
 });
 

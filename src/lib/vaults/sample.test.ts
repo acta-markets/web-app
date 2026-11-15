@@ -140,7 +140,7 @@ describe("sample-data.json", () => {
     expect(later.depositors[usdc].depositRequest!.createdAt - data.depositors[usdc].depositRequest!.createdAt).toBe(
       BigInt(shift),
     );
-    const shifts = (a: string | null | undefined, b: string | null | undefined) => Number(b) - Number(a);
+    const shifts = (a: number | null | undefined, b: number | null | undefined) => Number(b) - Number(a);
     expect(shifts(vaultNow.generation_started_at, vaultLater.generation_started_at)).toBe(shift);
     expect(shifts(vaultNow.created_at, vaultLater.created_at)).toBe(shift);
     expect(shifts(vaultNow.price_published_at, vaultLater.price_published_at)).toBe(shift);
@@ -153,8 +153,8 @@ describe("sample-data.json", () => {
     expect(shifts(data.exposure[usdc].positions[0].expiry_ts, later.exposure[usdc].positions[0].expiry_ts)).toBe(shift);
     expect(shifts(data.exposure[usdc].positions[0].spot_published_at, later.exposure[usdc].positions[0].spot_published_at)).toBe(shift);
     expect(shifts(data.history[usdc][0].occurred_at, later.history[usdc][0].occurred_at)).toBe(shift);
-    // "0" means unset on chain and stays that way
-    expect(later.vaults.find((v) => v.phase === "idle")!.active_expiry_ts).toBe("0");
+    // 0 means unset on chain and stays that way
+    expect(later.vaults.find((v) => v.phase === "idle")!.active_expiry_ts).toBe(0);
     // a month on, the last cycle still finished within the past week
     expect(NOW + shift - finishedCycles(later.cycles[usdc]).at(-1)!.finishedAt).toBeLessThan(7 * DAY);
   });

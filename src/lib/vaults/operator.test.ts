@@ -107,7 +107,7 @@ describe("vault operator", () => {
 
   it("batches pending deposits into packet-sized transactions", async () => {
     const vault = await testVault({ phase: "processing_capital", equity_computed: true, pending_deposit_count: 5 });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(page(users(5).map((wallet) => ({ wallet, amount: "1", created_at: "0", transaction: { type: "unknown" } })))));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(page(users(5).map((wallet) => ({ wallet, amount: "1", created_at: 0, transaction: { type: "unknown" } })))));
     const manager = await createVaultManager(vault, USER);
     const txs = await buildCapitalStepTransactions("process_deposits", { rpc: stubRpc(0n), manager, vault });
     expect(txs).toHaveLength(2);
@@ -118,7 +118,7 @@ describe("vault operator", () => {
 
   it("splits withdrawals into packet-sized transactions", async () => {
     const vault = await testVault({ phase: "processing_capital", equity_computed: true, pending_withdraw_count: 4 });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(page(users(4).map((wallet) => ({ wallet, shares: "1", created_at: "0", transaction: { type: "unknown" } })))));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(page(users(4).map((wallet) => ({ wallet, shares: "1", created_at: 0, transaction: { type: "unknown" } })))));
     const manager = await createVaultManager(vault, USER);
     const txs = await buildCapitalStepTransactions("process_withdrawals", { rpc: stubRpc(100n), manager, vault });
     expect(txs).toHaveLength(2);
@@ -126,7 +126,7 @@ describe("vault operator", () => {
   });
 
   it("holds the final redemption while deposits are pending", async () => {
-    const request = { wallet: USER, shares: "100", created_at: "0", transaction: { type: "unknown" } };
+    const request = { wallet: USER, shares: "100", created_at: 0, transaction: { type: "unknown" } };
     const manager = await createVaultManager(await testVault(), USER);
     for (const [pending, expected] of [[1, 0], [0, 1]] as const) {
       const vault = await testVault({ equity_computed: true, pending_withdraw_count: 1, pending_deposit_count: pending });
@@ -151,7 +151,7 @@ describe("vault operator", () => {
 
   it.each([false, true])("builds the final withdrawal against live supply (priced=%s)", async priced => {
     const vault = await testVault({ equity_computed: priced, pending_withdraw_count: 1,
-      total_shares: "1000", balances: { type: "observed" as const, main: "0", second: "0", live_share_supply: "900", manager_stake_shares: "0", observed_at: "0", slot: "0" }, pending_withdraw_shares: "900" });
+      total_shares: "1000", balances: { type: "observed" as const, main: "0", second: "0", live_share_supply: "900", manager_stake_shares: "0", observed_at: 0, slot: 0 }, pending_withdraw_shares: "900" });
     const manager = await createVaultManager(vault, USER);
     const ixs = await buildSelfProcessWithdrawInstructions(stubRpc(900n), manager, vault);
     expect(ixs).toHaveLength(priced ? 1 : 3);
@@ -161,10 +161,10 @@ describe("vault operator", () => {
 
   it("does not build a final withdrawal with pending deposits or staging", async () => {
     const vault = await testVault({ equity_computed: true, pending_withdraw_count: 1,
-      total_shares: "1000", balances: { type: "observed" as const, main: "0", second: "0", live_share_supply: "900", manager_stake_shares: "0", observed_at: "0", slot: "0" }, pending_withdraw_shares: "900" });
+      total_shares: "1000", balances: { type: "observed" as const, main: "0", second: "0", live_share_supply: "900", manager_stake_shares: "0", observed_at: 0, slot: 0 }, pending_withdraw_shares: "900" });
     const manager = await createVaultManager(vault, USER);
     await expect(buildSelfProcessWithdrawInstructions(stubRpc(900n), manager, { ...vault, pending_deposit_count: 1 })).rejects.toThrow("pending");
-    await expect(buildSelfProcessWithdrawInstructions(stubRpc(900n), manager, { ...vault, staging: { type: "staged", mint: "m", from_leg: "second", amount: "1", staged_at: "0", generation: "1" } })).rejects.toThrow("staged");
+    await expect(buildSelfProcessWithdrawInstructions(stubRpc(900n), manager, { ...vault, staging: { type: "staged", mint: "m", from_leg: "second", amount: "1", staged_at: 0, generation: 1 } })).rejects.toThrow("staged");
     const partial = await buildSelfProcessWithdrawInstructions(stubRpc(900n), manager, { ...vault, pending_withdraw_shares: "899" });
     expect(partial).toEqual([await manager.processWithdrawals([address(USER)])]);
   });

@@ -33,6 +33,7 @@ import {
   formatInputValue,
   presetAmounts,
   quantityToDeposit,
+  sizeRuleFromWire,
 } from "@/lib/trade/sizing";
 import {
   buildStrikeOptions,
@@ -58,7 +59,7 @@ import {
   type Direction,
   type Strategy,
 } from "@/lib/trade/thesis";
-import type { TakerSide } from "@/lib/spreads";
+import { wireAmount, type TakerSide } from "@/lib/spreads";
 import { ProfitOutlook } from "./profit-table";
 import { TICKET_CELL, TICKET_LABEL, TICKET_NOTE, TICKET_VALUE, TICKET_WHEN } from "./ticket-styles";
 import { ChartSkeleton, TradeSkeleton } from "./trade-skeleton";
@@ -197,7 +198,7 @@ export function SentenceTrade({
   const quoteSymbol = displayQuoteSymbol(snapshot?.quote_symbol ?? "USDC");
   const symbol = asset ? (amountInQuote ? quoteSymbol : asset.symbol) : quoteSymbol;
   const decimals = snapshot ? Number(snapshot.underlying_decimals) : getToken(asset?.symbol ?? "")?.decimals ?? 9;
-  const sizeRule = snapshot?.size_rule ?? null;
+  const sizeRule = sizeRuleFromWire(snapshot?.size_rule);
   const depositRule = depositRuleFor({ isPut: amountInQuote, sizeRule, strike1e9: strike?.strike1e9 ?? 0, underlyingDecimals: decimals });
   const inputDecimals = depositInputDecimals(depositRule, amountInQuote, decimals);
   // guards the size field to `inputDecimals` fraction digits, matching AppAmountInput
@@ -257,7 +258,7 @@ export function SentenceTrade({
         protocolFeesBySymbol?.get("USDC");
       // Without the quote token's fee config the preview would show a zero fee.
       if (fees?.type !== "quote") return null;
-      const terms = { type: info.positionType, strike: option.strike1e9 };
+      const terms = { type: info.positionType, strike: wireAmount(option.strike1e9) };
       const indicative = BigInt(Math.round(option.bestPrice));
       try {
         // A sell indicative already has the fee taken out; previewFill wants the gross price.
@@ -362,7 +363,7 @@ export function SentenceTrade({
     if (cta.action === "redeem") return openReferralGate();
     if (cta.action !== "quote" || !asset || !expiry || !strike || quantity == null || lockedDeposit == null) return;
     if (amountInput != null && lockedText != null && lockedText !== amountText) setAmountInput(lockedText);
-    const terms = { type: info.positionType, strike: strike.strike1e9 };
+    const terms = { type: info.positionType, strike: wireAmount(strike.strike1e9) };
     request(
       { market: expiry.pda, terms, side, quantity },
       {
@@ -491,6 +492,10 @@ export function SentenceTrade({
   // The ticket reads left to right as one story: what goes in, what is paid now, and the two
   // ways it can end. Every fact the page shows about the trade sits in one of those four cells.
   const loseSide = direction === "above" ? "below" : "above";
+  // What a buy's two outcomes are in plain words, before there is a price to put on them:
+  // being right pays more the further the price goes, being wrong costs the premium and no more.
+  const BUY_RIGHT_NOTE = "Grows with the price once the premium is covered";
+  const BUY_WRONG_NOTE = "A fixed fee, the most you can lose";
   const ticketOutcomes = labels && strikeLabel
     ? side === "sell"
       ? {
@@ -508,15 +513,25 @@ export function SentenceTrade({
           right: {
             when: `${direction} ${strikeLabel}`,
             what: "You profit",
-            note: buyBreakeven != null ? `Breakeven at ${formatUsdSmart(buyBreakeven)}` : "Once it clears the premium you paid",
+            note: buyBreakeven != null ? `Breakeven at ${formatUsdSmart(buyBreakeven)}` : BUY_RIGHT_NOTE,
           },
           wrong: {
             when: `${loseSide} ${strikeLabel}`,
             what: "Premium lost",
-            note: "The most you can lose",
+            note: BUY_WRONG_NOTE,
           },
         }
-    : { right: { when: null, what: "\u2014", note: "" }, wrong: { when: null, what: "\u2014", note: "" } };
+    : // No strike yet (the market is still loading, or lists none): the two outcomes are said in
+      // words instead of dashes, the same words the priced strip uses, so nothing jumps when it fills.
+      side === "sell"
+      ? {
+          right: { when: null, what: direction === "above" ? "Keep your USDC" : `Keep your ${asset.symbol}`, note: "and the premium" },
+          wrong: { when: null, what: `${direction === "above" ? "Buy" : "Sell"} ${asset.symbol}`, note: "You keep the premium" },
+        }
+      : {
+          right: { when: null, what: "You profit", note: BUY_RIGHT_NOTE },
+          wrong: { when: null, what: "Premium lost", note: BUY_WRONG_NOTE },
+        };
   const headlineNote = headline.value
     ? side === "buy"
       ? "Final quote might be different"
@@ -901,7 +916,8 @@ export function SentenceTrade({
                 <span data-testid="ticket-wrong" className={cn(TICKET_VALUE, "py-0.5 text-content-primary", side === "sell" && "xl:min-h-[54px]")}>
                   {outcomeLine(ticketOutcomes.wrong.what)}
                 </span>
-                <span className={cn(TICKET_NOTE, "whitespace-nowrap")}>
+                {/* the priced line breaks at one fixed point; a plain note wraps inside its two reserved lines */}
+                <span className={cn(TICKET_NOTE, side === "buy" && payUsd != null && "whitespace-nowrap")}>
                   {side === "buy" && payUsd != null ? (
                     // The words come first and the amount last, so a longer amount never pushes
                     // the words sideways; and it breaks at one fixed point where the cell is narrow.

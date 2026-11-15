@@ -1,16 +1,16 @@
 "use client";
 
 import type { MarketDescriptorInfo, PositionInfo } from "@/lib/rfq-client";
-import { executionTerms, isSpreadTerms, spreadName, strikeText } from "@/lib/spreads";
+import { executionTerms, isSpreadTerms, isWireAmount, spreadName, strikeText } from "@/lib/spreads";
 import { NONE } from "@/lib/vaults/format";
 import { TOKENS, getNetwork } from "@/lib/tokens";
 import { spreadCollateral } from "@acta-markets/ts-sdk/chain";
 
 export function spreadPositionAmounts(position: PositionInfo, descriptor?: MarketDescriptorInfo) {
   const terms = executionTerms(position.terms);
-  if (!isSpreadTerms(terms) || !Number.isSafeInteger(terms.upper_strike)
-    || !Number.isSafeInteger(terms.lower_strike) || !Number.isSafeInteger(position.quantity)
-    || terms.upper_strike! <= terms.lower_strike) return null;
+  if (!isSpreadTerms(terms) || !isWireAmount(terms.upper_strike)
+    || !isWireAmount(terms.lower_strike) || !isWireAmount(position.quantity)
+    || BigInt(terms.upper_strike) <= BigInt(terms.lower_strike)) return null;
   const network = getNetwork();
   const underlying = Object.values(TOKENS).find(token => token.mint[network] === position.underlying_mint);
   const quote = Object.values(TOKENS).find(token => token.mint[network] === position.quote_mint);
@@ -24,10 +24,10 @@ export function spreadPositionAmounts(position: PositionInfo, descriptor?: Marke
   const returned = position.state === "settled" && position.settlement.type === "cash" ? BigInt(position.settlement.writer_return) : null;
   const bought = position.side === "buy";
   // a buyer's cost is the gross premium; the position only stores the writer's net
-  const paid = Number.isSafeInteger(position.price)
+  const paid = isWireAmount(position.price)
     ? BigInt(position.price) * BigInt(position.quantity) * 10n ** BigInt(quoteDecimals) / (10n ** 9n * 10n ** BigInt(underlyingDecimals))
     : null;
-  const net = Number.isSafeInteger(position.total_premium) ? BigInt(position.total_premium) : null;
+  const net = isWireAmount(position.total_premium) ? BigInt(position.total_premium) : null;
   const premium = bought ? paid : net;
   const pnl = premium == null || payout == null ? null : bought ? payout - premium : premium - payout;
   return { collateral, payout, returned, premium, bought, pnl,

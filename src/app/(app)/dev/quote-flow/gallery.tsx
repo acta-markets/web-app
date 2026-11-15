@@ -2,7 +2,7 @@
 
 import { QuoteFlowView, quoteFlowTitle, type QuoteFlowOrder, type QuoteFlowViewProps } from "@/components/market/quote-flow-view";
 import { Chevron } from "@/components/app-ui/chevron";
-import { BUY_DEPOSIT_REMINDER } from "@/lib/trade/thesis";
+import { BUY_FUND_REMINDER } from "@/lib/trade/thesis";
 
 const noop = () => {};
 
@@ -14,12 +14,12 @@ const BUY: QuoteFlowOrder = {
   facts: [
     ["Size", "0.1 BTC"],
     ["Break-even", "$71,521"],
-    ["Deposit to exercise", "7,100.00 USDC"],
+    ["Fund to exercise", "7,100.00 USDC"],
     ["Expires", "Nov 20, 08:00 UTC"],
     ["Type", "Buy a call"],
   ],
   note: null,
-  nextStep: BUY_DEPOSIT_REMINDER,
+  nextStep: BUY_FUND_REMINDER,
 };
 const BUY_WAITING: QuoteFlowOrder = {
   ...BUY,
@@ -65,12 +65,12 @@ const TX = "https://solscan.io/tx/example?cluster=devnet";
 const STATES: Array<{ name: string; props: QuoteFlowViewProps }> = [
   { name: "Quote received (buy)", props: base },
   { name: "Quote received (sell)", props: { ...base, order: SELL } },
-  { name: "Quote changed while reading (worse)", props: { ...base, priceUpdate: { from: "50.00 USDC", worse: true }, confirmHeld: true } },
-  { name: "Quote changed while reading (better)", props: { ...base, priceUpdate: { from: "54.30 USDC", worse: false } } },
+  { name: "Quote got worse while reading", props: { ...base, priceUpdate: { from: "50.00 USDC" }, confirmHeld: true } },
   { name: "Quote expired", props: { ...base, secondsRemaining: 0 } },
   { name: "Getting a fresh quote", props: { ...base, step: "requesting_quote", order: BUY_WAITING } },
   { name: "Locking in", props: { ...base, step: "accepting_quote", canAbandon: true } },
-  { name: "Wallet signature", props: { ...base, step: "signing" } },
+  // the trade can still be cancelled while the wallet is open, so the two buttons share the row
+  { name: "Wallet signature", props: { ...base, step: "signing", canAbandon: true } },
   { name: "Sending", props: { ...base, step: "submitting" } },
   { name: "Pending on chain", props: { ...base, step: "pending", txUrl: TX } },
   { name: "Confirmed (buy)", props: { ...base, step: "confirmed", txUrl: TX } },

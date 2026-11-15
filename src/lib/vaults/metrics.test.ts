@@ -14,11 +14,11 @@ const NOW = 1_800_000_000;
 
 function cycle(overrides: Partial<VaultCycle> = {}): VaultCycle {
   return {
-    cycle_number: "0",
-    capital_generation: "0",
-    expiry_ts: "0",
-    started_at: "0",
-    finished_at: "100",
+    cycle_number: 0,
+    capital_generation: 0,
+    expiry_ts: 0,
+    started_at: 0,
+    finished_at: 100,
     share_price_start: "1000000000",
     share_price_end: "1010000000",
     equity_start: "1000000000",
@@ -37,17 +37,17 @@ function weekly(returns: number[], lastEndsDaysAgo = 7): FinishedCycle[] {
   const lastEnd = NOW - lastEndsDaysAgo * DAY_SECS;
   return returns.map((returnPct, i) => {
     const finishedAt = lastEnd - (returns.length - 1 - i) * WEEK;
-    return { cycleNumber: i, capitalGeneration: "0", startedAt: finishedAt - WEEK, finishedAt, returnPct };
+    return { cycleNumber: i, capitalGeneration: 0, startedAt: finishedAt - WEEK, finishedAt, returnPct };
   });
 }
 
 describe("finishedCycles", () => {
   it("drops the running cycle even when its return is already filled in", () => {
     const cycles = finishedCycles([
-      cycle({ cycle_number: "1", started_at: "200", finished_at: null, return_pct: 0.4 }),
-      cycle({ cycle_number: "0", started_at: "0", finished_at: "100", return_pct: 1 }),
+      cycle({ cycle_number: 1, started_at: 200, finished_at: null, return_pct: 0.4 }),
+      cycle({ cycle_number: 0, started_at: 0, finished_at: 100, return_pct: 1 }),
     ]);
-    expect(cycles).toEqual([{ cycleNumber: 0, capitalGeneration: "0", startedAt: 0, finishedAt: 100, returnPct: 1 }]);
+    expect(cycles).toEqual([{ cycleNumber: 0, capitalGeneration: 0, startedAt: 0, finishedAt: 100, returnPct: 1 }]);
   });
 
   it("derives the return from share prices when the backend leaves it out", () => {
@@ -58,26 +58,26 @@ describe("finishedCycles", () => {
   });
 
   it("sorts by finish time and drops duplicate pages", () => {
-    const a = cycle({ cycle_number: "0", started_at: "0", finished_at: "100" });
-    const b = cycle({ cycle_number: "1", started_at: "100", finished_at: "200" });
+    const a = cycle({ cycle_number: 0, started_at: 0, finished_at: 100 });
+    const b = cycle({ cycle_number: 1, started_at: 100, finished_at: 200 });
     expect(finishedCycles([b, a, b]).map((c) => c.cycleNumber)).toEqual([0, 1]);
   });
 
   it("keeps each cycle's capital generation", () => {
     const cycles = finishedCycles([
-      cycle({ cycle_number: "0", capital_generation: null, started_at: "0", finished_at: "100" }),
-      cycle({ cycle_number: "1", capital_generation: "3", started_at: "100", finished_at: "200" }),
+      cycle({ cycle_number: 0, capital_generation: null, started_at: 0, finished_at: 100 }),
+      cycle({ cycle_number: 1, capital_generation: 3, started_at: 100, finished_at: 200 }),
     ]);
-    expect(cycles.map((c) => c.capitalGeneration)).toEqual([null, "3"]);
+    expect(cycles.map((c) => c.capitalGeneration)).toEqual([null, 3]);
   });
 });
 
 describe("cumulative return", () => {
   it("compounds per-cycle returns, so a share price reset does not distort it", () => {
     const cycles = finishedCycles([
-      cycle({ cycle_number: "0", started_at: "0", finished_at: "100", share_price_start: "1000000000", share_price_end: "1100000000", return_pct: 10 }),
+      cycle({ cycle_number: 0, started_at: 0, finished_at: 100, share_price_start: "1000000000", share_price_end: "1100000000", return_pct: 10 }),
       // new capital generation: the share price restarts at 1
-      cycle({ cycle_number: "1", started_at: "100", finished_at: "200", share_price_start: "1000000000", share_price_end: "900000000", return_pct: -10 }),
+      cycle({ cycle_number: 1, started_at: 100, finished_at: 200, share_price_start: "1000000000", share_price_end: "900000000", return_pct: -10 }),
     ]);
     expect(cumulativeReturnSeries(cycles).at(-1)!.v).toBeCloseTo(-1, 10);
   });
@@ -107,8 +107,8 @@ describe("tvlSeries", () => {
   it("plots equity at each boundary in whole tokens, including the running cycle's start", () => {
     const series = tvlSeries(
       [
-        cycle({ cycle_number: "1", started_at: "100", finished_at: null, equity_start: "3000000000", equity_end: null }),
-        cycle({ cycle_number: "0", started_at: "0", finished_at: "100", equity_start: "1000000000", equity_end: "1100000000" }),
+        cycle({ cycle_number: 1, started_at: 100, finished_at: null, equity_start: "3000000000", equity_end: null }),
+        cycle({ cycle_number: 0, started_at: 0, finished_at: 100, equity_start: "1000000000", equity_end: "1100000000" }),
       ],
       9,
     );

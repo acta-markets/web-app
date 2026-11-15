@@ -11,7 +11,7 @@ export const DAY_SECS = 86_400;
 export type FinishedCycle = {
   cycleNumber: number;
   /** Null when the cycle's opening event is not retained. */
-  capitalGeneration: string | null;
+  capitalGeneration: number | null;
   startedAt: number;
   finishedAt: number;
   /** 1.0 means 1% */
@@ -20,7 +20,7 @@ export type FinishedCycle = {
 
 export type SeriesPoint = { t: number; v: number };
 
-function toNumber(value: string | null | undefined): number | null {
+function toNumber(value: string | number | null | undefined): number | null {
   if (value == null || value === "") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;

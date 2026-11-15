@@ -34,6 +34,9 @@ describe("Trade page modes", () => {
     const title = screen.getByRole("heading", { level: 1 });
     expect(title.textContent).toContain("on your thesis");
     expect(screen.getByRole("button", { name: "Trading mode: profit. Switch to yield" })).toBeTruthy();
+    // the line under the title says what this mode is; the other mode's line only holds its space
+    expect(screen.getByText("Profit if the price ends where you say").getAttribute("aria-hidden")).toBe("false");
+    expect(screen.getByText("Earn yield if the price ends where you say").getAttribute("aria-hidden")).toBe("true");
     expect(mocks.getEarnSummary).toHaveBeenCalled();
   });
 
@@ -41,6 +44,8 @@ describe("Trade page modes", () => {
     mocks.search = "mode=yield&asset=JLP";
     render(<TradeClient />);
     expect(screen.getByText("Yield for JLP")).toBeTruthy();
+    expect(screen.getByText("Earn yield if the price ends where you say").getAttribute("aria-hidden")).toBe("false");
+    expect(screen.getByText("Profit if the price ends where you say").getAttribute("aria-hidden")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Trading mode: yield. Switch to profit" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP", { scroll: false });
   });
@@ -66,12 +71,15 @@ describe("Trade page modes", () => {
   it("explains what is behind Profit: a bought option, its premium and using it", () => {
     render(<TradeClient />);
     fireEvent.click(screen.getByRole("button", { name: "How it works" }));
-    expect(screen.getByRole("dialog", { name: "How profit works" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "How it works" })).toBeTruthy();
+    // the plain version comes first: right lands in the profit zone, wrong costs the fixed premium
+    expect(screen.getByText(/If you are right, you land in the profit zone/)).toBeTruthy();
+    expect(screen.getByText(/you lose only the premium, a fixed fee paid up front/)).toBeTruthy();
     expect(screen.getByText("You buy an option")).toBeTruthy();
     expect(screen.getByText(/the right, not the obligation/)).toBeTruthy();
     expect(screen.getByText(/It is the most you can lose\./)).toBeTruthy();
-    // a bought option only pays if it is used, which takes a deposit
-    expect(screen.getByText(/deposit before the date/)).toBeTruthy();
+    // a bought option only pays if it is used, which takes funding it
+    expect(screen.getByText(/fund it before the date/)).toBeTruthy();
     expect(screen.getByText(/Above buys a call/)).toBeTruthy();
     expect(screen.queryByText("You sell an option")).toBeNull();
     expect(screen.getByRole("link", { name: "Read the guide to buying options" }).getAttribute("href")).toBe("/docs/guide/buying-options");
@@ -81,7 +89,9 @@ describe("Trade page modes", () => {
     mocks.search = "mode=yield";
     render(<TradeClient />);
     fireEvent.click(screen.getByRole("button", { name: "How it works" }));
-    expect(screen.getByRole("dialog", { name: "How yield works" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "How it works" })).toBeTruthy();
+    expect(screen.getByText(/If you are right, you keep the premium and your deposit comes back/)).toBeTruthy();
+    expect(screen.getByText(/your deposit buys or sells the asset at your price/)).toBeTruthy();
     expect(screen.getByText("You sell an option")).toBeTruthy();
     expect(screen.queryByText("You buy an option")).toBeNull();
     expect(screen.getByText(/yours either way/)).toBeTruthy();

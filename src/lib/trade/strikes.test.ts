@@ -54,7 +54,7 @@ describe("expiries", () => {
 
   it("reads spot from the reference price", () => {
     expect(spotFromSnapshot(snapshot())).toBe(100);
-    expect(spotFromSnapshot({ ...snapshot(), reference_price: 0 })).toBeNull();
+    expect(spotFromSnapshot({ ...snapshot(), reference_price: "0" })).toBeNull();
     expect(spotFromSnapshot(null)).toBeNull();
   });
 });
@@ -99,7 +99,7 @@ describe("per-side indicatives", () => {
     // Add a buy record for the same product/market; selling must still read the sell record.
     data.markets[1].indicatives.push({
       position_type: "cash_secured_put", side: "buy", freshness: { type: "fresh", updated_at: now },
-      strikes: [{ strike: 99e9, price: { type: "quoted", price: 9e9 } }],
+      strikes: [{ strike: "99000000000", price: { type: "quoted", price: "9000000000" } }],
     });
     const sell = indicativesFor(data, "put-soon", "cash_secured_put", "sell");
     const buy = indicativesFor(data, "put-soon", "cash_secured_put", "buy");

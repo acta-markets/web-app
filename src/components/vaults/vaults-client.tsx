@@ -3,10 +3,10 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { Chevron } from "@/components/app-ui/chevron";
-import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { AppButton } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
+import { AppPageHeader, AppPageHeaderLink } from "@/components/app-ui/app-page-header";
 import { cn } from "@/lib/cn";
 import { VAULT_SORTS, type VaultModalTab, type VaultSort } from "@/lib/vaults/presentation";
 import {
@@ -168,26 +168,11 @@ export function VaultsClient({ initialCategory }: { initialCategory: CategoryFil
 
   return (
     <div>
-      <div className="flex flex-col items-center gap-8 pb-16 pt-[104px] max-md:pb-10 max-md:pt-16">
-        <div className="flex w-full max-w-[540px] flex-col items-center gap-3 px-6">
-          <h1 className="w-full text-center font-space text-[64px] font-semibold leading-[1.2] tracking-[-1.28px] text-content-primary max-md:text-[40px]">
-            Earn
-          </h1>
-          <div className="flex w-full flex-col items-center gap-1.5">
-            <p className="w-full text-center text-base font-normal leading-[1.2] tracking-[-0.32px] text-content-secondary">
-              Curated vaults for the assets you already hold
-            </p>
-            <Link
-              prefetch={false}
-              href="/docs/guide/vaults"
-              className="inline-flex items-center gap-0.5 text-base font-medium leading-[1.2] tracking-[-0.32px] text-accent-secondary hover:text-accent-primary"
-            >
-              How vaults work
-              <Chevron kind="go" className="h-5 w-5" />
-            </Link>
-          </div>
-        </div>
-      </div>
+      <AppPageHeader
+        title="Earn"
+        subtitle="Curated vaults for the assets you already hold"
+        action={<AppPageHeaderLink href="/docs/guide/vaults" prefetch={false}>How vaults work</AppPageHeaderLink>}
+      />
 
       <div className="mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6 max-md:px-3">
         <section className="flex flex-col gap-4" aria-labelledby="vaults-heading">
