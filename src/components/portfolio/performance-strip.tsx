@@ -118,11 +118,12 @@ export function PerformanceStrip({
             note={apr.aprPct != null ? `On ${count(apr.writtenCount, "sold position", "sold positions")}` : "No open sold positions"}
           />
           <Cell
-            label="Premium"
+            // the label says which premium the figure is; the line under it is the other side, what was paid
+            label="Premium collected"
             value={trading.sellCount > 0 ? formatUsdSmart(trading.collectedUsd) : DASH}
             note={[
-              trading.sellCount > 0 ? "collected" : "Nothing sold",
-              trading.buyCount > 0 ? `${formatUsdSmart(trading.paidUsd)} paid` : null,
+              trading.sellCount > 0 ? null : "Nothing sold",
+              trading.buyCount > 0 ? `${formatUsdSmart(trading.paidUsd)} paid` : trading.sellCount > 0 ? "Nothing paid" : null,
             ].filter(Boolean).join(" · ")}
           />
         </div>

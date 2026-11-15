@@ -36,9 +36,9 @@ describe("PerformanceStrip", () => {
 
   it("shows premium collected and paid", () => {
     render(<PerformanceStrip pnl={pnl} apr={apr} trading={trading} unavailable={false} />);
-    expect(screen.getByText("Premium")).toBeTruthy();
     expect(screen.getByText("$20.00")).toBeTruthy();
-    expect(screen.getByText("collected · $7.00 paid")).toBeTruthy();
+    expect(screen.getByText("Premium collected")).toBeTruthy();
+    expect(screen.getByText("$7.00 paid")).toBeTruthy();
   });
 
   it("shows em dashes, never zeros, without a mark or APR", () => {
