@@ -105,7 +105,7 @@ export const ProfitOutlook = memo(function ProfitOutlook({
             className={cn(
               // the app's floating surface, as the info tooltip and the sentence's menus; like
               // them it opens under its trigger, never above (STYLE.md, "Menus and hover panels open downward")
-              "absolute left-0 top-full z-30 mt-1 w-max min-w-[220px] border border-bg-border bg-bg-primary p-3 shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)] group-hover:block",
+              "absolute bottom-full right-0 z-30 mb-1 w-max min-w-[220px] border border-bg-border bg-bg-primary p-3 shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)] group-hover:block",
               open ? "block" : "hidden",
             )}
           >
