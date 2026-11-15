@@ -33,10 +33,10 @@ describe("Trade page modes", () => {
     // the mode is the one changeable word in the page title
     const title = screen.getByRole("heading", { level: 1 });
     expect(title.textContent).toContain("on your thesis");
-    expect(screen.getByRole("button", { name: "Trading mode: profit. Switch to yield" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Trading mode: profit. Switch to shield" })).toBeTruthy();
     // the line under the title says what this mode is; the other mode's line only holds its space
-    expect(screen.getByText("Profit if the price ends where you say").getAttribute("aria-hidden")).toBe("false");
-    expect(screen.getByText("Earn yield if the price ends where you say").getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByText("Profit if you are right, and only the premium is at risk").getAttribute("aria-hidden")).toBe("false");
+    expect(screen.getByText("Shield your thesis, and buy the asset if you are wrong").getAttribute("aria-hidden")).toBe("true");
     expect(mocks.getEarnSummary).toHaveBeenCalled();
   });
 
@@ -44,8 +44,8 @@ describe("Trade page modes", () => {
     mocks.search = "mode=yield&asset=JLP";
     render(<TradeClient />);
     expect(screen.getByText("Yield for JLP")).toBeTruthy();
-    expect(screen.getByText("Earn yield if the price ends where you say").getAttribute("aria-hidden")).toBe("false");
-    expect(screen.getByText("Profit if the price ends where you say").getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByText("Shield your thesis, and buy the asset if you are wrong").getAttribute("aria-hidden")).toBe("false");
+    expect(screen.getByText("Profit if you are right, and only the premium is at risk").getAttribute("aria-hidden")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Trading mode: yield. Switch to profit" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP", { scroll: false });
   });
@@ -54,7 +54,7 @@ describe("Trade page modes", () => {
     mocks.search = "asset=JLP";
     render(<TradeClient />);
     expect(screen.getByText("Profit for JLP")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Trading mode: profit. Switch to yield" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trading mode: profit. Switch to shield" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP&mode=yield", { scroll: false });
   });
 

@@ -18,14 +18,16 @@ type Mode = "yield" | "profit";
     `word` completes the page title, "Get ___ on your thesis". */
 const MODES: Array<{ value: Mode; word: string }> = [
   { value: "profit", word: "profit" },
-  { value: "yield", word: "yield" },
+  { value: "yield", word: "shield" },
 ];
 
 /** The line under the title: what the switch changes, in one breath. Both read the same way,
     the mode's action and then the one condition they share. */
 const MODE_LINE: Record<Mode, string> = {
-  profit: "Profit if the price ends where you say",
-  yield: "Earn yield if the price ends where you say",
+  // buying: the upside is yours, the downside is capped at what you paid
+  profit: "Profit if you are right, and only the premium is at risk",
+  // selling: the premium is yours either way, and being wrong means buying the asset
+  yield: "Shield your thesis, and buy the asset if you are wrong",
 };
 
 /**
