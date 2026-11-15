@@ -399,8 +399,8 @@ function FlipAffordance({
       >
         <Chevron kind="switch" className="block h-3 w-3" />
       </span>
-      <span className="max-md:hidden">click the chart to flip</span>
-      <span className="md:hidden">tap to flip</span>
+      <span className="uppercase tracking-[0.08em] max-md:hidden">click the chart to flip</span>
+      <span className="uppercase tracking-[0.08em] md:hidden">tap to flip</span>
       {variant === "coach" && !coachSeen ? (
         <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-none border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[12px] tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
           tap anywhere on the chart to flip
@@ -1193,7 +1193,7 @@ export function ThesisChart({
             aria-valuetext={formatStrikePrice(strike)}
             tabIndex={0}
             title="Drag to change the strike"
-            className="group absolute z-[18] flex -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none select-none items-center gap-2 border border-accent-primary/30 bg-accent-primary/20 px-3 py-2 font-mono shadow-[0_2px_16px_rgba(0,0,0,0.7)] backdrop-blur-[4px] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary max-md:gap-1 max-md:px-2 max-md:py-1.5"
+            className="group absolute z-[18] flex min-h-[44px] min-w-[128px] -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center gap-2 border border-accent-primary/30 bg-accent-primary/20 px-4 py-3 font-mono shadow-[0_2px_16px_rgba(0,0,0,0.7)] backdrop-blur-[4px] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary max-md:gap-1 max-md:px-3 max-md:py-2"
             // on a phone the history half is narrow: a compact handle, kept inside the pane's left edge
             style={{ left: Math.max(leftSectionCenterX, 44), top: geometry.strikeY, animation: pulse ? "strike-pulse 1.4s ease-out 2" : undefined }}
             onPointerDown={onDragPointerDown}
@@ -1206,6 +1206,7 @@ export function ThesisChart({
               <Chevron kind="switch" className="h-4 w-4 shrink-0 text-content-primary" />
               <Grab className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
             </span>
+            <span className="text-[12px] tracking-[0.08em] text-content-primary max-md:hidden">STRIKE</span>
             <span className="text-[12px] font-semibold tabular-nums text-content-primary">{formatStrikePrice(strike)}</span>
           </div>
         ) : geometry ? (
