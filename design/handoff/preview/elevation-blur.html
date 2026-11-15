@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Elevation & blur</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+         background:
+           radial-gradient(circle at 30% 20%, rgba(128,201,182,0.08), transparent 40%),
+           radial-gradient(circle at 80% 80%, rgba(42,162,134,0.06), transparent 40%),
+           repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 4px),
+           #121212;
+  }
+  .card { border: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 12px;
+          background: var(--black-100); }
+  .tok { font-family: var(--font-mono); font-size: 12px; color: var(--fg); }
+  .px  { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); }
+  .demo { height: 64px; border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="tok">flat (default)</div>
+    <div class="demo" style="background:#121212"></div>
+    <div class="px">no shadow · flat #121212</div>
+  </div>
+  <div class="card">
+    <div class="tok">glass-sm · blur 8</div>
+    <div class="demo" style="background:rgba(18,18,18,0.01); backdrop-filter: blur(8px);"></div>
+    <div class="px">over hero texture</div>
+  </div>
+  <div class="card">
+    <div class="tok">glass-lg · blur 16</div>
+    <div class="demo" style="background:rgba(18,18,18,0.01); backdrop-filter: blur(16px);"></div>
+    <div class="px">info-box over hero</div>
+  </div>
+  <div class="card">
+    <div class="tok">scrolled header</div>
+    <div class="demo" style="background:rgba(18,18,18,0.8); backdrop-filter: blur(12px);"></div>
+    <div class="px">rgba(18,18,18,0.8) + blur</div>
+  </div>
+  <div class="card">
+    <div class="tok">float shadow</div>
+    <div class="demo" style="background:#121212; box-shadow: 0 1px 2px rgba(16,24,40,0.06)"></div>
+    <div class="px">0 1px 2px / .06 · menus, toasts</div>
+  </div>
+  <div class="card">
+    <div class="tok">ambient frame</div>
+    <div class="demo" style="background:#121212; box-shadow: 0 0 0 1px rgba(18,18,18,0.32)"></div>
+    <div class="px">0 0 0 1px / .32</div>
+  </div>
+</body>
+</html>

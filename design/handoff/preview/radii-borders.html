@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Radii & borders</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .card { border: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .tok { font-family: var(--font-mono); font-size: 12px; color: var(--fg); }
+  .px  { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); }
+  .demo { height: 60px; border: 1px solid var(--border); background: var(--white-500); }
+  .pill { height: 32px; width: 88px; border: 1px solid var(--border); border-radius: 999px; background: var(--white-500); display:flex;align-items:center;justify-content:center; font-family: var(--font-mono); font-size: 12px; }
+  .circle { height: 40px; width: 40px; border: 1px solid var(--border); border-radius: 999px; background: #F0F0F0; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="tok">--r-0 (default)</div>
+    <div class="demo" style="border-radius:0"></div>
+    <div class="px">0px · cards, tables, inputs</div>
+  </div>
+  <div class="card">
+    <div class="tok">--r-pill</div>
+    <div class="pill">Cash secured</div>
+    <div class="px">999px · tags</div>
+  </div>
+  <div class="card">
+    <div class="tok">token circle</div>
+    <div class="circle"></div>
+    <div class="px">999px · asset marks</div>
+  </div>
+  <div class="card">
+    <div class="tok">border</div>
+    <div class="demo"></div>
+    <div class="px">1px solid #282828</div>
+  </div>
+</body>
+</html>

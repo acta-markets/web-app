@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Logo</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .row { display: flex; gap: 32px; align-items: center; padding: 16px; border: 1px solid var(--border); }
+  .row .meta { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); margin-left: auto; }
+  .logomark { width: 44px; height: 44px; background: #F0F0F0; mask: url(../assets/logomark.svg) center/contain no-repeat; -webkit-mask: url(../assets/logomark.svg) center/contain no-repeat; }
+  .wordmark { width: 88px; height: 30px; background: #F0F0F0; mask: url(../assets/wordmark.svg) center/contain no-repeat; -webkit-mask: url(../assets/wordmark.svg) center/contain no-repeat; }
+  .full { display: flex; align-items: center; gap: 10px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="full"><div class="logomark"></div><div class="wordmark"></div></div>
+    <span class="meta">Full lockup · on #121212</span>
+  </div>
+  <div class="row">
+    <div class="logomark"></div>
+    <span class="meta">Logomark · 44px</span>
+  </div>
+  <div class="row" style="background:#F0F0F0;">
+    <div class="full"><div class="logomark" style="background:#121212"></div><div class="wordmark" style="background:#121212"></div></div>
+    <span class="meta" style="color:#8A8A8A">Inverted · on #F0F0F0</span>
+  </div>
+</body>
+</html>

@@ -1,0 +1,88 @@
+/* Acta Design System — colors + type */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ——— Primitives: Black ——— */
+  --black-100: #121212;            /* canvas, default surface */
+  --black-150: rgba(18,18,18,0.80); /* scrolled header */
+  --black-200: rgba(18,18,18,0.01); /* glass fill */
+  --black-300: #282828;            /* hairline border */
+  --black-400: rgba(40,40,40,0.80);
+  --black-500: #8A8A8A;            /* muted fg */
+
+  /* ——— Primitives: White ——— */
+  --white-100: #F0F0F0;            /* bright fg */
+  --white-200: rgba(240,240,240,0.50);
+  --white-300: rgba(240,240,240,0.25);
+  --white-400: rgba(240,240,240,0.15);
+  --white-500: rgba(240,240,240,0.10);
+
+  /* ——— Primitives: Green (accent) ——— */
+  --green-100: #078568;            /* primary dark */
+  --green-200: #2AA286;            /* primary */
+  --green-300: #80C9B6;            /* primary light */
+  --green-400: rgba(42,162,134,0.30);
+  --green-500: rgba(42,162,134,0.20);
+
+  /* ——— Primitives: Orange ——— */
+  --orange-100: #FF611B;           /* BTC-only */
+
+  /* ——— Semantic ——— */
+  --bg: var(--black-100);
+  --bg-glass: var(--black-200);
+  --bg-scrolled: var(--black-150);
+  --fg: var(--white-100);
+  --fg-muted: var(--black-500);
+  --fg-dim: var(--white-200);
+  --border: var(--black-300);
+  --accent: var(--green-200);
+  --accent-dark: var(--green-100);
+  --accent-tint: var(--green-500);
+  --accent-border: var(--green-400);
+
+  /* ——— Type families ——— */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-ui: 'Geist', 'Inter', system-ui, sans-serif;
+
+  /* ——— Shadows (used sparingly) ——— */
+  --shadow-ambient: 0 0 0 1px rgba(18,18,18,0.32);
+  --shadow-float: 0 1px 2px rgba(16,24,40,0.06);
+
+  /* ——— Spacing scale ——— */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
+  --sp-4: 16px; --sp-5: 20px; --sp-6: 24px;
+  --sp-8: 32px; --sp-10: 40px;
+
+  /* ——— Radii ——— */
+  --r-0: 0px;
+  --r-pill: 999px;
+}
+
+/* ——— Semantic type classes ——— */
+html, body { background: var(--bg); color: var(--fg); font-family: var(--font-mono); }
+
+.h-display    { font-family: var(--font-display); font-weight: 600; font-size: 114px; line-height: 1.05; letter-spacing: -0.02em; }
+.h-hero       { font-family: var(--font-display); font-weight: 600; font-size: 64px;  line-height: 1.1;  letter-spacing: -0.02em; }
+.h-1          { font-family: var(--font-display); font-weight: 600; font-size: 48px;  line-height: 1.2;  letter-spacing: -0.02em; }
+.h-2          { font-family: var(--font-display); font-weight: 600; font-size: 40px;  line-height: 1.2;  letter-spacing: -0.02em; }
+.h-3          { font-family: var(--font-display); font-weight: 600; font-size: 28px;  line-height: 1.25; letter-spacing: -0.02em; }
+.h-4          { font-family: var(--font-display); font-weight: 600; font-size: 24px;  line-height: 1.3;  letter-spacing: -0.02em; }
+.h-5          { font-family: var(--font-display); font-weight: 600; font-size: 20px;  line-height: 1.3;  letter-spacing: -0.02em; }
+
+.mono-lg      { font-family: var(--font-mono); font-weight: 500; font-size: 24px; line-height: 1.4;  letter-spacing: -0.02em; }
+.mono-md      { font-family: var(--font-mono); font-weight: 500; font-size: 20px; line-height: 1.2;  letter-spacing: -0.02em; }
+.mono-body    { font-family: var(--font-mono); font-weight: 400; font-size: 16px; line-height: 1.4;  letter-spacing: -0.02em; }
+.mono-body-m  { font-family: var(--font-mono); font-weight: 500; font-size: 16px; line-height: 1.4;  letter-spacing: -0.02em; }
+.mono-sm      { font-family: var(--font-mono); font-weight: 400; font-size: 14px; line-height: 1.2;  letter-spacing: -0.02em; }
+.mono-sm-m    { font-family: var(--font-mono); font-weight: 500; font-size: 14px; line-height: 1.2;  letter-spacing: -0.02em; }
+.mono-xs      { font-family: var(--font-mono); font-weight: 400; font-size: 12px; line-height: 1.2;  letter-spacing: -0.02em; }
+.mono-xs-m    { font-family: var(--font-mono); font-weight: 500; font-size: 12px; line-height: 1.2;  letter-spacing: -0.02em; }
+
+.ui-md        { font-family: var(--font-ui); font-weight: 500; font-size: 16px; line-height: 20px; letter-spacing: -0.01em; }
+
+/* ——— Reset-ish ——— */
+* { box-sizing: border-box; }
+button { font-family: inherit; cursor: pointer; border: 0; background: transparent; color: inherit; padding: 0; }
+a { color: inherit; text-decoration: none; }
