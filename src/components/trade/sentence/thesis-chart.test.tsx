@@ -86,6 +86,36 @@ describe("thesis chart", () => {
     expect(screen.getByText(/Strike \$95/)).toBeTruthy();
   });
 
+  it("marks the two zones as the ticket marks its outcomes: a check where the user is right, a red cross where they are wrong", async () => {
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    const { container, rerender } = render(<ThesisChart {...props} direction="above" />);
+    await waitFor(() => expect(container.querySelectorAll("[data-zone-mark]")).toHaveLength(2));
+    const chips = () => [...container.querySelectorAll("[data-zone-mark]")].map((mark) => [mark.getAttribute("data-zone-mark"), mark.parentElement!.textContent, mark.getAttribute("class")]);
+    // above: the right zone is the upper one, so it comes first (the fixture is in Yield mode)
+    let [first, second] = chips();
+    expect(first.slice(0, 2)).toEqual(["right", "YIELD ZONE"]);
+    expect(first[2]).toContain("text-additional-green-primary-deep");
+    expect(second[0]).toBe("wrong");
+    expect(second[2]).toContain("text-additional-red-primary");
+    // the typed tick is gone: the mark is the icon, on both
+    expect(container.textContent).not.toContain("✓");
+    // flipped, the cross moves to the upper zone with the words it belongs to
+    rerender(<ThesisChart {...props} direction="below" />);
+    [first, second] = chips();
+    expect(first[0]).toBe("wrong");
+    expect(second.slice(0, 2)).toEqual(["right", "YIELD ZONE"]);
+  });
+
+  it("names the right zone after the mode: profit in Profit, yield in Yield", async () => {
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    const { container, rerender } = render(<ThesisChart {...props} direction="above" side="buy" />);
+    const right = () => container.querySelector('[data-zone-mark="right"]')?.parentElement?.textContent;
+    await waitFor(() => expect(right()).toBe("PROFIT ZONE"));
+    rerender(<ThesisChart {...props} direction="above" side="sell" />);
+    expect(right()).toBe("YIELD ZONE");
+    expect(container.textContent).not.toContain("PROFIT ZONE");
+  });
+
   it("flips direction from the (flip) button and a clean chart tap, ignoring drags", async () => {
     const onDirection = vi.fn();
     mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));

@@ -390,7 +390,7 @@ function FlipAffordance({
     <span
       aria-hidden="true"
       // dressed exactly as the NOW tag, so the chart's labels are one family
-      className="pointer-events-none absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
+      className="pointer-events-none absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] tracking-[-0.02em] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
     >
       <span
         className="inline-block transition-transform duration-300 ease-out"
@@ -417,6 +417,7 @@ function FlipAffordance({
     are labelled by buttons, so the sections read as the things you click. */
 function ZoneChip({
   text,
+  outcome,
   toneClass,
   x,
   y,
@@ -425,6 +426,8 @@ function ZoneChip({
   onFlip,
 }: {
   text: string;
+  /** Which way this zone ends for the user: it sets the mark in front of the words. */
+  outcome: "right" | "wrong";
   toneClass: string;
   x: number;
   y: number;
@@ -437,9 +440,19 @@ function ZoneChip({
     "absolute z-[17] -translate-y-1/2 whitespace-nowrap border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono font-semibold tracking-[0.08em] backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)] transition-colors",
     compact ? "-translate-x-full text-[12px]" : "-translate-x-1/2 text-xs"
   );
+  // The same marks, at the same size, as the ticket's "If ..." labels under the chart: a green
+  // check where the user is right, a red cross where they are wrong. Colour alone did not say
+  // which zone was which; the profit zone had a typed tick and the other zone had nothing.
+  const mark =
+    outcome === "right" ? (
+      <Check aria-hidden="true" data-zone-mark="right" className="mr-1 inline h-3 w-3 shrink-0 align-[-1px] text-additional-green-primary-deep" />
+    ) : (
+      <X aria-hidden="true" data-zone-mark="wrong" className="mr-1 inline h-3 w-3 shrink-0 align-[-1px] text-additional-red-primary" />
+    );
   if (!interactive) {
     return (
       <span aria-hidden="true" className={cn(base, "pointer-events-none", toneClass)} style={{ left: x, top: y }}>
+        {mark}
         {text}
       </span>
     );
@@ -457,6 +470,7 @@ function ZoneChip({
       )}
       style={{ left: x, top: y }}
     >
+      {mark}
       {text}
       <Chevron kind="switch" className="ml-1 inline h-3 w-3 opacity-50" />
     </button>
@@ -951,6 +965,8 @@ export function ThesisChart({
       exercised against you: the deposit buys the asset (above) or the asset is sold (below).
       A long option forfeits the premium it paid. */
   const wrongZone = side === "sell" ? `YOU ${direction === "above" ? "BUY" : "SELL"} ${symbol}` : "PREMIUM LOST";
+  // the zone is named after the mode's own word: you take profit in Profit and earn yield in Yield
+  const rightZone = side === "sell" ? "YIELD ZONE" : "PROFIT ZONE";
 
   const body = (
     <>
@@ -1068,7 +1084,8 @@ export function ThesisChart({
             />
             {/* zone labels: kept out of the click targets and lifted above the frosted future pane */}
             <ZoneChip
-              text={direction === "above" ? "✓ PROFIT ZONE" : wrongZone}
+              text={direction === "above" ? rightZone : wrongZone}
+              outcome={direction === "above" ? "right" : "wrong"}
               toneClass={direction === "above" ? "text-additional-green-primary-deep" : "text-additional-red-primary"}
               x={zoneChipX}
               y={topZoneCenterY}
@@ -1077,7 +1094,8 @@ export function ThesisChart({
               onFlip={flipDirection}
             />
             <ZoneChip
-              text={direction !== "above" ? "✓ PROFIT ZONE" : wrongZone}
+              text={direction !== "above" ? rightZone : wrongZone}
+              outcome={direction !== "above" ? "right" : "wrong"}
               toneClass={direction !== "above" ? "text-additional-green-primary-deep" : "text-additional-red-primary"}
               x={zoneChipX}
               y={bottomZoneCenterY}
@@ -1135,7 +1153,7 @@ export function ThesisChart({
               ) : null}
             </svg>
             <span
-              className="pointer-events-none absolute right-1.5 top-1 z-[17] font-mono text-[12px] text-content-secondary"
+              className="pointer-events-none absolute right-1.5 top-1 z-[17] font-mono text-[12px] tracking-[-0.02em] text-content-secondary"
               aria-hidden="true"
             >
               <Chevron kind="go" className="mr-0.5 inline h-3 w-3 -translate-y-px" />
@@ -1160,7 +1178,7 @@ export function ThesisChart({
               />
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute right-1.5 z-[17] -translate-y-1/2 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary px-2 py-1 font-mono text-[12px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)]"
+                className="pointer-events-none absolute right-1.5 z-[17] -translate-y-1/2 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary px-2 py-1 font-mono text-[12px] tracking-[-0.02em] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)]"
                 style={{ top: y }}
               >
                 {formatStrikePrice(previewStrike)}
@@ -1173,7 +1191,7 @@ export function ThesisChart({
             dot, so it names the price without covering the end of the line. */}
         {geometry && nowX != null && spotY != null ? (
           <span
-            className="pointer-events-none absolute z-[17] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
+            className="pointer-events-none absolute z-[17] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] tracking-[-0.02em] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
             style={{ left: nowX, top: nowTagY ?? spotY, transition: "top 180ms ease-out, left 180ms ease-out" }}
             aria-hidden="true"
           >
@@ -1194,7 +1212,7 @@ export function ThesisChart({
             aria-valuetext={formatStrikePrice(strike)}
             tabIndex={0}
             title="Drag to change the strike"
-            className="strike-ring group absolute z-[18] flex min-h-[44px] min-w-[128px] -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center gap-2 border border-accent-primary/30 bg-accent-primary/20 px-4 py-3 font-mono shadow-[0_2px_16px_rgba(0,0,0,0.7)] backdrop-blur-[4px] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary max-md:gap-1 max-md:px-3 max-md:py-2"
+            className="strike-ring group absolute z-[18] flex min-h-[44px] min-w-[128px] -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none select-none items-center justify-center gap-2 border border-accent-primary/30 bg-accent-primary/20 px-4 py-3 font-mono tracking-[-0.02em] shadow-[0_2px_16px_rgba(0,0,0,0.7)] backdrop-blur-[4px] active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary max-md:gap-1 max-md:px-3 max-md:py-2"
             // on a phone the history half is narrow: a compact handle, kept inside the pane's left edge
             style={{ left: Math.max(leftSectionCenterX, 44), top: geometry.strikeY }}
             onPointerDown={onDragPointerDown}
@@ -1208,11 +1226,11 @@ export function ThesisChart({
               <Grab className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
             </span>
             <span className="text-[12px] font-semibold tracking-[0.08em] text-content-primary max-md:hidden">STRIKE</span>
-            <span className="text-[12px] font-semibold tabular-nums text-content-primary">{formatStrikePrice(strike)}</span>
+            <span className="text-[12px] font-semibold tracking-[-0.02em] tabular-nums text-content-primary">{formatStrikePrice(strike)}</span>
           </div>
         ) : geometry ? (
           <span
-            className="pointer-events-none absolute z-[16] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-accent-primary/30 bg-accent-primary/20 px-3 py-2 font-mono text-[12px] font-semibold leading-[1.2] text-content-primary shadow-[0_2px_12px_rgba(0,0,0,0.7)] backdrop-blur-[4px]"
+            className="pointer-events-none absolute z-[16] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-accent-primary/30 bg-accent-primary/20 px-3 py-2 font-mono text-[12px] tracking-[-0.02em] font-semibold leading-[1.2] text-content-primary shadow-[0_2px_12px_rgba(0,0,0,0.7)] backdrop-blur-[4px]"
             style={{ left: leftSectionCenterX, top: geometry.strikeY }}
             aria-hidden="true"
           >
@@ -1240,7 +1258,7 @@ export function ThesisChart({
             {rightAxis.ticks.map((t, i) => (
               <div
                 key={i}
-                className="pointer-events-none absolute right-1.5 -translate-y-1/2 text-right font-mono text-[12px] leading-[1.15] tabular-nums"
+                className="pointer-events-none absolute right-1.5 -translate-y-1/2 text-right font-mono text-[12px] tracking-[-0.02em] leading-[1.15] tabular-nums"
                 style={{ top: t.y }}
               >
                 <div className="text-content-secondary">{t.price}</div>
@@ -1249,7 +1267,7 @@ export function ThesisChart({
             ))}
             {/* what the two numbers at each tick are, in the free strip beside the time axis:
                 set like a tick itself, each word in its own number's colour */}
-            <div className="pointer-events-none absolute bottom-1 right-1.5 text-right font-mono text-[12px] leading-[1.25]">
+            <div className="pointer-events-none absolute bottom-1 right-1.5 text-right font-mono text-[12px] tracking-[-0.02em] leading-[1.25]">
               <div className="text-content-secondary">Price</div>
               {rightAxis.readoutLabel ? <div className="text-accent-primary">{rightAxis.readoutLabel}</div> : null}
             </div>
