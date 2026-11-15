@@ -18,7 +18,7 @@ type Mode = "yield" | "profit";
     `word` completes the page title, "Get ___ on your thesis". */
 const MODES: Array<{ value: Mode; word: string }> = [
   { value: "profit", word: "profit" },
-  { value: "yield", word: "shield" },
+  { value: "yield", word: "yield" },
 ];
 
 /** The line under the title: what the switch changes, in one breath. Both read the same way,
@@ -26,8 +26,7 @@ const MODES: Array<{ value: Mode; word: string }> = [
 const MODE_LINE: Record<Mode, string> = {
   // buying: the upside is yours, the downside is capped at what you paid
   profit: "Profit if you are right, and only the premium is at risk",
-  // selling: the premium is yours either way, and being wrong means buying the asset
-  yield: "Shield your thesis, and buy the asset if you are wrong",
+  yield: "Earn yield if the price ends where you say",
 };
 
 /**
@@ -176,7 +175,7 @@ export function TradeClient() {
             <button
               type="button"
               onClick={() => setHowOpen(true)}
-              className="inline-flex items-center gap-0.5 font-mono text-sm leading-[1.2] text-content-secondary transition-colors hover:text-content-primary"
+              className="inline-flex items-center gap-0.5 font-mono text-sm leading-[1.2] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary"
             >
               How it works
               <Chevron kind="go" className="h-4 w-4" />
