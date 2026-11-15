@@ -16,8 +16,14 @@ const SHOWN_STEPS = 3;
  */
 function ProfitRows({ breakeven, steps, testId }: { breakeven: ProfitRow | null; steps: ProfitRow[]; testId: string }) {
   return (
-    <dl data-testid={testId} className={cn(TICKET_NOTE, "grid grid-cols-[6ch_auto_1fr] gap-x-[1ch] gap-y-0.5 whitespace-nowrap tabular-nums")}>
-      {breakeven ? <Row row={breakeven} /> : null}
+    <dl data-testid={testId} className={cn(TICKET_NOTE, "grid grid-cols-[5ch_1fr_6ch] items-baseline gap-x-3 whitespace-nowrap tabular-nums")}>
+      {/* breakeven leads, because it is the line where the trade stops losing */}
+      {breakeven ? (
+        <>
+          <Row row={breakeven} />
+          <div className="col-span-3 border-t border-bg-border" aria-hidden="true" />
+        </>
+      ) : null}
       {steps.map((row) => (
         <Row key={row.move} row={row} profit />
       ))}
@@ -32,7 +38,7 @@ function Row({ row, profit = false }: { row: ProfitRow; profit?: boolean }) {
       <dt>
         <span className="text-content-tertiary">at</span> {row.price}
       </dt>
-      <dd className={cn("text-right", profit && "text-additional-green-primary-deep")}>{row.result}</dd>
+      <dd className={cn("text-right tabular-nums", profit && "text-additional-green-primary-deep")}>{row.result}</dd>
     </div>
   );
 }

@@ -933,10 +933,11 @@ export function SentenceTrade({
             </div>
 
             {/* the ticket's last row: nothing renders after the button */}
-            <div className="mt-3">
-              <AppButton size="lg" className="w-full whitespace-nowrap font-mono max-md:px-4 max-md:text-base" disabled={cta.action == null} onClick={onCta}>
+            {/* the last step of the trade, sized like an action rather than a banner: a
+                full-bleed bar reads as a cookie notice, so the button hugs the panel */}
+            <div className="mt-4 flex justify-start">
+              <AppButton size="lg" className="whitespace-nowrap font-mono px-8" disabled={cta.action == null} onClick={onCta}>
                 {cta.label}
-                <Chevron kind="go" className="h-6 w-6" />
               </AppButton>
             </div>
           </div>
