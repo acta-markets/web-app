@@ -6,7 +6,7 @@ import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { cn } from "@/lib/cn";
 import { formatUsdSmart } from "@/lib/markets";
 import { numberFormat } from "@/lib/number-format";
-import { formatPortfolioPremium, portfolioIncomeSeries, type WalletPositionSummary } from "@/lib/portfolio-api";
+import { formatPortfolioPremium, portfolioIncomeSeries, portfolioPremiumInLastDays, type WalletPositionSummary } from "@/lib/portfolio-api";
 import { TOKENS, getNetwork } from "@/lib/tokens";
 import { shortAddress } from "@/lib/vaults/format";
 import { PortfolioEarningsChart, type IncomeRange } from "./portfolio-earnings-chart";
@@ -16,6 +16,15 @@ const RANGES: Array<{ value: IncomeRange; label: string }> = [
   { value: "7d", label: "7D" },
   { value: "30d", label: "30D" },
 ];
+const RANGE_DAYS: Record<IncomeRange, number> = { "7d": 7, "30d": 30 };
+
+/**
+ * What was collected over the chosen range. Thirty days is the venue's own total; a week is
+ * counted from the same daily figures the chart draws.
+ */
+function premiumInRange(summary: WalletPositionSummary, range: IncomeRange, nowSec: number): string {
+  return range === "30d" ? summary.premium_30d : portfolioPremiumInLastDays(summary, RANGE_DAYS[range], nowSec);
+}
 
 /** The token's symbol for a quote mint; a shortened address when it is not a known token. */
 function quoteSymbol(mint: string): string {
@@ -24,8 +33,9 @@ function quoteSymbol(mint: string): string {
 }
 
 /**
- * Premium collected over time. The header carries the two totals the chart is drawn from, so
- * the number is readable without hovering the line. `summaries` holds one entry per quote
+ * Premium collected over time. The header carries two totals, so the number is readable
+ * without hovering the line: all time, and the range the chart is showing. The second follows
+ * the 7D / 30D switch, as the chart does. `summaries` holds one entry per quote
  * currency; with more than one, a switch picks which to show.
  */
 export function IncomeCard({
@@ -65,7 +75,7 @@ export function IncomeCard({
             <p className="mt-1.5 font-mono text-sm leading-[1.3] tracking-[-0.28px] tabular-nums text-content-secondary">
               <span className="text-content-primary">{formatPortfolioPremium(summary.premium_all_time, summary.quote_decimals, symbol)}</span> all time
               {" · "}
-              <span className="text-content-primary">{formatPortfolioPremium(summary.premium_30d, summary.quote_decimals, symbol)}</span> in the last 30 days
+              <span className="text-content-primary">{formatPortfolioPremium(premiumInRange(summary, range, nowSec), summary.quote_decimals, symbol)}</span> in the last {RANGE_DAYS[range]} days
             </p>
           ) : state === "pending" ? (
             <div aria-hidden="true" className="mt-1.5 h-[18px] w-56 animate-pulse bg-action-primary" />

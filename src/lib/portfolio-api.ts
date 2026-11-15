@@ -45,6 +45,22 @@ export function formatPortfolioPremium(atoms: string, decimals: number, currency
   return currency === "USDC" ? `$${value}` : `${value} ${currency}`;
 }
 
+/**
+ * Premium collected in the last `days` days, in atoms, added up from the daily buckets. The
+ * window is the chart's: a bucket counts when its day starts within `days` of now, which makes
+ * it today and the six days before for a week. The summary only carries a ready total for
+ * thirty days, so any shorter range is counted here.
+ */
+export function portfolioPremiumInLastDays(summary: WalletPositionSummary, days: number, nowSec: number): string {
+  const start = nowSec - days * 24 * 60 * 60;
+  let total = 0n;
+  for (const { day, premium } of summary.daily) {
+    const t = Date.parse(`${day}T00:00:00Z`) / 1000;
+    if (t >= start && t <= nowSec) total += BigInt(premium);
+  }
+  return total.toString();
+}
+
 /** The chart library accepts numbers; do not silently round large atom totals. */
 export function portfolioIncomeSeries(summary: WalletPositionSummary): { t: number; v: number }[] | null {
   const allTime = BigInt(summary.premium_all_time);
