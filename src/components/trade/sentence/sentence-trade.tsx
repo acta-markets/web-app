@@ -712,7 +712,7 @@ export function SentenceTrade({
                 expiry (right). Where the card has its full width the headings share the top row
                 and the four cells the row beneath; on anything narrower, laptops included, each
                 heading sits right above its own pair, so no cell is ever too narrow for its line. */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1 xl:grid-cols-[1.05fr_0.9fr_1.1fr_1.05fr]">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 xl:grid-cols-[1.02fr_0.82fr_1.24fr_0.92fr] xl:gap-x-12">
               <p className={cn(TICKET_WHEN, "xl:order-1")}>Now</p>
               {/* 1. what goes in */}
               <div className={cn(TICKET_CELL, "xl:order-3")}>
@@ -935,8 +935,8 @@ export function SentenceTrade({
             {/* the ticket's last row: nothing renders after the button */}
             {/* the last step of the trade, sized like an action rather than a banner: a
                 full-bleed bar reads as a cookie notice, so the button hugs the panel */}
-            <div className="mt-4 flex justify-start">
-              <AppButton size="lg" className="whitespace-nowrap font-mono px-8" disabled={cta.action == null} onClick={onCta}>
+            <div className="mt-4">
+              <AppButton size="lg" className="w-full whitespace-nowrap font-mono max-md:px-4 max-md:text-base" disabled={cta.action == null} onClick={onCta}>
                 {cta.label}
               </AppButton>
             </div>

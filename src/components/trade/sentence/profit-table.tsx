@@ -16,7 +16,7 @@ const SHOWN_STEPS = 3;
  */
 function ProfitRows({ breakeven, steps, testId }: { breakeven: ProfitRow | null; steps: ProfitRow[]; testId: string }) {
   return (
-    <dl data-testid={testId} className={cn(TICKET_NOTE, "grid grid-cols-[5ch_1fr_6ch] items-baseline gap-x-3 whitespace-nowrap tabular-nums")}>
+    <dl data-testid={testId} className={cn(TICKET_NOTE, "grid w-full grid-cols-[5ch_1fr_auto] items-baseline gap-x-2.5 whitespace-nowrap tabular-nums")}>
       {/* breakeven leads, because it is the line where the trade stops losing */}
       {breakeven ? (
         <>
@@ -95,7 +95,7 @@ export const ProfitOutlook = memo(function ProfitOutlook({
             onClick={() => setOpen((was) => !was)}
             onBlur={() => setOpen(false)}
             // the app's quiet action link, as HALF and MAX
-            className="font-mono text-xs font-medium leading-[1.2] tracking-[-0.28px] text-accent-secondary transition-colors hover:text-accent-primary focus-visible:text-accent-primary focus-visible:outline-none"
+            className="font-mono text-xs font-medium leading-[1.2] tracking-[-0.28px] text-accent-secondary transition-all hover:-translate-y-0.5 hover:text-accent-primary focus-visible:-translate-y-0.5 focus-visible:text-accent-primary focus-visible:outline-none"
           >
             More prices
           </button>
