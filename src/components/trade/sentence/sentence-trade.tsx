@@ -933,11 +933,12 @@ export function SentenceTrade({
             </div>
 
             {/* the ticket's last row: nothing renders after the button */}
-            {/* the last step of the trade, sized like an action rather than a banner: a
-                full-bleed bar reads as a cookie notice, so the button hugs the panel */}
+            {/* the last step of the trade. A main action carries the brand's two chevrons, as
+                the header's connect button does; clickable text carries the same pair, smaller */}
             <div className="mt-4">
               <AppButton size="lg" className="w-full whitespace-nowrap font-mono max-md:px-4 max-md:text-base" disabled={cta.action == null} onClick={onCta}>
                 {cta.label}
+                <Chevron kind="go" className="h-6 w-6" />
               </AppButton>
             </div>
           </div>
