@@ -9,7 +9,7 @@
  *      (RFQ -> quote -> accept -> verify+sign keeper-sponsored tx -> submit -> on-chain outcome)
  *
  * NEVER touches mainnet and never uses real funds. Run:
- *   node scripts/e2e-testnet/run.ts [--limit N] [--underlying SYM] [--keypair path.json] [--print-keypair] [--timeout SEC]
+ *   node scripts/e2e-testnet/run.ts [--limit N] [--underlying SYM] [--side buy|sell] [--keypair path.json] [--print-keypair] [--timeout SEC]
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -56,6 +56,8 @@ const FILL_BOUNDS = { maxUnitLimit: 400_000, maxUnitPriceMicroLamports: 100_000 
 type Args = {
   limit: number;
   underlying: string | null;
+  /** Only the sells or only the buys; null runs both. */
+  side: TakerSide | null;
   keypairPath: string | null;
   printKeypair: boolean;
   timeout: number;
@@ -64,11 +66,12 @@ type Args = {
   retry: number;
 };
 function parseArgs(argv: string[]): Args {
-  const a: Args = { limit: 0, underlying: null, keypairPath: null, printKeypair: false, timeout: 20, invite: null, delay: 0, retry: 0 };
+  const a: Args = { limit: 0, underlying: null, side: null, keypairPath: null, printKeypair: false, timeout: 20, invite: null, delay: 0, retry: 0 };
   for (let i = 0; i < argv.length; i++) {
     const v = argv[i];
     if (v === "--limit") a.limit = Number(argv[++i]);
     else if (v === "--underlying") a.underlying = (argv[++i] ?? "").toUpperCase();
+    else if (v === "--side") a.side = argv[++i] === "buy" ? "buy" : "sell";
     else if (v === "--keypair") a.keypairPath = argv[++i];
     else if (v === "--print-keypair") a.printKeypair = true;
     else if (v === "--timeout") a.timeout = Number(argv[++i]);
@@ -673,7 +676,8 @@ async function main() {
     }
   }
 
-  const selected = args.limit > 0 ? cases.slice(0, args.limit) : cases;
+  const wanted = args.side ? cases.filter((c) => c.side === args.side) : cases;
+  const selected = args.limit > 0 ? wanted.slice(0, args.limit) : wanted;
   console.log(`# running ${selected.length} cases (timeout ${args.timeout}s each)...\n`);
 
   const runner = new CaseRunner(client, rpc, takerAddress, messageSigner);
