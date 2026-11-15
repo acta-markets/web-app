@@ -6,57 +6,93 @@ import { useSolana } from "@/components/solana/solana-wallet-provider";
 type Fundable = { pda: string; market: string };
 
 const NONE: ReadonlySet<string> = new Set();
-/** Positions prepared at once; each is two account reads. */
-const PREPARE_CONCURRENCY = 4;
+
+function without(set: ReadonlySet<string>, pdas: readonly string[]): ReadonlySet<string> {
+  if (!pdas.some((pda) => set.has(pda))) return set;
+  const next = new Set(set);
+  for (const pda of pdas) next.delete(pda);
+  return next;
+}
 
 /**
- * Wallet-paid funding, one position or several. `funded` covers confirmed deposits until the
- * listener's Funded row arrives; `pending` holds the positions being signed or confirmed.
+ * Wallet-paid funding, one position or several, and taking one deposit back. `funded` covers
+ * confirmed deposits until the listener's Funded row arrives, `withdrawn` the same for a
+ * deposit taken back; `pending` holds the positions being signed or confirmed and `action`
+ * says which of the two it is.
  */
 export function useBuyDeposit(onFunded: () => void) {
   const { rpc, selectedAccount, signTransaction, signAllTransactions } = useSolana();
   const owner = selectedAccount?.address;
   const [pending, setPending] = useState<ReadonlySet<string>>(NONE);
+  const [action, setAction] = useState<"fund" | "withdraw" | null>(null);
   const [funded, setFunded] = useState<ReadonlySet<string>>(new Set());
+  const [withdrawn, setWithdrawn] = useState<ReadonlySet<string>>(NONE);
   const [error, setError] = useState<string | null>(null);
 
   const send = useCallback(
     async (positions: readonly Fundable[]) => {
       if (!owner || positions.length === 0) return;
-      const batch = positions.length > 1;
       setPending(new Set(positions.map((p) => p.pda)));
+      setAction("fund");
       setError(null);
+      // what a failure may have left behind depends on how far it got
+      let sent = false;
+      let several = false;
+      let fundedNow: string[] = [];
+      const onSending = () => {
+        sent = true;
+      };
       try {
-        const [{ buildBuyDepositInstructions }, { sendWalletTransaction, sendWalletTransactions }, { mapLimit, withRetry }] = await Promise.all([
+        const [{ buildBuyDepositGroups }, { packInstructionGroups, sendWalletTransaction, sendWalletTransactions }] = await Promise.all([
           import("@/lib/trade/buy-deposit"),
           import("@/lib/vaults/transaction"),
-          import("@/lib/async-pool"),
         ]);
-        // One transaction per position. A batch is approved once in the wallet and sent in the
-        // order given, so the soonest expiry lands first. Each one reads two accounts, so they
-        // are prepared a few at a time and a dropped read is tried again: thirty at once is
-        // sixty requests, and a single one lost to a busy RPC used to fail the whole batch.
-        const transactions = await mapLimit(positions, PREPARE_CONCURRENCY, (p) =>
-          withRetry(() => buildBuyDepositInstructions(rpc, owner, p)),
-        );
-        if (batch) await sendWalletTransactions({ rpc, feePayer: owner, transactions, signAllTransactions });
-        else await sendWalletTransaction({ rpc, feePayer: owner, instructions: transactions[0], signTransaction });
+        // Every position's accounts come from two reads in all, and the deposits are packed
+        // several to a transaction, in the order given, so the soonest expiry lands first.
+        // Thirty options used to be sixty reads and thirty transactions, which a public RPC
+        // refuses for rate before the wallet is ever asked. A batch is approved once.
+        const built = await buildBuyDepositGroups(rpc, owner, positions);
+        // A row behind the chain (already funded, settled, closed) is left out, not allowed to
+        // fail the rest. If that leaves nothing, its reason is the error.
+        const ready = positions.flatMap((position, index) => {
+          const group = built[index];
+          return "instructions" in group ? [{ position, instructions: group.instructions }] : [];
+        });
+        const skipped = built.flatMap((group) => ("skipped" in group ? [group.skipped] : []));
+        if (ready.length === 0) throw new Error(skipped[0] ?? "nothing to fund");
+        const transactions = packInstructionGroups(owner, ready.map((r) => r.instructions));
+        several = transactions.length > 1;
+        if (several) await sendWalletTransactions({ rpc, feePayer: owner, transactions, signAllTransactions, onSending });
+        else await sendWalletTransaction({ rpc, feePayer: owner, instructions: transactions[0], signTransaction, onSending });
+        fundedNow = ready.map((r) => r.position.pda);
+        if (skipped.length > 0) {
+          const { describeSkippedPosition } = await import("@/lib/vaults/tx-errors");
+          const reasons = [...new Set(skipped.map(describeSkippedPosition))].join("; ");
+          setError(`${skipped.length} of ${positions.length} options were left out: ${reasons}. The rest are funded.`);
+        }
         setFunded((current) => {
           const next = new Set(current);
-          for (const p of positions) next.add(p.pda);
+          for (const pda of fundedNow) next.add(pda);
           return next;
         });
+        setWithdrawn((current) => without(current, fundedNow));
         onFunded();
       } catch (err) {
-        const { describeVaultTxError } = await import("@/lib/vaults/tx-errors");
+        console.error("[Portfolio] funding failed", err);
+        const { describeNotSent, describeVaultTxError } = await import("@/lib/vaults/tx-errors");
         const { message } = describeVaultTxError(err);
-        // A batch can fail part way: the deposits sent before the failure may have landed, and
-        // only the listener knows which. Say so and reload instead of guessing.
-        const partial = batch && !message.endsWith("Nothing was sent.");
-        setError(partial ? `${message} Options funded before it may have gone through; the list updates in a moment.` : message);
-        if (partial) onFunded();
+        if (!sent) {
+          // it stopped while preparing, simulating or signing: say that, and why
+          setError(describeNotSent(err));
+        } else {
+          // Several transactions can fail part way: the ones sent before the failure may have
+          // landed, and only the listener knows which. Say so and reload instead of guessing.
+          setError(several ? `${message} Options funded before it may have gone through; the list updates in a moment.` : message);
+          if (several) onFunded();
+        }
       } finally {
         setPending(NONE);
+        setAction(null);
       }
     },
     [owner, rpc, signTransaction, signAllTransactions, onFunded],
@@ -64,5 +100,34 @@ export function useBuyDeposit(onFunded: () => void) {
 
   const deposit = useCallback((position: Fundable) => send([position]), [send]);
 
-  return { deposit, depositAll: send, pending, funded, error };
+  /** Takes one funded option's deposit back; it is Open again and can be funded again before expiry. */
+  const withdraw = useCallback(
+    async (position: Fundable) => {
+      if (!owner) return;
+      setPending(new Set([position.pda]));
+      setAction("withdraw");
+      setError(null);
+      try {
+        const [{ buildBuyWithdrawInstructions }, { sendWalletTransaction }, { withRetry }] = await Promise.all([
+          import("@/lib/trade/buy-deposit"),
+          import("@/lib/vaults/transaction"),
+          import("@/lib/async-pool"),
+        ]);
+        const instructions = await withRetry(() => buildBuyWithdrawInstructions(rpc, owner, position));
+        await sendWalletTransaction({ rpc, feePayer: owner, instructions, signTransaction });
+        setFunded((current) => without(current, [position.pda]));
+        setWithdrawn((current) => new Set(current).add(position.pda));
+        onFunded();
+      } catch (err) {
+        const { describeVaultTxError } = await import("@/lib/vaults/tx-errors");
+        setError(describeVaultTxError(err).message);
+      } finally {
+        setPending(NONE);
+        setAction(null);
+      }
+    },
+    [owner, rpc, signTransaction, onFunded],
+  );
+
+  return { deposit, depositAll: send, withdraw, pending, action, funded, withdrawn, error };
 }

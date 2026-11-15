@@ -11,7 +11,7 @@ import { PositionsTable } from "@/components/portfolio/positions-table";
 import { LoadingStatus, PerformanceSkeleton, PortfolioEmpty, PortfolioSignIn, PositionsSkeleton } from "@/components/portfolio/portfolio-states";
 import type { WalletPositionSummary } from "@/lib/portfolio-api";
 import { openWrittenApr, summarizePnl, tradingStats } from "@/lib/portfolio-pnl";
-import { buildPositionRows, fundingSummary, isWorthExercising } from "@/lib/portfolio-positions";
+import { buildPositionRows, canFundRow, fundingSummary, isWorthExercising, markWithdrawn } from "@/lib/portfolio-positions";
 import type { PositionInfo } from "@/lib/rfq-client";
 import { TOKENS, getNetwork } from "@/lib/tokens";
 
@@ -152,6 +152,7 @@ export function PortfolioGallery() {
   const [now] = useState(() => Math.floor(Date.now() / 1000));
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [funded, setFunded] = useState<ReadonlySet<string>>(new Set());
+  const [withdrawn, setWithdrawn] = useState<ReadonlySet<string>>(new Set());
   const [quoteMint, setQuoteMint] = useState("");
   const [assetFilter, setAssetFilter] = useState<string | null>(null);
   const [exerciseOnly, setExerciseOnly] = useState(false);
@@ -160,12 +161,22 @@ export function PortfolioGallery() {
     pending,
     funded,
     deposit: ({ pda }: { pda: string }) => fund([pda]),
+    withdraw: ({ pda }: { pda: string }) => unfund(pda),
   };
   /** Stands in for the wallet: every deposit "confirms" after a moment. */
   function fund(pdas: string[]) {
     setPending(new Set(pdas));
     window.setTimeout(() => {
       setFunded((current) => new Set([...current, ...pdas]));
+      setPending(new Set());
+    }, 1200);
+  }
+  /** The same for taking one back: the option is Open again. */
+  function unfund(pda: string) {
+    setPending(new Set([pda]));
+    window.setTimeout(() => {
+      setFunded((current) => new Set([...current].filter((p) => p !== pda)));
+      setWithdrawn((current) => new Set([...current, pda]));
       setPending(new Set());
     }, 1200);
   }
@@ -186,17 +197,20 @@ export function PortfolioGallery() {
   }, [scene, now]);
 
   const nowMs = now * 1000;
-  const funding = fundingSummary(data.openRows, nowMs, funded);
   const assetCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const row of data.openRows) counts.set(row.symbol, (counts.get(row.symbol) ?? 0) + 1);
     return [...counts].sort((a, b) => b[1] - a[1]);
   }, [data.openRows]);
   const shownAsset = assetCounts.some(([symbol]) => symbol === assetFilter) ? assetFilter : null;
-  const assetRows = shownAsset ? data.openRows.filter((r) => r.symbol === shownAsset) : data.openRows;
+  const openRows = markWithdrawn(data.openRows, withdrawn);
+  const assetRows = shownAsset ? openRows.filter((r) => r.symbol === shownAsset) : openRows;
   const worthExercising = assetRows.filter((r) => isWorthExercising(r, nowMs));
   const exerciseOn = exerciseOnly && worthExercising.length > 0;
   const visibleOpenRows = exerciseOn ? worthExercising : assetRows;
+  // as on the page: the summary and its button follow the filters
+  const funding = fundingSummary(visibleOpenRows, nowMs, funded);
+  const hasFundingCard = openRows.some((row) => canFundRow(row, nowMs, funded) || isWorthExercising(row, nowMs));
 
   return (
     <div className="mx-auto w-full max-w-[850px] pb-16 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-8">
@@ -232,14 +246,20 @@ export function PortfolioGallery() {
             <IncomeCard summaries={data.summaries} quoteMint={quoteMint} onQuoteMint={setQuoteMint} state={scene === "failed" ? "unavailable" : "ready"} nowSec={now} />
           </div>
           <Section title={`Positions · Open ${data.openRows.length}`}>
-            {funding ? <FundingStrip summary={funding} nowMs={nowMs} pending={pending.size > 0} onFundAll={(positions) => fund(positions.map((p) => p.pda))} /> : null}
-            {assetCounts.length > 1 || worthExercising.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-2">
-                {assetCounts.length > 1 ? <AssetFilter counts={assetCounts} total={data.openRows.length} value={shownAsset} onChange={setAssetFilter} /> : null}
-                {worthExercising.length > 0 ? <ExerciseFilter count={worthExercising.length} active={exerciseOn} onChange={setExerciseOnly} /> : null}
-              </div>
-            ) : null}
-            <PositionsTable rows={visibleOpenRows} nowMs={nowMs} grouped={scene === "grouped" && !shownAsset && !exerciseOn} deposit={deposit} />
+            <FundingStrip
+              summary={funding}
+              nowMs={nowMs}
+              pending={pending.size > 0}
+              onFund={(positions) => fund(positions.map((p) => p.pda))}
+              filters={hasFundingCard ? <ExerciseFilter total={assetRows.length} count={worthExercising.length} active={exerciseOn} onChange={setExerciseOnly} /> : undefined}
+            />
+            <PositionsTable
+              rows={visibleOpenRows}
+              nowMs={nowMs}
+              grouped={scene === "grouped" && !shownAsset && !exerciseOn}
+              deposit={deposit}
+              filter={assetCounts.length > 1 ? <AssetFilter counts={assetCounts} total={data.openRows.length} value={shownAsset} onChange={setAssetFilter} /> : undefined}
+            />
           </Section>
           <Section title="Positions · History">
             <PositionsTable variant="history" rows={data.closedRows} nowMs={nowMs} grouped={false} />

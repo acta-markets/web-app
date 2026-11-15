@@ -12,6 +12,9 @@ const ALL = "all";
  *
  * It is the trade page's asset selector (`AppInlineSelect`): a styled, keyboard-driven menu
  * from 768px and the platform's own picker on phones.
+ *
+ * It belongs to the table: it sits in the Position column's header, sized to a header row. The
+ * funding card above follows it, since the card counts and funds what the table shows.
  */
 export function AssetFilter({
   counts,
@@ -45,10 +48,10 @@ export function AssetFilter({
       onChange={(next) => onChange(next === ALL ? null : next)}
       // a wallet with many assets gets a wider menu, not one that scrolls
       overflow="columns"
-      // the app's chip, as Earn's sort control; the glyph is sized here because a chip's text is small
-      className="h-10 gap-2 border-bg-border px-4 py-2.5 font-mono text-sm leading-none tracking-[-0.02em] text-content-secondary hover:text-content-primary max-md:h-8 max-md:px-3 [&>svg]:h-4 [&>svg]:w-4"
+      // a chip the height of a header row; the glyph is sized here because a chip's text is small
+      className="h-7 gap-1.5 border-bg-border px-2 py-0 font-mono text-sm font-normal leading-none tracking-[-0.02em] text-content-secondary hover:text-content-primary max-md:h-8 max-md:px-3 [&>svg]:h-4 [&>svg]:w-4"
     >
-      <span className="inline-flex items-center gap-2">
+      <span className="inline-flex items-center gap-1.5">
         {shown ? <TokenLogo symbol={shown[0]} /> : null}
         <span className="text-content-primary">{shown ? shown[0] : "All assets"}</span>
         <span className="tabular-nums">{shown ? shown[1] : total}</span>

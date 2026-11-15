@@ -13,6 +13,7 @@ import {
   DEFAULT_SORT,
   buildDisplayList,
   canFundRow,
+  canWithdrawRow,
   formatExpiryCountdown,
   isRowFunded,
   nextSort,
@@ -29,6 +30,8 @@ export type DepositControl = {
   pending: ReadonlySet<string>;
   funded: ReadonlySet<string>;
   deposit: (position: { pda: string; market: string }) => void;
+  /** Takes a funded option's deposit back; without it a funded option only says so. */
+  withdraw?: (position: { pda: string; market: string }) => void;
 };
 
 type ColumnId = "position" | "now" | "size" | "premium" | "pnl" | "expiry" | "outcome" | "action";
@@ -38,6 +41,8 @@ type Column = {
   label: string;
   /** A CSS width; the position column has none and takes whatever the others leave. */
   width?: string;
+  /** Width classes, for a column whose width depends on the screen. */
+  widthClassName?: string;
   align: "left" | "right";
   sort?: SortKey;
   /** A column whose header is only announced, not drawn. */
@@ -54,7 +59,9 @@ const COLUMNS: Record<PositionsVariant, Column[]> = {
     { id: "premium", label: "Premium", width: "10%", align: "right", sort: "premium" },
     { id: "pnl", label: "uPnL", width: "12%", align: "right", sort: "pnl" },
     { id: "expiry", label: "Expiry", width: "10%", align: "right", sort: "expiry" },
-    { id: "action", label: "Action", width: "96px", align: "right", hiddenLabel: true },
+    // One button of one width and its (i). Under 1280px the table is 708px and every pixel here
+    // comes out of the claim beside it; from 1280px there is room for a button with air in it.
+    { id: "action", label: "Action", widthClassName: "w-[98px] xl:w-[132px]", align: "right", hiddenLabel: true },
   ],
   history: [
     { id: "position", label: "Position", align: "left" },
@@ -117,10 +124,18 @@ function fundTooltipCopy(row: PositionsTableRow): string {
   return `Fund it with ${amount}${expiry} to exercise.${delivery} Unfunded options are not exercised and the premium is lost.`;
 }
 
+/** What taking the deposit back does: the amount, until when, and what the option is after. */
+function withdrawTooltipCopy(row: PositionsTableRow): string {
+  const amount = fundAmount(row) ?? "the deposit";
+  const expiry = row.expiryTs != null ? ` any time before ${formatExpiryDay(row.expiryTs * 1000)}` : "";
+  return `Take ${amount} back${expiry}. The option is then unfunded again: it is not exercised and the premium is lost, unless you fund it again before expiry.`;
+}
+
 /**
  * The deposit a bought physical option needs before expiry to be exercised. Missing it loses
- * the premium, so it is drawn as a button, never as a text link. Once funded, a quiet label
- * takes its place.
+ * the premium, so it is drawn as a button, never as a text link. Once funded, the deposit can
+ * be taken back until expiry: a quieter button, since it undoes the funding. That a position is
+ * funded is said beside its product, so this holds actions only.
  */
 function isFunded(row: PositionsTableRow, deposit?: DepositControl): boolean {
   return isRowFunded(row, deposit?.funded);
@@ -129,6 +144,14 @@ function isFunded(row: PositionsTableRow, deposit?: DepositControl): boolean {
 function canFund(row: PositionsTableRow, nowMs: number, deposit?: DepositControl): boolean {
   return !!deposit && canFundRow(row, nowMs, deposit.funded);
 }
+
+/**
+ * A row's button in the table. Its width is set by the longest label it ever shows (eight
+ * letters: "Withdraw", "Funding…", "Sending…"), not by the one it shows now, so a row that
+ * starts funding does not widen its column and push the table about.
+ */
+const ROW_BUTTON = "h-7 w-[calc(8ch+12px)] px-0 xl:h-8 xl:w-[calc(8ch+26px)] xl:text-[14px]";
+const ROW_ACTION = "inline-flex shrink-0 gap-1 xl:gap-2";
 
 function FundAction({
   row,
@@ -143,11 +166,34 @@ function FundAction({
   wide: boolean;
 }) {
   const buy = row.buy;
-  if (isFunded(row, deposit)) return <span className="shrink-0 text-xs text-content-tertiary">Funded</span>;
-  if (!deposit || !buy || !canFund(row, nowMs, deposit)) return null;
   const amount = fundAmount(row);
+  if (isFunded(row, deposit)) {
+    const withdraw = deposit?.withdraw;
+    if (!deposit || !withdraw || !buy || !canWithdrawRow(row, nowMs, deposit.funded)) return null;
+    const sending = deposit.pending.has(buy.pda);
+    return (
+      <span className={cn("items-center whitespace-nowrap", wide ? "flex w-full gap-2" : ROW_ACTION)}>
+        <button
+          type="button"
+          disabled={deposit.pending.size > 0}
+          onClick={() => void withdraw({ pda: buy.pda, market: buy.market })}
+          aria-label={amount ? `Withdraw deposit, ${amount}` : "Withdraw deposit"}
+          className={cn(
+            "inline-flex items-center justify-center whitespace-nowrap border border-bg-border font-mono text-xs font-medium text-content-secondary transition-colors hover:border-content-tertiary hover:text-content-primary disabled:cursor-not-allowed disabled:opacity-40",
+            FOCUS,
+            wide ? "h-10 flex-1 px-2.5 text-sm" : ROW_BUTTON,
+          )}
+        >
+          {/* the narrow column holds eight letters: "Withdrawing…" is for the stacked layout */}
+          {sending ? (wide ? "Withdrawing…" : "Sending…") : wide && amount ? `Withdraw ${amount}` : "Withdraw"}
+        </button>
+        <InfoTooltip label="How withdrawing this deposit works">{withdrawTooltipCopy(row)}</InfoTooltip>
+      </span>
+    );
+  }
+  if (!deposit || !buy || !canFund(row, nowMs, deposit)) return null;
   return (
-    <span className={cn("items-center gap-2 whitespace-nowrap", wide ? "flex w-full" : "inline-flex shrink-0 gap-1.5")}>
+    <span className={cn("items-center whitespace-nowrap", wide ? "flex w-full gap-2" : ROW_ACTION)}>
       <button
         type="button"
         disabled={deposit.pending.size > 0}
@@ -156,7 +202,7 @@ function FundAction({
         className={cn(
           "inline-flex items-center justify-center whitespace-nowrap border border-accent-primary/50 px-2.5 font-mono text-xs font-medium text-accent-secondary transition-colors hover:border-accent-primary hover:bg-accent-primary/20 hover:text-content-primary disabled:cursor-not-allowed disabled:opacity-40",
           FOCUS,
-          wide ? "h-10 flex-1 text-sm" : "h-7",
+          wide ? "h-10 flex-1 text-sm" : ROW_BUTTON,
         )}
       >
         {deposit.pending.has(buy.pda) ? "Funding…" : wide && amount ? `Fund ${amount}` : "Fund"}
@@ -230,6 +276,7 @@ export function PositionsTable({
   nowMs,
   grouped,
   deposit,
+  filter,
   variant = "open",
   empty,
 }: {
@@ -237,6 +284,8 @@ export function PositionsTable({
   nowMs: number;
   grouped: boolean;
   deposit?: DepositControl;
+  /** A control that narrows the rows by what the Position column holds, drawn in its header. */
+  filter?: React.ReactNode;
   variant?: PositionsVariant;
   /** Shown instead of the table when there are no rows. */
   empty?: React.ReactNode;
@@ -275,6 +324,8 @@ export function PositionsTable({
     return (
       <div>
         <div className="border border-bg-border bg-bg-primary">
+          {/* a row of its own: beside the sort buttons it would push them into a sideways scroll */}
+          {filter ? <div className="flex items-center border-b border-bg-border px-3 py-2">{filter}</div> : null}
           <div className="flex items-center gap-1 overflow-x-auto border-b border-bg-border px-3 py-1.5">
             <span className={cn(LABEL, "mr-1 shrink-0")}>Sort</span>
             {sortable.map((column) => {
@@ -315,6 +366,7 @@ export function PositionsTable({
                   : [premium, row.markText ? `Now ${row.markText}` : null];
               const funded = variant === "open" && isFunded(row, deposit);
               const fundable = variant === "open" && canFund(row, nowMs, deposit);
+              const withdrawable = funded && !!deposit?.withdraw && canWithdrawRow(row, nowMs, deposit.funded);
               return (
                 <li key={row.id} className="border-b border-bg-border px-3 py-3 last:border-b-0">
                   <div className="flex items-center justify-between gap-3">
@@ -345,7 +397,7 @@ export function PositionsTable({
                     <span className="truncate tabular-nums">{detail.filter(Boolean).join(" · ") || DASH}</span>
                     {funded ? <span className="shrink-0 text-content-tertiary">Funded</span> : null}
                   </div>
-                  {fundable ? (
+                  {fundable || withdrawable ? (
                     <div className="mt-3">
                       <FundAction row={row} nowMs={nowMs} deposit={deposit} wide />
                     </div>
@@ -398,7 +450,7 @@ export function PositionsTable({
         <table className="w-full table-fixed border-collapse text-[14px] tracking-[-0.02em]">
           <colgroup>
             {columns.map((column) => (
-              <col key={column.id} style={column.width ? { width: column.width } : undefined} />
+              <col key={column.id} className={column.widthClassName} style={column.width ? { width: column.width } : undefined} />
             ))}
           </colgroup>
           <caption className="sr-only">
@@ -413,10 +465,22 @@ export function PositionsTable({
                   key={column.id}
                   scope="col"
                   aria-sort={column.sort && sort.key === column.sort ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}
-                  className={cn(LABEL, "whitespace-nowrap px-2 py-2.5", column.align === "right" ? "text-right" : "text-left")}
+                  className={cn(
+                    LABEL,
+                    "whitespace-nowrap px-2 py-2.5",
+                    column.align === "right" ? "text-right" : "text-left",
+                    // the filter chip is taller than a label: less padding keeps the header row its height
+                    column.id === "position" && filter && "py-1",
+                  )}
                 >
                   {column.hiddenLabel ? (
                     <span className="sr-only">{column.label}</span>
+                  ) : column.id === "position" && filter ? (
+                    <span className="flex items-center gap-3">
+                      {/* below 1280px the column is too narrow for the word and the chip: the chip says what it filters */}
+                      <span className="max-xl:sr-only">{column.label}</span>
+                      {filter}
+                    </span>
                   ) : column.sort ? (
                     <button
                       type="button"
@@ -468,7 +532,14 @@ export function PositionsTable({
                             <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-content-secondary">
                               {variant === "open" ? <span aria-hidden="true" className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotTone(row))} /> : null}
                               <Product row={row} />
-                              {variant === "open" ? <span className="sr-only">, {row.state}</span> : null}
+                              {variant !== "open" ? null : isFunded(row, deposit) ? (
+                                <>
+                                  <span aria-hidden="true">·</span>
+                                  <span className="shrink-0">Funded</span>
+                                </>
+                              ) : (
+                                <span className="sr-only">, {row.state}</span>
+                              )}
                             </span>
                           </span>
                         </span>
@@ -479,6 +550,8 @@ export function PositionsTable({
                         className={cn(
                           // no clipping: a long figure may lean into its neighbour's padding, never lose digits
                           "px-2 py-2.5 align-middle text-content-secondary",
+                          // right-aligned, so its left padding only takes room from the position column
+                          column.id === "action" && "pl-0",
                           column.align === "right" ? "whitespace-nowrap text-right tabular-nums" : "text-left",
                         )}
                       >

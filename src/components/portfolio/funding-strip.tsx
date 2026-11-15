@@ -1,6 +1,6 @@
 "use client";
 
-import { TYPE_LABEL, TYPE_LINK } from "@/components/app-ui/type-styles";
+import { TYPE_LABEL, TYPE_LINK, TYPE_NOTE } from "@/components/app-ui/type-styles";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AppButton } from "@/components/app-ui/app-button";
@@ -197,39 +197,65 @@ function FundBreakdown({ totals, totalUsd, count }: { totals: FundingSummary["to
 /**
  * The bought options that still need their deposit, taken together: how many, what funding
  * them all takes, the nearest deadline, how many are worth exercising right now and the
- * premium at stake. With two or more, one button funds every one of them with a single wallet
- * approval; a lone option keeps the Fund button on its own row.
+ * premium at stake. It also holds the all / worth exercising choice, because that answers one
+ * question: what to see and what to fund. The figures and the button follow it and the table's
+ * asset filter, and the button funds exactly what they leave, with a single wallet approval.
+ * The button says only "Fund"; the count and the amount are in the "To fund" figure under it.
  *
- * Shown only while at least one option can still be funded.
+ * The card has one header whatever the table's asset filter leaves: that choice on the left,
+ * the button on the right. Without anything to fund in the current view the header stays and
+ * says so in the button's place; with no choice passed in, it is not drawn.
  */
 export function FundingStrip({
   summary,
   nowMs,
   pending,
-  onFundAll,
+  busy = false,
+  onFund,
+  filters,
 }: {
-  summary: FundingSummary;
+  /** What needs funding among the positions the filters leave; null when nothing there does. */
+  summary: FundingSummary | null;
   nowMs: number;
   /** A deposit is being signed or confirmed, here or on a row. */
   pending: boolean;
-  onFundAll: (positions: FundingSummary["positions"]) => void;
+  /** Something else is with the wallet (a withdrawal): the button waits without saying "Funding". */
+  busy?: boolean;
+  onFund: (positions: FundingSummary["positions"]) => void;
+  /** The all / worth exercising choice: what the table shows and what this button funds. */
+  filters?: React.ReactNode;
 }) {
+  if (!summary) {
+    // nothing to fund in this view: the same header, with a note where the button would be
+    return filters ? (
+      <AppCard className="p-5" aria-label="Filter positions" role="region">
+        {/* as tall as the row with the button, so the header does not move between the two */}
+        <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-6 gap-y-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">{filters}</div>
+          <span className={cn(TYPE_NOTE, "text-content-tertiary")}>Nothing to fund</span>
+        </div>
+      </AppCard>
+    ) : null;
+  }
   const { count, totals, totalUsd, firstExpiryTs, inTheMoney, priced, premiumPaid } = summary;
   const many = count > 1;
+  // The button only says what it does. How many and how much are read beside it, in "To fund";
+  // its accessible name still carries them, since a screen reader meets the button on its own.
+  const amount = totalUsd != null ? approxUsd(totalUsd) : totals.length === 1 ? amountText(totals[0]) : null;
+  const optionsText = many ? `${count} options` : "1 option";
   return (
     <AppCard className="p-5" aria-label="Options to fund" role="region">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0">
-          <div className={LABEL}>Needs funding</div>
-          <p className="mt-2 font-space text-xl font-semibold leading-[1.2] tracking-[-0.4px] text-content-primary">
-            {many ? `${count} options are not funded` : "1 option is not funded"}
-          </p>
-        </div>
-        {many ? (
-          <AppButton className="max-md:w-full" disabled={pending} onClick={() => onFundAll(summary.positions)}>
-            {pending ? "Funding…" : `Fund all ${count}`}
-          </AppButton>
-        ) : null}
+        <div className="flex min-w-0 flex-wrap items-center gap-2">{filters}</div>
+        <AppButton
+          // wide enough for "Funding…", so the button does not grow when it is pressed
+          className="min-w-[8.5rem] max-md:w-full"
+          disabled={pending || busy}
+          aria-label={pending ? undefined : amount ? `Fund ${optionsText}, ${amount}` : `Fund ${optionsText}`}
+          onClick={() => onFund(summary.positions)}
+        >
+          {pending ? "Funding…" : "Fund"}
+        </AppButton>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-bg-border pt-5 md:grid-cols-4">
@@ -239,8 +265,21 @@ export function FundingStrip({
           wrap
           // one figure in dollars; without a price for every token, the first token as it is
           value={totalUsd != null ? approxUsd(totalUsd) : totals.length > 0 ? amountText(totals[0]) : "—"}
-          // one asset is said outright; several sit behind a link that says how many
-          note={totals.length > 1 ? <FundBreakdown totals={totals} totalUsd={totalUsd} count={count} /> : totals.length === 1 && totalUsd != null ? amountText(totals[0]) : many ? "For all of them" : "To exercise it"}
+          // how many options the button funds, then in what: one asset is said outright, several sit behind a link that says how many
+          note={
+            <>
+              {optionsText}
+              {/* words, not a dot, between the two: on a phone the note wraps, and a dot would end the line */}
+              {totals.length > 1 ? (
+                <>
+                  {" in "}
+                  <FundBreakdown totals={totals} totalUsd={totalUsd} count={count} />
+                </>
+              ) : totals.length === 1 && totalUsd != null ? (
+                `, ${amountText(totals[0])}`
+              ) : null}
+            </>
+          }
         />
         <Cell
           label="First deadline"

@@ -14,7 +14,7 @@ import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 import { openWrittenApr, summarizePnl, tradingStats } from "@/lib/portfolio-pnl";
-import { buildPositionRows, fundingSummary, isWorthExercising } from "@/lib/portfolio-positions";
+import { buildPositionRows, canFundRow, fundingSummary, isWorthExercising, markWithdrawn } from "@/lib/portfolio-positions";
 import { useBuyDeposit } from "./use-buy-deposit";
 import { useWalletHistory } from "./use-wallet-history";
 import { AssetFilter } from "./asset-filter";
@@ -79,6 +79,7 @@ export function PortfolioClient() {
     getClient,
     assetSnapshots,
     getAssetSnapshots,
+    referralInfo,
   } = useRfqContext();
   const address = selectedAccount?.address ?? null;
 
@@ -152,8 +153,8 @@ export function PortfolioClient() {
   );
 
   const rows = useMemo(
-    () => buildPositionRows(allPositions, symbolFor, nowMs, liveSpotFor),
-    [allPositions, symbolFor, nowMs, liveSpotFor],
+    () => markWithdrawn(buildPositionRows(allPositions, symbolFor, nowMs, liveSpotFor), buyDeposit.withdrawn),
+    [allPositions, symbolFor, nowMs, liveSpotFor, buyDeposit.withdrawn],
   );
   // "Settling" has passed its expiry but is not in the history yet, so it still belongs with
   // what is live.
@@ -185,8 +186,14 @@ export function PortfolioClient() {
   }, [exerciseOnly, worthExercising.length]);
 
   const groupedByUnderlying = !tokenFilter && !exerciseOnly && openRows.length >= 8 && tokenCounts.length >= 2;
-  // Every open position, whatever the token filter shows: "Fund all" means all of them.
-  const funding = useMemo(() => fundingSummary(openRows, nowMs, buyDeposit.funded), [openRows, nowMs, buyDeposit.funded]);
+  // The filters decide what is seen and what is funded: the summary and its button follow them.
+  const funding = useMemo(() => fundingSummary(visibleOpenRows, nowMs, buyDeposit.funded), [visibleOpenRows, nowMs, buyDeposit.funded]);
+  // Decided on every open position, not on what the filters leave: the card is there for the
+  // wallet, so picking an asset with nothing to fund empties it instead of taking it away.
+  const hasFundingCard = useMemo(
+    () => openRows.some((row) => canFundRow(row, nowMs, buyDeposit.funded) || isWorthExercising(row, nowMs)),
+    [openRows, nowMs, buyDeposit.funded],
+  );
 
   const pnlSummary = useMemo(() => summarizePnl(allPositions, liveSpotFor), [allPositions, liveSpotFor]);
   const openApr = useMemo(() => openWrittenApr(allPositions), [allPositions]);
@@ -247,7 +254,14 @@ export function PortfolioClient() {
             {firstLoad ? (
               <PerformanceSkeleton />
             ) : (
-              <PerformanceStrip pnl={pnlSummary} apr={openApr} trading={tradeStats} unavailable={failed} incomplete={!!history.nextCursor} />
+              <PerformanceStrip
+                pnl={pnlSummary}
+                apr={openApr}
+                trading={tradeStats}
+                unavailable={failed}
+                incomplete={!!history.nextCursor}
+                referralCode={referralInfo?.referral_code}
+              />
             )}
             <IncomeCard
               summaries={history.summary}
@@ -279,25 +293,32 @@ export function PortfolioClient() {
                 <PositionsSkeleton />
               ) : (
                 <div className="flex flex-col gap-3">
-                  {funding ? (
-                    <FundingStrip
-                      summary={funding}
-                      nowMs={nowMs}
-                      pending={buyDeposit.pending.size > 0}
-                      onFundAll={(positions) => void buyDeposit.depositAll(positions)}
-                    />
-                  ) : null}
-                  {tokenCounts.length > 1 || worthExercising.length > 0 ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {tokenCounts.length > 1 ? (
+                  {/* one card: which positions to see, what they take to fund, and the button that funds them */}
+                  <FundingStrip
+                    summary={funding}
+                    nowMs={nowMs}
+                    pending={buyDeposit.action === "fund"}
+                    busy={buyDeposit.action === "withdraw"}
+                    onFund={(positions) => void buyDeposit.depositAll(positions)}
+                    // the same two choices whenever the card is drawn, so its header does not change with the asset
+                    filters={
+                      hasFundingCard ? (
+                        <ExerciseFilter total={assetRows.length} count={worthExercising.length} active={exerciseOnly} onChange={setExerciseOnly} />
+                      ) : undefined
+                    }
+                  />
+                  <PositionsTable
+                    rows={visibleOpenRows}
+                    nowMs={nowMs}
+                    grouped={groupedByUnderlying}
+                    deposit={buyDeposit}
+                    // the asset filter is the table's: the card above counts and funds what it leaves
+                    filter={
+                      tokenCounts.length > 1 ? (
                         <AssetFilter counts={tokenCounts} total={openRows.length} value={tokenFilter} onChange={setTokenFilter} />
-                      ) : null}
-                      {worthExercising.length > 0 ? (
-                        <ExerciseFilter count={worthExercising.length} active={exerciseOnly} onChange={setExerciseOnly} />
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <PositionsTable rows={visibleOpenRows} nowMs={nowMs} grouped={groupedByUnderlying} deposit={buyDeposit} />
+                      ) : undefined
+                    }
+                  />
                 </div>
               )
             ) : (

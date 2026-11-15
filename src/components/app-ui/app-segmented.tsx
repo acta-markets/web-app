@@ -5,6 +5,8 @@ export type AppSegmentedOption<T extends string> = {
   value: T;
   /** Plain text, or a composed face such as a logo plus ticker and count. */
   label: React.ReactNode;
+  /** A choice that is there but leads nowhere right now, such as a filter that would leave nothing. */
+  disabled?: boolean;
 };
 
 export function AppSegmented<T extends string>({
@@ -46,7 +48,7 @@ export function AppSegmented<T extends string>({
             type="button"
             role="tab"
             aria-selected={active}
-            disabled={disabled}
+            disabled={disabled || o.disabled}
             onClick={() => onChange(o.value)}
             className={cn(
               btn,

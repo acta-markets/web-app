@@ -237,6 +237,19 @@ export function canFundRow(row: PositionsTableRow, nowMs: number, funded?: Reado
   return row.buy != null && !isRowFunded(row, funded) && row.state === "Open" && row.expiryTs != null && row.expiryTs * 1000 > nowMs;
 }
 
+/** A funded bought option whose deposit can still be taken back: only before expiry. */
+export function canWithdrawRow(row: PositionsTableRow, nowMs: number, funded?: ReadonlySet<string>): boolean {
+  return row.buy != null && isRowFunded(row, funded) && row.expiryTs != null && row.expiryTs * 1000 > nowMs;
+}
+
+/**
+ * A deposit withdrawn in this session reads as Open until the listener reports it: the mirror
+ * of the `funded` set, which covers a deposit the listener has not reported yet.
+ */
+export function markWithdrawn(rows: readonly PositionsTableRow[], withdrawn: ReadonlySet<string>): PositionsTableRow[] {
+  return rows.map((row) => (row.buy != null && row.state === "Funded" && withdrawn.has(row.buy.pda) ? { ...row, state: "Open" } : row));
+}
+
 /**
  * A bought option worth exercising right now: one that delivers (not a spread), is in the
  * money at the current price, and has not expired. Funded or not: a funded one is already

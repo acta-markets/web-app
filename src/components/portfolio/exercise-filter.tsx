@@ -1,32 +1,47 @@
 "use client";
 
+import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { InfoTooltip } from "@/components/app-ui/info-tooltip";
-import { cn } from "@/lib/cn";
+
+type Scope = "all" | "worth";
 
 /**
- * Narrows the open positions to the bought options worth exercising: in the money at the
- * current price and not yet expired. A switch, not a menu, because there is one thing to
- * turn on. It sits beside the asset filter and works with it: an asset chosen there and this
- * switch on leave that asset's options worth exercising.
+ * What the open positions show and what the fund button funds: all of them, or only the
+ * bought options worth exercising, which are in the money at the current price and not yet
+ * expired. Two choices side by side, each with how many it leaves, so it reads as a filter
+ * and not as a mode. It works with the asset filter in the table's header: an asset chosen
+ * there and "Worth exercising" here leave that asset's options worth exercising.
  *
- * Shown only while at least one position qualifies, with how many.
+ * The card it sits in always opens with these two choices, whatever asset is picked, so its
+ * header never changes shape. When nothing qualifies, "Worth exercising" stays in place with
+ * a zero and cannot be chosen.
  */
-export function ExerciseFilter({ count, active, onChange }: { count: number; active: boolean; onChange: (active: boolean) => void }) {
+export function ExerciseFilter({
+  total,
+  count,
+  active,
+  onChange,
+}: {
+  /** How many open positions "All" shows. */
+  total: number;
+  /** How many of them are worth exercising. */
+  count: number;
+  active: boolean;
+  onChange: (active: boolean) => void;
+}) {
+  const tally = (n: number) => <span className="ml-1.5 tabular-nums text-content-tertiary">{n}</span>;
   return (
     <span className="inline-flex items-center gap-2">
-      <button
-        type="button"
-        aria-pressed={active}
-        onClick={() => onChange(!active)}
-        // the app's chip, as the asset filter beside it; on, it takes the accent tint a selected tab has
-        className={cn(
-          "flex h-10 items-center gap-2 whitespace-nowrap border px-4 py-2.5 font-mono text-sm leading-none tracking-[-0.02em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary max-md:h-8 max-md:px-3",
-          active ? "border-accent-primary/30 bg-accent-primary/20 text-content-primary" : "border-bg-border text-content-secondary hover:text-content-primary",
-        )}
-      >
-        <span className={active ? undefined : "text-content-primary"}>Worth exercising</span>
-        <span className="tabular-nums">{count}</span>
-      </button>
+      <AppSegmented<Scope>
+        value={active ? "worth" : "all"}
+        onChange={(scope) => onChange(scope === "worth")}
+        ariaLabel="Which positions to show and fund"
+        stretch={false}
+        options={[
+          { value: "all", label: <>All{tally(total)}</> },
+          { value: "worth", label: <>Worth exercising{tally(count)}</>, disabled: count === 0 },
+        ]}
+      />
       <InfoTooltip label="What worth exercising means">
         Bought options that are in the money at the current price and have not expired. Fund one before it expires to exercise it; a funded one is already set.
       </InfoTooltip>

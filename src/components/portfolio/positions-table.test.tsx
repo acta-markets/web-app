@@ -12,7 +12,7 @@ import {
   stateLabel,
   thesisStrike1e9,
 } from "@/lib/portfolio-positions";
-import { fundingSummary, isWorthExercising } from "@/lib/portfolio-positions";
+import { canWithdrawRow, fundingSummary, isWorthExercising, markWithdrawn } from "@/lib/portfolio-positions";
 import { PositionsTable } from "./positions-table";
 
 const NOV28 = Math.floor(Date.UTC(2026, 10, 28, 8, 0, 0) / 1000);
@@ -303,6 +303,85 @@ describe("PositionsTable", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: "How funding this position works" })).toBeNull();
+  });
+
+  describe("a funded bought option", () => {
+    const nowMs = (NOV28 - 3600) * 1000;
+    const funded = pos({ side: "buy", market_pda: "m1", expiry_ts: NOV28, state: "funded" });
+    const control = (over: Record<string, unknown> = {}) => ({ pending: new Set<string>(), funded: new Set<string>(), deposit: vi.fn(), withdraw: vi.fn(), ...over });
+    const show = (deposit: ReturnType<typeof control> | undefined, at = nowMs) =>
+      render(<PositionsTable rows={buildPositionRows([funded], () => "SOL", at)} nowMs={at} grouped={false} deposit={deposit} />);
+
+    it("says it is funded beside the product and offers the deposit back", () => {
+      const deposit = control();
+      show(deposit);
+      expect(screen.getByText("Funded")).toBeTruthy();
+      const button = screen.getByRole("button", { name: "Withdraw deposit, 150.00 USDC" });
+      expect(button.textContent).toBe("Withdraw");
+      fireEvent.click(button);
+      expect(deposit.withdraw).toHaveBeenCalledWith({ pda: "p1", market: "m1" });
+      expect(screen.queryByRole("button", { name: /^Fund/ })).toBeNull();
+    });
+
+    it("explains what taking the deposit back does", () => {
+      show(control());
+      fireEvent.pointerEnter(screen.getByRole("button", { name: "How withdrawing this deposit works" }), { pointerType: "mouse" });
+      expect(screen.getByText(/Take 150\.00 USDC back any time before Nov 28/)).toBeTruthy();
+      expect(screen.getByText(/not exercised and the premium is lost, unless you fund it again before expiry/)).toBeTruthy();
+    });
+
+    it("only says Funded without a way to withdraw, and after expiry", () => {
+      show(control({ withdraw: undefined }));
+      expect(screen.getByText("Funded")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /^Withdraw/ })).toBeNull();
+      cleanup();
+      show(control(), (NOV28 + 60) * 1000);
+      expect(screen.getByText("Funded")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /^Withdraw/ })).toBeNull();
+    });
+
+    it("waits while anything is with the wallet, and says so on its own row", () => {
+      show(control({ pending: new Set(["p1"]) }));
+      const button = screen.getByRole("button", { name: /^Withdraw deposit/ }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      expect(button.textContent).toBe("Sending…");
+    });
+
+    it("names the amount on the button in the stacked phone layout", () => {
+      const original = window.matchMedia;
+      window.matchMedia = ((query: string) => ({ matches: query.includes("max-width"), media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+      try {
+        show(control());
+        expect(screen.getByText("Funded")).toBeTruthy();
+        expect(screen.getByRole("button", { name: /^Withdraw deposit/ }).textContent).toBe("Withdraw 150.00 USDC");
+      } finally {
+        window.matchMedia = original;
+      }
+    });
+  });
+});
+
+describe("withdrawing a deposit", () => {
+  const now = (NOV28 - 3600) * 1000;
+  const call = (over: Record<string, unknown> = {}) => pos({ side: "buy", pda: "call", market_pda: "m-call", ...over });
+  const row = (p: PositionInfo) => buildPositionRows([p], () => "SOL", now)[0];
+
+  it("is for a funded bought option before expiry, funded on chain or in this session", () => {
+    expect(canWithdrawRow(row(call({ state: "funded" })), now)).toBe(true);
+    expect(canWithdrawRow(row(call()), now)).toBe(false);
+    expect(canWithdrawRow(row(call()), now, new Set(["call"]))).toBe(true);
+    expect(canWithdrawRow(row(call({ state: "funded", expiry_ts: NOV28 - 7200 })), now)).toBe(false);
+    // a sold position is funded by its buyer: nothing of the writer's to take back
+    expect(canWithdrawRow(row(pos({ state: "funded" })), now)).toBe(false);
+  });
+
+  it("reads as Open, and needs funding again, until the listener reports it", () => {
+    const rows = buildPositionRows([call({ state: "funded" }), call({ pda: "other", state: "funded" })], () => "SOL", now);
+    expect(fundingSummary(rows, now)).toBeNull();
+    const after = markWithdrawn(rows, new Set(["call"]));
+    expect(after.map((r) => r.state)).toEqual(["Open", "Funded"]);
+    expect(fundingSummary(after, now)?.positions).toEqual([{ pda: "call", market: "m-call" }]);
+    expect(canWithdrawRow(after[0], now)).toBe(false);
   });
 });
 
