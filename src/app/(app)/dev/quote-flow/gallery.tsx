@@ -28,7 +28,7 @@ const BUY_WAITING: QuoteFlowOrder = {
 };
 const SELL: QuoteFlowOrder = {
   thesis: "BTC will be above $64,500 on Nov 20",
-  premiumLabel: "You earn now",
+  premiumLabel: "You earn premium",
   premium: "38.72 USDC",
   premiumNote: null,
   facts: [
@@ -47,6 +47,8 @@ const base: QuoteFlowViewProps = {
   restored: false,
   secondsRemaining: 12,
   secondsTotal: 20,
+  priceUpdate: null,
+  confirmHeld: false,
   error: null,
   txUrl: null,
   accepting: false,
@@ -63,6 +65,8 @@ const TX = "https://solscan.io/tx/example?cluster=devnet";
 const STATES: Array<{ name: string; props: QuoteFlowViewProps }> = [
   { name: "Quote received (buy)", props: base },
   { name: "Quote received (sell)", props: { ...base, order: SELL } },
+  { name: "Quote changed while reading (worse)", props: { ...base, priceUpdate: { from: "50.00 USDC", worse: true }, confirmHeld: true } },
+  { name: "Quote changed while reading (better)", props: { ...base, priceUpdate: { from: "54.30 USDC", worse: false } } },
   { name: "Quote expired", props: { ...base, secondsRemaining: 0 } },
   { name: "Getting a fresh quote", props: { ...base, step: "requesting_quote", order: BUY_WAITING } },
   { name: "Locking in", props: { ...base, step: "accepting_quote", canAbandon: true } },

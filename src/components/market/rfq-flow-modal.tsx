@@ -51,6 +51,8 @@ interface RfqFlowModalProps {
 }
 
 const PENDING = "\u2014";
+/** How long Confirm is held after the quote under review gets worse. */
+const CONFIRM_HOLD_MS = 1500;
 
 /**
  * A bought position's terms that depend on the quoted price; dashes until the quote is in.
@@ -104,6 +106,8 @@ export function RfqFlowModal({
   const [quoteStep, setStep] = useState<"idle" | "requesting_quote" | "quote_received" | "failed">("idle");
   const [error, setError] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteReceivedMessage | null>(null);
+  /** The quote under review was replaced by one at another price: what it showed, and when. */
+  const [priceUpdate, setPriceUpdate] = useState<{ from: number; worse: boolean; at: number } | null>(null);
   const [, tick] = useState(0);
   const [recoveredOpen, setRecoveredOpen] = useState(false);
   const { flow, accept, accepting, abandon, canAbandon, reset, checkStatus, txSignature, restored } = useRfqOrder({
@@ -134,6 +138,7 @@ export function RfqFlowModal({
       setStep("requesting_quote");
       setError(null);
       setQuote(null);
+      setPriceUpdate(null);
       reset();
     }
   }, [open, requestNonce, preview, isRestoredOrder, reset]);
@@ -141,12 +146,22 @@ export function RfqFlowModal({
   useEffect(() => {
     if (!preview || accepting || flow.type !== "idle" || (quoteStep !== "requesting_quote" && quoteStep !== "quote_received")) return;
     if (bestQuote && quoteMatchesProduct(bestQuote, preview.terms, preview.side)) {
+      // Makers requote, and a better maker can arrive: the modal follows the best live quote,
+      // but never silently. A price that moved is announced, with what it was.
+      if (quote && quote !== bestQuote) {
+        const buying = preview.side === "buy";
+        const shown = (q: QuoteReceivedMessage) => Number(buying ? q.price : q.net_price ?? q.price);
+        const before = shown(quote);
+        const after = shown(bestQuote);
+        if (before !== after) setPriceUpdate({ from: before, worse: buying ? after > before : after < before, at: Date.now() });
+      }
       setQuote(bestQuote);
       setStep("quote_received");
     } else if (!bestQuote && quote && quoteSecondsRemaining(quote) === 0) {
       setStep("quote_received");
     } else {
       setQuote(null);
+      setPriceUpdate(null);
       setStep("requesting_quote");
     }
   }, [bestQuote, preview, accepting, flow.type, quoteStep, quote, quoteSecondsRemaining]);
@@ -209,7 +224,11 @@ export function RfqFlowModal({
     countdownStart.current = { rfqId: quote.rfq_id, total: Math.max(1, secondsRemaining) };
   }
   const secondsTotal = quote ? countdownStart.current?.total ?? 0 : 0;
+  // After the price moves against the user, Confirm waits a moment: a click already on its way
+  // must not accept a number that was not the one being read.
+  const confirmHeld = priceUpdate != null && priceUpdate.worse && Date.now() - priceUpdate.at < CONFIRM_HOLD_MS;
   const handleAcceptQuote = () => {
+    if (confirmHeld) return;
     if (quote && quoteSecondsRemaining(quote) > 0) void accept(quote, rfqTerms(quote.rfq_id));
   };
 
@@ -228,6 +247,7 @@ export function RfqFlowModal({
         reset();
         setError(null);
         setQuote(null);
+        setPriceUpdate(null);
         setStep("requesting_quote");
         onRequote();
       }
@@ -248,7 +268,7 @@ export function RfqFlowModal({
 
   const order: QuoteFlowOrder | null = preview && !isRestoredOrder ? {
     thesis: preview.thesis ?? null,
-    premiumLabel: isBuy ? "You pay premium" : "You earn now",
+    premiumLabel: isBuy ? "You pay premium" : "You earn premium",
     premium: totalPremiumUsd != null ? formatUsdc(totalPremiumUsd) : null,
     premiumNote: isBuy ? "This is the most you can lose." : null,
     facts: [
@@ -279,6 +299,8 @@ export function RfqFlowModal({
         restored={isRestoredOrder}
         secondsRemaining={secondsRemaining}
         secondsTotal={secondsTotal}
+        priceUpdate={priceUpdate ? { from: formatUsdc((priceUpdate.from / 1_000_000_000) * quoteQuantity), worse: priceUpdate.worse } : null}
+        confirmHeld={confirmHeld}
         error={flowError}
         txUrl={txSignature ? `https://solscan.io/tx/${txSignature}${IS_MAINNET ? "" : "?cluster=devnet"}` : null}
         accepting={accepting}

@@ -81,8 +81,10 @@ describe("RFQ order modal", () => {
     expect(screen.getAllByText("1.00 USDC").length).toBeGreaterThan(0);
     context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, price: 2_000_000_000 } });
     h.rerender(<RfqFlowModal {...h.props} />);
-    expect(screen.queryAllByText("1.00 USDC")).toHaveLength(0);
     expect(screen.getAllByText("2.00 USDC").length).toBeGreaterThan(0);
+    // the number did not change silently: a seller's higher premium is announced as better, with what it was
+    expect(screen.getByRole("status").textContent).toBe("A better quote came in. It was 1.00 USDC");
+    expect((screen.getByRole("button", { name: "Confirm trade" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(h.cancel).toHaveBeenCalledOnce();
     expect(h.props.onClose).toHaveBeenCalledOnce();
@@ -241,6 +243,25 @@ it("counts down to the RFQ's close, which comes before the quote's own padded va
   expect(screen.queryByRole("button", { name: "Confirm trade" })).toBeNull();
 });
 
+it("says when the quote gets worse while it is being read, and holds Confirm for a moment", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-27T10:00:00Z"));
+  const h = setup();
+  expect(screen.queryByRole("status")).toBeNull();
+  // the maker replaces its quote with a lower premium for the seller
+  context.read.mockReturnValue({ ...context.read(), bestQuote: { ...quote, order_id: "requote", price: 500_000_000 } });
+  h.rerender(<RfqFlowModal {...h.props} />);
+  expect(screen.getAllByText("0.50 USDC").length).toBeGreaterThan(0);
+  expect(screen.getByRole("status").textContent).toBe("The quote changed. It was 1.00 USDC");
+  const confirm = () => screen.getByRole("button", { name: "Confirm trade" }) as HTMLButtonElement;
+  expect(confirm().disabled).toBe(true);
+  fireEvent.click(confirm());
+  expect(h.accept).not.toHaveBeenCalled();
+  // once there has been time to read it, the new price can be confirmed
+  act(() => vi.advanceTimersByTime(1750));
+  expect(confirm().disabled).toBe(false);
+});
+
 describe("asking again from inside the modal", () => {
   it("offers a fresh quote once the quote expires, and waits for it in place", () => {
     vi.useFakeTimers();
@@ -346,6 +367,6 @@ describe("Buy", () => {
       expect(screen.queryByText("Max loss")).toBeNull();
       expect(screen.queryByText("Deposit to exercise")).toBeNull();
       expect(screen.queryByRole("alert")).toBeNull();
-      expect(screen.getByText("You earn now")).toBeTruthy();
+      expect(screen.getByText("You earn premium")).toBeTruthy();
     });
 });

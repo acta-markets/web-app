@@ -23,7 +23,7 @@ export type QuoteFlowStep =
 export type QuoteFlowOrder = {
   /** the user's view in words, e.g. "BTC will be above $71,000 on Nov 20" */
   thesis: string | null;
-  /** names the headline amount: "You pay premium", "You earn now" */
+  /** names the headline amount: "You pay premium", "You earn premium" */
   premiumLabel: string;
   /** the quoted premium; null while a quote is awaited */
   premium: string | null;
@@ -45,6 +45,10 @@ export type QuoteFlowViewProps = {
   /** seconds left to confirm, and how many there were when the quote was first shown */
   secondsRemaining: number;
   secondsTotal: number;
+  /** set when the quote under review was replaced by one at another price: what it was, and whether the new one is worse for the user */
+  priceUpdate: { from: string; worse: boolean } | null;
+  /** Confirm is held for a moment after the price moves against the user, so it cannot be clicked unread */
+  confirmHeld: boolean;
   error: string | null;
   /** explorer link for the sent transaction */
   txUrl: string | null;
@@ -159,7 +163,15 @@ function Status({
 }
 
 /** How long is left to confirm: a bar that only ever drains, and the seconds in words. */
-function QuoteTimer({ secondsRemaining, secondsTotal }: { secondsRemaining: number; secondsTotal: number }) {
+function QuoteTimer({
+  secondsRemaining,
+  secondsTotal,
+  priceUpdate,
+}: {
+  secondsRemaining: number;
+  secondsTotal: number;
+  priceUpdate: QuoteFlowViewProps["priceUpdate"];
+}) {
   const live = secondsRemaining > 0;
   const left = secondsTotal > 0 ? Math.min(1, secondsRemaining / secondsTotal) : 0;
   return (
@@ -180,6 +192,19 @@ function QuoteTimer({ secondsRemaining, secondsTotal }: { secondsRemaining: numb
           "This quote expired. Get a fresh one to continue."
         )}
       </p>
+      {/* market makers can replace a quote while it is being read: say so instead of swapping the number silently */}
+      {live && priceUpdate ? (
+        <p
+          role="status"
+          className={cn(
+            "mt-1 font-mono text-sm leading-[1.4]",
+            priceUpdate.worse ? "text-additional-orange-primary-deep" : "text-accent-primary"
+          )}
+        >
+          {priceUpdate.worse ? "The quote changed. It was " : "A better quote came in. It was "}
+          <span className="tabular-nums">{priceUpdate.from}</span>
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -194,6 +219,8 @@ export function QuoteFlowView({
   restored,
   secondsRemaining,
   secondsTotal,
+  priceUpdate,
+  confirmHeld,
   error,
   txUrl,
   accepting,
@@ -249,7 +276,7 @@ export function QuoteFlowView({
             This usually takes a few seconds.
           </Status>
         ) : step === "quote_received" ? (
-          <QuoteTimer secondsRemaining={secondsRemaining} secondsTotal={secondsTotal} />
+          <QuoteTimer secondsRemaining={secondsRemaining} secondsTotal={secondsTotal} priceUpdate={priceUpdate} />
         ) : step === "accepting_quote" ? (
           <Status tone="busy" title="Locking in your quote">
             Your wallet will ask you to approve next.
@@ -308,7 +335,7 @@ export function QuoteFlowView({
             <AppButton variant="secondary" className="flex-1" onClick={onClose}>
               Cancel
             </AppButton>
-            <AppButton className="flex-1" onClick={onAccept} disabled={accepting}>
+            <AppButton className="flex-1" onClick={onAccept} disabled={accepting || confirmHeld}>
               Confirm trade
             </AppButton>
           </>
