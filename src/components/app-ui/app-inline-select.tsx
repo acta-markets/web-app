@@ -345,7 +345,7 @@ function MenuSelect({
               {groupRuns(options).map((run, r) => (
                 <React.Fragment key={`${run.group ?? "run"}-${r}`}>
                   {run.group ? (
-                    <li role="presentation" className={cn("px-3 pb-1 font-mono text-[11px] font-medium uppercase tracking-[0.12em] text-content-tertiary", r === 0 ? "pt-1.5" : "pt-3")}>
+                    <li role="presentation" className={cn("px-3 pb-1 font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-content-tertiary", r === 0 ? "pt-1.5" : "pt-3")}>
                       {run.group}
                     </li>
                   ) : null}

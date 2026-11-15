@@ -62,7 +62,7 @@ export type QuoteFlowViewProps = {
   onRequote?: () => void;
 };
 
-const LABEL = "font-mono text-[11px] font-medium uppercase leading-[1.2] tracking-[0.12em]";
+const LABEL = "font-mono text-[12px] font-medium uppercase leading-[1.2] tracking-[0.12em]";
 
 /** The modal's title for each step: it names what is happening now. */
 export function quoteFlowTitle(step: QuoteFlowStep, restored: boolean): string {

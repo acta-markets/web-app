@@ -624,7 +624,7 @@ export function SentenceTrade({
               className="h-4 w-4 shrink-0 rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
             />
           ) : (
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[rgba(240,240,240,0.1)] bg-action-primary font-mono text-[9px] font-medium leading-none text-content-primary">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[rgba(240,240,240,0.1)] bg-action-primary font-mono text-[12px] font-medium leading-none text-content-primary">
               {a.symbol.slice(0, 2)}
             </span>
           ),

@@ -115,13 +115,13 @@ export function VaultCardSkeleton() {
       <div className="relative z-10 flex flex-col items-center gap-2.5">
         <div className="h-14 w-14 animate-pulse rounded-full bg-action-primary" />
         <div className="flex min-h-[69px] flex-col items-center justify-center gap-1">
-          <div className="h-6 w-32 animate-pulse rounded bg-action-primary" />
-          <div className="h-[17px] w-24 animate-pulse rounded bg-action-primary" />
+          <div className="h-6 w-32 animate-pulse rounded-none bg-action-primary" />
+          <div className="h-[17px] w-24 animate-pulse rounded-none bg-action-primary" />
         </div>
       </div>
       <div className="relative z-10 mt-6 flex items-center gap-4">
-        <div className="flex-1"><div className="mx-auto h-9 w-16 animate-pulse rounded bg-action-primary" /></div>
-        <div className="flex-1"><div className="mx-auto h-9 w-16 animate-pulse rounded bg-action-primary" /></div>
+        <div className="flex-1"><div className="mx-auto h-9 w-16 animate-pulse rounded-none bg-action-primary" /></div>
+        <div className="flex-1"><div className="mx-auto h-9 w-16 animate-pulse rounded-none bg-action-primary" /></div>
       </div>
       <div className="relative z-10 mt-auto flex gap-2">
         <div className="h-9 flex-1 animate-pulse bg-action-primary" />

@@ -13,7 +13,7 @@ export function TokenLogo({ symbol, className }: { symbol: string; className?: s
     <span
       className={cn(
         base,
-        "flex items-center justify-center bg-action-primary font-mono text-[9px] font-medium leading-none text-content-primary",
+        "flex items-center justify-center bg-action-primary font-mono text-[12px] font-medium leading-none text-content-primary",
         className,
       )}
     >

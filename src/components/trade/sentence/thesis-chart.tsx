@@ -390,7 +390,7 @@ function FlipAffordance({
     <span
       aria-hidden="true"
       // dressed exactly as the NOW tag, so the chart's labels are one family
-      className="pointer-events-none absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[10px] font-semibold uppercase leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
+      className="pointer-events-none absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] font-semibold uppercase leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
     >
       <span
         className="inline-block transition-transform duration-300 ease-out"
@@ -402,7 +402,7 @@ function FlipAffordance({
       <span className="max-md:hidden">click the chart to flip</span>
       <span className="md:hidden">tap to flip</span>
       {variant === "coach" && !coachSeen ? (
-        <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[9px] tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+        <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-none border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[12px] tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
           tap anywhere on the chart to flip
           <span className="absolute left-1/2 top-full -translate-x-1/2 leading-none text-content-secondary">
             ▾
@@ -434,8 +434,8 @@ function ZoneChip({
   onFlip: () => void;
 }) {
   const base = cn(
-    "absolute z-[17] -translate-y-1/2 whitespace-nowrap rounded-md border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono font-semibold uppercase tracking-wider backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)] transition-colors",
-    compact ? "-translate-x-full text-[10px]" : "-translate-x-1/2 text-xs"
+    "absolute z-[17] -translate-y-1/2 whitespace-nowrap border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono font-semibold uppercase tracking-wider backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)] transition-colors",
+    compact ? "-translate-x-full text-[12px]" : "-translate-x-1/2 text-xs"
   );
   if (!interactive) {
     return (
@@ -990,7 +990,7 @@ export function ThesisChart({
                 aria-selected={active}
                 onClick={() => setManual({ expiryMs, range: o.value })}
                 className={cn(
-                  "px-1.5 py-0.5 text-[10px] leading-none tracking-[-0.28px] transition-colors",
+                  "px-1.5 py-0.5 text-[12px] leading-none tracking-[-0.28px] transition-colors",
                   active ? "bg-accent-primary/20 text-content-primary" : "text-content-secondary hover:text-content-primary"
                 )}
               >
@@ -1135,7 +1135,7 @@ export function ThesisChart({
               ) : null}
             </svg>
             <span
-              className="pointer-events-none absolute right-1.5 top-1 z-[17] font-mono text-[10px] text-content-secondary"
+              className="pointer-events-none absolute right-1.5 top-1 z-[17] font-mono text-[12px] text-content-secondary"
               aria-hidden="true"
             >
               <Chevron kind="go" className="mr-0.5 inline h-3 w-3 -translate-y-px" />
@@ -1160,7 +1160,7 @@ export function ThesisChart({
               />
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute right-1.5 z-[17] -translate-y-1/2 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary px-2 py-1 font-mono text-[10px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)]"
+                className="pointer-events-none absolute right-1.5 z-[17] -translate-y-1/2 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary px-2 py-1 font-mono text-[12px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)]"
                 style={{ top: y }}
               >
                 {formatStrikePrice(previewStrike)}
@@ -1173,7 +1173,7 @@ export function ThesisChart({
             dot, so it names the price without covering the end of the line. */}
         {geometry && nowX != null && spotY != null ? (
           <span
-            className="pointer-events-none absolute z-[17] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[10px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
+            className="pointer-events-none absolute z-[17] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
             style={{ left: nowX, top: nowTagY ?? spotY, transition: "top 180ms ease-out, left 180ms ease-out" }}
             aria-hidden="true"
           >
@@ -1206,12 +1206,12 @@ export function ThesisChart({
               <Chevron kind="switch" className="h-4 w-4 shrink-0 text-content-primary" />
               <Grab className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
             </span>
-            <span className="text-[9px] uppercase tracking-widest text-content-primary max-md:hidden">Strike</span>
+            <span className="text-[12px] uppercase tracking-widest text-content-primary max-md:hidden">Strike</span>
             <span className="text-[12px] font-semibold tabular-nums text-content-primary">{formatStrikePrice(strike)}</span>
           </div>
         ) : geometry ? (
           <span
-            className="pointer-events-none absolute z-[16] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-accent-primary/30 bg-accent-primary/20 px-3 py-2 font-mono text-[10px] font-semibold leading-[1.2] text-content-primary shadow-[0_2px_12px_rgba(0,0,0,0.7)] backdrop-blur-[4px]"
+            className="pointer-events-none absolute z-[16] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-accent-primary/30 bg-accent-primary/20 px-3 py-2 font-mono text-[12px] font-semibold leading-[1.2] text-content-primary shadow-[0_2px_12px_rgba(0,0,0,0.7)] backdrop-blur-[4px]"
             style={{ left: leftSectionCenterX, top: geometry.strikeY }}
             aria-hidden="true"
           >
@@ -1239,7 +1239,7 @@ export function ThesisChart({
             {rightAxis.ticks.map((t, i) => (
               <div
                 key={i}
-                className="pointer-events-none absolute right-1.5 -translate-y-1/2 text-right font-mono text-[10px] leading-[1.15] tabular-nums"
+                className="pointer-events-none absolute right-1.5 -translate-y-1/2 text-right font-mono text-[12px] leading-[1.15] tabular-nums"
                 style={{ top: t.y }}
               >
                 <div className="text-content-secondary">{t.price}</div>
@@ -1248,7 +1248,7 @@ export function ThesisChart({
             ))}
             {/* what the two numbers at each tick are, in the free strip beside the time axis:
                 set like a tick itself, each word in its own number's colour */}
-            <div className="pointer-events-none absolute bottom-1 right-1.5 text-right font-mono text-[8px] uppercase leading-[1.25] tracking-[0.08em]">
+            <div className="pointer-events-none absolute bottom-1 right-1.5 text-right font-mono text-[12px] uppercase leading-[1.25] tracking-[0.08em]">
               <div className="text-content-secondary">Price</div>
               {rightAxis.readoutLabel ? <div className="text-accent-primary">{rightAxis.readoutLabel}</div> : null}
             </div>

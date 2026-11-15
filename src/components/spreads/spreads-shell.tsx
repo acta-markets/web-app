@@ -43,7 +43,7 @@ export function SpreadsShell() {
       </div>
 
       <AppCard className="mt-8 flex flex-col items-start gap-4 p-6 max-md:p-4">
-        <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-accent-secondary">
+        <div className="font-mono text-[12px] uppercase tracking-[0.12em] text-accent-secondary">
           Coming soon
         </div>
         <p className="font-mono text-base leading-[1.55] tracking-[-0.02em] text-content-secondary">

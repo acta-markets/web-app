@@ -23,7 +23,7 @@ export function LandingHeader() {
                 href={item.href}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="font-mono text-[13px] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary"
+                className="font-mono text-[14px] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary"
               >
                 {item.label}
               </a>
@@ -31,7 +31,7 @@ export function LandingHeader() {
               <Link prefetch={false}
                 key={item.label}
                 href={item.href}
-                className="font-mono text-[13px] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary"
+                className="font-mono text-[14px] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary"
               >
                 {item.label}
               </Link>

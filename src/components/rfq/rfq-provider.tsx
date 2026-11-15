@@ -1193,7 +1193,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         <p>This app requires the WS 1.0.0 API. The connected backend returned an incompatible response. Please reload after the backend maintenance window.</p>
       </main> : children}
       {showDebugBadge ? (
-        <div className="fixed bottom-3 right-3 z-[120] rounded-lg border border-white/20 bg-black/80 px-3 py-2 text-[11px] font-semibold text-white shadow-lg backdrop-blur">
+        <div className="fixed bottom-3 right-3 z-[120] border border-white/20 bg-black/80 px-3 py-2 text-[12px] font-semibold text-white shadow-lg backdrop-blur">
           <div className="text-white/70">state: {connectionState}</div>
         </div>
       ) : null}

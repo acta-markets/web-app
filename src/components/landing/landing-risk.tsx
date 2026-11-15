@@ -90,7 +90,7 @@ function CapChart() {
         />
       </svg>
 
-      <div className="pointer-events-none absolute inset-0 font-mono text-[11px] uppercase">
+      <div className="pointer-events-none absolute inset-0 font-mono text-[12px] uppercase">
         {
                                                               }
         <span

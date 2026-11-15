@@ -121,7 +121,7 @@ function TreeNode({
   );
 
   const rowClassName = cn(
-    "group flex w-full items-center gap-1 py-1.5 pr-2 text-[13px] leading-5 transition-colors",
+    "group flex w-full items-center gap-1 py-1.5 pr-2 text-[14px] leading-5 transition-colors",
     isActive
       ? "bg-accent-secondary/10 text-accent-secondary"
       : "hover:bg-white/[0.04] hover:text-content-primary",
@@ -258,7 +258,7 @@ export function DataRoomShell({ tree, config, children }: DataRoomShellProps) {
 
   const sidebarContent = searching ? (
     <div>
-      <div className="mb-3 px-3 font-mono text-[10px] uppercase tracking-[0.14em] text-content-tertiary">
+      <div className="mb-3 px-3 font-mono text-[12px] uppercase tracking-[0.14em] text-content-tertiary">
         Results
       </div>
       {hits.length > 0 ? (
@@ -269,7 +269,7 @@ export function DataRoomShell({ tree, config, children }: DataRoomShellProps) {
                 <button
                   type="button"
                   onClick={() => revealFolder(hit.id)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-content-secondary hover:bg-white/[0.04] hover:text-content-primary"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] text-content-secondary hover:bg-white/[0.04] hover:text-content-primary"
                 >
                   <Folder className="h-3.5 w-3.5 shrink-0 text-content-tertiary" aria-hidden />
                   <span className="truncate">{hit.name}</span>
@@ -277,12 +277,12 @@ export function DataRoomShell({ tree, config, children }: DataRoomShellProps) {
               ) : (
                 <Link
                   href={docHref(hit.id)}
-                  className="flex items-center gap-2 px-3 py-2 text-[13px] text-content-secondary hover:bg-white/[0.04] hover:text-content-primary"
+                  className="flex items-center gap-2 px-3 py-2 text-[14px] text-content-secondary hover:bg-white/[0.04] hover:text-content-primary"
                 >
                   <FileText className="h-3.5 w-3.5 shrink-0 text-content-tertiary" aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{hit.name}</span>
                   {hit.folderPath.length > 0 && (
-                    <span className="shrink-0 truncate text-[10px] text-content-tertiary">
+                    <span className="shrink-0 truncate text-[12px] text-content-tertiary">
                       {hit.folderPath.join(" / ")}
                     </span>
                   )}
@@ -358,7 +358,7 @@ export function DataRoomShell({ tree, config, children }: DataRoomShellProps) {
       <div className="pt-16">
         <aside className="fixed bottom-0 left-0 top-16 z-30 w-72 overflow-y-auto border-r border-bg-border bg-bg-primary max-lg:hidden">
           <div className="border-b border-bg-border px-5 py-4">
-            <p className="truncate font-mono text-[11px] uppercase tracking-[0.12em] text-content-tertiary">
+            <p className="truncate font-mono text-[12px] uppercase tracking-[0.12em] text-content-tertiary">
               {config.title}
             </p>
           </div>
@@ -376,7 +376,7 @@ export function DataRoomShell({ tree, config, children }: DataRoomShellProps) {
             />
             <aside className="fixed bottom-0 left-0 top-16 z-30 w-[min(86vw,320px)] overflow-y-auto border-r border-bg-border bg-bg-primary lg:hidden">
               <div className="border-b border-bg-border px-5 py-4">
-                <p className="truncate font-mono text-[11px] uppercase tracking-[0.12em] text-content-tertiary">
+                <p className="truncate font-mono text-[12px] uppercase tracking-[0.12em] text-content-tertiary">
                   {config.title}
                 </p>
               </div>

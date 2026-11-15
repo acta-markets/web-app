@@ -70,7 +70,7 @@ export function DocsArticle({
   }
 
   const tableOfContents = markdown.length > 4500 && headings.length >= 4 ? (
-    <nav aria-label="On this page" className="mb-10 rounded-lg border border-bg-border p-5">
+    <nav aria-label="On this page" className="mb-10 border border-bg-border p-5">
       <p className="mb-3 text-sm font-medium text-content-primary">On this page</p>
       <ul className="grid gap-2 text-sm sm:grid-cols-2">
         {headings.map((heading) => (
@@ -125,9 +125,9 @@ export function DocsArticle({
         {previous ? (
           <Link
             href={docsHref(previous.slug)}
-            className="rounded-lg border border-bg-border p-4 transition-colors hover:border-accent-secondary/50 hover:bg-white/[0.025]"
+            className="rounded-none border border-bg-border p-4 transition-colors hover:border-accent-secondary/50 hover:bg-white/[0.025]"
           >
-            <span className="block font-mono text-[10px] uppercase tracking-[0.12em] text-content-tertiary">
+            <span className="block font-mono text-[12px] uppercase tracking-[0.12em] text-content-tertiary">
               Previous
             </span>
             <span className="mt-2 block text-sm font-medium text-content-primary">
@@ -141,9 +141,9 @@ export function DocsArticle({
         {next && (
           <Link
             href={docsHref(next.slug)}
-            className="rounded-lg border border-bg-border p-4 text-right transition-colors hover:border-accent-secondary/50 hover:bg-white/[0.025]"
+            className="rounded-none border border-bg-border p-4 text-right transition-colors hover:border-accent-secondary/50 hover:bg-white/[0.025]"
           >
-            <span className="block font-mono text-[10px] uppercase tracking-[0.12em] text-content-tertiary">
+            <span className="block font-mono text-[12px] uppercase tracking-[0.12em] text-content-tertiary">
               Next
             </span>
             <span className="mt-2 block text-sm font-medium text-content-primary">

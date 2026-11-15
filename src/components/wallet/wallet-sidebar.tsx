@@ -53,7 +53,7 @@ export function WalletSidebarProvider({ children }: { children: ReactNode }) {
   );
 }
 
-const LABEL = "font-mono text-[11px] font-medium uppercase leading-[1.2] tracking-[0.12em] text-content-tertiary";
+const LABEL = "font-mono text-[12px] font-medium uppercase leading-[1.2] tracking-[0.12em] text-content-tertiary";
 // Only `accent-primary` takes an opacity (it is defined from RGB parts); a tint of any other
 // token draws nothing, and on a border falls back to the text colour.
 const ROW = "group flex w-full items-center gap-4 border border-bg-border p-4 transition-colors hover:border-accent-primary/50 hover:bg-accent-primary/10";

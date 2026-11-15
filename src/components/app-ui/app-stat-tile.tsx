@@ -20,7 +20,7 @@ export function AppStatTile({
     <AppCard className={cn("min-w-0 p-4", className)}>
       <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">{label}</div>
       {loading ? (
-        <div className="mt-2 h-[29px] w-24 animate-pulse rounded bg-action-primary" />
+        <div className="mt-2 h-[29px] w-24 animate-pulse rounded-none bg-action-primary" />
       ) : (
         <div className="mt-2 truncate font-mono text-2xl font-medium leading-[1.2] tabular-nums text-content-primary max-md:text-xl">
           {value}

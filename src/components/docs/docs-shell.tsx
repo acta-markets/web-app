@@ -97,7 +97,7 @@ export function DocsShell({
             href={docsHref(entry.slug)}
             onClick={() => setMobileOpen(false)}
             aria-current={audience === entry.audience ? "true" : undefined}
-            className={`block rounded-md px-3 py-2 text-sm font-medium transition-colors ${audience === entry.audience
+            className={`block px-3 py-2 text-sm font-medium transition-colors ${audience === entry.audience
               ? "bg-white/[0.06] text-content-primary"
               : "text-content-secondary hover:bg-white/[0.04] hover:text-content-primary"}`}
           >
@@ -107,7 +107,7 @@ export function DocsShell({
       </div>
       {navigation.filter((group) => group.audience === audience).map((group) => (
         <section key={group.title} className="mb-8">
-          <h2 className="mb-2 px-3 font-mono text-[10px] uppercase tracking-[0.14em] text-content-tertiary">
+          <h2 className="mb-2 px-3 font-mono text-[12px] uppercase tracking-[0.14em] text-content-tertiary">
             {group.title}
           </h2>
           <ul className="space-y-0.5">
@@ -119,7 +119,7 @@ export function DocsShell({
                     href={docsHref(item.slug)}
                     onClick={() => setMobileOpen(false)}
                     aria-current={active ? "page" : undefined}
-                    className={`block rounded-md px-3 py-2 text-sm leading-5 transition-colors ${
+                    className={`block px-3 py-2 text-sm leading-5 transition-colors ${
                       active
                         ? "bg-accent-secondary/10 font-medium text-accent-secondary"
                         : "text-content-secondary hover:bg-white/[0.04] hover:text-content-primary"
@@ -200,10 +200,10 @@ export function DocsShell({
               aria-activedescendant={showSearch && activeResult >= 0 ? `docs-search-result-${activeResult}` : undefined}
               placeholder="Search documentation"
               aria-label="Search documentation"
-              className="h-9 w-full rounded-md border border-bg-border bg-black/30 pl-9 pr-3 text-sm text-content-primary outline-none transition-colors placeholder:text-content-tertiary focus:border-accent-secondary"
+              className="h-9 w-full border border-bg-border bg-black/30 pl-9 pr-3 text-sm text-content-primary outline-none transition-colors placeholder:text-content-tertiary focus:border-accent-secondary"
             />
             {showSearch && (
-              <div id="docs-search-results" role={results.length > 0 ? "listbox" : "status"} aria-label="Search results" className="absolute right-0 top-11 z-50 max-h-[420px] w-full overflow-y-auto rounded-lg border border-bg-border bg-bg-secondary p-2 shadow-2xl max-sm:fixed max-sm:left-3 max-sm:right-3 max-sm:top-[60px] max-sm:w-auto">
+              <div id="docs-search-results" role={results.length > 0 ? "listbox" : "status"} aria-label="Search results" className="absolute right-0 top-11 z-50 max-h-[420px] w-full overflow-y-auto border border-bg-border bg-bg-secondary p-2 shadow-2xl max-sm:fixed max-sm:left-3 max-sm:right-3 max-sm:top-[60px] max-sm:w-auto">
                 {results.length > 0 ? (
                   results.map((item, index) => (
                     <Link
@@ -215,9 +215,9 @@ export function DocsShell({
                       ref={(element) => { resultRefs.current[index] = element; }}
                       href={docsHref(item.slug)}
                       onClick={() => { setSearchOpen(false); setQuery(""); }}
-                      className={`block rounded-md px-3 py-2.5 hover:bg-white/[0.05] ${activeResult === index ? "bg-white/[0.07]" : ""}`}
+                      className={`block px-3 py-2.5 hover:bg-white/[0.05] ${activeResult === index ? "bg-white/[0.07]" : ""}`}
                     >
-                      <span className="mb-1 block text-[10px] uppercase tracking-wide text-content-secondary">
+                      <span className="mb-1 block text-[12px] uppercase tracking-wide text-content-secondary">
                         {item.audience === "user" ? "User guide" : "Protocol & integrations"}
                       </span>
                       <span className="block text-sm font-medium text-content-primary">
@@ -242,7 +242,7 @@ export function DocsShell({
             onClick={() => setMobileOpen((open) => !open)}
             aria-expanded={mobileOpen}
             aria-label="Toggle documentation navigation"
-            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-md border border-bg-border text-content-secondary max-lg:flex"
+            className="hidden h-9 w-9 shrink-0 items-center justify-center border border-bg-border text-content-secondary max-lg:flex"
           >
             {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>

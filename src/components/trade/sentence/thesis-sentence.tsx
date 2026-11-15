@@ -373,7 +373,7 @@ export function ThesisSentence({
       {/* a quiet line of its own under the belief, so it never touches how the belief wraps; it keeps its height before prices arrive */}
       <p className={cn(
         "-mt-1 font-medium leading-[1.3] tracking-[-0.02em] text-content-secondary max-md:mt-0",
-        compact ? "text-[13px]" : "text-[18px] max-md:text-[15px]"
+        compact ? "text-[14px]" : "text-[18px] max-md:text-[15px]"
       )}>
         {move ?? " "}
       </p>

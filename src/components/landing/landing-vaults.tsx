@@ -42,7 +42,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
     >
       <div>
         <div
-          className="mb-5 font-mono text-[11px] uppercase text-content-secondary"
+          className="mb-5 font-mono text-[12px] uppercase text-content-secondary"
           style={{ letterSpacing: "0.12em" }}
         >
           {vault.type}
@@ -74,14 +74,14 @@ function VaultCard({ vault }: { vault: LandingVault }) {
                   ~{total}%
                 </span>
                 <span
-                  className="font-mono text-[11px] uppercase text-content-secondary"
+                  className="font-mono text-[12px] uppercase text-content-secondary"
                   style={{ letterSpacing: "0.12em" }}
                 >
                   APY
                 </span>
               </div>
               <div
-                className="mt-2.5 font-mono text-[13px] text-content-secondary"
+                className="mt-2.5 font-mono text-[14px] text-content-secondary"
                 style={{ letterSpacing: "-0.02em" }}
               >
                 {aprLegs(vault)}
@@ -110,7 +110,7 @@ function VaultCard({ vault }: { vault: LandingVault }) {
             </>
           ) : (
             <div
-              className="font-mono text-[13px] text-content-secondary"
+              className="font-mono text-[14px] text-content-secondary"
               style={{ letterSpacing: "-0.02em" }}
             >
               {vault.status === "launch"

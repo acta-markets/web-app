@@ -317,7 +317,7 @@ export function StrikeBoxesChart({
             <circle cx={geo.xNow} cy={geo.ySpot} r={4.5} fill="var(--accent-secondary)" stroke="var(--bg-primary)" strokeWidth={2} />
           </svg>
 
-          <div className="pointer-events-none absolute inset-x-0 font-mono text-[11px] leading-none text-content-secondary" style={{ top: plotHeight + 8 }}>
+          <div className="pointer-events-none absolute inset-x-0 font-mono text-[12px] leading-none text-content-secondary" style={{ top: plotHeight + 8 }}>
             {geo.history.length ? <span className="absolute left-0">1W</span> : null}
             <span className="absolute -translate-x-1/2" style={{ left: geo.xNow }}>Now</span>
             <span className="absolute right-0">{formatExpiryDay(expiryMs)}</span>

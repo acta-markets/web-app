@@ -11,7 +11,7 @@ import { formatExpiryDay } from "@/lib/trade/format";
 import { cn } from "@/lib/cn";
 import { Cell } from "./performance-strip";
 
-const LABEL = "font-mono text-[11px] font-medium uppercase leading-[1.2] tracking-[0.12em] text-content-tertiary";
+const LABEL = "font-mono text-[12px] font-medium uppercase leading-[1.2] tracking-[0.12em] text-content-tertiary";
 
 /** "6,900.00 USDC": dollars to the cent for the quote, up to four places for an asset. */
 function amountText({ symbol, amount }: { symbol: string; amount: number }): string {
@@ -19,7 +19,7 @@ function amountText({ symbol, amount }: { symbol: string; amount: number }): str
   return `${numberFormat(usd ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 4 }).format(amount)} ${symbol}`;
 }
 
-/** "≈ $10,413": a rounded dollar figure, marked as approximate. */
+/** "≈ $10,413": a rounded-none dollar figure, marked as approximate. */
 function approxUsd(usd: number): string {
   return `≈ ${formatUsdSmart(usd)}`;
 }
@@ -180,7 +180,7 @@ function FundBreakdown({ totals, totalUsd, count }: { totals: FundingSummary["to
                   <span>{approxUsd(totalUsd)}</span>
                 </div>
               ) : null}
-              <p className="mt-2 max-w-[260px] whitespace-normal font-mono text-[11px] leading-[1.4] text-content-tertiary">
+              <p className="mt-2 max-w-[260px] whitespace-normal font-mono text-[12px] leading-[1.4] text-content-tertiary">
                 A call is funded in the quote token at its strike, a put in the asset itself, valued here at the current price.
               </p>
             </div>,

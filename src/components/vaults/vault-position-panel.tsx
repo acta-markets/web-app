@@ -179,8 +179,8 @@ export function VaultPositionPanel({
   } else {
     body = (
       <div className="mt-2 flex flex-col gap-2" aria-hidden="true">
-        <div className="h-7 w-40 animate-pulse rounded bg-action-primary" />
-        <div className="h-4 w-24 animate-pulse rounded bg-action-primary" />
+        <div className="h-7 w-40 animate-pulse rounded-none bg-action-primary" />
+        <div className="h-4 w-24 animate-pulse rounded-none bg-action-primary" />
       </div>
     );
   }
