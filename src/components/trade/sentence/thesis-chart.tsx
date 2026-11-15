@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { Check, Grab, X } from "lucide-react";
+import { Check, Grab, Hand, X } from "lucide-react";
 import { AreaSeries, createChart, ColorType, LineStyle, type IChartApi, type ISeriesApi, type UTCTimestamp } from "lightweight-charts";
 import { AppCard } from "@/components/app-ui/app-card";
 import { Chevron } from "@/components/app-ui/chevron";
@@ -500,7 +500,7 @@ export function ThesisChart({
   strike: number;
   expiryMs: number;
   direction: Direction;
-  /** sell (short) or buy (long): picks the wrong-zone label — assigned vs premium lost */
+  /** sell (short) or buy (long): picks the wrong-zone label — assigned vs you lose premium */
   side: "sell" | "buy";
   right: ZoneLabel;
   wrong: ZoneLabel;
@@ -598,6 +598,8 @@ export function ThesisChart({
     [strikes]
   );
   const dragRef = useRef<{ pointerId: number; anchorY: number; index: number } | null>(null);
+  /** The handle is held: its icon closes from an open hand to a grabbing one, as the cursor does. */
+  const [grabbed, setGrabbed] = useState(false);
   const onStrikeRef = useRef(onStrike);
   onStrikeRef.current = onStrike;
 
@@ -631,6 +633,7 @@ export function ThesisChart({
       if (index < 0) return;
       e.currentTarget.setPointerCapture(e.pointerId);
       dragRef.current = { pointerId: e.pointerId, anchorY: e.clientY, index };
+      setGrabbed(true);
     },
     [nearestStrikeIndex, strike]
   );
@@ -667,6 +670,7 @@ export function ThesisChart({
   const onDragPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (dragRef.current?.pointerId === e.pointerId) {
       dragRef.current = null;
+      setGrabbed(false);
       if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
         e.currentTarget.releasePointerCapture(e.pointerId);
       }
@@ -964,7 +968,7 @@ export function ThesisChart({
   /** The wrong-zone overlay label, in the outcome's own words. A short option that goes wrong is
       exercised against you: the deposit buys the asset (above) or the asset is sold (below).
       A long option forfeits the premium it paid. */
-  const wrongZone = side === "sell" ? `YOU ${direction === "above" ? "BUY" : "SELL"} ${symbol}` : "PREMIUM LOST";
+  const wrongZone = side === "sell" ? `YOU ${direction === "above" ? "BUY" : "SELL"} ${symbol}` : "YOU LOSE PREMIUM";
   // the zone is named after the mode's own word: you take profit in Profit and earn yield in Yield
   const rightZone = side === "sell" ? "YIELD ZONE" : "PROFIT ZONE";
 
@@ -1223,7 +1227,12 @@ export function ThesisChart({
           >
             <span className="flex items-center gap-1" aria-hidden="true">
               <Chevron kind="switch" className="h-4 w-4 shrink-0 text-content-primary" />
-              <Grab className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
+              {/* an open hand at rest, a closed one while held */}
+              {grabbed ? (
+                <Grab data-testid="strike-hand" data-grabbed="true" className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
+              ) : (
+                <Hand data-testid="strike-hand" data-grabbed="false" className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
+              )}
             </span>
             <span className="text-[12px] font-semibold tracking-[0.08em] text-content-primary max-md:hidden">STRIKE</span>
             <span className="text-[12px] font-semibold tracking-[-0.02em] tabular-nums text-content-primary">{formatStrikePrice(strike)}</span>

@@ -262,7 +262,7 @@ describe("sentence trade", () => {
     render(<SentenceTrade mode="profit" />);
     expect(screen.getByTestId("ticket-right").textContent).toBe("You profit");
     expect(screen.getByText("Grows with the price once the premium is covered")).toBeTruthy();
-    expect(screen.getByTestId("ticket-wrong").textContent).toBe("Premium lost");
+    expect(screen.getByTestId("ticket-wrong").textContent).toBe("You lose premium");
     expect(screen.getByText("A fixed fee, the most you can lose")).toBeTruthy();
     cleanup();
 
@@ -280,7 +280,7 @@ describe("sentence trade", () => {
     // the note says the quote has the last word, and names the cell for what it is
     expect(screen.getByText("You pay premium")).toBeTruthy();
     expect(screen.getByTestId("trade-headline-note").textContent).toBe("Final quote might be different");
-    expect(screen.getByTestId("ticket-wrong").textContent).toBe("Premium lost");
+    expect(screen.getByTestId("ticket-wrong").textContent).toBe("You lose premium");
     expect(screen.getByText("The most you can lose is $1.00")).toBeTruthy();
     // the winning cell lists the breakeven and what the trade makes at three moves past it
     expect(screen.getByTestId("ticket-right").textContent).toBe("You profit");

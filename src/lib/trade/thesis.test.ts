@@ -203,7 +203,7 @@ describe("buying", () => {
   it("labels the chart zones without a kept premium", () => {
     expect(buyZoneLabels({ asset: "SOL", direction: "above", strike: 150 }).right).toEqual({ title: "SOL above $150 — profit", premium: null, kept: false });
     expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).right.title).toBe("SOL below $150 — profit");
-    expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).wrong.title).toBe("SOL above $150 — premium lost");
+    expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).wrong.title).toBe("SOL above $150 — you lose premium");
     expect(buyZoneLabels({ asset: "SOL", direction: "below", strike: 150 }).wrong.premium).toBeNull();
   });
 });
@@ -244,7 +244,7 @@ describe("bought spreads", () => {
   it("labels the chart with cash, never with the asset", () => {
     expect(spreadZoneLabels("20.00 USDC").right).toEqual({ title: "Up to 20.00 USDC", premium: null, kept: false });
     expect(spreadZoneLabels(null).right.title).toBe("Cash payoff");
-    expect(spreadZoneLabels(null).wrong.title).toBe("Premium lost");
+    expect(spreadZoneLabels(null).wrong.title).toBe("You lose premium");
   });
 
   it("names the leg and says what can come back", () => {

@@ -501,7 +501,7 @@ export function spreadOutcomeCopy({
 export function spreadZoneLabels(maxPayout: string | null): { right: ZoneLabel; wrong: ZoneLabel } {
   return {
     right: { title: maxPayout ? `Up to ${maxPayout}` : "Cash payoff", premium: null, kept: false },
-    wrong: { title: "Premium lost", premium: null, kept: false },
+    wrong: { title: "You lose premium", premium: null, kept: false },
   };
 }
 
@@ -519,7 +519,7 @@ export function buyZoneLabels({
   const loseSide = direction === "above" ? "below" : "above";
   return {
     right: { title: `${asset} ${winSide} ${price} \u2014 profit`, premium: null, kept: false },
-    wrong: { title: `${asset} ${loseSide} ${price} \u2014 premium lost`, premium: null, kept: false },
+    wrong: { title: `${asset} ${loseSide} ${price} \u2014 you lose premium`, premium: null, kept: false },
   };
 }
 
