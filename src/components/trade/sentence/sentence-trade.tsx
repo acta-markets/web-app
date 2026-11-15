@@ -712,7 +712,7 @@ export function SentenceTrade({
                 expiry (right). Where the card has its full width the headings share the top row
                 and the four cells the row beneath; on anything narrower, laptops included, each
                 heading sits right above its own pair, so no cell is ever too narrow for its line. */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 xl:grid-cols-[1.02fr_0.82fr_1.24fr_0.92fr] xl:gap-x-12">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,0.9fr)_minmax(0,1.35fr)_minmax(0,0.97fr)] xl:gap-x-12">
               <p className={cn(TICKET_WHEN, "xl:order-1")}>Now</p>
               {/* 1. what goes in */}
               <div className={cn(TICKET_CELL, "xl:order-3")}>
@@ -880,7 +880,7 @@ export function SentenceTrade({
                     "If right"
                   )}
                 </span>
-                <span data-testid="ticket-right" className={cn(TICKET_VALUE, "py-0.5 text-content-primary", side === "sell" && "xl:min-h-[54px]")}>
+                <span data-testid="ticket-right" className={cn(TICKET_VALUE, "whitespace-nowrap py-0.5 text-content-primary", side === "sell" && "xl:min-h-[54px]")}>
                   {outcomeLine(ticketOutcomes.right.what)}
                 </span>
                 {/* In Profit this block is always as tall as the table and its link, so prices
@@ -913,7 +913,7 @@ export function SentenceTrade({
                     "If wrong"
                   )}
                 </span>
-                <span data-testid="ticket-wrong" className={cn(TICKET_VALUE, "py-0.5 text-content-primary", side === "sell" && "xl:min-h-[54px]")}>
+                <span data-testid="ticket-wrong" className={cn(TICKET_VALUE, "whitespace-nowrap py-0.5 text-content-primary", side === "sell" && "xl:min-h-[54px]")}>
                   {outcomeLine(ticketOutcomes.wrong.what)}
                 </span>
                 {/* the priced line breaks at one fixed point; a plain note wraps inside its two reserved lines */}
