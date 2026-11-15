@@ -8,8 +8,8 @@ import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 export type AppTab = "earn" | "trade" | "portfolio" | "spreads";
 
 const TABS: ReadonlyArray<{ value: AppTab; label: string; href: string; soon?: boolean }> = [
-  { value: "earn", label: "Earn", href: "/earn" },
   { value: "trade", label: "Trade", href: "/trade" },
+  { value: "earn", label: "Earn", href: "/earn" },
   { value: "portfolio", label: "Portfolio", href: "/portfolio" },
 ];
 

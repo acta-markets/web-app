@@ -37,6 +37,13 @@ describe("AppNav", () => {
     expect(screen.getByRole("link", { name: "Portfolio" }).getAttribute("href")).toBe("/portfolio");
   });
 
+  it("lists Trade first, then Earn, then Portfolio", () => {
+    nav.pathname = "/earn";
+    render(<AppNav />);
+    const labels = screen.getAllByRole("link").map((a) => a.textContent).filter(Boolean);
+    expect(labels).toEqual(["Trade", "Earn", "Portfolio"]);
+  });
+
   it("does not surface Spreads in the header while it is unbuilt", () => {
     nav.pathname = "/earn";
     render(<AppNav />);
