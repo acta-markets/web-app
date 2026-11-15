@@ -19,7 +19,7 @@ function fakeRpc(simulationErr: unknown = null) {
     ),
     simulateTransaction: vi.fn(() => call({ value: { err: simulationErr, logs: ["log"] } })),
     sendTransaction: vi.fn(() => call(`sig${sent++}`)),
-    getSignatureStatuses: vi.fn(() => call({ value: [{ confirmationStatus: "confirmed", err: null }] })),
+    getSignatureStatuses: vi.fn((signatures: string[]) => call({ value: signatures.map(() => ({ confirmationStatus: "confirmed", err: null })) })),
     getBlockHeight: vi.fn(() => call(1n)),
   };
 }
@@ -69,6 +69,46 @@ describe("sendWalletTransactions", () => {
       },
     })).rejects.toThrow();
     expect(rpc.sendTransaction).not.toHaveBeenCalled();
+  });
+
+  it("tries a dropped simulation request again instead of failing the batch", async () => {
+    const rpc = fakeRpc();
+    rpc.simulateTransaction.mockImplementationOnce(() => ({ send: async () => { throw new Error("fetch failed"); } }) as never);
+    const signAll = vi.fn(async (txs: VersionedTransaction[]) => txs);
+    const signatures = await sendWalletTransactions({
+      rpc: rpc as never,
+      feePayer: FEE_PAYER,
+      transactions: [[ix(1)], [ix(2)]],
+      signAllTransactions: signAll,
+    });
+    expect(rpc.simulateTransaction).toHaveBeenCalledTimes(3);
+    expect(signatures).toEqual(["sig0", "sig1"]);
+  });
+
+  it("keeps a large batch to a few requests at a time and confirms it with one status request", async () => {
+    const rpc = fakeRpc();
+    let running = 0;
+    let peak = 0;
+    rpc.simulateTransaction.mockImplementation(() => ({
+      send: async () => {
+        running++;
+        peak = Math.max(peak, running);
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        running--;
+        return { value: { err: null, logs: [] } };
+      },
+    }) as never);
+    const transactions = Array.from({ length: 30 }, (_, i) => [ix(i)]);
+    const signatures = await sendWalletTransactions({
+      rpc: rpc as never,
+      feePayer: FEE_PAYER,
+      transactions,
+      signAllTransactions: async (txs) => txs,
+    });
+    expect(signatures).toHaveLength(30);
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(rpc.getSignatureStatuses).toHaveBeenCalledTimes(1);
+    expect(rpc.getSignatureStatuses.mock.calls[0][0]).toHaveLength(30);
   });
 
   it("does nothing for an empty step", async () => {

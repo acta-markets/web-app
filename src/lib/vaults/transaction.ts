@@ -16,7 +16,14 @@ import {
   type SolanaRpcApiMainnet,
 } from "@solana/kit";
 
+import { mapLimit, withRetry } from "@/lib/async-pool";
+
 const CONFIRM_POLL_MS = 1_000;
+/**
+ * How many RPC requests a batch keeps in flight. Thirty transactions simulated at once is
+ * enough for a public RPC to drop or refuse a few, and one lost request used to fail them all.
+ */
+const RPC_CONCURRENCY = 4;
 
 export class TransactionFailedError extends Error {
   constructor(
@@ -70,18 +77,22 @@ export async function sendWalletTransactions(args: SendWalletTransactionsArgs): 
       ),
     ),
   );
-  await Promise.all(
-    compiled.map(async (transaction) => {
-      const { value } = await rpc
-        .simulateTransaction(getBase64EncodedWireTransaction(transaction), {
-          encoding: "base64",
-          sigVerify: false,
-          commitment: "confirmed",
-        })
-        .send({ abortSignal });
-      if (value.err) throw new Error(`simulation failed: ${(value.logs ?? []).join("\n")}`);
-    }),
-  );
+  await mapLimit(compiled, RPC_CONCURRENCY, async (transaction) => {
+    // A request that is dropped or refused is tried again. An error the simulation itself
+    // reports is final: it is thrown outside the retry.
+    const { value } = await withRetry(
+      () =>
+        rpc
+          .simulateTransaction(getBase64EncodedWireTransaction(transaction), {
+            encoding: "base64",
+            sigVerify: false,
+            commitment: "confirmed",
+          })
+          .send({ abortSignal }),
+      { signal: abortSignal },
+    );
+    if (value.err) throw new Error(`simulation failed: ${(value.logs ?? []).join("\n")}`);
+  });
   const unsigned = compiled.map(transaction =>
     VersionedTransaction.deserialize(new Uint8Array(getTransactionEncoder().encode(transaction))));
   const messages = unsigned.map(transaction => transaction.message.serialize().slice());
@@ -103,25 +114,33 @@ export async function sendWalletTransactions(args: SendWalletTransactionsArgs): 
       await rpc.sendTransaction(wire, { encoding: "base64", preflightCommitment: "confirmed" }).send({ abortSignal }),
     );
   }
-  await Promise.all(
-    signatures.map((signature) => confirmSignature(rpc, signature, blockhash.lastValidBlockHeight, abortSignal)),
-  );
+  await confirmSignatures(rpc, signatures, blockhash.lastValidBlockHeight, abortSignal);
   return signatures;
 }
 
-async function confirmSignature(
+/**
+ * Waits until every signature is confirmed, with one status request per poll however many
+ * there are: a loop per signature made a batch of thirty ask sixty questions a second.
+ */
+async function confirmSignatures(
   rpc: Rpc<SolanaRpcApiMainnet>,
-  signature: Signature,
+  signatures: readonly Signature[],
   lastValidBlockHeight: bigint,
   abortSignal?: AbortSignal,
 ): Promise<void> {
+  let pending = [...signatures];
   for (;;) {
-    const { value } = await rpc.getSignatureStatuses([signature]).send({ abortSignal });
-    const status = value[0];
-    if (status?.err) throw new TransactionFailedError(signature, `transaction failed: ${JSON.stringify(status.err, (_, v) => (typeof v === "bigint" ? v.toString() : v))}`);
-    if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") return;
-    const height = await rpc.getBlockHeight({ commitment: "confirmed" }).send({ abortSignal });
-    if (height > lastValidBlockHeight) throw new TransactionFailedError(signature, "transaction expired");
+    const { value } = await withRetry(() => rpc.getSignatureStatuses(pending).send({ abortSignal }), { signal: abortSignal });
+    const waiting: Signature[] = [];
+    pending.forEach((signature, index) => {
+      const status = value[index];
+      if (status?.err) throw new TransactionFailedError(signature, `transaction failed: ${JSON.stringify(status.err, (_, v) => (typeof v === "bigint" ? v.toString() : v))}`);
+      if (status?.confirmationStatus !== "confirmed" && status?.confirmationStatus !== "finalized") waiting.push(signature);
+    });
+    if (waiting.length === 0) return;
+    pending = waiting;
+    const height = await withRetry(() => rpc.getBlockHeight({ commitment: "confirmed" }).send({ abortSignal }), { signal: abortSignal });
+    if (height > lastValidBlockHeight) throw new TransactionFailedError(pending[0], "transaction expired");
     await new Promise((resolve) => setTimeout(resolve, CONFIRM_POLL_MS));
   }
 }

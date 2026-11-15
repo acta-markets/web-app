@@ -6,6 +6,8 @@ import { useSolana } from "@/components/solana/solana-wallet-provider";
 type Fundable = { pda: string; market: string };
 
 const NONE: ReadonlySet<string> = new Set();
+/** Positions prepared at once; each is two account reads. */
+const PREPARE_CONCURRENCY = 4;
 
 /**
  * Wallet-paid funding, one position or several. `funded` covers confirmed deposits until the
@@ -25,13 +27,18 @@ export function useBuyDeposit(onFunded: () => void) {
       setPending(new Set(positions.map((p) => p.pda)));
       setError(null);
       try {
-        const [{ buildBuyDepositInstructions }, { sendWalletTransaction, sendWalletTransactions }] = await Promise.all([
+        const [{ buildBuyDepositInstructions }, { sendWalletTransaction, sendWalletTransactions }, { mapLimit, withRetry }] = await Promise.all([
           import("@/lib/trade/buy-deposit"),
           import("@/lib/vaults/transaction"),
+          import("@/lib/async-pool"),
         ]);
         // One transaction per position. A batch is approved once in the wallet and sent in the
-        // order given, so the soonest expiry lands first.
-        const transactions = await Promise.all(positions.map((p) => buildBuyDepositInstructions(rpc, owner, p)));
+        // order given, so the soonest expiry lands first. Each one reads two accounts, so they
+        // are prepared a few at a time and a dropped read is tried again: thirty at once is
+        // sixty requests, and a single one lost to a busy RPC used to fail the whole batch.
+        const transactions = await mapLimit(positions, PREPARE_CONCURRENCY, (p) =>
+          withRetry(() => buildBuyDepositInstructions(rpc, owner, p)),
+        );
         if (batch) await sendWalletTransactions({ rpc, feePayer: owner, transactions, signAllTransactions });
         else await sendWalletTransaction({ rpc, feePayer: owner, instructions: transactions[0], signTransaction });
         setFunded((current) => {
