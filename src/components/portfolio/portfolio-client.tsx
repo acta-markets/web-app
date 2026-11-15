@@ -14,10 +14,11 @@ import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 import { openWrittenApr, summarizePnl, tradingStats } from "@/lib/portfolio-pnl";
-import { buildPositionRows, fundingSummary } from "@/lib/portfolio-positions";
+import { buildPositionRows, fundingSummary, isWorthExercising } from "@/lib/portfolio-positions";
 import { useBuyDeposit } from "./use-buy-deposit";
 import { useWalletHistory } from "./use-wallet-history";
 import { AssetFilter } from "./asset-filter";
+import { ExerciseFilter } from "./exercise-filter";
 import { FundingStrip } from "./funding-strip";
 import { IncomeCard } from "./income-card";
 import { PerformanceStrip } from "./performance-strip";
@@ -66,6 +67,8 @@ export function PortfolioClient() {
   const [positionsTab, setPositionsTab] = useState<PositionsTab>("open");
   /** Asset filter for the open positions; null means every asset. */
   const [tokenFilter, setTokenFilter] = useState<string | null>(null);
+  /** Show only the bought options worth exercising at the current price. */
+  const [exerciseOnly, setExerciseOnly] = useState(false);
   const [quoteMint, setQuoteMint] = useState("");
   const { isConnected: walletConnected, selectedAccount } = useSolana();
   const {
@@ -163,18 +166,25 @@ export function PortfolioClient() {
     return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   }, [openRows]);
 
-  const visibleOpenRows = useMemo(
+  const assetRows = useMemo(
     () => (tokenFilter ? openRows.filter((r) => r.symbol === tokenFilter) : openRows),
     [openRows, tokenFilter],
   );
+  // Counted inside the asset filter, so the chip's number is the number of rows it would leave.
+  const worthExercising = useMemo(() => assetRows.filter((r) => isWorthExercising(r, nowMs)), [assetRows, nowMs]);
+  const visibleOpenRows = exerciseOnly ? worthExercising : assetRows;
 
   // A filter that no longer matches anything (position settled) falls back to every token
   // instead of leaving an empty table with no way back.
   useEffect(() => {
     if (tokenFilter && !tokenCounts.some(([symbol]) => symbol === tokenFilter)) setTokenFilter(null);
   }, [tokenFilter, tokenCounts]);
+  // The same for the exercise filter: the price moved, or the last one was funded and settled.
+  useEffect(() => {
+    if (exerciseOnly && worthExercising.length === 0) setExerciseOnly(false);
+  }, [exerciseOnly, worthExercising.length]);
 
-  const groupedByUnderlying = !tokenFilter && openRows.length >= 8 && tokenCounts.length >= 2;
+  const groupedByUnderlying = !tokenFilter && !exerciseOnly && openRows.length >= 8 && tokenCounts.length >= 2;
   // Every open position, whatever the token filter shows: "Fund all" means all of them.
   const funding = useMemo(() => fundingSummary(openRows, nowMs, buyDeposit.funded), [openRows, nowMs, buyDeposit.funded]);
 
@@ -277,9 +287,14 @@ export function PortfolioClient() {
                       onFundAll={(positions) => void buyDeposit.depositAll(positions)}
                     />
                   ) : null}
-                  {tokenCounts.length > 1 ? (
-                    <div className="flex">
-                      <AssetFilter counts={tokenCounts} total={openRows.length} value={tokenFilter} onChange={setTokenFilter} />
+                  {tokenCounts.length > 1 || worthExercising.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {tokenCounts.length > 1 ? (
+                        <AssetFilter counts={tokenCounts} total={openRows.length} value={tokenFilter} onChange={setTokenFilter} />
+                      ) : null}
+                      {worthExercising.length > 0 ? (
+                        <ExerciseFilter count={worthExercising.length} active={exerciseOnly} onChange={setExerciseOnly} />
+                      ) : null}
                     </div>
                   ) : null}
                   <PositionsTable rows={visibleOpenRows} nowMs={nowMs} grouped={groupedByUnderlying} deposit={buyDeposit} />

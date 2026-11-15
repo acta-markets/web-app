@@ -311,6 +311,73 @@ describe("Asset filter", () => {
   });
 });
 
+describe("Worth exercising filter", () => {
+  const nowSec = () => Math.floor(Date.now() / 1000);
+  // a price of $160: a $150 call is in the money, a $150 put is not
+  const priced = { underlying_price: { type: "available", price: "160000000000", published_at: nowSec() } };
+  const option = (pda: string, over: Record<string, unknown> = {}) => ({
+    ...position(pda, nowSec() - 100), side: "buy", state: "open", market_pda: `m-${pda}`, expiry_ts: nowSec() + 3600, settlement: undefined,
+    terms: { type: "covered_call", strike: "150000000000" }, ...priced, ...over,
+  }) as unknown as PositionInfo;
+  const put = (pda: string, over: Record<string, unknown> = {}) => option(pda, { terms: { type: "cash_secured_put", strike: "150000000000" }, ...over });
+  const sold = (pda: string) => ({ ...position(pda, nowSec() - 100), state: "open", expiry_ts: nowSec() + 3600, settlement: undefined, ...priced }) as unknown as PositionInfo;
+  async function show(live: PositionInfo[]) {
+    mocks.page.mockResolvedValue({ positions: [], next_cursor: null });
+    mocks.live = live;
+    render(<PortfolioClient />);
+    await screen.findByText("Net P&L");
+  }
+  const rows = () => screen.getAllByText(/ends (above|below)/).length;
+  const chip = () => screen.queryByRole("button", { name: /^Worth exercising/ });
+
+  it("narrows the table to the bought options in the money, and back", async () => {
+    await show([option("itm-call"), put("otm-put"), sold("sold")]);
+    expect(rows()).toBe(3);
+    expect(chip()!.textContent).toBe("Worth exercising1");
+    expect(chip()!.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(chip()!);
+    expect(chip()!.getAttribute("aria-pressed")).toBe("true");
+    expect(rows()).toBe(1);
+    expect(screen.getByText(/ends above/)).toBeTruthy();
+    fireEvent.click(chip()!);
+    expect(rows()).toBe(3);
+  });
+
+  it("works with the asset filter and counts inside it", async () => {
+    await show([option("sol-call"), option("btc-call", { underlying_symbol: "BTC", underlying_mint: "BTC-mint" }), put("btc-put", { underlying_symbol: "BTC", underlying_mint: "BTC-mint" })]);
+    expect(chip()!.textContent).toBe("Worth exercising2");
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter positions by asset" }), { target: { value: "BTC" } });
+    expect(chip()!.textContent).toBe("Worth exercising1");
+    fireEvent.click(chip()!);
+    expect(rows()).toBe(1);
+  });
+
+  it("is not offered when nothing qualifies", async () => {
+    await show([put("otm-put"), sold("sold")]);
+    expect(chip()).toBeNull();
+  });
+
+  it("is offered for a single asset too, where there is no asset filter", async () => {
+    await show([option("itm-call"), sold("sold")]);
+    expect(screen.queryByRole("combobox", { name: "Filter positions by asset" })).toBeNull();
+    expect(chip()).toBeTruthy();
+  });
+
+  it("switches itself off when the last qualifying position stops qualifying, so the table is never left empty", async () => {
+    mocks.page.mockResolvedValue({ positions: [], next_cursor: null });
+    mocks.live = [option("itm-call"), sold("sold")];
+    const view = render(<PortfolioClient />);
+    await screen.findByText("Net P&L");
+    fireEvent.click(chip()!);
+    expect(rows()).toBe(1);
+    // the price falls under the strike while the filter is on
+    mocks.live = [option("itm-call", { underlying_price: { type: "available", price: "140000000000", published_at: nowSec() } }), sold("sold")];
+    view.rerender(<PortfolioClient />);
+    await waitFor(() => expect(chip()).toBeNull());
+    expect(rows()).toBe(2);
+  });
+});
+
 describe("Portfolio states", () => {
   const open = (pda: string) => ({ ...position(pda, Math.floor(Date.now() / 1000) - 100), state: "open", expiry_ts: Math.floor(Date.now() / 1000) + 86400, settlement: undefined }) as unknown as PositionInfo;
 

@@ -237,6 +237,16 @@ export function canFundRow(row: PositionsTableRow, nowMs: number, funded?: Reado
   return row.buy != null && !isRowFunded(row, funded) && row.state === "Open" && row.expiryTs != null && row.expiryTs * 1000 > nowMs;
 }
 
+/**
+ * A bought option worth exercising right now: one that delivers (not a spread), is in the
+ * money at the current price, and has not expired. Funded or not: a funded one is already
+ * set to exercise, an unfunded one is the one to fund. Without a price the answer is no,
+ * because nothing says it is.
+ */
+export function isWorthExercising(row: PositionsTableRow, nowMs: number): boolean {
+  return row.buy != null && row.inTheMoney === true && row.expiryTs != null && row.expiryTs * 1000 > nowMs;
+}
+
 /** Everything about the bought options that still need their deposit, taken together. */
 export type FundingSummary = {
   /** What to fund, soonest expiry first, so a balance that runs short covers the urgent ones. */

@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { IncomeCard } from "@/components/portfolio/income-card";
 import { AssetFilter } from "@/components/portfolio/asset-filter";
+import { ExerciseFilter } from "@/components/portfolio/exercise-filter";
 import { FundingStrip } from "@/components/portfolio/funding-strip";
 import { PerformanceStrip } from "@/components/portfolio/performance-strip";
 import { PositionsTable } from "@/components/portfolio/positions-table";
 import { LoadingStatus, PerformanceSkeleton, PortfolioEmpty, PortfolioSignIn, PositionsSkeleton } from "@/components/portfolio/portfolio-states";
 import type { WalletPositionSummary } from "@/lib/portfolio-api";
 import { openWrittenApr, summarizePnl, tradingStats } from "@/lib/portfolio-pnl";
-import { buildPositionRows, fundingSummary } from "@/lib/portfolio-positions";
+import { buildPositionRows, fundingSummary, isWorthExercising } from "@/lib/portfolio-positions";
 import type { PositionInfo } from "@/lib/rfq-client";
 import { TOKENS, getNetwork } from "@/lib/tokens";
 
@@ -153,6 +154,7 @@ export function PortfolioGallery() {
   const [funded, setFunded] = useState<ReadonlySet<string>>(new Set());
   const [quoteMint, setQuoteMint] = useState("");
   const [assetFilter, setAssetFilter] = useState<string | null>(null);
+  const [exerciseOnly, setExerciseOnly] = useState(false);
 
   const deposit = {
     pending,
@@ -191,7 +193,10 @@ export function PortfolioGallery() {
     return [...counts].sort((a, b) => b[1] - a[1]);
   }, [data.openRows]);
   const shownAsset = assetCounts.some(([symbol]) => symbol === assetFilter) ? assetFilter : null;
-  const visibleOpenRows = shownAsset ? data.openRows.filter((r) => r.symbol === shownAsset) : data.openRows;
+  const assetRows = shownAsset ? data.openRows.filter((r) => r.symbol === shownAsset) : data.openRows;
+  const worthExercising = assetRows.filter((r) => isWorthExercising(r, nowMs));
+  const exerciseOn = exerciseOnly && worthExercising.length > 0;
+  const visibleOpenRows = exerciseOn ? worthExercising : assetRows;
 
   return (
     <div className="mx-auto w-full max-w-[850px] pb-16 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-8">
@@ -228,12 +233,13 @@ export function PortfolioGallery() {
           </div>
           <Section title={`Positions · Open ${data.openRows.length}`}>
             {funding ? <FundingStrip summary={funding} nowMs={nowMs} pending={pending.size > 0} onFundAll={(positions) => fund(positions.map((p) => p.pda))} /> : null}
-            {assetCounts.length > 1 ? (
-              <div className="flex">
-                <AssetFilter counts={assetCounts} total={data.openRows.length} value={shownAsset} onChange={setAssetFilter} />
+            {assetCounts.length > 1 || worthExercising.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {assetCounts.length > 1 ? <AssetFilter counts={assetCounts} total={data.openRows.length} value={shownAsset} onChange={setAssetFilter} /> : null}
+                {worthExercising.length > 0 ? <ExerciseFilter count={worthExercising.length} active={exerciseOn} onChange={setExerciseOnly} /> : null}
               </div>
             ) : null}
-            <PositionsTable rows={visibleOpenRows} nowMs={nowMs} grouped={scene === "grouped" && !shownAsset} deposit={deposit} />
+            <PositionsTable rows={visibleOpenRows} nowMs={nowMs} grouped={scene === "grouped" && !shownAsset && !exerciseOn} deposit={deposit} />
           </Section>
           <Section title="Positions · History">
             <PositionsTable variant="history" rows={data.closedRows} nowMs={nowMs} grouped={false} />

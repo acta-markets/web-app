@@ -12,7 +12,7 @@ import {
   stateLabel,
   thesisStrike1e9,
 } from "@/lib/portfolio-positions";
-import { fundingSummary } from "@/lib/portfolio-positions";
+import { fundingSummary, isWorthExercising } from "@/lib/portfolio-positions";
 import { PositionsTable } from "./positions-table";
 
 const NOV28 = Math.floor(Date.UTC(2026, 10, 28, 8, 0, 0) / 1000);
@@ -346,5 +346,33 @@ describe("funding summary", () => {
     const summary = fundingSummary(buildPositionRows([call(), put()], () => "SOL", now), now)!;
     expect(summary.totals).toEqual([{ symbol: expect.stringMatching(/^USDC/), amount: 150, usd: 150 }, { symbol: "SOL", amount: 1, usd: null }]);
     expect(summary.totalUsd).toBeNull();
+  });
+});
+
+describe("worth exercising", () => {
+  const now = (NOV28 - 3600) * 1000;
+  const at = (spot1e9: number) => (positions: PositionInfo[]) => buildPositionRows(positions, () => "SOL", now, () => spot1e9);
+  const call = (over: Record<string, unknown> = {}) => pos({ side: "buy", pda: "call", ...over });
+  const put = (over: Record<string, unknown> = {}) => pos({ side: "buy", pda: "put", terms: { type: "cash_secured_put", strike: "150000000000" }, ...over });
+
+  it("is a bought option in the money at the current price: a call above its strike, a put below", () => {
+    // spot $160 against a $150 strike
+    const [c, p] = at(160e9)([call(), put()]);
+    expect(isWorthExercising(c, now)).toBe(true);
+    expect(isWorthExercising(p, now)).toBe(false);
+    const [c2, p2] = at(140e9)([call(), put()]);
+    expect(isWorthExercising(c2, now)).toBe(false);
+    expect(isWorthExercising(p2, now)).toBe(true);
+  });
+
+  it("counts a funded one too, since it is the same answer to the same question", () => {
+    expect(isWorthExercising(at(160e9)([call({ state: "funded" })])[0], now)).toBe(true);
+  });
+
+  it("is never a sold position, a spread, an expired option or one without a price", () => {
+    expect(isWorthExercising(at(160e9)([pos()])[0], now)).toBe(false);
+    expect(isWorthExercising(at(160e9)([pos({ side: "buy", terms: { type: "call_spread", lower_strike: "150000000000", upper_strike: "180000000000" } })])[0], now)).toBe(false);
+    expect(isWorthExercising(at(160e9)([call({ expiry_ts: NOV28 - 7200 })])[0], now)).toBe(false);
+    expect(isWorthExercising(buildPositionRows([call()], () => "SOL", now)[0], now)).toBe(false);
   });
 });
