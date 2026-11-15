@@ -372,8 +372,9 @@ export function ThesisSentence({
       </p>
       {/* a quiet line of its own under the belief, so it never touches how the belief wraps; it keeps its height before prices arrive */}
       <p className={cn(
-        "-mt-1 font-medium leading-[1.3] tracking-[-0.02em] text-content-secondary max-md:mt-0",
-        compact ? "text-[14px]" : "text-[18px] max-md:text-[15px]"
+        "-mt-1 tracking-[-0.02em] text-content-secondary max-md:mt-0",
+        // on the trade page it is set as every other quiet note there: mono, 14px, regular
+        compact ? "font-mono text-[14px] font-normal leading-[1.45]" : "text-[18px] font-medium leading-[1.3] max-md:text-[15px]"
       )}>
         {move ?? " "}
       </p>

@@ -434,7 +434,7 @@ function ZoneChip({
   onFlip: () => void;
 }) {
   const base = cn(
-    "absolute z-[17] -translate-y-1/2 whitespace-nowrap border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono font-semibold tracking-wider backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)] transition-colors",
+    "absolute z-[17] -translate-y-1/2 whitespace-nowrap border border-bg-border bg-bg-primary/95 px-2 py-0.5 font-mono font-semibold tracking-[0.08em] backdrop-blur-[4px] shadow-[0_1px_5px_rgba(0,0,0,0.45)] transition-colors",
     compact ? "-translate-x-full text-[12px]" : "-translate-x-1/2 text-xs"
   );
   if (!interactive) {
@@ -1177,7 +1177,8 @@ export function ThesisChart({
             style={{ left: nowX, top: nowTagY ?? spotY, transition: "top 180ms ease-out, left 180ms ease-out" }}
             aria-hidden="true"
           >
-            NOW {formatUsdSmart(spot)}
+            {/* every caps word on the chart wears the same tracking; numbers never do */}
+            <span className="tracking-[0.08em]">NOW</span> {formatUsdSmart(spot)}
           </span>
         ) : null}
 
@@ -1206,7 +1207,7 @@ export function ThesisChart({
               <Chevron kind="switch" className="h-4 w-4 shrink-0 text-content-primary" />
               <Grab className="h-4 w-4 shrink-0 text-content-primary max-md:hidden" />
             </span>
-            <span className="text-[12px] tracking-[0.08em] text-content-primary max-md:hidden">STRIKE</span>
+            <span className="text-[12px] font-semibold tracking-[0.08em] text-content-primary max-md:hidden">STRIKE</span>
             <span className="text-[12px] font-semibold tabular-nums text-content-primary">{formatStrikePrice(strike)}</span>
           </div>
         ) : geometry ? (

@@ -712,7 +712,7 @@ export function SentenceTrade({
                 expiry (right). Where the card has its full width the headings share the top row
                 and the four cells the row beneath; on anything narrower, laptops included, each
                 heading sits right above its own pair, so no cell is ever too narrow for its line. */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,0.9fr)_minmax(0,1.35fr)_minmax(0,0.97fr)] xl:gap-x-12">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 xl:grid-cols-[minmax(0,0.97fr)_minmax(0,0.8fr)_minmax(0,1.19fr)_minmax(0,1.04fr)]">
               <p className={cn(TICKET_WHEN, "xl:order-1")}>Now</p>
               {/* 1. what goes in */}
               <div className={cn(TICKET_CELL, "xl:order-3")}>
@@ -922,8 +922,8 @@ export function SentenceTrade({
                     // The words come first and the amount last, so a longer amount never pushes
                     // the words sideways; and it breaks at one fixed point where the cell is narrow.
                     <>
-                      The most you can lose is <br className="max-xl:hidden" />
-                      {formatUsdAmount(payUsd)}
+                      The most you can <br className="max-xl:hidden" />
+                      lose is {formatUsdAmount(payUsd)}
                     </>
                   ) : (
                     ticketOutcomes.wrong.note

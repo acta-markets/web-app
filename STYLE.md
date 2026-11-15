@@ -201,6 +201,11 @@ A hover panel or tooltip goes to the bottom right: its left edge lines up with t
 of what opened it and it runs to the right from there. Short of room on the right it slides
 left just enough to stay on screen.
 
+One exception: "More prices" on the trade page. The trade button sits right under it, so its
+panel opens upward, with its bottom left corner ten pixels right of and above the pointer
+(above the link when opened from the keyboard). It is kept whole inside the window instead of
+scrolling the page.
+
 ### Components
 
 Server components by default. `landing-faq.tsx` is the only `"use client"` file on the
