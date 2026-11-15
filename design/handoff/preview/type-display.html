@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Type — Display</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 24px; }
+  .row { display: flex; align-items: baseline; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .row:last-child { border-bottom: 0; }
+  .spec { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); flex: 0 0 140px; }
+  .sample { flex: 1; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+  <div class="row"><div class="spec">Display · 114</div><div class="sample h-display">Earn</div></div>
+  <div class="row"><div class="spec">Hero · 64</div><div class="sample h-hero">Solana volatility</div></div>
+  <div class="row"><div class="spec">H1 · 48</div><div class="sample h-1">Structured yield.</div></div>
+  <div class="row"><div class="spec">H2 · 40</div><div class="sample h-2">All markets</div></div>
+  <div class="row"><div class="spec">H3 · 28</div><div class="sample h-3">Popular markets</div></div>
+  <div class="row"><div class="spec">H4 · 24</div><div class="sample h-4">Your position</div></div>
+</body>
+</html>

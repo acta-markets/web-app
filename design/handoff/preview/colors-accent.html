@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Colors — Accent</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 20px; }
+  .row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .sw { border: 1px solid var(--border); padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; min-height: 100px; }
+  .chip { width: 100%; height: 40px; border: 1px solid var(--border); }
+  .name { font-family: var(--font-mono); font-size: 12px; color: var(--fg); }
+  .hex  { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); }
+  .section-label { font-family: var(--font-ui); font-size: 12px; color: var(--fg-muted); margin: 2px 0 8px; }
+</style>
+</head>
+<body>
+  <div class="section-label">Green (accent) · Orange (BTC-only)</div>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:#078568"></div><div class="name">green-100</div><div class="hex">#078568</div></div>
+    <div class="sw"><div class="chip" style="background:#2AA286"></div><div class="name">green-200</div><div class="hex">#2AA286</div></div>
+    <div class="sw"><div class="chip" style="background:#80C9B6"></div><div class="name">green-300</div><div class="hex">#80C9B6</div></div>
+    <div class="sw"><div class="chip" style="background:rgba(42,162,134,0.3)"></div><div class="name">green-400</div><div class="hex">#2AA286 / 30%</div></div>
+    <div class="sw"><div class="chip" style="background:rgba(42,162,134,0.2)"></div><div class="name">green-500</div><div class="hex">#2AA286 / 20%</div></div>
+    <div class="sw"><div class="chip" style="background:#FF611B"></div><div class="name">orange-100</div><div class="hex">#FF611B</div></div>
+  </div>
+</body>
+</html>

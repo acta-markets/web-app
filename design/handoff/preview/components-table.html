@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Table row</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 0; }
+  .wrap { border: 1px solid var(--border); }
+  .head, .row {
+    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1.5fr 40px;
+    align-items: center; padding: 12px 20px; gap: 8px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono); letter-spacing: -0.02em;
+  }
+  .head { color: var(--fg-muted); font-size: 14px; }
+  .head .sort { display: inline-flex; align-items: center; gap: 4px; }
+  .row { font-size: 14px; color: var(--fg); font-weight: 500; min-height: 60px; }
+  .row:hover { background: rgba(240,240,240,0.03); }
+  .row:last-child { border-bottom: 0; }
+  .asset { display: flex; align-items: center; gap: 10px; }
+  .tok { width: 28px; height: 28px; border-radius: 999px; background: #F0F0F0; display:flex;align-items:center;justify-content:center; color:#121212; font-family: var(--font-display); font-weight: 600; font-size: 10px; }
+  .cap { display: flex; align-items: center; gap: 8px; }
+  .bar { width: 60px; height: 6px; background: rgba(42,162,134,0.2); border: 1px solid var(--accent); }
+  .bar > i { display: block; height: 100%; background: #2AA286; }
+  .chev { color: var(--fg-muted); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <span>Asset</span>
+      <span>Type</span>
+      <span class="sort">Min APR ▾</span>
+      <span class="sort">Max APR ▾</span>
+      <span class="sort">Cap filled ▾</span>
+      <span></span>
+    </div>
+    <div class="row">
+      <div class="asset"><div class="tok">jito</div>jitoSOL</div>
+      <div>Call</div>
+      <div>12%</div>
+      <div>34%</div>
+      <div class="cap">54%<div class="bar"><i style="width:54%"></i></div></div>
+      <div class="chev">»</div>
+    </div>
+    <div class="row">
+      <div class="asset"><div class="tok" style="background:#2775CA;color:#F0F0F0">$</div>USDC</div>
+      <div>Put</div>
+      <div>8%</div>
+      <div>22%</div>
+      <div class="cap">78%<div class="bar"><i style="width:78%"></i></div></div>
+      <div class="chev">»</div>
+    </div>
+    <div class="row">
+      <div class="asset"><div class="tok" style="background:#FF611B;color:#F0F0F0">₿</div>BTC</div>
+      <div>Call</div>
+      <div>14%</div>
+      <div>41%</div>
+      <div class="cap">31%<div class="bar"><i style="width:31%"></i></div></div>
+      <div class="chev">»</div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Colors — White</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 20px; }
+  .row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .sw { border: 1px solid var(--border); padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; min-height: 100px; }
+  .chip { width: 100%; height: 40px; border: 1px solid var(--border); background-image: linear-gradient(45deg, #1a1a1a 25%, transparent 25%), linear-gradient(-45deg, #1a1a1a 25%, transparent 25%); background-size: 12px 12px; }
+  .chip > i { display:block; width:100%; height:100%; }
+  .name { font-family: var(--font-mono); font-size: 12px; color: var(--fg); }
+  .hex  { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); }
+  .section-label { font-family: var(--font-ui); font-size: 12px; color: var(--fg-muted); margin: 2px 0 8px; }
+</style>
+</head>
+<body>
+  <div class="section-label">White · on #121212 with alpha</div>
+  <div class="row">
+    <div class="sw"><div class="chip"><i style="background:#F0F0F0"></i></div><div class="name">white-100</div><div class="hex">#F0F0F0</div></div>
+    <div class="sw"><div class="chip"><i style="background:rgba(240,240,240,0.5)"></i></div><div class="name">white-200</div><div class="hex">#F0F0F0 / 50%</div></div>
+    <div class="sw"><div class="chip"><i style="background:rgba(240,240,240,0.25)"></i></div><div class="name">white-300</div><div class="hex">#F0F0F0 / 25%</div></div>
+    <div class="sw"><div class="chip"><i style="background:rgba(240,240,240,0.15)"></i></div><div class="name">white-400</div><div class="hex">#F0F0F0 / 15%</div></div>
+    <div class="sw"><div class="chip"><i style="background:rgba(240,240,240,0.10)"></i></div><div class="name">white-500</div><div class="hex">#F0F0F0 / 10%</div></div>
+  </div>
+</body>
+</html>

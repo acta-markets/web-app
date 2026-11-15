@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Spacing</title>
+<link rel="stylesheet" href="../colors_and_type.css"/>
+<style>
+  body { margin: 0; padding: 24px; }
+  .row { display: grid; grid-template-columns: 80px 1fr 80px; gap: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .row:last-child { border-bottom: 0; }
+  .tok { font-family: var(--font-mono); font-size: 12px; color: var(--fg); }
+  .px  { font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted); text-align: right; }
+  .bar { height: 14px; background: var(--green-400); border-right: 1px solid var(--accent); }
+</style>
+</head>
+<body>
+  <div class="row"><div class="tok">--sp-1</div><div><div class="bar" style="width:4px"></div></div><div class="px">4px</div></div>
+  <div class="row"><div class="tok">--sp-2</div><div><div class="bar" style="width:8px"></div></div><div class="px">8px</div></div>
+  <div class="row"><div class="tok">--sp-3</div><div><div class="bar" style="width:12px"></div></div><div class="px">12px</div></div>
+  <div class="row"><div class="tok">--sp-4</div><div><div class="bar" style="width:16px"></div></div><div class="px">16px</div></div>
+  <div class="row"><div class="tok">--sp-5</div><div><div class="bar" style="width:20px"></div></div><div class="px">20px</div></div>
+  <div class="row"><div class="tok">--sp-6</div><div><div class="bar" style="width:24px"></div></div><div class="px">24px</div></div>
+  <div class="row"><div class="tok">--sp-8</div><div><div class="bar" style="width:32px"></div></div><div class="px">32px</div></div>
+  <div class="row"><div class="tok">--sp-10</div><div><div class="bar" style="width:40px"></div></div><div class="px">40px</div></div>
+</body>
+</html>
