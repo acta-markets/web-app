@@ -4,7 +4,7 @@ import { IS_MAINNET } from "@/lib/network";
 import { DEVNET_TAG } from "@/lib/share/card";
 import { SHARE_CARD_SIZE, shareCardElement } from "@/lib/share/card-image";
 import { decodeShareCard } from "@/lib/share/params";
-import { SHARE_FONT_COUNT, publicImage, shareCardFonts } from "@/lib/share/server-assets";
+import { publicImage, shareCardCacheControl, shareCardFonts } from "@/lib/share/server-assets";
 import { getTokenLogo } from "@/lib/tokens";
 
 export const runtime = "nodejs";
@@ -31,8 +31,9 @@ export async function GET(req: NextRequest) {
     width: SHARE_CARD_SIZE.width * scale,
     height: SHARE_CARD_SIZE.height * scale,
     fonts: fonts.length > 0 ? fonts : undefined,
-    // A card's address is its content, so the same address is always the same picture and can
-    // be kept. Unless a face was missing: that one is drawn in the fallback face and must not stick.
-    headers: { "Cache-Control": fonts.length === SHARE_FONT_COUNT ? "public, max-age=86400, s-maxage=604800, immutable" : "no-store" },
+    // The header's name is written in lower case on purpose: `ImageResponse` spreads these over
+    // its own lower-case "cache-control" (a year, immutable). Under any other spelling both
+    // survive and are joined, and a card drawn in the fallback face would be kept for a year.
+    headers: { "cache-control": shareCardCacheControl(fonts.length) },
   });
 }

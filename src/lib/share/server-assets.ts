@@ -45,6 +45,15 @@ function googleFont(family: string, weight: number): Promise<ArrayBuffer | null>
 /** How many faces a complete card has; fewer came back means some text is in the built-in face. */
 export const SHARE_FONT_COUNT = 4;
 
+/**
+ * How long a drawn card may be kept. A card's address is its content, so the same address is
+ * always the same picture and can be kept, unless a face was missing: that one is drawn in the
+ * fallback face and must not stick anywhere.
+ */
+export function shareCardCacheControl(fontsLoaded: number): string {
+  return fontsLoaded === SHARE_FONT_COUNT ? "public, max-age=86400, s-maxage=604800, immutable" : "no-store";
+}
+
 /** The faces the card is set in, as far as they could be loaded. */
 export async function shareCardFonts(): Promise<Font[]> {
   const wanted: Array<[string, Font["weight"]]> = [
