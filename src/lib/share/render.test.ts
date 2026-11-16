@@ -1,38 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { fitLine, fitSentence, wrapLines } from "./render";
-
-/** Every character is as wide as the font size is tall, halved: enough to test the arithmetic. */
-const measureAt = (size: number) => (text: string) => text.length * size * 0.5;
+import { clipMono, fitMono, sentenceSize } from "./card-image";
 
 describe("share card text fitting", () => {
-  it("wraps at word boundaries and never drops a word", () => {
-    const lines = wrapLines(measureAt(20), "BTC will be above $64,500 on Nov 20", 120);
-    expect(lines.join(" ")).toBe("BTC will be above $64,500 on Nov 20");
-    for (const line of lines) expect(line.length * 10).toBeLessThanOrEqual(120);
+  it("keeps a headline figure at full size while it fits, and shrinks a long one to the card's width", () => {
+    expect(fitMono("+$1,514.58", 1072, 132, 56, -0.03)).toBe(132);
+    const size = fitMono("+$11,141,123.88", 1072, 132, 56, -0.03);
+    expect(size).toBeLessThan(132);
+    expect("+$11,141,123.88".length * size * 0.57).toBeLessThanOrEqual(1072);
+    expect(fitMono("9".repeat(200), 1072, 132, 56, -0.03)).toBe(56);
   });
 
-  it("keeps a word wider than the line on a line of its own", () => {
-    expect(wrapLines(measureAt(20), "a Supercalifragilistic b", 60)).toEqual(["a", "Supercalifragilistic", "b"]);
+  it("cuts a value that cannot fit its column, and leaves one that does alone", () => {
+    expect(clipMono("Call", 244, 36, -0.02)).toBe("Call");
+    const cut = clipMono("Put spread 1,100/1,250.50", 244, 20, -0.02);
+    expect(cut.endsWith("…")).toBe(true);
+    expect(cut.length * 20 * 0.58).toBeLessThanOrEqual(244);
   });
 
-  it("takes the largest size whose line budget the sentence fits", () => {
-    const sizes = [[80, 1], [40, 2], [20, 3]] as const;
-    expect(fitSentence(measureAt, "short", 400, sizes).size).toBe(80);
-    const fitted = fitSentence(measureAt, "a sentence that needs two lines here", 400, sizes);
-    expect(fitted.size).toBe(40);
-    expect(fitted.lines).toHaveLength(2);
-  });
-
-  it("falls back to the smallest size, cut to its budget, when nothing fits", () => {
-    const fitted = fitSentence(measureAt, "one two three four five six seven eight nine ten", 60, [[40, 1], [20, 2]]);
-    expect(fitted.size).toBe(20);
-    expect(fitted.lines).toHaveLength(2);
-  });
-
-  it("shrinks one line until it fits, down to a floor", () => {
-    expect(fitLine(measureAt, "+$1,514.58", 1000, 132, 56)).toBe(132);
-    const size = fitLine(measureAt, "+$11,141,123.88", 600, 132, 56);
-    expect("+$11,141,123.88".length * size * 0.5).toBeLessThanOrEqual(600);
-    expect(fitLine(measureAt, "x".repeat(200), 100, 132, 56)).toBe(56);
+  it("sets a longer sentence smaller", () => {
+    expect(sentenceSize("BTC will be above $64,500 on Nov 20")).toBe(76);
+    expect(sentenceSize("x".repeat(60))).toBe(64);
+    expect(sentenceSize("x".repeat(90))).toBe(54);
+    expect(sentenceSize("x".repeat(140))).toBe(46);
   });
 });

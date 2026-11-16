@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { AccountRole, address, getAddressDecoder, type Instruction } from "@solana/kit";
+import { address, type Instruction } from "@solana/kit";
 import { ComputeBudgetProgram, PublicKey, SystemProgram, TransactionInstruction, TransactionMessage, VersionedTransaction } from "@solana/web3.js";
-import { packInstructionGroups, sendWalletTransactions, walletChange } from "./transaction";
+import { sendWalletTransactions, walletChange } from "./transaction";
 
 const FEE_PAYER = "11111111111111111111111111111112";
 const ix = (byte: number): Instruction => ({
@@ -170,46 +170,6 @@ describe("sendWalletTransactions on a busy RPC", () => {
       }),
     ).rejects.toThrow("rejected");
     expect(onSending).not.toHaveBeenCalled();
-  });
-});
-
-describe("packInstructionGroups", () => {
-  const key = (n: number) => getAddressDecoder().decode(Uint8Array.from({ length: 32 }, (_, i) => (i === 0 ? n : i === 1 ? n >> 8 : 7)));
-  // a deposit's shape: two instructions that belong together, over accounts no other group shares
-  const group = (n: number): Instruction[] => [
-    { programAddress: address("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"), accounts: [{ address: key(n * 4 + 1), role: AccountRole.WRITABLE }], data: new Uint8Array([1]) },
-    {
-      programAddress: address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
-      accounts: [1, 2, 3].map((k) => ({ address: key(n * 4 + k), role: AccountRole.WRITABLE })),
-      data: new Uint8Array([n]),
-    },
-  ];
-  const groups = Array.from({ length: 12 }, (_, n) => group(n + 1));
-
-  it("fills transactions with whole groups, in order, and keeps each under the limit", () => {
-    const packed = packInstructionGroups(FEE_PAYER, groups);
-    expect(packed.length).toBeGreaterThan(1);
-    expect(packed.length).toBeLessThan(groups.length);
-    expect(packed.flat()).toEqual(groups.flat());
-    // whole groups only: every transaction holds an even number of instructions, starting with a group's first
-    for (const transaction of packed) {
-      expect(transaction.length % 2).toBe(0);
-      expect(transaction[0].data).toEqual(new Uint8Array([1]));
-    }
-    // one more group would not have fitted the first transaction
-    const perTransaction = packed[0].length / 2;
-    expect(packInstructionGroups(FEE_PAYER, groups.slice(0, perTransaction))).toHaveLength(1);
-    expect(packInstructionGroups(FEE_PAYER, groups.slice(0, perTransaction + 1))).toHaveLength(2);
-  });
-
-  it("gives a group too big for the limit a transaction of its own instead of dropping it", () => {
-    const packed = packInstructionGroups(FEE_PAYER, groups.slice(0, 3), 10);
-    expect(packed).toEqual(groups.slice(0, 3));
-  });
-
-  it("returns nothing for nothing, and one transaction for a single group", () => {
-    expect(packInstructionGroups(FEE_PAYER, [])).toEqual([]);
-    expect(packInstructionGroups(FEE_PAYER, [group(1)])).toEqual([group(1)]);
   });
 });
 

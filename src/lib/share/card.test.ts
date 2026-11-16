@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { hasShareablePnl, pnlShareCard, tradeShareCard, type TradeShareInput } from "./card";
+import type { PositionsTableRow } from "@/lib/portfolio-positions";
+import { hasShareablePnl, hasShareablePosition, pnlShareCard, positionShareCard, tradeShareCard, type TradeShareInput } from "./card";
 
 const NOW = Date.UTC(2026, 10, 16, 12);
 
@@ -107,5 +108,53 @@ describe("pnlShareCard", () => {
     expect(hasShareablePnl(empty)).toBe(false);
     expect(hasShareablePnl({ ...empty, settledCount: 1 })).toBe(true);
     expect(hasShareablePnl({ ...empty, unrealized: 2, hasUnrealizedMark: true })).toBe(true);
+  });
+});
+
+describe("positionShareCard", () => {
+  const row = (over: Partial<PositionsTableRow> = {}): PositionsTableRow => ({
+    id: "p1", symbol: "SOL", sentenceBody: "ends below $150 by Nov 28", sentence: "SOL ends below $150 by Nov 28",
+    productLabel: "Covered call", legsText: null, outcome: null, exerciseText: null, strikeText: "$150", markText: "$140.00",
+    direction: "below", side: "sell", sizeNum: 1, sizeText: "1 SOL", premiumNum: 2, premiumLabel: "collected",
+    pnlNum: 2, pnlText: "+$2.00", expiryTs: Math.floor(Date.UTC(2026, 10, 28, 8) / 1000), isOpen: true, state: "Open",
+    createdTs: 0, buy: null, fund: null, inTheMoney: null,
+    ...over,
+  });
+
+  it("heads a sold position with its unrealised P&L and says what the position is", () => {
+    const card = positionShareCard(row(), { devnet: false, nowMs: NOW });
+    expect(card.eyebrow).toBe("Unrealised P&L");
+    expect(card.title).toBe("+$2.00");
+    expect(card.titleTone).toBe("up");
+    expect(card.caption).toBe("SOL ends below $150 by Nov 28");
+    expect(card.stats).toEqual([
+      { label: "Type", value: "Covered call" },
+      { label: "Now", value: "$140.00" },
+      { label: "Premium collected", value: "$2.00" },
+      { label: "Expires", value: "Nov 28" },
+    ]);
+    expect(card.text).toBe("SOL ends below $150 by Nov 28. Unrealised P&L +$2.00 on Acta.");
+  });
+
+  it("gives a bought position its return on the premium paid", () => {
+    const card = positionShareCard(
+      row({ side: "buy", productLabel: "Call spread", legsText: "150/180", premiumNum: 10, premiumLabel: "paid", pnlNum: -4, pnlText: "-$4.00" }),
+      { devnet: true, nowMs: NOW },
+    );
+    expect(card.titleTone).toBe("down");
+    expect(card.stats).toEqual([
+      { label: "Type", value: "Call spread" },
+      { label: "Now", value: "$140.00" },
+      { label: "Premium paid", value: "$10.00" },
+      { label: "Return", value: "-40.0%", tone: "down" },
+    ]);
+    expect(card.tag).toBe("Devnet");
+    expect(card.text).toMatch(/\(devnet\)$/);
+  });
+
+  it("is only for an open position that could be priced", () => {
+    expect(hasShareablePosition(row())).toBe(true);
+    expect(hasShareablePosition(row({ pnlNum: null, pnlText: "\u2014" }))).toBe(false);
+    expect(hasShareablePosition(row({ isOpen: false }))).toBe(false);
   });
 });

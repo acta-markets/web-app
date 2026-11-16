@@ -312,6 +312,7 @@ export function PortfolioClient() {
                     nowMs={nowMs}
                     grouped={groupedByUnderlying}
                     deposit={buyDeposit}
+                    share={{ referralCode: referralInfo?.referral_code }}
                     // the asset filter is the table's: the card above counts and funds what it leaves
                     filter={
                       tokenCounts.length > 1 ? (

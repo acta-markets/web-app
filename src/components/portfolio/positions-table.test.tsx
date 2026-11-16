@@ -15,6 +15,13 @@ import {
 import { canWithdrawRow, fundingSummary, isWorthExercising, markWithdrawn } from "@/lib/portfolio-positions";
 import { PositionsTable } from "./positions-table";
 
+vi.mock("@/lib/share/render", () => ({
+  SHARE_CARD_SIZE: { width: 1200, height: 675 },
+  renderShareCard: async () => new Blob(["png"], { type: "image/png" }),
+}));
+URL.createObjectURL = () => "blob:card";
+URL.revokeObjectURL = () => {};
+
 const NOV28 = Math.floor(Date.UTC(2026, 10, 28, 8, 0, 0) / 1000);
 const DEC5 = Math.floor(Date.UTC(2026, 11, 5, 8, 0, 0) / 1000);
 
@@ -145,13 +152,13 @@ describe("PositionsTable", () => {
 
   it("renders the sentence, side badge and state", () => {
     render(<PositionsTable rows={buildPositionRows([pos()], () => "SOL", NOV28 * 1000)} nowMs={NOV28 * 1000} grouped={false} />);
-    // The date lives in its own column, so the cell keeps only the claim and a title holds
-    // the whole sentence for assistive tech and hover.
+    // The row is one line: the cell shows only the claim. The date has its own column, and a
+    // title holds the whole sentence and the product for hover.
     expect(screen.getByText("ends below $150")).toBeTruthy();
-    expect(screen.getByTitle("SOL ends below $150 by Nov 28")).toBeTruthy();
-    // The lifecycle state is still announced, but the visible label is the product type.
-    expect(screen.getByText("Covered call")).toBeTruthy();
-    expect(screen.getByText(/, Open/)).toBeTruthy();
+    expect(screen.getByTitle("SOL ends below $150 by Nov 28 · Covered call")).toBeTruthy();
+    // The product and the lifecycle state are still announced, but not drawn.
+    expect(screen.getByText("Covered call").closest(".sr-only")).toBeTruthy();
+    expect(screen.getByText(/, Open/).closest(".sr-only")).toBeTruthy();
   });
 
   it("folds a token group shut and opens it again", () => {
@@ -312,10 +319,11 @@ describe("PositionsTable", () => {
     const show = (deposit: ReturnType<typeof control> | undefined, at = nowMs) =>
       render(<PositionsTable rows={buildPositionRows([funded], () => "SOL", at)} nowMs={at} grouped={false} deposit={deposit} />);
 
-    it("says it is funded beside the product and offers the deposit back", () => {
+    it("offers the deposit back, and announces that it is funded without drawing it twice", () => {
       const deposit = control();
       show(deposit);
-      expect(screen.getByText("Funded")).toBeTruthy();
+      // the Withdraw button is what shows it; the word is for screen readers
+      expect(screen.getByText("Funded").closest(".sr-only")).toBeTruthy();
       const button = screen.getByRole("button", { name: "Withdraw deposit, 150.00 USDC" });
       expect(button.textContent).toBe("Withdraw");
       fireEvent.click(button);
@@ -330,13 +338,13 @@ describe("PositionsTable", () => {
       expect(screen.getByText(/not exercised and the premium is lost, unless you fund it again before expiry/)).toBeTruthy();
     });
 
-    it("only says Funded without a way to withdraw, and after expiry", () => {
+    it("says Funded in the action cell, in sight, without a way to withdraw and after expiry", () => {
       show(control({ withdraw: undefined }));
-      expect(screen.getByText("Funded")).toBeTruthy();
+      expect(screen.getByText("Funded").closest(".sr-only")).toBeNull();
       expect(screen.queryByRole("button", { name: /^Withdraw/ })).toBeNull();
       cleanup();
       show(control(), (NOV28 + 60) * 1000);
-      expect(screen.getByText("Funded")).toBeTruthy();
+      expect(screen.getByText("Funded").closest(".sr-only")).toBeNull();
       expect(screen.queryByRole("button", { name: /^Withdraw/ })).toBeNull();
     });
 
@@ -453,5 +461,52 @@ describe("worth exercising", () => {
     expect(isWorthExercising(at(160e9)([pos({ side: "buy", terms: { type: "call_spread", lower_strike: "150000000000", upper_strike: "180000000000" } })])[0], now)).toBe(false);
     expect(isWorthExercising(at(160e9)([call({ expiry_ts: NOV28 - 7200 })])[0], now)).toBe(false);
     expect(isWorthExercising(buildPositionRows([call()], () => "SOL", now)[0], now)).toBe(false);
+  });
+});
+
+describe("sharing an open position", () => {
+  afterEach(cleanup);
+  const NOW = (NOV28 - 3600) * 1000;
+  // sold a covered call at $150 for $2; SOL at $140 keeps the premium, so uPnL is +$2.00
+  const priced = () => buildPositionRows([pos()], () => "SOL", NOW, () => 140e9);
+
+  it("opens the position's card from its row, with the uPnL as the headline", async () => {
+    render(<PositionsTable rows={priced()} nowMs={NOW} grouped={false} share={{ referralCode: "TIM" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Share SOL position, uPnL +$2.00" }));
+    const dialog = screen.getByRole("dialog", { name: "Share your position" });
+    const img = await screen.findByRole("img", { name: /^Unrealised P&L/ });
+    expect(img.getAttribute("alt")).toBe("Unrealised P&L +$2.00. SOL ends below $150 by Nov 28. Type Covered call, Now $140, Premium collected $2.00, Expires Nov 28. Devnet test funds");
+    expect(dialog.contains(img)).toBe(true);
+    const post = new URL(screen.getByRole("link", { name: "Share on X" }).getAttribute("href")!);
+    const page = new URL(post.searchParams.get("url")!);
+    expect(page.origin + page.pathname).toBe(`${window.location.origin}/share`);
+    expect(page.searchParams.get("ref")).toBe("TIM");
+    expect(page.searchParams.get("c")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("has nothing to share without a current price, in history, or when sharing is not offered", () => {
+    const share = () => screen.queryByRole("button", { name: /^Share SOL position/ });
+    const { unmount } = render(<PositionsTable rows={buildPositionRows([pos()], () => "SOL", NOW)} nowMs={NOW} grouped={false} share={{}} />);
+    expect(share()).toBeNull();
+    unmount();
+    const closed = render(<PositionsTable variant="history" rows={priced()} nowMs={NOW} grouped={false} share={{}} />);
+    expect(share()).toBeNull();
+    closed.unmount();
+    render(<PositionsTable rows={priced()} nowMs={NOW} grouped={false} />);
+    expect(share()).toBeNull();
+  });
+
+  it("offers it in the stacked phone layout too", () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: query.includes("max-width"), media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    try {
+      render(<PositionsTable rows={priced()} nowMs={NOW} grouped={false} share={{}} />);
+      expect(screen.queryByRole("table")).toBeNull();
+      expect(screen.getByRole("button", { name: "Share SOL position, uPnL +$2.00" })).toBeTruthy();
+    } finally {
+      window.matchMedia = original;
+    }
   });
 });

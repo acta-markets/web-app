@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { tradeShareCard, type TradeShareInput } from "@/lib/share/card";
+import { decodeShareCard } from "@/lib/share/params";
 import { ShareCardModal, ShareCardPanel } from "./share-card";
 
 const draw = vi.hoisted(() => ({ render: vi.fn() }));
@@ -35,16 +36,25 @@ describe("ShareCardPanel", () => {
     expect((screen.getByRole("button", { name: "Copy image" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("posts the card's words and the link to X, and copies the image to paste there", async () => {
+  it("posts the card's words to X with a link to the card's own page, which is what carries the picture", async () => {
     render(<ShareCardPanel card={card} url="https://acta.test/?ref=TIM" />);
     await screen.findByRole("img");
     const link = screen.getByRole("link", { name: "Share on X" });
     const href = new URL(link.getAttribute("href")!);
     expect(href.searchParams.get("text")).toBe(card.text);
-    expect(href.searchParams.get("url")).toBe("https://acta.test/?ref=TIM");
+    const page = new URL(href.searchParams.get("url")!);
+    expect(page.origin + page.pathname).toBe("https://acta.test/share");
+    // the sharer's referral code rides along, and the page holds this very card
+    expect(page.searchParams.get("ref")).toBe("TIM");
+    expect(decodeShareCard(page.searchParams.get("c"), { tag: null })).toMatchObject({ title: card.title, stats: card.stats, alt: card.alt });
     expect(link.getAttribute("target")).toBe("_blank");
-    fireEvent.click(link);
-    await screen.findByText("Image copied. Paste it into your post.");
+  });
+
+  it("copies the image when asked", async () => {
+    render(<ShareCardPanel card={card} />);
+    await screen.findByRole("img");
+    fireEvent.click(screen.getByRole("button", { name: "Copy image" }));
+    await screen.findByText("Image copied.");
     expect(write).toHaveBeenCalledOnce();
   });
 
@@ -65,7 +75,7 @@ describe("ShareCardPanel", () => {
     await screen.findByRole("img");
     fireEvent.click(screen.getByRole("tab", { name: "Without amounts" }));
     await waitFor(() => expect(screen.getByRole("img").getAttribute("alt")).toBe(privateCard.alt));
-    expect(draw.render).toHaveBeenLastCalledWith(privateCard, expect.anything());
+    expect(draw.render).toHaveBeenLastCalledWith(privateCard);
     expect(new URL(screen.getByRole("link", { name: "Share on X" }).getAttribute("href")!).searchParams.get("text")).toBe(privateCard.text);
   });
 

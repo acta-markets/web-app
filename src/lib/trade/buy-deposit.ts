@@ -40,27 +40,40 @@ export async function buildBuyDepositInstructions(
   return ixs;
 }
 
-/** A position's deposit, or why the chain will not take one for it. */
-export type BuyDepositGroup = { instructions: Instruction[] } | { skipped: string };
+/** What funding several positions comes to: the transactions to sign, and what was left out. */
+export type BuyDepositBatch = {
+  /**
+   * Whole transactions, the positions in the order given. The SDK fills each one (up to nine
+   * deposits on one market, fewer across markets), leaves room for the two fee instructions a
+   * wallet may add before signing, and wraps SOL once per transaction.
+   */
+  transactions: Instruction[][];
+  /** The positions those transactions fund. */
+  funded: string[];
+  /** The positions the chain will not take a deposit for, each with the reason. */
+  skipped: Array<{ pda: string; reason: string }>;
+};
 
 /**
- * The same for many positions at once: one entry per position, in the order given. The
- * accounts are read a hundred to a request, so thirty options are two requests (their
- * positions, their markets) where one position at a time made sixty. A public RPC answers
- * about forty of one kind in ten seconds, and past that the batch used to fail before the
- * wallet was asked.
+ * The same for many positions at once. The accounts are read a hundred to a request, so
+ * thirty options are two requests (their positions, their markets) where one position at a
+ * time made sixty. A public RPC answers about forty of one kind in ten seconds, and past that
+ * the batch used to fail before the wallet was asked.
  *
  * A row can be behind the chain: a position already funded, settled or closed. That one is
  * returned as skipped, with the reason, so it does not take the others down with it.
  */
-export async function buildBuyDepositGroups(
+export async function buildBuyDepositBatch(
   rpc: Rpc<SolanaRpcApiMainnet>,
   owner: string,
   positions: ReadonlyArray<{ pda: string; market: string }>,
-): Promise<BuyDepositGroup[]> {
+): Promise<BuyDepositBatch> {
   const holder = address(owner);
+  const common = { programId: getActaProgramId(), payer: holder, owner: createNoopSigner(holder) };
+  // the SDK refuses a batch that names a position twice: it is funded once
+  const unique = [...new Map(positions.map((p) => [p.pda, p])).values()];
   // a row whose addresses are not addresses is skipped like any other the chain cannot serve
-  const readable = positions.filter((p) => isAddress(p.pda) && isAddress(p.market));
+  const readable = unique.filter((p) => isAddress(p.pda) && isAddress(p.market));
   const marketAddresses = [...new Set(readable.map((p) => p.market))].map((market) => address(market));
   const [positionAccounts, marketAccounts] = await Promise.all([
     readAll((chunk) => fetchAllMaybePosition(rpc, chunk, { commitment: "confirmed" }), readable.map((p) => address(p.pda))),
@@ -68,27 +81,47 @@ export async function buildBuyDepositGroups(
   ]);
   const positionsByAddress = new Map(positionAccounts.map((account) => [account.address as string, account]));
   const markets = new Map(marketAccounts.map((account) => [account.address as string, account]));
-  return Promise.all(
-    positions.map(async (p): Promise<BuyDepositGroup> => {
-      if (!isAddress(p.pda) || !isAddress(p.market)) return { skipped: "position not found on chain" };
-      const position = positionsByAddress.get(p.pda);
-      const market = markets.get(p.market);
-      if (!position?.exists) return { skipped: "position not found on chain" };
-      if (!market?.exists) return { skipped: "market not found on chain" };
-      try {
-        const { ixs } = await flows.buildDepositFundsIxs({
-          programId: getActaProgramId(),
-          payer: holder,
-          owner: createNoopSigner(holder),
-          position: position.data,
-          market: market.data,
-        });
-        return { instructions: ixs };
-      } catch (err) {
-        return { skipped: err instanceof Error ? err.message : String(err) };
-      }
-    }),
-  );
+
+  const reasons = new Map<string, string>();
+  const found = unique.flatMap((p) => {
+    const position = isAddress(p.pda) && isAddress(p.market) ? positionsByAddress.get(p.pda) : undefined;
+    const market = markets.get(p.market);
+    if (!position?.exists) reasons.set(p.pda, "position not found on chain");
+    else if (!market?.exists) reasons.set(p.pda, "market not found on chain");
+    else return [{ pda: p.pda, position: position.data, market: market.data }];
+    return [];
+  });
+
+  const batch = (items: typeof found) => (items.length === 0 ? [] : flows.buildDepositFundsBatchIxs({ ...common, items }).then((built) => built.transactions));
+  let ready = found;
+  let transactions: Instruction[][];
+  try {
+    transactions = await batch(ready);
+  } catch (refused) {
+    // One position the program will not fund refuses the whole batch, without saying which.
+    // Ask for each on its own, leave the refused ones out and batch the rest.
+    const refusals = await Promise.all(
+      found.map((item) =>
+        flows.buildDepositFundsIxs({ ...common, position: item.position, market: item.market }).then(
+          () => null,
+          (err: unknown) => (err instanceof Error ? err.message : String(err)),
+        ),
+      ),
+    );
+    // every position is fine on its own: the batch itself failed, and that is the error
+    if (refusals.every((reason) => reason === null)) throw refused;
+    found.forEach((item, index) => {
+      const reason = refusals[index];
+      if (reason !== null) reasons.set(item.pda, reason);
+    });
+    ready = found.filter((item) => !reasons.has(item.pda));
+    transactions = await batch(ready);
+  }
+  return {
+    transactions,
+    funded: ready.map((item) => item.pda),
+    skipped: unique.flatMap((p) => (reasons.has(p.pda) ? [{ pda: p.pda, reason: reasons.get(p.pda)! }] : [])),
+  };
 }
 
 /**

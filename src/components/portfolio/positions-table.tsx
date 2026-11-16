@@ -2,12 +2,17 @@
 
 import { TYPE_LABEL } from "@/components/app-ui/type-styles";
 import * as React from "react";
+import { Share2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { AppButtonLink } from "@/components/app-ui/app-button";
 import { InfoTooltip } from "@/components/app-ui/info-tooltip";
 import { useIsNarrow } from "@/components/app-ui/use-is-narrow";
 import { TokenLogo } from "@/components/portfolio/token-logo";
+import { ShareCardModal } from "@/components/share/share-card";
 import { formatUsdSmart } from "@/lib/markets";
+import { IS_MAINNET } from "@/lib/network";
+import { shareLink } from "@/lib/share/actions";
+import { hasShareablePosition, positionShareCard, type ShareCard } from "@/lib/share/card";
 import { formatExpiryDay } from "@/lib/trade/format";
 import {
   DEFAULT_SORT,
@@ -134,8 +139,8 @@ function withdrawTooltipCopy(row: PositionsTableRow): string {
 /**
  * The deposit a bought physical option needs before expiry to be exercised. Missing it loses
  * the premium, so it is drawn as a button, never as a text link. Once funded, the deposit can
- * be taken back until expiry: a quieter button, since it undoes the funding. That a position is
- * funded is said beside its product, so this holds actions only.
+ * be taken back until expiry: a quieter button, since it undoes the funding. A funded option
+ * with nothing to take back says "Funded" here in the table, where the row has no other place.
  */
 function isFunded(row: PositionsTableRow, deposit?: DepositControl): boolean {
   return isRowFunded(row, deposit?.funded);
@@ -145,6 +150,11 @@ function canFund(row: PositionsTableRow, nowMs: number, deposit?: DepositControl
   return !!deposit && canFundRow(row, nowMs, deposit.funded);
 }
 
+/** A funded option whose deposit can be taken back from here: the row then shows Withdraw. */
+function canWithdraw(row: PositionsTableRow, nowMs: number, deposit?: DepositControl): boolean {
+  return !!deposit?.withdraw && row.buy != null && canWithdrawRow(row, nowMs, deposit.funded);
+}
+
 /**
  * A row's button in the table. Its width is set by the longest label it ever shows (eight
  * letters: "Withdraw", "Funding…", "Sending…"), not by the one it shows now, so a row that
@@ -152,6 +162,20 @@ function canFund(row: PositionsTableRow, nowMs: number, deposit?: DepositControl
  */
 const ROW_BUTTON = "h-7 w-[calc(8ch+12px)] px-0 xl:h-8 xl:w-[calc(8ch+26px)] xl:text-[14px]";
 const ROW_ACTION = "inline-flex shrink-0 gap-1 xl:gap-2";
+
+/**
+ * A row with nothing to press says its state in the button's own box: the same width, height
+ * and type, with the room of the info icon kept beside it. Every word in the column then sits
+ * on one axis, whether it is a button or not.
+ */
+function RowStatus({ children }: { children: React.ReactNode }) {
+  return (
+    <span className={cn("items-center whitespace-nowrap", ROW_ACTION)}>
+      <span className={cn("inline-flex items-center justify-center font-mono text-xs text-content-tertiary", ROW_BUTTON)}>{children}</span>
+      <span aria-hidden="true" className="w-4 shrink-0" />
+    </span>
+  );
+}
 
 function FundAction({
   row,
@@ -169,7 +193,11 @@ function FundAction({
   const amount = fundAmount(row);
   if (isFunded(row, deposit)) {
     const withdraw = deposit?.withdraw;
-    if (!deposit || !withdraw || !buy || !canWithdrawRow(row, nowMs, deposit.funded)) return null;
+    if (!deposit || !withdraw || !buy || !canWithdraw(row, nowMs, deposit)) {
+      // Nothing to press, but the table row has no other place that says so. The stacked
+      // layout says it on its own line.
+      return wide ? null : <RowStatus>Funded</RowStatus>;
+    }
     const sending = deposit.pending.has(buy.pda);
     return (
       <span className={cn("items-center whitespace-nowrap", wide ? "flex w-full gap-2" : ROW_ACTION)}>
@@ -212,6 +240,35 @@ function FundAction({
   );
 }
 
+/** The longest uPnL figure that still leaves room for the share icon in the column under 1280px: "+$154.40". */
+const ICON_FITS_UNDER = 8;
+
+/**
+ * A position's uPnL as the button that opens its share card: the figure, with the share icon
+ * to its left so figures stay right-aligned down the column. Under 1280px the column has no
+ * spare width, so beside a long figure the icon is left out there; the figure still opens the card.
+ */
+function SharePnl({ row, onShare, roomy }: { row: PositionsTableRow; onShare: (row: PositionsTableRow) => void; roomy: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onShare(row)}
+      aria-label={`Share ${row.symbol} position, uPnL ${row.pnlText}`}
+      // exactly the line it sits on: a row with a share button is as tall as one without
+      className={cn("group inline-flex h-[21px] items-center gap-1 align-top font-[inherit] leading-[21px] tabular-nums", FOCUS)}
+    >
+      <Share2
+        aria-hidden="true"
+        className={cn(
+          "h-3 w-3 shrink-0 text-content-tertiary transition-colors group-hover:text-content-primary",
+          !roomy && row.pnlText.length > ICON_FITS_UNDER && "max-xl:hidden",
+        )}
+      />
+      <Pnl row={row} />
+    </button>
+  );
+}
+
 function GroupToggle({ symbol, count, open, onToggle }: { symbol: string; count: number; open: boolean; onToggle: () => void }) {
   return (
     <button
@@ -246,6 +303,12 @@ function Product({ row }: { row: PositionsTableRow }) {
   );
 }
 
+/** The whole position for a hover: the sentence with its date, what the product is, and that it is funded. */
+function rowTitle(row: PositionsTableRow, funded: boolean): string {
+  const product = row.productLabel === "Secured put" ? "Cash-secured put" : row.productLabel;
+  return [row.sentence, row.legsText ? `${product} ${row.legsText}` : product, funded ? "Funded" : null].filter(Boolean).join(" · ");
+}
+
 function Pnl({ row, className }: { row: PositionsTableRow; className?: string }) {
   if (row.pnlNum == null) return <span className={cn("text-content-secondary", className)}>{DASH}</span>;
   return <span className={cn(pnlTone(row.pnlNum), className)}>{row.pnlText}</span>;
@@ -269,7 +332,8 @@ function EmptyOpen() {
  * One table for every position. The `open` variant carries the live mark, a countdown and the
  * Fund action; the `history` variant carries the realised result and how the position ended.
  * The default order is most at risk first: open by nearest expiry, then closed by recency.
- * From `md` up it is a table; below that each position stacks into three lines.
+ * From `md` up it is a table of one-line rows; below that each position stacks into three lines.
+ * An open position's uPnL is also the button that opens its share card.
  */
 export function PositionsTable({
   rows,
@@ -277,6 +341,7 @@ export function PositionsTable({
   grouped,
   deposit,
   filter,
+  share,
   variant = "open",
   empty,
 }: {
@@ -286,6 +351,8 @@ export function PositionsTable({
   deposit?: DepositControl;
   /** A control that narrows the rows by what the Position column holds, drawn in its header. */
   filter?: React.ReactNode;
+  /** Lets each open position with a uPnL be shared as a card; the code rides in the post's link. */
+  share?: { referralCode?: string | null };
   variant?: PositionsVariant;
   /** Shown instead of the table when there are no rows. */
   empty?: React.ReactNode;
@@ -294,6 +361,19 @@ export function PositionsTable({
   /** Symbols whose group is folded shut; everything starts open so nothing hides by default. */
   const [collapsed, setCollapsed] = React.useState<Set<string>>(() => new Set());
   const narrow = useIsNarrow();
+  /** The card as it stood when its icon was pressed: the image does not redraw while prices tick. */
+  const [shared, setShared] = React.useState<{ card: ShareCard; url: string } | null>(null);
+  const onShare =
+    share && variant === "open"
+      ? (row: PositionsTableRow) =>
+          setShared({
+            card: positionShareCard(row, { devnet: !IS_MAINNET, nowMs: Date.now() }),
+            url: shareLink(window.location.origin, share.referralCode),
+          })
+      : null;
+  const shareModal = shared ? (
+    <ShareCardModal open onClose={() => setShared(null)} title="Share your position" card={shared.card} url={shared.url} />
+  ) : null;
 
   const toggleGroup = (symbol: string) =>
     setCollapsed((prev) => {
@@ -366,7 +446,7 @@ export function PositionsTable({
                   : [premium, row.markText ? `Now ${row.markText}` : null];
               const funded = variant === "open" && isFunded(row, deposit);
               const fundable = variant === "open" && canFund(row, nowMs, deposit);
-              const withdrawable = funded && !!deposit?.withdraw && canWithdrawRow(row, nowMs, deposit.funded);
+              const withdrawable = funded && canWithdraw(row, nowMs, deposit);
               return (
                 <li key={row.id} className="border-b border-bg-border px-3 py-3 last:border-b-0">
                   <div className="flex items-center justify-between gap-3">
@@ -379,7 +459,7 @@ export function PositionsTable({
                     </span>
                     <span className="shrink-0 font-mono text-sm font-medium tabular-nums">
                       <span className="sr-only">{variant === "history" ? "Result " : "uPnL "}</span>
-                      <Pnl row={row} />
+                      {onShare && hasShareablePosition(row) ? <SharePnl row={row} onShare={onShare} roomy /> : <Pnl row={row} />}
                     </span>
                   </div>
                   <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-content-secondary">
@@ -408,6 +488,7 @@ export function PositionsTable({
           </ul>
         </div>
         {note}
+        {shareModal}
       </div>
     );
   }
@@ -427,7 +508,7 @@ export function PositionsTable({
           </span>
         );
       case "pnl":
-        return <Pnl row={row} />;
+        return onShare && hasShareablePosition(row) ? <SharePnl row={row} onShare={onShare} roomy={false} /> : <Pnl row={row} />;
       case "expiry":
         return whenText(row, nowMs, variant);
       case "outcome":
@@ -520,28 +601,21 @@ export function PositionsTable({
                   {columns.map((column) =>
                     column.id === "position" ? (
                       <th key={column.id} scope="row" className="px-2 py-2.5 text-left align-middle font-normal">
-                        <span className="flex min-w-0 items-start gap-2">
-                          <TokenLogo symbol={row.symbol} className="mt-0.5" />
-                          <span className="min-w-0 flex-1">
-                            <span className="flex min-w-0 items-baseline gap-2">
-                              <span className="shrink-0 font-medium text-content-primary">{row.symbol}</span>
-                              <span className="truncate font-mono text-[14px] text-content-primary" title={row.sentence}>
-                                {claimOf(row)}
-                              </span>
-                            </span>
-                            <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-content-secondary">
-                              {variant === "open" ? <span aria-hidden="true" className={cn("h-1.5 w-1.5 shrink-0 rounded-full", dotTone(row))} /> : null}
-                              <Product row={row} />
-                              {variant !== "open" ? null : isFunded(row, deposit) ? (
-                                <>
-                                  <span aria-hidden="true">·</span>
-                                  <span className="shrink-0">Funded</span>
-                                </>
-                              ) : (
-                                <span className="sr-only">, {row.state}</span>
-                              )}
-                            </span>
+                        {/* One line. The claim takes all but a few pixels of the column at every width, so
+                            the product and the state are not drawn here: they are read out, and shown
+                            with the full sentence when the claim is hovered. */}
+                        <span className="flex min-w-0 items-center gap-2">
+                          <TokenLogo symbol={row.symbol} />
+                          <span className="shrink-0 font-medium text-content-primary">{row.symbol}</span>
+                          <span className="truncate font-mono text-[14px] text-content-primary" title={rowTitle(row, variant === "open" && isFunded(row, deposit))}>
+                            {claimOf(row)}
                           </span>
+                          <span className="sr-only">
+                            , <Product row={row} />
+                            {variant === "open" && !isFunded(row, deposit) ? `, ${row.state}` : ", "}
+                          </span>
+                          {/* a funded row says so in its action cell, unless Withdraw is there instead */}
+                          {variant === "open" && isFunded(row, deposit) && canWithdraw(row, nowMs, deposit) ? <span className="sr-only">Funded</span> : null}
                         </span>
                       </th>
                     ) : (
@@ -550,8 +624,9 @@ export function PositionsTable({
                         className={cn(
                           // no clipping: a long figure may lean into its neighbour's padding, never lose digits
                           "px-2 py-2.5 align-middle text-content-secondary",
-                          // right-aligned, so its left padding only takes room from the position column
-                          column.id === "action" && "pl-0",
+                          // right-aligned, so its left padding only takes room from the position column;
+                          // less padding above and below, so a row with a button is as tall as one without
+                          column.id === "action" && "py-1 pl-0",
                           column.align === "right" ? "whitespace-nowrap text-right tabular-nums" : "text-left",
                         )}
                       >
@@ -566,6 +641,7 @@ export function PositionsTable({
         </table>
       </div>
       {note}
+      {shareModal}
     </div>
   );
 }

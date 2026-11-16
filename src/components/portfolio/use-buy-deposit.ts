@@ -43,28 +43,23 @@ export function useBuyDeposit(onFunded: () => void) {
         sent = true;
       };
       try {
-        const [{ buildBuyDepositGroups }, { packInstructionGroups, sendWalletTransaction, sendWalletTransactions }] = await Promise.all([
+        const [{ buildBuyDepositBatch }, { sendWalletTransaction, sendWalletTransactions }] = await Promise.all([
           import("@/lib/trade/buy-deposit"),
           import("@/lib/vaults/transaction"),
         ]);
-        // Every position's accounts come from two reads in all, and the deposits are packed
+        // Every position's accounts come from two reads in all, and the SDK packs the deposits
         // several to a transaction, in the order given, so the soonest expiry lands first.
         // Thirty options used to be sixty reads and thirty transactions, which a public RPC
         // refuses for rate before the wallet is ever asked. A batch is approved once.
-        const built = await buildBuyDepositGroups(rpc, owner, positions);
+        const { transactions, funded: fundable, skipped: leftOut } = await buildBuyDepositBatch(rpc, owner, positions);
         // A row behind the chain (already funded, settled, closed) is left out, not allowed to
         // fail the rest. If that leaves nothing, its reason is the error.
-        const ready = positions.flatMap((position, index) => {
-          const group = built[index];
-          return "instructions" in group ? [{ position, instructions: group.instructions }] : [];
-        });
-        const skipped = built.flatMap((group) => ("skipped" in group ? [group.skipped] : []));
-        if (ready.length === 0) throw new Error(skipped[0] ?? "nothing to fund");
-        const transactions = packInstructionGroups(owner, ready.map((r) => r.instructions));
+        const skipped = leftOut.map((entry) => entry.reason);
+        if (transactions.length === 0) throw new Error(skipped[0] ?? "nothing to fund");
         several = transactions.length > 1;
         if (several) await sendWalletTransactions({ rpc, feePayer: owner, transactions, signAllTransactions, onSending });
         else await sendWalletTransaction({ rpc, feePayer: owner, instructions: transactions[0], signTransaction, onSending });
-        fundedNow = ready.map((r) => r.position.pda);
+        fundedNow = fundable;
         if (skipped.length > 0) {
           const { describeSkippedPosition } = await import("@/lib/vaults/tx-errors");
           const reasons = [...new Set(skipped.map(describeSkippedPosition))].join("; ");

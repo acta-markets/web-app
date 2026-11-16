@@ -1,7 +1,9 @@
 "use client";
 
 import { ShareCardPanel } from "@/components/share/share-card";
-import { pnlShareCard, tradeShareCard, type ShareCard, type TradeShareInput } from "@/lib/share/card";
+import type { PositionsTableRow } from "@/lib/portfolio-positions";
+import { BUY_PRODUCT_NAME, productLabel } from "@/lib/spreads";
+import { pnlShareCard, positionShareCard, tradeShareCard, type ShareCard, type TradeShareInput } from "@/lib/share/card";
 
 const NOW = Date.UTC(2026, 10, 16);
 
@@ -9,7 +11,7 @@ const SELL: TradeShareInput = {
   asset: "BTC",
   thesis: "BTC will be above $64,500 on Nov 20",
   side: "sell",
-  typeLabel: "Cash-secured put",
+  typeLabel: productLabel("cash_secured_put"),
   aprPct: 36.52,
   premium: "38.72 USDC",
   deposit: "6,450.00 USDC",
@@ -24,7 +26,7 @@ const BUY: TradeShareInput = {
   thesis: "SOL will be above $150 on Nov 28",
   asset: "SOL",
   side: "buy",
-  typeLabel: "Buy a call",
+  typeLabel: BUY_PRODUCT_NAME.covered_call,
   aprPct: null,
   premium: "52.10 USDC",
   deposit: null,
@@ -34,7 +36,7 @@ const SPREAD: TradeShareInput = {
   ...BUY,
   asset: "TSLA",
   thesis: "TSLA will be below $1,250.50 on Dec 26",
-  typeLabel: "Put spread",
+  typeLabel: BUY_PRODUCT_NAME.put_spread,
   breakEven: "$1,231.20",
   maxGain: "1,480.00 USDC",
   devnet: true,
@@ -42,8 +44,8 @@ const SPREAD: TradeShareInput = {
 const LONG: TradeShareInput = {
   ...SELL,
   asset: "XAU",
-  thesis: "Tokenized gold will be below $4,125.75 an ounce on Dec 26",
-  typeLabel: "Covered call",
+  thesis: "XAU will be below $4,125.756789 on Dec 26",
+  typeLabel: productLabel("covered_call"),
   deposit: "12.5 XAU",
   premium: "1,204.18 USDC",
   devnet: true,
@@ -59,12 +61,37 @@ const pnl = (realized: number, unrealized: number | null, aprPct: number | null,
     nowMs: NOW,
   });
 
+const position = (over: Partial<PositionsTableRow>, devnet = false) =>
+  positionShareCard(
+    {
+      id: "p", symbol: "SOL", sentenceBody: "ends below $150 by Nov 28", sentence: "SOL ends below $150 by Nov 28",
+      productLabel: "Covered call", legsText: null, outcome: null, exerciseText: null, strikeText: "$150", markText: "$141.20",
+      direction: "below", side: "sell", sizeNum: 10, sizeText: "10 SOL", premiumNum: 31.4, premiumLabel: "collected",
+      pnlNum: 31.4, pnlText: "+$31.40", expiryTs: Date.UTC(2026, 10, 28, 8) / 1000, isOpen: true, state: "Open",
+      createdTs: 0, buy: null, fund: null, inTheMoney: null,
+      ...over,
+    },
+    { devnet, nowMs: NOW },
+  );
+
 const CARDS: Array<{ name: string; card: ShareCard; privateCard?: ShareCard }> = [
   { name: "Trade, sold", card: tradeShareCard(SELL, { amounts: true }), privateCard: tradeShareCard(SELL, { amounts: false }) },
   { name: "Trade, bought call", card: tradeShareCard(BUY, { amounts: true }), privateCard: tradeShareCard(BUY, { amounts: false }) },
   { name: "Trade, bought spread, devnet", card: tradeShareCard(SPREAD, { amounts: true }), privateCard: tradeShareCard(SPREAD, { amounts: false }) },
   { name: "Trade, long sentence, devnet", card: tradeShareCard(LONG, { amounts: true }), privateCard: tradeShareCard(LONG, { amounts: false }) },
   { name: "Trade, no sentence, no logo", card: tradeShareCard(NO_THESIS, { amounts: true }) },
+  { name: "Position, sold, up", card: position({}) },
+  {
+    name: "Position, bought call, up",
+    card: position({ symbol: "BTC", sentence: "BTC ends above $71,000 by Nov 20", productLabel: "Call", side: "buy", markText: "$74,310", premiumNum: 52.1, premiumLabel: "paid", pnlNum: 278.9, pnlText: "+$278.90" }),
+  },
+  {
+    name: "Position, bought spread, down, devnet",
+    card: position(
+      { symbol: "TSLA", sentence: "TSLA ends below $1,250.50 by Dec 26", productLabel: "Put spread", legsText: "1,100/1,250.50", side: "buy", markText: "$1,302.15", premiumNum: 220, premiumLabel: "paid", pnlNum: -220, pnlText: "-$220.00" },
+      true,
+    ),
+  },
   { name: "P&L, up", card: pnl(1204.18, 310.4, 24.31, 1630.02) },
   { name: "P&L, down, devnet", card: pnl(-86.5, -12.25, 18.4, 44, true) },
   { name: "P&L, open only", card: pnl(0, 4.5, null, 0) },

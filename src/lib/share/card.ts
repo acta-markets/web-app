@@ -1,5 +1,10 @@
 import { formatUsdSmart } from "@/lib/markets";
 import { formatSignedUsd, type OpenWrittenApr, type PnlSummary, type TradingStats } from "@/lib/portfolio-pnl";
+import type { PositionsTableRow } from "@/lib/portfolio-positions";
+import { formatExpiryDay } from "@/lib/trade/format";
+
+/** 16:9, the shape a post's image is shown at with next to no cropping. */
+export const SHARE_CARD_SIZE = { width: 1200, height: 675 } as const;
 
 export type ShareTone = "up" | "down" | "plain";
 
@@ -7,8 +12,8 @@ export type ShareStat = { label: string; value: string; tone?: ShareTone };
 
 /**
  * Everything a share card says, already in display form. The same object is drawn into the
- * image (`render.ts`), read out as the image's alt text and turned into the words of the post,
- * so the three cannot disagree.
+ * image (`card-image.tsx`, on the server), read out as the image's alt text and turned into the
+ * words of the post, so the three cannot disagree.
  */
 export type ShareCard = {
   /** the small line over the title: "I believe", "Net P&L" */
@@ -20,6 +25,8 @@ export type ShareCard = {
   /** a sentence is set in the display face and may wrap; a figure is set in mono on one line */
   titleKind: "sentence" | "figure";
   titleTone: ShareTone;
+  /** one line under a headline figure saying what it is about, e.g. the position in words; null when the title says it */
+  caption: string | null;
   /** up to four labelled figures under the title */
   stats: readonly ShareStat[];
   /** a corner tag that qualifies the whole card, e.g. "Devnet" for test funds */
@@ -40,10 +47,11 @@ const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", y
 /** Test funds are not real money: a card made on devnet says so in its corner and in its words. */
 export const DEVNET_TAG = "Devnet";
 
-function altText(card: Pick<ShareCard, "eyebrow" | "title" | "stats" | "tag">): string {
+/** The card in words: its lead, what it is about, its figures, and that the funds are test funds when they are. */
+export function altText(card: Pick<ShareCard, "eyebrow" | "title" | "caption" | "stats" | "tag">): string {
   const lead = `${card.eyebrow} ${card.title}`;
   const stats = card.stats.map((s) => `${s.label} ${s.value}`).join(", ");
-  return [lead, stats, card.tag ? `${card.tag} test funds` : null].filter(Boolean).join(". ");
+  return [lead, card.caption, stats, card.tag ? `${card.tag} test funds` : null].filter(Boolean).join(". ");
 }
 
 export type TradeShareInput = {
@@ -95,6 +103,7 @@ export function tradeShareCard(input: TradeShareInput, { amounts }: { amounts: b
     title: input.thesis ?? `${input.asset} ${input.typeLabel.toLowerCase()}`,
     titleKind: "sentence" as const,
     titleTone: "plain" as const,
+    caption: null,
     stats: stats.slice(0, 4),
     tag: input.devnet ? DEVNET_TAG : null,
   };
@@ -137,6 +146,7 @@ export function pnlShareCard({ pnl, apr, trading, devnet, nowMs }: PnlShareInput
     title: formatSignedUsd(net),
     titleKind: "figure" as const,
     titleTone: tone(net),
+    caption: null,
     stats,
     tag: devnet ? DEVNET_TAG : null,
   };
@@ -146,5 +156,54 @@ export function pnlShareCard({ pnl, apr, trading, devnet, nowMs }: PnlShareInput
     alt: altText(base),
     text: `My net P&L on Acta: ${formatSignedUsd(net)}${devnet ? " (devnet)" : ""}`,
     filename: "acta-pnl",
+  };
+}
+
+/** True when an open position has an unrealised figure to put on a card: it needs a current price. */
+export function hasShareablePosition(row: PositionsTableRow): boolean {
+  return row.isOpen && row.pnlNum != null;
+}
+
+function signedPct(n: number): string {
+  const abs = Math.abs(n);
+  return `${n > 0 ? "+" : n < 0 ? "-" : ""}${abs.toFixed(abs >= 100 ? 0 : 1)}%`;
+}
+
+/**
+ * One open position's card: its unrealised P&L as the headline, the position in the table's
+ * own words under it, then what it is, the price it was valued at and the premium. A bought
+ * position adds its return on the premium paid; a sold one says when it expires.
+ */
+export function positionShareCard(row: PositionsTableRow, { devnet, nowMs }: { devnet: boolean; nowMs: number }): ShareCard {
+  const pnl = row.pnlNum ?? 0;
+  const tone: ShareTone = pnl > 0 ? "up" : pnl < 0 ? "down" : "plain";
+  // a spread's two strikes do not fit a quarter of the card; the line above names the one the claim turns on
+  const stats: ShareStat[] = [{ label: "Type", value: row.productLabel }];
+  if (row.markText) stats.push({ label: "Now", value: row.markText });
+  if (row.premiumNum != null) {
+    stats.push({ label: row.side === "buy" ? "Premium paid" : "Premium collected", value: formatUsdSmart(row.premiumNum) });
+  }
+  if (row.side === "buy" && row.premiumNum != null && row.premiumNum > 0) {
+    stats.push({ label: "Return", value: signedPct((pnl / row.premiumNum) * 100), tone });
+  } else if (row.expiryTs != null) {
+    stats.push({ label: "Expires", value: formatExpiryDay(row.expiryTs * 1000) });
+  }
+
+  const base = {
+    eyebrow: "Unrealised P&L",
+    asset: row.symbol,
+    title: row.pnlText,
+    titleKind: "figure" as const,
+    titleTone: tone,
+    caption: row.sentence,
+    stats,
+    tag: devnet ? DEVNET_TAG : null,
+  };
+  return {
+    ...base,
+    date: DAY.format(new Date(nowMs)),
+    alt: altText(base),
+    text: `${row.sentence}. Unrealised P&L ${row.pnlText} on Acta.${devnet ? " (devnet)" : ""}`,
+    filename: `acta-${row.symbol.toLowerCase()}-position`,
   };
 }

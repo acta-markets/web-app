@@ -5,15 +5,15 @@ import type { PositionInfo } from "@/lib/rfq-client";
 import { TOKENS, getNetwork } from "@/lib/tokens";
 import { PortfolioClient } from "./portfolio-client";
 
-const mocks = vi.hoisted(() => ({ markets: [] as unknown[], buildDeposit: vi.fn(), buildWithdraw: vi.fn(), pack: vi.fn(), sendTx: vi.fn(), sendAll: vi.fn(), client: {}, getClient: vi.fn(), page: vi.fn(), summary: vi.fn(), wallet: "wallet-a", live: [] as PositionInfo[], fetchPositions: vi.fn(), authenticated: true }));
+const mocks = vi.hoisted(() => ({ markets: [] as unknown[], buildDeposit: vi.fn(), buildWithdraw: vi.fn(), sendTx: vi.fn(), sendAll: vi.fn(), client: {}, getClient: vi.fn(), page: vi.fn(), summary: vi.fn(), wallet: "wallet-a", live: [] as PositionInfo[], fetchPositions: vi.fn(), authenticated: true }));
 vi.mock("@/lib/portfolio-api", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/portfolio-api")>(), fetchWalletPositions: mocks.page, fetchWalletPositionSummary: mocks.summary }));
 vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ isConnected: true, selectedAccount: { address: mocks.wallet } }) }));
 vi.mock("@/components/solana/solana-connect-button", () => ({ SolanaConnectButton: () => null }));
 vi.mock("@/components/rfq/rfq-provider", () => ({ useRfqContext: () => ({ positions: mocks.live, markets: mocks.markets, marketDescriptors: [], isAuthenticated: mocks.authenticated, fetchPositions: mocks.fetchPositions, positionsFailed: false, getClient: mocks.getClient }) }));
 vi.mock("./portfolio-earnings-chart", () => ({ PortfolioEarningsChart: ({ points }: { points: unknown[] }) => <div data-testid="income-chart">{JSON.stringify(points)}</div> }));
 
-vi.mock("@/lib/trade/buy-deposit", () => ({ buildBuyDepositGroups: mocks.buildDeposit, buildBuyWithdrawInstructions: mocks.buildWithdraw }));
-vi.mock("@/lib/vaults/transaction", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/vaults/transaction")>(), sendWalletTransaction: mocks.sendTx, sendWalletTransactions: mocks.sendAll, packInstructionGroups: mocks.pack }));
+vi.mock("@/lib/trade/buy-deposit", () => ({ buildBuyDepositBatch: mocks.buildDeposit, buildBuyWithdrawInstructions: mocks.buildWithdraw }));
+vi.mock("@/lib/vaults/transaction", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/vaults/transaction")>(), sendWalletTransaction: mocks.sendTx, sendWalletTransactions: mocks.sendAll }));
 
 function position(pda: string, created_at: number, spread = false): PositionInfo {
   return { pda, market_pda: "market", underlying_mint: TOKENS.SOL.mint[getNetwork()], quote_mint: TOKENS.USDC.mint[getNetwork()], underlying_decimals: 9, quote_decimals: 6,
@@ -28,8 +28,12 @@ beforeEach(() => {
   vi.clearAllMocks(); mocks.getClient.mockReturnValue(mocks.client); mocks.page.mockReset(); mocks.summary.mockReset(); mocks.wallet = "wallet-a"; mocks.live = []; mocks.markets = []; mocks.authenticated = true;
   mocks.summary.mockResolvedValue(summary);
   // one group of instructions per position, and one transaction per group unless a test packs them
-  mocks.buildDeposit.mockReset().mockImplementation(async (_rpc: unknown, _owner: string, positions: Array<{ pda: string }>) => positions.map((p) => ({ instructions: [`ix-${p.pda}`] })));
-  mocks.pack.mockReset().mockImplementation((_owner: string, groups: string[][]) => groups);
+  // one transaction per position unless a test packs them
+  mocks.buildDeposit.mockReset().mockImplementation(async (_rpc: unknown, _owner: string, positions: Array<{ pda: string }>) => ({
+    transactions: positions.map((p) => [`ix-${p.pda}`]),
+    funded: positions.map((p) => p.pda),
+    skipped: [],
+  }));
   mocks.sendTx.mockReset(); mocks.sendAll.mockReset(); mocks.buildWithdraw.mockReset();
 });
 afterEach(cleanup);
@@ -256,9 +260,14 @@ describe("Bought options", () => {
   });
 
   it("leaves out an option the chain will not take a deposit for, funds the rest and says so", async () => {
-    mocks.buildDeposit.mockImplementation(async (_rpc: unknown, _owner: string, positions: Array<{ pda: string }>) =>
-      positions.map((p) => (p.pda === "stale" ? { skipped: "funding requires a matching Open position held by a wallet or Maker" } : { instructions: [`ix-${p.pda}`] })),
-    );
+    mocks.buildDeposit.mockImplementation(async (_rpc: unknown, _owner: string, positions: Array<{ pda: string }>) => {
+      const ready = positions.filter((p) => p.pda !== "stale");
+      return {
+        transactions: ready.map((p) => [`ix-${p.pda}`]),
+        funded: ready.map((p) => p.pda),
+        skipped: [{ pda: "stale", reason: "funding requires a matching Open position held by a wallet or Maker" }],
+      };
+    });
     mocks.sendAll.mockResolvedValue(["sig-1", "sig-2"]);
     await show([bought({ pda: "a" }), bought({ pda: "stale", market_pda: "m2" }), bought({ pda: "b", market_pda: "m3" })]);
     fireEvent.click(screen.getByRole("button", { name: /^Fund 3 options/ }));
@@ -270,7 +279,7 @@ describe("Bought options", () => {
   });
 
   it("names the reason when the one option asked for cannot be funded", async () => {
-    mocks.buildDeposit.mockResolvedValue([{ skipped: "position not found on chain" }]);
+    mocks.buildDeposit.mockResolvedValue({ transactions: [], funded: [], skipped: [{ pda: "bought", reason: "position not found on chain" }] });
     await show([bought({})]);
     fireEvent.click(screen.getByRole("button", { name: /^Fund(?! \d)/ }));
     expect((await screen.findByRole("alert", {}, SLOW)).textContent).toBe("This option is not found on chain. Nothing was sent.");
@@ -290,7 +299,11 @@ describe("Bought options", () => {
   });
 
   it("sends several options as one transaction when they fit, through the single-transaction path", async () => {
-    mocks.pack.mockImplementation((_owner: string, groups: string[][]) => [groups.flat()]);
+    mocks.buildDeposit.mockImplementation(async (_rpc: unknown, _owner: string, positions: Array<{ pda: string }>) => ({
+      transactions: [positions.map((p) => `ix-${p.pda}`)],
+      funded: positions.map((p) => p.pda),
+      skipped: [],
+    }));
     mocks.sendTx.mockResolvedValue("sig");
     await show([bought({ pda: "a" }), bought({ pda: "b", market_pda: "m2" })]);
     fireEvent.click(screen.getByRole("button", { name: /^Fund 2 options/ }));

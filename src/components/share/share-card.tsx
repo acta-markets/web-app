@@ -10,6 +10,7 @@ import { TYPE_NOTE } from "@/components/app-ui/type-styles";
 import { cn } from "@/lib/cn";
 import { canCopyImage, canShareFile, copyImage, downloadImage, shareFile, shareNative, xPostUrl } from "@/lib/share/actions";
 import type { ShareCard } from "@/lib/share/card";
+import { sharePageUrl } from "@/lib/share/params";
 import { SHARE_CARD_SIZE, renderShareCard } from "@/lib/share/render";
 
 /** The small button that opens a share card, wherever a result is worth showing. */
@@ -30,7 +31,7 @@ function useCardImage(card: ShareCard): { drawn: Drawn | null; failed: boolean }
   React.useEffect(() => {
     let live = true;
     let src: string | null = null;
-    renderShareCard(card, { host: window.location.host })
+    renderShareCard(card)
       .then((blob) => {
         if (!live) return;
         src = URL.createObjectURL(blob);
@@ -58,9 +59,9 @@ function useCoarsePointer(): boolean {
 /**
  * A share card and what can be done with it: the image as it will be posted, then the buttons.
  *
- * On a computer the main button opens a new post on X with the words and link filled in. X
- * takes no image that way, so the image is put on the clipboard first and the user pastes it.
- * On a phone the system share sheet attaches the image itself.
+ * The main button opens a new post on X with the words and a link. The link is this card's own
+ * page, whose preview is the card, so the post carries the picture without anything to paste.
+ * On a phone the system share sheet attaches the image file itself.
  */
 export function ShareCardPanel({
   card,
@@ -70,7 +71,7 @@ export function ShareCardPanel({
   card: ShareCard;
   /** the same card without the figures that give away size; offering it adds the Amounts switch */
   privateCard?: ShareCard;
-  /** the link the post carries; this site when left out */
+  /** this site's link, with the sharer's referral code when they have one; the card's page is built on it */
   url?: string;
 }) {
   const [amounts, setAmounts] = React.useState<"show" | "hide">("show");
@@ -84,7 +85,9 @@ export function ShareCardPanel({
   // read after mount: the server has no address to offer, and the two must render the same
   const [origin, setOrigin] = React.useState("");
   React.useEffect(() => setOrigin(window.location.origin), []);
-  const link = url ?? origin;
+  const site = url ?? origin;
+  // the card's own page: its preview is the card, which is how the post gets its picture
+  const link = site ? sharePageUrl(site, active) : "";
   const file = React.useMemo(() => (blob ? shareFile(blob, active.filename) : null), [blob, active.filename]);
   const native = coarse && file != null && canShareFile(file);
 
@@ -156,8 +159,6 @@ export function ShareCardPanel({
               href={xPostUrl(active.text, link)}
               target="_blank"
               rel="noopener noreferrer"
-              // the copy starts while this page still has focus; the new tab opens right after
-              onClick={() => void copy("Image copied. Paste it into your post.", "Download the image and attach it to your post.")}
               className="inline-flex h-10 items-center justify-center bg-accent-primary py-2.5 text-base font-medium tracking-[-0.02em] text-bg-primary transition-colors hover:bg-accent-deep focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary/40"
             >
               Share on X

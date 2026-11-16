@@ -66,6 +66,8 @@ function position(now: number, f: Fixture): PositionInfo {
 const OPEN: Fixture[] = [
   { id: "sol-cc", symbol: "SOL", terms: { type: "covered_call", strike: "160000000000" }, quantity: 12, price: 1.85, expiresIn: 3 * DAY + 7200 },
   { id: "sol-csp", symbol: "SOL", terms: { type: "cash_secured_put", strike: "150000000000" }, quantity: 8, price: 2.4, expiresIn: 5 * DAY },
+  // sold, and the buyer has put up the deposit: funded, with nothing for this side to press
+  { id: "sol-sold-funded", symbol: "SOL", terms: { type: "covered_call", strike: "165000000000" }, quantity: 5, price: 1.2, expiresIn: 4 * DAY, state: "funded" },
   { id: "btc-call", symbol: "BTC", decimals: 8, terms: { type: "covered_call", strike: "69000000000000" }, side: "buy", quantity: 0.1, price: 521, expiresIn: 5 * 3600 },
   { id: "btc-put", symbol: "BTC", decimals: 8, terms: { type: "cash_secured_put", strike: "71000000000000" }, side: "buy", quantity: 0.05, price: 640, expiresIn: 9 * DAY },
   { id: "btc-funded", symbol: "BTC", decimals: 8, terms: { type: "covered_call", strike: "68000000000000" }, side: "buy", quantity: 0.02, price: 900, expiresIn: 2 * DAY, state: "funded" },
@@ -258,6 +260,7 @@ export function PortfolioGallery() {
               nowMs={nowMs}
               grouped={scene === "grouped" && !shownAsset && !exerciseOn}
               deposit={deposit}
+              share={{}}
               filter={assetCounts.length > 1 ? <AssetFilter counts={assetCounts} total={data.openRows.length} value={shownAsset} onChange={setAssetFilter} /> : undefined}
             />
           </Section>

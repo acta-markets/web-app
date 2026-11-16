@@ -10,7 +10,6 @@ import {
   pipe,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
-  type Blockhash,
   type Instruction,
   type Rpc,
   type Signature,
@@ -133,56 +132,6 @@ export type SendWalletTransactionsArgs = {
   abortSignal?: AbortSignal;
   assertBinding?: () => void;
 };
-
-/**
- * A transaction may be 1232 bytes on the wire. A packed one stops well short of it, so a
- * wallet that adds instructions of its own before signing still has the room.
- */
-const PACKED_TRANSACTION_BYTES = 1_000;
-/** Only the size matters while packing, so any well-formed blockhash stands in for the real one. */
-const SIZING_LIFETIME = { blockhash: "11111111111111111111111111111111" as Blockhash, lastValidBlockHeight: 0n };
-
-function wireSize(feePayer: string, instructions: Instruction[]): number {
-  try {
-    const compiled = compileTransaction(
-      pipe(
-        createTransactionMessage({ version: 0 }),
-        (m) => setTransactionMessageFeePayer(address(feePayer), m),
-        (m) => setTransactionMessageLifetimeUsingBlockhash(SIZING_LIFETIME, m),
-        (m) => appendTransactionMessageInstructions(instructions, m),
-      ),
-    );
-    return getTransactionEncoder().encode(compiled).length;
-  } catch {
-    // too many accounts or instructions to compile at all: too big by any measure
-    return Number.POSITIVE_INFINITY;
-  }
-}
-
-/**
- * Fills transactions with whole groups of instructions, in order, as many groups to a
- * transaction as fit `maxBytes`. A group is never split, so what belongs together (a token
- * account and the deposit into it) lands or fails together; a group too big on its own still
- * gets a transaction to itself. Thirty deposits become a handful of transactions: fewer to
- * approve on a hardware wallet, fewer fees and far fewer requests to the RPC.
- */
-export function packInstructionGroups(
-  feePayer: string,
-  groups: ReadonlyArray<Instruction[]>,
-  maxBytes = PACKED_TRANSACTION_BYTES,
-): Instruction[][] {
-  const packed: Instruction[][] = [];
-  let current: Instruction[] = [];
-  for (const group of groups) {
-    if (current.length > 0 && wireSize(feePayer, [...current, ...group]) > maxBytes) {
-      packed.push(current);
-      current = [];
-    }
-    current = [...current, ...group];
-  }
-  if (current.length > 0) packed.push(current);
-  return packed;
-}
 
 export async function sendWalletTransactions(args: SendWalletTransactionsArgs): Promise<Signature[]> {
   const { rpc, abortSignal } = args;

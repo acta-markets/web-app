@@ -24,7 +24,10 @@ describe("PerformanceStrip", () => {
     const img = await within(dialog).findByRole("img");
     expect(img.getAttribute("alt")).toMatch(/^Net P&L -\$1\.50\. Realised -\$6\.00, Unrealised \+\$4\.50, APR 18\.40%, Premium collected \$20\.00/);
     const post = new URL(within(dialog).getByRole("link", { name: "Share on X" }).getAttribute("href")!);
-    expect(post.searchParams.get("url")).toBe(`${window.location.origin}/?ref=TIM`);
+    const page = new URL(post.searchParams.get("url")!);
+    expect(page.origin + page.pathname).toBe(`${window.location.origin}/share`);
+    expect(page.searchParams.get("ref")).toBe("TIM");
+    expect(page.searchParams.get("c")).toBeTruthy();
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).toBeNull();
   });
