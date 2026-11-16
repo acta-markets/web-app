@@ -59,6 +59,17 @@ export const VAULT_LINEUP: readonly LineupEntry[] = [
   { id: "tsla", asset: "TSLA", type: "Stocks", pda: { devnet: null, mainnet: null }, state: "open", assumedApr: { staking: 0, premium: 25 } },
 ];
 
+/** The lineup's assets as running text, "jitoSOL, USDC and TSLA": for a page description or a preview image. */
+export function lineupAssetsText(lineup: readonly LineupEntry[] = VAULT_LINEUP, last = " and "): string {
+  const assets = lineup.map((entry) => entry.asset);
+  return assets.length < 2 ? assets.join("") : `${assets.slice(0, -1).join(", ")}${last}${assets[assets.length - 1]}`;
+}
+
+/** Earn in one line, for the page's description and its link preview. No rate: the lineup's rates are assumptions. */
+export function earnDescription(lineup: readonly LineupEntry[] = VAULT_LINEUP): string {
+  return `Income vaults on ${lineupAssetsText(lineup)}. Deposit what you already hold and earn premium from trading desks. No liquidations.`;
+}
+
 export type LineupSlot<T> = { entry: LineupEntry; bound: T | null };
 
 /**

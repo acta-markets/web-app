@@ -8,12 +8,14 @@ import { LandingYieldSource } from "@/components/landing/landing-yield-source";
 import { LandingRisk } from "@/components/landing/landing-risk";
 import { LandingFaq } from "@/components/landing/landing-faq";
 import { LandingCta } from "@/components/landing/landing-cta";
+import { pageMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "Curated yield vaults on a Solana options venue",
   description:
     "Curated yield vaults for the assets you already hold, on Acta's own options venue. Vaults earn yield from trading desks. No liquidations.",
-};
+  path: "/",
+});
 
 export default function HomePage() {
   return (

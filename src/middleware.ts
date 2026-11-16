@@ -8,27 +8,29 @@ import {
   getTradeMarkdown,
   getVaultsMarkdown,
 } from "@/lib/agent-discovery";
+import { APP_HOME, isAppEnabled } from "@/lib/app-enabled";
 
-function isAppEnabled() {
-  const v = process.env.NEXT_PUBLIC_APP_ENABLED;
-  if (!v) return true;
-  return !(v === "false" || v === "0");
-}
+// Where the site root sends a person while the app is on: the app opens on Trade, not on the landing page.
+export { APP_HOME };
 
 const BLOCKED_PAGE_PREFIXES = ["/earn", "/trade", "/trade2", "/portfolio", "/market"];
-/** Where the site root sends a person while the app is on: the app opens on Trade, not on the landing page. */
-export const APP_HOME = "/trade";
 const MARKDOWN_PATHS = new Set(["/", "/earn", "/trade"]);
 const DOCS_HOSTNAME = "docs.acta.markets";
 const DOCS_RESERVED_PATHS = [
   "/_next",
   "/.well-known",
   "/api",
+  // the site's own icons, manifest and preview image: files, not guide pages
+  "/app-icon",
+  "/apple-icon",
   "/auth.md",
   "/favicon",
   "/fonts",
+  "/icon.svg",
   "/images",
   "/llms.txt",
+  "/manifest.webmanifest",
+  "/og",
   "/openapi.json",
   "/robots.txt",
   "/sitemap.xml",

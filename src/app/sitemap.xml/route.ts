@@ -6,6 +6,7 @@ import {
   getDocsSitemapUrls,
   isDocsRequest,
 } from "@/lib/docs-content";
+import { VAULT_LINEUP } from "@/lib/vaults/lineup";
 
 function escapeXml(value: string): string {
   return value
@@ -18,9 +19,12 @@ function escapeXml(value: string): string {
 
 export function GET(request: Request) {
   const context = getRequestDeploymentContext(request);
+  // the vaults Earn lists by address on this environment; one with no address yet has no page
+  const network = context.environment === "beta" ? "mainnet" : "devnet";
+  const vaultAddresses = VAULT_LINEUP.map((entry) => entry.pda[network]).filter((address): address is string => address !== null);
   const sitemapUrls = isDocsRequest(request)
     ? getDocsSitemapUrls()
-    : getSitemapUrls(context);
+    : getSitemapUrls(context, { vaultAddresses });
   const urls = sitemapUrls
     .map((url) => `  <url><loc>${escapeXml(url)}</loc></url>`)
     .join("\n");

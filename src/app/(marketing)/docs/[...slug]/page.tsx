@@ -21,7 +21,8 @@ export function generateMetadata({ params }: DocsPageProps): Metadata {
   if (!page) return {};
 
   return {
-    title: `${page.title} | Acta Docs`,
+    // whole as written, or the site's own suffix would follow "Acta Docs"
+    title: { absolute: `${page.title} | Acta Docs` },
     description: page.description,
     alternates: {
       canonical: getDocsCanonicalUrl(page.slug),

@@ -98,11 +98,22 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 - `docs/vaults-integration.md` - data sources, polling budget and UI rules
 - `NEXT_PUBLIC_VAULTS_SAMPLE=1` swaps in fixture vaults from `src/lib/vaults/sample-data.json` in development (loaded on demand by `sample.ts`); production builds ignore it
 
-**Share cards**: A confirmed trade and the Portfolio's Net P&L card each have a Share button that draws a 1200x675 PNG in the browser (canvas, no server route) and offers Download, Copy image and Share on X; a touch device that can share files gets the system share sheet instead.
-- `src/lib/share/` - `card.ts` (what a card says: `tradeShareCard`, `pnlShareCard`), `render.ts` (the canvas drawing, reads the page's CSS tokens and fonts), `actions.ts` (clipboard, download, X post link, referral link)
+**Share cards**: A confirmed trade, the Portfolio's Net P&L card and each open position with a uPnL (its uPnL figure is the button) can be shared as a 1200x675 image, with Download, Copy image and Share on X; a touch device that can share files gets the system share sheet instead.
+- The card travels in a link. `/share?c=…` is the page a post links to: its metadata names the card's image, so the post shows the picture. `/share/card?c=…` draws that image on the server with `next/og` (`s=2` for a sharp file); the app's own preview, the saved file and the post's picture are that one image. Both live outside `/api` because robots.txt closes `/api/` to the crawlers that build link previews.
+- `src/lib/share/` - `card.ts` (what a card says: `tradeShareCard`, `pnlShareCard`, `positionShareCard`), `params.ts` (the card in a link, and the check on the way back in), `card-image.tsx` (the drawing), `server-assets.ts` (fonts from Google Fonts and public images, fetched once per server instance), `render.ts` (the app fetching the image), `actions.ts` (clipboard, download, X post link, referral link)
 - `src/components/share/share-card.tsx` - `ShareButton`, `ShareCardPanel`, `ShareCardModal`
-- A card made on devnet is tagged "Devnet" on the image and in the post text; keep that, test funds must not read as real money
+- Anyone can write a card link by hand. `decodeShareCard` therefore accepts only the app's own labels and product names and text shaped like a price, a rate, a date or a view; a new label or product name has to be added there (a test fails until it is). A made-up number still gets through, so never describe a card as verified.
+- The "Devnet" tag is decided by the server that draws the card, never by the link; keep that, test funds must not read as real money
 - `/dev/share` shows every card
+
+**Site metadata**: what a page says about itself in a tab, a search result and a link preview comes from `src/lib/site-metadata.ts`.
+- A page states its title, one line and its address through `pageMetadata({ title, description, path, image, index })`; the site's name, the canonical link, `og:url` and the picture follow. On devnet the name is "Acta Devnet" and every description ends "Devnet: test funds only." (from `IS_MAINNET`), and `siteOrigin()` is always `https://devnet.acta.markets` there, never the Vercel project's production address.
+- A page that sets any `openGraph` field replaces the layout's whole set, picture included. So never set `openGraph` by hand on a page: use `pageMetadata`, which always names a picture.
+- Preview pictures are named, not file-convention images: `src/lib/site-images.ts` says what each shows (`site`, `trade`, `earn`), `src/lib/site-image.tsx` draws it in the share card's frame (`cardFrame` in `src/lib/share/card-image.tsx`), `/og/[name]` serves it. No rate goes on a picture: the lineup's rates are assumptions.
+- `index: false` on pages that are one wallet's own or not offered (`/portfolio`, `/referrals`, `/spreads`, `/trade2`); `/data-room` is noindex in its layout. The sitemap (`getSitemapUrls`) leaves out `/` while the app is on, because it redirects to `/trade`.
+- Icons: `icon.svg`, `apple-icon.tsx`, `/app-icon/[size]` (PNG; the manifest's icons) and `favicon.ico`, which is the 16/32/48 PNGs in one file. After changing the logomark run `node scripts/make-favicon.mjs` with the dev server up. `manifest.ts` is the web manifest.
+- `not-found.tsx` and `error.tsx` exist at the root and inside `(app)`; both draw `src/components/site/status-view.tsx`. `/dev/states` shows them (`?missing=1` triggers a real `notFound()`).
+- A new top-level file route (an icon, a manifest, a picture) must be added to `DOCS_RESERVED_PATHS` in `src/middleware.ts`, or the docs host rewrites it to a guide page.
 
 **Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
 - Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)

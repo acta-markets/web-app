@@ -1,9 +1,9 @@
 import { Metadata } from "next";
 import { PortfolioClient } from "@/components/portfolio/portfolio-client";
+import { pageMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
-  title: "Portfolio"
-};
+// one wallet's own figures: not a page for a search result
+export const metadata: Metadata = pageMetadata({ title: "Portfolio", path: "/portfolio", index: false });
 
 export const dynamic = "force-dynamic";
 

@@ -81,11 +81,28 @@ describe("agent discovery", () => {
     );
   });
 
-  it("lists only public canonical pages in the sitemap", () => {
+  it("lists only public pages that answer at their own address in the sitemap", () => {
     const context = getDeploymentContext("https://devnet.acta.markets/");
-    expect(getSitemapUrls(context)).toEqual([
-      "https://devnet.acta.markets/",
+    // with the app on, the root redirects to Trade, so it is not a page to list
+    expect(getSitemapUrls(context, { appEnabled: true })).toEqual([
       "https://devnet.acta.markets/earn",
+      "https://devnet.acta.markets/trade",
+      "https://devnet.acta.markets/partners",
+    ]);
+    const urls = getSitemapUrls(context);
+    expect(urls.some((url) => /^\/(portfolio|referrals|share|dev|data-room)/.test(new URL(url).pathname))).toBe(false);
+  });
+
+  it("lists the landing page at the root while the app is off", () => {
+    const context = getDeploymentContext("https://beta.acta.markets/");
+    expect(getSitemapUrls(context, { appEnabled: false })[0]).toBe("https://beta.acta.markets/");
+  });
+
+  it("lists a page for each vault Earn names by address", () => {
+    const context = getDeploymentContext("https://devnet.acta.markets/");
+    expect(getSitemapUrls(context, { appEnabled: true, vaultAddresses: ["Vau1tAddre55"] })).toEqual([
+      "https://devnet.acta.markets/earn",
+      "https://devnet.acta.markets/earn/Vau1tAddre55",
       "https://devnet.acta.markets/trade",
       "https://devnet.acta.markets/partners",
     ]);

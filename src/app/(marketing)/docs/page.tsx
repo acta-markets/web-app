@@ -7,7 +7,8 @@ import {
 } from "@/lib/docs-content";
 
 export const metadata: Metadata = {
-  title: "Acta User Guide",
+  // whole as written: the guide is the same on every environment, so it takes no site suffix
+  title: { absolute: "Acta User Guide" },
   description:
     "Using Acta: options, vaults, deposits, withdrawals, fees, and risks.",
   alternates: {

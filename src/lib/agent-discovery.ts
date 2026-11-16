@@ -1,3 +1,4 @@
+import { isAppEnabled } from "./app-enabled";
 import { getNetwork } from "./tokens";
 
 export type ActaEnvironment = "devnet" | "beta";
@@ -267,6 +268,23 @@ Sitemap: ${DOCS_SITE_ORIGIN}/sitemap.xml
 `;
 }
 
-export function getSitemapUrls(context: DeploymentContext): string[] {
-  return ["/", "/earn", "/trade", "/partners"].map((path) => `${context.siteOrigin}${path}`);
+/**
+ * The pages a search engine should know: public ones that answer at their own address.
+ *  - The root is listed only while the app is off. With the app on it redirects to Trade,
+ *    and a sitemap names pages, not redirects.
+ *  - `vaultAddresses` are the vaults Earn lists by address; each has a page of its own.
+ * Portfolio, Referrals and a shared card are one person's own and are never listed.
+ */
+export function getSitemapUrls(
+  context: DeploymentContext,
+  { appEnabled = isAppEnabled(), vaultAddresses = [] }: { appEnabled?: boolean; vaultAddresses?: readonly string[] } = {},
+): string[] {
+  const paths = [
+    ...(appEnabled ? [] : ["/"]),
+    "/earn",
+    ...vaultAddresses.map((address) => `/earn/${encodeURIComponent(address)}`),
+    "/trade",
+    "/partners",
+  ];
+  return paths.map((path) => `${context.siteOrigin}${path}`);
 }

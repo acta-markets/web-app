@@ -55,3 +55,17 @@ describe("site root", () => {
     }
   });
 });
+
+describe("docs host", () => {
+  const docs = (path: string) => middleware(request(path, { host: "docs.acta.markets" }));
+
+  it("serves a guide page from its short address", () => {
+    expect(docs("/guide/vaults").headers.get("x-middleware-rewrite")).toContain("/docs/guide/vaults");
+  });
+
+  it("leaves the site's own icons, manifest and preview image alone: they are files, not guide pages", () => {
+    for (const path of ["/icon.svg", "/apple-icon", "/app-icon/192", "/manifest.webmanifest", "/og/site"]) {
+      expect(docs(path).headers.get("x-middleware-rewrite"), path).toBeNull();
+    }
+  });
+});
