@@ -32,7 +32,6 @@ import { isCashSettledTerms, isSpreadTerms, isWireAmount, lowerStrike, quoteMatc
 import { RfqNoMakersError } from "@/lib/rfq-collateral";
 import { rememberReferenceTokens } from "@/lib/tokens";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
-import { AppModal } from "@/components/app-ui/app-modal";
 import { ReferralGateModal } from "@/components/referral/referral-gate-modal";
 import { clearPendingRefCode } from "@/components/referral/ref-capture";
 import { useToast } from "@/components/app-ui/toast";
@@ -278,8 +277,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const authWarmupTimerRef = useRef<number | null>(null);
   const [authWarmupDone, setAuthWarmupDone] = useState(false);
   const prefetchedIndicativeKeysRef = useRef<Set<string>>(new Set());
-  const [showAuthSignModal, setShowAuthSignModal] = useState(false);
-  const [dismissedAuthSignModal, setDismissedAuthSignModal] = useState(false);
   const [referralStatus, setReferralStatus] = useState<ReferralStatus>("unknown");
   const [referralInfo, setReferralInfo] = useState<MyReferralInfoData | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
@@ -850,19 +847,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
     if (client) resetToAnonymous(client);
   }, [walletConnected, dropRfq, resetToAnonymous]);
 
-  useEffect(() => {
-    if (connectionState !== "authenticating") {
-      setShowAuthSignModal(false);
-      setDismissedAuthSignModal(false);
-      return;
-    }
-    if (dismissedAuthSignModal) return;
-    const timeoutId = window.setTimeout(() => {
-      setShowAuthSignModal(true);
-    }, 800);
-    return () => window.clearTimeout(timeoutId);
-  }, [connectionState, dismissedAuthSignModal]);
-
   const disconnect = useCallback(() => {
     clientRef.current?.disconnect();
     setConnectionState("disconnected");
@@ -1197,24 +1181,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
           <div className="text-white/70">state: {connectionState}</div>
         </div>
       ) : null}
-      <AppModal
-        open={showAuthSignModal}
-        onClose={() => {
-          setShowAuthSignModal(false);
-          setDismissedAuthSignModal(true);
-        }}
-        title="Awaiting Wallet Signature"
-        showHowItWorks={false}
-      >
-        <div className="space-y-3">
-          <p className="text-sm text-content-secondary">
-            Please check your wallet and sign the authentication message to continue.
-          </p>
-          <p className="text-xs text-content-tertiary">
-            Keep this tab open. This popup closes automatically after successful authentication.
-          </p>
-        </div>
-      </AppModal>
+      {/* The sign-in prompt, its retry and the welcome are `SignInOnboarding`, mounted by the app layout. */}
       <ReferralGateModal
         open={referralGateOpen}
         state={referralStatus === "required" ? "redeem" : "loading"}

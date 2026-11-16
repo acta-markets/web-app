@@ -42,6 +42,7 @@ describe("site root", () => {
     expect(root.status).toBe(200);
     expect(root.headers.get("location")).toBeNull();
     expect(location(middleware(request("/trade")))).toBe("/?app=closed");
+    expect(location(middleware(request("/rewards")))).toBe("/?app=closed");
   });
 
   it("does not redirect the docs host's root", () => {
@@ -50,7 +51,7 @@ describe("site root", () => {
   });
 
   it("leaves every other page alone", () => {
-    for (const path of ["/trade", "/earn", "/portfolio", "/partners"]) {
+    for (const path of ["/trade", "/earn", "/portfolio", "/rewards", "/partners"]) {
       expect(middleware(request(path)).headers.get("location")).toBeNull();
     }
   });

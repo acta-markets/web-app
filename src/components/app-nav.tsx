@@ -5,12 +5,13 @@ import { usePathname } from "next/navigation";
 import { ActaLogo } from "@/components/acta-logo";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 
-export type AppTab = "earn" | "trade" | "portfolio" | "spreads";
+export type AppTab = "earn" | "trade" | "portfolio" | "rewards" | "spreads";
 
 const TABS: ReadonlyArray<{ value: AppTab; label: string; href: string; soon?: boolean }> = [
   { value: "trade", label: "Trade", href: "/trade" },
   { value: "earn", label: "Earn", href: "/earn" },
   { value: "portfolio", label: "Portfolio", href: "/portfolio" },
+  { value: "rewards", label: "Rewards", href: "/rewards" },
 ];
 
 /** Market pages are reached from the Trade table, so they keep Trade highlighted. */
@@ -19,6 +20,7 @@ export function activeAppTab(pathname: string | null): AppTab | null {
   if (under("/earn")) return "earn";
   if (under("/trade") || under("/market")) return "trade";
   if (under("/portfolio")) return "portfolio";
+  if (under("/rewards")) return "rewards";
   if (under("/spreads")) return "spreads";
   return null;
 }
@@ -34,8 +36,9 @@ export function AppNav() {
           <ActaLogo className="h-9 w-[120px]" />
         </Link>
       </div>
-      {/* One tab row for both layouts: a full-width third row on mobile, inline from md up */}
-      <div className="order-last grid w-full grid-cols-3 gap-2 md:order-none md:flex md:w-auto md:items-center">
+      {/* One tab row for both layouts: a full-width third row on mobile, inline from md up.
+          Four tabs share a phone's width, so there the gap and the side padding are at their smallest. */}
+      <div className="order-last grid w-full grid-cols-4 gap-1 md:order-none md:flex md:w-auto md:items-center md:gap-2">
         {TABS.map((t) => {
           const isActive = t.value === active;
           return (
@@ -45,7 +48,7 @@ export function AppNav() {
               aria-current={isActive ? "page" : undefined}
               aria-label={t.soon ? `${t.label} (coming soon)` : undefined}
               className={[
-                "flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-sm font-normal leading-[1.2] tracking-[-0.28px] backdrop-blur-[4px] transition-colors md:h-10 md:px-4 md:py-2.5 md:text-base md:tracking-[-0.32px]",
+                "flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-1 py-1.5 text-sm font-normal leading-[1.2] tracking-[-0.28px] backdrop-blur-[4px] transition-colors md:h-10 md:px-4 md:py-2.5 md:text-base md:tracking-[-0.32px]",
                 isActive
                   ? "bg-[rgba(42,162,134,0.2)] text-content-primary"
                   : t.soon

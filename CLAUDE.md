@@ -73,7 +73,7 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 
 **Next.js 14 App Router** with two route groups:
 - `(marketing)` - Landing page at `/`. While the app is enabled the middleware sends a browser that opens `/` on to `/trade` (307), so people skip the landing page; an agent asking for markdown still gets the home document, and with the app disabled `/` is the landing page.
-- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (Easy mode; `?mode=pro` is a placeholder), `/portfolio`, `/market/[asset]` (the previous market page, reached by direct URL)
+- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (Easy mode; `?mode=pro` is a placeholder), `/portfolio`, `/rewards` (leagues, points and boards), `/market/[asset]` (the previous market page, reached by direct URL)
 
 **Middleware** (`middleware.ts`) gates app routes based on `NEXT_PUBLIC_APP_ENABLED`. When disabled, app routes redirect to landing but `/api/whitelist` remains accessible.
 
@@ -114,6 +114,20 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 - Icons: `icon.svg`, `apple-icon.tsx`, `/app-icon/[size]` (PNG; the manifest's icons) and `favicon.ico`, which is the 16/32/48 PNGs in one file. After changing the logomark run `node scripts/make-favicon.mjs` with the dev server up. `manifest.ts` is the web manifest.
 - `not-found.tsx` and `error.tsx` exist at the root and inside `(app)`; both draw `src/components/site/status-view.tsx`. `/dev/states` shows them (`?missing=1` triggers a real `notFound()`).
 - A new top-level file route (an icon, a manifest, a picture) must be added to `DOCS_RESERVED_PATHS` in `src/middleware.ts`, or the docs host rewrites it to a guide page.
+
+**Rewards**: `/rewards` shows the season the backend is running: its leagues, each league's rules as a checklist, the trader and clan boards, and a connected wallet's own standing and awards. It is read from the SDK's seasons API (`currentSeason`, `seasonBoard`, `seasonSubject`, `seasonAwards` on `ActaHttpClient`), with no sign-in: a wallet's points are looked up by its address.
+- `src/lib/rewards/` - `api.ts` (the calls; a 404 is "no season" or "no points", not a failure), `view.ts` (everything the page says, pure and tested), `source.ts` (the only place live and sample data split), `sample-season.ts` (a made-up season in the wire's shape, from the leagues draft of 14 Nov 2026)
+- `src/components/rewards/` - `use-season.ts` (polling hooks and the page's choices), `rewards-parts.tsx` (presentational pieces), `rewards-view.tsx`, `rewards-client.tsx`
+- A rule's title and description are the backend's words, shown as they come. A rule's `points` and a cap's `max` are CEL formulas: a figure is shown only when the formula is a plain number, otherwise "Varies". Never parse or print the formula.
+- The page is the trader's (`role: "taker"`). A drop is labelled "test funds" on devnet (from `IS_MAINNET`); prize pools are not shown, the `pool` transform's unit is not stated.
+- Sample mode is for development only: `NEXT_PUBLIC_REWARDS_SAMPLE=1` or `/rewards?sample=1`, never in a production build, and the page says "Sample data". `/dev/rewards` shows every state.
+- Not served by the backend, so not in the app: eligibility (X or mainnet wallet), naming or joining a clan, feedback, drop history.
+
+**Sign-in and onboarding**: the modal that asks a wallet to sign in is also the first-run welcome. `src/components/onboarding/sign-in-onboarding.tsx` (mounted in `(app)/layout.tsx`) watches the RFQ connection and drives `sign-in-modal.tsx`; `src/lib/onboarding.ts` holds the rules (`signInView`).
+- The prompt goes up 800 ms into `authenticating`, so a resumed session never flashes it. A sign-in that ends without a signature shows "Sign-in was not completed" with Try again.
+- The welcome is the prompt's next state, never a modal of its own: only after a signature just given, only for a wallet that has never traded (`referralInfo.status === "pending"`), once per wallet and backend (localStorage `acta_welcome_seen:<backend>:<wallet>`), and never over the invite gate.
+- Test funds are shown as the chain reports them (`useTokenBalance`), "Arriving" until then; no amount is promised in copy. The funds step exists on devnet only.
+- `/dev/sign-in` shows every state.
 
 **Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
 - Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)

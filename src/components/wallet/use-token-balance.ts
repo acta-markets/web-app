@@ -18,7 +18,8 @@ function getConnection() {
 }
 
 /**
- * Wallet balance of one token in UI units, polled every 30s; null when unknown.
+ * Wallet balance of one token in UI units, polled every 30s (or every `intervalMs`, for a
+ * caller waiting on funds to arrive); null when unknown.
  *
  * `mint` is the authoritative mint the market actually uses (the server's
  * underlying/quote mint), never a symbol looked up in the static token list — the
@@ -30,6 +31,7 @@ export function useTokenBalance(
   walletAddress: string | undefined,
   mint: string | undefined,
   decimals: number,
+  intervalMs = 30_000,
 ): number | null {
   const [balance, setBalance] = useState<number | null>(null);
 
@@ -60,9 +62,9 @@ export function useTokenBalance(
     }
 
     fetch();
-    const id = setInterval(fetch, 30_000);
+    const id = setInterval(fetch, intervalMs);
     return () => { cancelled = true; clearInterval(id); };
-  }, [walletAddress, mint, decimals]);
+  }, [walletAddress, mint, decimals, intervalMs]);
 
   return balance;
 }

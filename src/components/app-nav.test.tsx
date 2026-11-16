@@ -19,6 +19,8 @@ describe("activeAppTab", () => {
     ["/trade", "trade"],
     ["/market/SOL", "trade"],
     ["/portfolio", "portfolio"],
+    ["/rewards", "rewards"],
+    ["/rewardsome", null],
     ["/spreads", "spreads"],
     ["/referrals", null],
     ["/earnings", null],
@@ -29,19 +31,20 @@ describe("activeAppTab", () => {
 });
 
 describe("AppNav", () => {
-  it("renders Earn, Trade and Portfolio as links", () => {
+  it("renders Earn, Trade, Portfolio and Rewards as links", () => {
     nav.pathname = "/earn";
     render(<AppNav />);
     expect(screen.getByRole("link", { name: "Earn" }).getAttribute("href")).toBe("/earn");
     expect(screen.getByRole("link", { name: "Trade" }).getAttribute("href")).toBe("/trade");
     expect(screen.getByRole("link", { name: "Portfolio" }).getAttribute("href")).toBe("/portfolio");
+    expect(screen.getByRole("link", { name: "Rewards" }).getAttribute("href")).toBe("/rewards");
   });
 
-  it("lists Trade first, then Earn, then Portfolio", () => {
+  it("lists Trade first, then Earn, Portfolio and Rewards", () => {
     nav.pathname = "/earn";
     render(<AppNav />);
     const labels = screen.getAllByRole("link").map((a) => a.textContent).filter(Boolean);
-    expect(labels).toEqual(["Trade", "Earn", "Portfolio"]);
+    expect(labels).toEqual(["Trade", "Earn", "Portfolio", "Rewards"]);
   });
 
   it("does not surface Spreads in the header while it is unbuilt", () => {

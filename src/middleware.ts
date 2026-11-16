@@ -13,7 +13,7 @@ import { APP_HOME, isAppEnabled } from "@/lib/app-enabled";
 // Where the site root sends a person while the app is on: the app opens on Trade, not on the landing page.
 export { APP_HOME };
 
-const BLOCKED_PAGE_PREFIXES = ["/earn", "/trade", "/trade2", "/portfolio", "/market"];
+const BLOCKED_PAGE_PREFIXES = ["/earn", "/trade", "/trade2", "/portfolio", "/market", "/rewards"];
 const MARKDOWN_PATHS = new Set(["/", "/earn", "/trade"]);
 const DOCS_HOSTNAME = "docs.acta.markets";
 const DOCS_RESERVED_PATHS = [

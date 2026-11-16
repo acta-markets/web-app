@@ -6,6 +6,7 @@ import { RfqProvider } from "@/components/rfq/rfq-provider";
 import { Footer } from "@/components/sections/footer";
 import { ClarityProvider } from "@/components/clarity-provider";
 import { ToastProvider } from "@/components/app-ui/toast";
+import { SignInOnboarding } from "@/components/onboarding/sign-in-onboarding";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -20,6 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <main className="relative z-[1] flex-1">{children}</main>
               <Footer />
             </div>
+            <SignInOnboarding />
           </RfqProvider>
         </ToastProvider>
       </WalletSidebarProvider>
