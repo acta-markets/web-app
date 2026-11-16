@@ -10,6 +10,8 @@ describe("Chevron", () => {
     ["next", 1],
     ["switch", 2],
     ["go", 2],
+    ["unfold", 2],
+    ["fold", 2],
     ["close", 2],
   ])("draws %s with %i stroke(s), cut square and in the text colour", (kind, strokes) => {
     const { container } = render(<Chevron kind={kind} className="h-5 w-5" />);

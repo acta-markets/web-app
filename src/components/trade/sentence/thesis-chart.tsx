@@ -399,11 +399,11 @@ function FlipAffordance({
       >
         <Chevron kind="switch" className="block h-3 w-3" />
       </span>
-      <span className="uppercase tracking-[0.08em] max-md:hidden">click the chart to flip</span>
-      <span className="uppercase tracking-[0.08em] md:hidden">tap to flip</span>
+      <span className="uppercase tracking-[0.08em] max-md:hidden">click the chart to flip it</span>
+      <span className="uppercase tracking-[0.08em] md:hidden">tap to flip it</span>
       {variant === "coach" && !coachSeen ? (
         <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-none border border-bg-border bg-bg-primary/95 px-1.5 py-1 text-[12px] tracking-normal text-content-primary shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-          tap anywhere on the chart to flip
+          tap anywhere on the chart to flip it
           <span className="absolute left-1/2 top-full -translate-x-1/2 leading-none text-content-secondary">
             ▾
           </span>

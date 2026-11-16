@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render as renderClosed, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { EarnAssetSummary, TokenMarketsInfoData } from "@/lib/rfq-client";
@@ -118,6 +118,75 @@ describe("outcome line break", () => {
     expect(splitOutcome("Keep 99.75 USDC")).toEqual(["Keep", "99.75 USDC"]);
     expect(splitOutcome("Keep 6,650.00 USDC")).toEqual(["Keep", "6,650.00 USDC"]);
     expect(splitOutcome("Keep")).toBeNull();
+  });
+});
+
+/** The ticket starts closed; most tests read it, so they render the page and open it. */
+function render(ui: Parameters<typeof renderClosed>[0]) {
+  const view = renderClosed(ui);
+  const opener = screen.queryByTestId("open-ticket");
+  if (opener) fireEvent.click(opener);
+  return view;
+}
+
+describe("the ticket under the chart", () => {
+  const ticket = () => document.getElementById("trade-ticket") as HTMLElement;
+
+  it("starts closed: one button naming the next step, and the trade action is not there", () => {
+    connectWallet();
+    renderClosed(<SentenceTrade mode="profit" />);
+    expect(ticket().hidden).toBe(true);
+    expect(screen.getByTestId("open-ticket").textContent).toBe("Set size");
+    expect(screen.queryByRole("button", { name: "Take trade" })).toBeNull();
+    expect(mocks.context.submitRfq).not.toHaveBeenCalled();
+  });
+
+  it("names the deposit in Yield, priced or not: words only, never a number", () => {
+    renderClosed(<SentenceTrade mode="yield" />);
+    expect(screen.getByTestId("open-ticket").textContent).toBe("Set deposit");
+    cleanup();
+    mocks.context = { ...mocks.context, tokenMarketsInfo: { underlyingMint: SOL, data: snapshot({ stale: true }) } };
+    renderClosed(<SentenceTrade mode="yield" />);
+    expect(screen.getByTestId("open-ticket").textContent).toBe("Set deposit");
+  });
+
+  it("puts the cursor in the size field on opening, and back on the button on closing", async () => {
+    renderClosed(<SentenceTrade mode="profit" />);
+    fireEvent.click(screen.getByTestId("open-ticket"));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Amount")));
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("open-ticket")));
+  });
+
+  it("opens to the ticket and the trade action, and is closed again on the next visit", () => {
+    connectWallet();
+    const first = renderClosed(<SentenceTrade mode="profit" />);
+    fireEvent.click(screen.getByTestId("open-ticket"));
+    expect(ticket().hidden).toBe(false);
+    expect(screen.queryByTestId("open-ticket")).toBeNull();
+    // opening never trades: the action is a new button that has not been pressed
+    expect(screen.getByRole("button", { name: "Take trade" })).toBeTruthy();
+    expect(mocks.context.submitRfq).not.toHaveBeenCalled();
+    first.unmount();
+    renderClosed(<SentenceTrade mode="profit" />);
+    expect(ticket().hidden).toBe(true);
+    expect(screen.getByTestId("open-ticket")).toBeTruthy();
+  });
+
+  it("folds away again from the small chevrons at its corner", () => {
+    render(<SentenceTrade mode="profit" />);
+    expect(ticket().hidden).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+    expect(ticket().hidden).toBe(true);
+    expect(screen.getByTestId("open-ticket")).toBeTruthy();
+  });
+
+  it("keeps the size that was typed while it is closed", () => {
+    render(<SentenceTrade mode="profit" />);
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+    fireEvent.click(screen.getByTestId("open-ticket"));
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("2");
   });
 });
 

@@ -147,6 +147,19 @@ export function SentenceTrade({
   const [amountInput, setAmountInput] = useState<string | null>(null);
   /** token the amount is entered in; null follows the position's default */
   const [denomChoice, setDenomChoice] = useState<boolean | null>(null);
+  // The ticket under the chart starts closed behind one button, so the first screen is the
+  // belief, the chart and that button. Every visit starts that way: it is not remembered, so
+  // the page never opens differently from one load to the next.
+  const [ticketOpen, setTicketOpen] = useState(false);
+  const showTicket = (open: boolean) => {
+    setTicketOpen(open);
+    // Opening is the step before typing a size, so the cursor lands in the size field (and is
+    // scrolled into view); closing hands the place back to the button that opens it.
+    window.requestAnimationFrame(() => {
+      const next = open ? document.getElementById("trade-size") : document.querySelector<HTMLElement>('[data-testid="open-ticket"]');
+      next?.focus();
+    });
+  };
 
   const asset = pickAsset(assets, assetChoice ?? initialAsset);
   const snapshot = useTokenMarketsSnapshot(asset?.mint ?? null);
@@ -402,7 +415,7 @@ export function SentenceTrade({
               No markets are open right now. Check back soon.
             </AppCard>
           ) : (
-            <TradeSkeleton side={side} />
+            <TradeSkeleton side={side} folded={!ticketOpen} />
           )}
         </div>
         {footer}
@@ -660,6 +673,8 @@ export function SentenceTrade({
     />
   );
 
+  const ticketFolded = !ticketOpen;
+
   return (
     <div className={CONTAINER}>
       <section aria-label="Your trade" className="flex flex-col gap-4">
@@ -713,8 +728,11 @@ export function SentenceTrade({
                 and the four cells the row beneath; on anything narrower, laptops included, each
                 heading sits right above its own pair, so no cell is ever too narrow for its line. */}
             <div
+              id="trade-ticket"
+              hidden={ticketFolded}
               className={cn(
-                "grid grid-cols-2 gap-x-6 gap-y-2",
+                "relative grid grid-cols-2 gap-x-6 gap-y-2",
+                ticketFolded && "hidden",
                 // Yield needs room for the deposit; Profit's "You lose premium" needs it in the last column
                 side === "sell"
                   ? "xl:grid-cols-[minmax(0,0.97fr)_minmax(0,0.8fr)_minmax(0,1.19fr)_minmax(0,1.04fr)]"
@@ -722,6 +740,22 @@ export function SentenceTrade({
               )}
             >
               <p className={cn(TICKET_WHEN, "xl:order-1")}>Now</p>
+              {/* folds the ticket away again: as quiet as the page's links ("More prices", "How it
+                  works"), in the headings' row where the right end is empty. It answers the
+                  opener's pair of chevrons with the same pair, pointing up. */}
+              <button
+                type="button"
+                data-testid="close-ticket"
+                aria-label="Collapse"
+                title="Collapse"
+                aria-expanded={true}
+                aria-controls="trade-ticket"
+                onClick={() => showTicket(false)}
+                // no word and no frame: the mark alone, in the link's colour, in a box big enough to hit
+                className="absolute right-0 top-0 inline-flex h-6 w-6 items-center justify-end text-content-secondary transition-colors hover:text-content-primary focus-visible:text-content-primary focus-visible:outline-none"
+              >
+                <Chevron kind="fold" className="h-4 w-4" />
+              </button>
               {/* 1. what goes in */}
               <div className={cn(TICKET_CELL, "xl:order-3")}>
                 <span aria-hidden="true" className={TICKET_LABEL}>
@@ -943,11 +977,29 @@ export function SentenceTrade({
             {/* the ticket's last row: nothing renders after the button */}
             {/* the last step of the trade. A main action carries the brand's two chevrons, as
                 the header's connect button does; clickable text carries the same pair, smaller */}
-            <div className="mt-4">
-              <AppButton size="lg" className="w-full whitespace-nowrap font-mono max-md:px-4 max-md:text-base" disabled={cta.action == null} onClick={onCta}>
-                {cta.label}
-                <Chevron kind="go" className="h-6 w-6" />
-              </AppButton>
+            <div className={ticketFolded ? undefined : "mt-4"}>
+              {ticketFolded ? (
+                // its own key: opening must replace the button, never turn it into the trade
+                // action under a second click
+                <AppButton
+                  key="open-ticket"
+                  data-testid="open-ticket"
+                  size="lg"
+                  className="w-full whitespace-nowrap font-mono max-md:px-4 max-md:text-base"
+                  aria-expanded={false}
+                  aria-controls="trade-ticket"
+                  onClick={() => showTicket(true)}
+                >
+                  {/* two words: the next step, named as the field it opens onto ("Size", "You deposit") */}
+                  {side === "sell" ? "Set deposit" : "Set size"}
+                  <Chevron kind="unfold" className="h-6 w-6" />
+                </AppButton>
+              ) : (
+                <AppButton key="trade-action" size="lg" className="w-full whitespace-nowrap font-mono max-md:px-4 max-md:text-base" disabled={cta.action == null} onClick={onCta}>
+                  {cta.label}
+                  <Chevron kind="go" className="h-6 w-6" />
+                </AppButton>
+              )}
             </div>
           </div>
         </AppCard>

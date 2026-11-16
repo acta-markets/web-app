@@ -54,9 +54,10 @@ function SkeletonCell({ className, value, note = "h-3 w-28" }: { className?: str
 /**
  * The trade card while the venue's markets load: the same blocks at the same sizes as the loaded
  * card (sentence, chart with its price rail, the Now / In N days strip, the button), so nothing
- * jumps when the data lands. Profit's winning cell holds a table, so its bone is taller.
+ * jumps when the data lands. Profit's winning cell holds a table, so its bone is taller. The
+ * strip starts closed behind the button (`folded`), and then only the button is drawn.
  */
-export function TradeSkeleton({ side }: { side: TakerSide }) {
+export function TradeSkeleton({ side, folded = false }: { side: TakerSide; folded?: boolean }) {
   return (
     <AppCard aria-hidden="true" data-testid="trade-skeleton" className="border-0 p-4 max-md:p-3">
       {/* the sentence and the line under it. The sentence wraps to three lines on a phone, two on
@@ -70,7 +71,7 @@ export function TradeSkeleton({ side }: { side: TakerSide }) {
       <ChartSkeleton />
       {/* the strip: two headings, four cells, in the loaded strip's own grid and order */}
       <div className="mt-4">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1 xl:grid-cols-[1.05fr_0.9fr_1.1fr_1.05fr]">
+        <div className={cn("grid grid-cols-2 gap-x-6 gap-y-1 xl:grid-cols-[1.05fr_0.9fr_1.1fr_1.05fr]", folded && "hidden")}>
           <div className="col-span-2 pt-1 xl:order-1">
             <div className={cn(BONE, "h-[19px] w-10")} />
           </div>
@@ -82,7 +83,7 @@ export function TradeSkeleton({ side }: { side: TakerSide }) {
           <SkeletonCell className="xl:order-5" value={side === "sell" ? "w-32 xl:h-[54px]" : "w-32"} note={side === "buy" ? "h-[91px] w-full" : "h-3 w-28"} />
           <SkeletonCell className="xl:order-6" value={side === "sell" ? "w-36 xl:h-[54px]" : "w-36"} />
         </div>
-        <div className={cn(BONE, "mt-3 h-[52px] w-full max-md:h-12")} />
+        <div className={cn(BONE, "h-[52px] w-full max-md:h-12", !folded && "mt-3")} />
       </div>
     </AppCard>
   );
