@@ -174,12 +174,12 @@ Do not sign a served transaction blind. The SDKs rebuild the expected instructio
 
 A swap's minimum output must meet your own floor (`min_output_floor` in Rust, `minOutputFloor` in TypeScript). This floor does not apply to the first `stage`, whose output is an intermediate asset. Each half still has its own minimum output and contract price-drift check.
 
-| | Rust (`acta-maker-sdk` 0.10.0, feature `vault`) | TypeScript (`@acta-markets/ts-sdk` 0.7.0) |
+| | Rust (`acta-maker-sdk`, feature `vault`) | TypeScript (`@acta-markets/ts-sdk`) |
 | --- | --- | --- |
 | Position open | `VaultOperatorClient::verify_and_sign_sponsored_tx` | `verifyAndSignSponsoredTx` from `/ws` |
 | Swap | `VaultOperatorClient::verify_and_sign_swap` | `verifyAndSignSwap` from `/ws` |
-| Verify only | `chain::vault::verify_vault_open` / `verify_vault_swap` | `flows.verifyVaultOpen` / `flows.verifyVaultSwap` |
-| Price routes | `PriceRoute::from_account` at `VaultAddresses::{main,second}_price_route` | `fetchVaultPriceRoutes` from `/chain` |
+| Verify only | `chain::vault::verify_vault_open` / `verify_vault_swap` | `flows.verifyVaultOpen` / `flows.verifyVaultSwap` from `/chain` |
+| Price routes | `PriceRoute::from_account` at `VaultAddresses::{main,second}_price_route` | `fetchVaultPriceRoutes` / `decodePriceRouteAccount` + `findPriceRoutePda` from `/chain` |
 
 Rust takes `VaultSwapIntent { vault, request, quote, price_routes: PairPriceRoutes { main, second, staging, shards }, min_output_floor, account }`. `account` is the decoded `VaultAccount` before the request; verification checks its second leg and staging slot.
 

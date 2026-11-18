@@ -16,19 +16,38 @@ Unit variants have no `data` field, for example:
 
 ## Encodings and units
 
+### Numbers
+
+One rule covers the WebSocket protocol and the [HTTP API](http-api.md):
+
+- **Token amounts are JSON decimal strings.** Every amount in token atoms or 1e9-scaled
+  integers: prices, premiums, strikes (`lower_strike`, `upper_strike`), quantities,
+  collateral, balances, payoffs and returns, fees in atoms, shares, share prices, equity and
+  TVL values (`value_1e9`), deposit and withdrawal amounts, notionals, intrinsic values, caps
+  and size rules. The quote `nonce` is a full-range `u64` and is a decimal string too. A
+  decimal string is canonical: ASCII digits, no sign, no leading zero (`"0"`, `"150000000000"`).
+- **Everything else is a JSON number**: Unix timestamps (`*_ts`, `*_at`, `*_at_ms`,
+  `valid_until`, `expires_at`), slots, counts, versions and generations, decimals, basis
+  points, durations in seconds, rate limits, page limits, and ratios such as `utilization` or
+  `apr`. Every integer number is below 2^53, so `JSON.parse` reads it exactly.
+
+The server rejects an amount sent as a number and a number sent as a string. A field has the
+same encoding in every message and on both transports.
+
 | Field | Format |
 |-------|--------|
 | Pubkeys | base58 |
 | Signatures | base58 (64 bytes) |
 | `order_id` | 64-char hex (optional `0x` prefix) |
-| `price` | `u64`, gross premium per 1 underlying unit, 1e9 scale |
-| `total_premium` | `u64`, net premium amount in quote token atomic units |
-| `strike`, `lower_strike`, `upper_strike` | `u64`, quote per 1 underlying unit, 1e9 scale |
-| `quantity` | `u64`, underlying atomic units |
-| `size_rule` | min_size, max_size, step in underlying atomic units; always tied to underlying_mint |
-| `strike_tick` | `u64`, strike ladder spacing for an underlying, 1e9 scale |
-| Timestamps | Unix seconds |
-| `server_now_at_ms` | Unix milliseconds |
+| `price` | decimal string, gross premium per 1 underlying unit, 1e9 scale |
+| `total_premium` | decimal string, net premium amount in quote token atomic units |
+| `strike`, `lower_strike`, `upper_strike` | decimal string, quote per 1 underlying unit, 1e9 scale |
+| `quantity` | decimal string, underlying atomic units |
+| `size_rule` | `min_size`, `max_size`, `step`: decimal strings in underlying atomic units; always tied to underlying_mint |
+| `strike_tick` | decimal string, strike ladder spacing for an underlying, 1e9 scale |
+| `nonce` | decimal string, full-range `u64` |
+| Timestamps | number, Unix seconds |
+| `server_now_at_ms` | number, Unix milliseconds |
 
 `price` and `strike` are always 1e9 fixed-point per 1 underlying unit, independent of mint decimals.
 
@@ -88,12 +107,12 @@ type TokenInfo = {
     | { type: "quote" }
     | {
         type: "underlying";
-        size_rule: {               // underlying atomic units
-          min_size: number;
-          max_size: number;
-          step: number;
+        size_rule: {               // decimal strings, underlying atomic units
+          min_size: string;
+          max_size: string;
+          step: string;
         };
-        strike_tick: number;       // strike ladder spacing, 1e9 scale
+        strike_tick: string;       // decimal string, strike ladder spacing, 1e9 scale
         quote_mints: string[];     // quote mints of its active markets
       };
   schedule:                        // the price feed schedule
@@ -125,13 +144,13 @@ Used by `Snapshot.markets`, `Markets` and HTTP `/api/v1/markets`. Markets name t
 ```typescript
 type MarketInfo = {
   pda: string;
-  underlying: string;                // underlying mint
-  quote: string;                     // quote mint
+  underlying_mint: string;
+  quote_mint: string;
   expiry_ts: number;
   is_put: boolean;
   products: Product[];               // non-empty; see below
   status: "active" | "closed" | "finalized";
-  settlement: { type: "pending" } | { type: "fixed"; price: number }; // price 1e9 scale
+  settlement: { type: "pending" } | { type: "fixed"; price: string }; // price: decimal string, 1e9 scale
 };
 
 type Product =
@@ -419,9 +438,10 @@ keeps the connection. The per-connection and per-wallet message limits close it.
 | Limit | Scope | Default | On exceed |
 |---|---|---|---|
 | Message rate | Every connection | 30/s, burst 60 | `rate_limited` error, then close `4003` |
-| Wallet message rate | All connections of one taker wallet | 50/s, burst 100 | `rate_limited` error, then close `4003` |
+| Wallet message rate | All `/taker` and `/vault` connections of one authenticated wallet | 50/s, burst 100 | `rate_limited` error, then close `4003` |
 | RFQ messages (`RfqRequest`, `AcceptQuote`, `CancelRfq`, `SwapQuote`, `SwapSubmit`) | Taker and Vault connections | 10/s, burst 20 | `rate_limited` error for that message; the connection stays open |
 | Query messages (`Get*`, `CheckQuote`, subscription messages) | Every connection | 20/s, burst 40 | `rate_limited` error for that message; the connection stays open |
+| Quote messages (`Quote`, `ReplaceQuote`, `BatchQuotes`, `CancelQuote`, `CancelAllQuotes`) | `/maker` and `/vault` before maker or operator authentication; a taker on `/vault` | 50/s, burst 100 | `rate_limited` for that message; the connection stays open. Not in `Welcome.rate_limits`; these messages are rejected anyway until the session can quote |
 
 Once a maker or Vault operator authenticates, one shared bucket replaces all of the limits above:
 every message spends from it, and an exceeded budget rejects the message with `rate_limited`:
@@ -434,6 +454,17 @@ than a second, is closed with `4003`.
 `BatchQuotes` spends one token per quote in the batch, and `SwapQuote` spends five. Every other
 message spends one. A batch over `max_batch_quotes` is rejected before the shared bucket and is
 charged to the connection message rate instead.
+
+Authentication messages (`StartAuth`, `StartVaultAuth`, `AuthChallenge`, `ResumeAuth`, and `Hello` on
+`/maker` and `/maker/data`) also spend from a per-IP bucket, 20/s, burst 40 by default. It is not in
+`Welcome.rate_limits`. An exceeded budget rejects the message with `rate_limited` and keeps the
+connection.
+
+No rate-limit rejection says when to retry: `rate_limited` carries only `code` and `message`. A
+bucket gains one token every `1 / per_second` seconds, so wait at least that long, using the
+message's bucket from `Welcome.rate_limits`, then back off further on repeated rejections.
+After a `4003` close, reconnect with backoff. The typed `RateLimit` error is a different case: its
+action depends on the `RateLimitReason` (see the [ServerError catalog](#servererror-catalog)).
 
 Admission limits cap work in flight across the server:
 
@@ -716,7 +747,7 @@ This is the closed set of `type` values. A variant without `data` has no `data` 
 | `InviteErrorReason` | `invalid_code`, `code_exhausted`, `code_expired`, `code_disabled`, `code_owner_inactive`, `code_owner_blacklisted`, `already_registered`, `internal_error` |
 | `ClaimErrorReason` | `not_registered`, `invalid_format`, `code_taken`, `reserved`, `internal_error` |
 
-`RateLimitReason` is in the [Maker](maker-api.md#ratelimitreason-in-typed-rate_limit-error) and [Taker](taker-api.md#ratelimitreason-in-typed-ratelimit-error) references. `CapError` is in [CapError](maker-api.md#caperror).
+`RateLimitReason` is in the [Maker](maker-api.md#ratelimitreason-in-typed-ratelimit-error) and [Taker](taker-api.md#ratelimitreason-in-typed-ratelimit-error) references. `CapError` is in [CapError](maker-api.md#caperror).
 
 ```json
 { "type": "Error", "data": { "type": "QuoteLocked", "data": { "reason": "rfq_locked" } } }
@@ -734,8 +765,6 @@ This is the closed set of `type` values. A variant without `data` has no `data` 
 { "type": "Error", "data": { "type": "DbDisabled", "data": { "feature": "mm_summary" } } }
 ```
 
-JavaScript integrators must preserve integer precision: a wire `u64` can exceed `Number.MAX_SAFE_INTEGER`. TS SDK represents most WS amounts as `number`; for an oversized amount literal it reports `unsafe_integer` and drops the whole frame, so the matching event never fires; recover state with a read (`GetMyActiveRfqs`, `GetOrderStatus`). Inbound nonces have separate lossless handling. For full-range raw JSON amounts, use lossless parsing and bigint arithmetic; `BigInt(JSON.parse(...).amount)` cannot repair precision already lost. This does not change the wire encoding or the `1e9` scale.
-
 ## WS error codes
 
 The closed set of `Generic.code` values (in `Error.data` and `RequestError.data.error`) and
@@ -750,7 +779,7 @@ receives a code outside this set fails to decode the frame.
 | `hello_required` | Generic | `fix_request` | The first message was not `Hello`; the connection closes |
 | `hello_timeout` | Generic | `retry` | No `Hello` in time; followed by close `4005` |
 | `hello_already_sent` | Generic | `fix_request` | A second `Hello` on one connection |
-| `rate_limited` | Generic | `retry` | Connection or wallet rate limits close with `4003`; a per-type limit rejects only the message |
+| `rate_limited` | Generic | `retry` | Connection or wallet rate limits close with `4003`; a per-type limit rejects only the message. Carries no retry time; see [Rate limits and admission](#rate-limits-and-admission) |
 | `server_overloaded` | Generic | `retry` | The admission limit for this message class is full; retry with backoff. A full connection command queue sends it uncorrelated and closes with `4003` |
 | `server_busy` | Generic, AuthError | `retry` | A bounded internal queue (auth, RFQ creation) is full; retry |
 | `internal_error` | Generic | `retry` | Unexpected server failure; the message is sanitized |
@@ -900,7 +929,7 @@ Position rows carry a required `state`: `open`, `funded`, `liquidated` or
 `settled { settlement: physical | cash }`.
 
 - `open`: position created, collateral locked, premium paid to taker.
-- `funded`: maker deposited the settlement asset via `DepositFundsToPosition`. Physical products only.
+- `funded`: the holder deposited the settlement asset via `DepositFundsToPosition`. Physical products only. `WithdrawFundsFromPosition` before expiry returns the position to `open`.
 - `settled`: market finalized, assets distributed based on the ITM/OTM outcome. `settlement` is
   `physical` for covered calls and cash-secured puts, `cash` for spreads and cash puts.
 - `liquidated`: an unfunded ITM position was closed by a liquidation transaction. Physical products only.

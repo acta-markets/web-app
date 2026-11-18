@@ -14,6 +14,18 @@ const errorResponse = {
 
 const notModifiedResponse = { description: "Not modified since the ETag sent in If-None-Match" };
 
+/** A paged list: the items under `key`, then `next_cursor` (null on the last page). */
+function page(key: string, item: string) {
+  return {
+    type: "object",
+    required: [key, "next_cursor"],
+    properties: {
+      [key]: { type: "array", items: { $ref: `#/components/schemas/${item}` } },
+      next_cursor: { anyOf: [{ type: "string" }, { type: "null" }] },
+    },
+  };
+}
+
 export function getOpenApiDocument(context: DeploymentContext) {
   return {
     openapi: "3.1.0",
@@ -105,21 +117,13 @@ export function getOpenApiDocument(context: DeploymentContext) {
         get: {
           operationId: "listTokens",
           summary: "List tokens of active markets",
+          parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }],
           responses: {
             "200": {
-              description: "Tokens",
+              description: "Tokens, sorted by mint",
               content: {
                 "application/json": {
-                  schema: {
-                    type: "object",
-                    required: ["tokens"],
-                    properties: {
-                      tokens: {
-                        type: "array",
-                        items: { $ref: "#/components/schemas/Token" },
-                      },
-                    },
-                  },
+                  schema: page("tokens", "Token"),
                 },
               },
             },
@@ -134,24 +138,24 @@ export function getOpenApiDocument(context: DeploymentContext) {
           summary: "List markets",
           parameters: [
             {
-              name: "underlying",
+              name: "underlying_mint",
               in: "query",
               required: false,
-              description: "Filter by underlying mint",
+              description: "Filter by underlying mint (base58)",
               schema: { type: "string" },
             },
             {
-              name: "quote",
+              name: "quote_mint",
               in: "query",
               required: false,
-              description: "Filter by quote mint",
+              description: "Filter by quote mint (base58)",
               schema: { type: "string" },
             },
             {
-              name: "expiry",
+              name: "expiry_ts",
               in: "query",
               required: false,
-              description: "Filter by expiry, Unix seconds",
+              description: "Exact expiry, Unix seconds",
               schema: { type: "integer", format: "int64" },
             },
             {
@@ -167,22 +171,15 @@ export function getOpenApiDocument(context: DeploymentContext) {
               description: "Defaults to active markets only; false returns every market the server holds in memory",
               schema: { type: "boolean" },
             },
+            { $ref: "#/components/parameters/Limit" },
+            { $ref: "#/components/parameters/Cursor" },
           ],
           responses: {
             "200": {
-              description: "Markets",
+              description: "Markets, sorted by expiry_ts then PDA",
               content: {
                 "application/json": {
-                  schema: {
-                    type: "object",
-                    required: ["markets"],
-                    properties: {
-                      markets: {
-                        type: "array",
-                        items: { $ref: "#/components/schemas/Market" },
-                      },
-                    },
-                  },
+                  schema: page("markets", "Market"),
                 },
               },
             },
@@ -195,24 +192,17 @@ export function getOpenApiDocument(context: DeploymentContext) {
         get: {
           operationId: "listMakers",
           summary: "List registered makers",
+          parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }],
           responses: {
             "200": {
-              description: "Makers",
+              description: "Makers, sorted by PDA",
               content: {
                 "application/json": {
-                  schema: {
-                    type: "object",
-                    required: ["makers"],
-                    properties: {
-                      makers: {
-                        type: "array",
-                        items: { $ref: "#/components/schemas/Maker" },
-                      },
-                    },
-                  },
+                  schema: page("makers", "Maker"),
                 },
               },
             },
+            "400": errorResponse,
             "500": errorResponse,
             "503": errorResponse,
           },
@@ -266,6 +256,20 @@ export function getOpenApiDocument(context: DeploymentContext) {
           description: "Solana program-derived address encoded as base58",
           schema: { type: "string" },
         },
+        Limit: {
+          name: "limit",
+          in: "query",
+          required: false,
+          description: "Page size, at most the venue's max_page_size",
+          schema: { type: "integer", minimum: 1 },
+        },
+        Cursor: {
+          name: "cursor",
+          in: "query",
+          required: false,
+          description: "The previous page's next_cursor; omit for the first page",
+          schema: { type: "string" },
+        },
       },
       schemas: {
         Error: {
@@ -276,12 +280,15 @@ export function getOpenApiDocument(context: DeploymentContext) {
             code: { type: "string" },
           },
         },
+        Amount: {
+          type: "string",
+          pattern: "^(0|[1-9][0-9]*)$",
+          description: "Token atoms or a 1e9-scaled value as a canonical decimal string",
+        },
         Venue: {
           type: "object",
           required: [
             "program_id",
-            "protocol_fee_bps_premium",
-            "protocol_fee_bps_volume",
             "min_quote_validity_seconds",
             "settlement_buffer_seconds",
             "quote_refresh_lead_seconds",
@@ -291,11 +298,11 @@ export function getOpenApiDocument(context: DeploymentContext) {
             "max_quotes_per_rfq",
             "max_active_rfqs_per_taker",
             "pre_expiry_cutoff_seconds",
+            "max_page_size",
+            "max_batch_quotes",
           ],
           properties: {
             program_id: { type: "string" },
-            protocol_fee_bps_premium: { type: "integer" },
-            protocol_fee_bps_volume: { type: "integer" },
             min_quote_validity_seconds: { type: "integer" },
             settlement_buffer_seconds: { type: "integer" },
             quote_refresh_lead_seconds: { type: "integer" },
@@ -305,6 +312,8 @@ export function getOpenApiDocument(context: DeploymentContext) {
             max_quotes_per_rfq: { $ref: "#/components/schemas/CountLimit" },
             max_active_rfqs_per_taker: { $ref: "#/components/schemas/CountLimit" },
             pre_expiry_cutoff_seconds: { type: "integer" },
+            max_page_size: { type: "integer" },
+            max_batch_quotes: { type: "integer" },
           },
           additionalProperties: true,
         },
@@ -320,7 +329,7 @@ export function getOpenApiDocument(context: DeploymentContext) {
         },
         Token: {
           type: "object",
-          required: ["mint", "symbol", "decimals", "oracle_feed_ids", "role"],
+          required: ["mint", "symbol", "decimals", "oracle_feed_ids", "role", "schedule", "session", "protocol_fees"],
           properties: {
             mint: { type: "string" },
             symbol: { type: "string" },
@@ -337,16 +346,66 @@ export function getOpenApiDocument(context: DeploymentContext) {
                     type: { const: "underlying" },
                     size_rule: {
                       type: "object",
+                      description: "Sizes min_size + k * step up to max_size, in underlying atoms",
                       required: ["min_size", "max_size", "step"],
                       properties: {
-                        min_size: { type: "integer", format: "int64" },
-                        max_size: { type: "integer", format: "int64" },
-                        step: { type: "integer", format: "int64" },
+                        min_size: { $ref: "#/components/schemas/Amount" },
+                        max_size: { $ref: "#/components/schemas/Amount" },
+                        step: { $ref: "#/components/schemas/Amount" },
                       },
                     },
-                    strike_tick: { type: "integer", format: "int64" },
+                    strike_tick: { $ref: "#/components/schemas/Amount" },
                     quote_mints: { type: "array", items: { type: "string" } },
                   },
+                },
+              ],
+            },
+            schedule: {
+              description: "The price feed schedule",
+              oneOf: [
+                { type: "object", required: ["type"], properties: { type: { enum: ["unknown", "continuous"] } } },
+                {
+                  type: "object",
+                  required: ["type", "spec"],
+                  properties: { type: { const: "pyth" }, spec: { type: "string" } },
+                },
+              ],
+            },
+            session: {
+              description: "Whether the feed trades now; times are Unix seconds",
+              oneOf: [
+                {
+                  type: "object",
+                  required: ["type"],
+                  properties: { type: { enum: ["continuous", "closed_indefinitely", "unknown"] } },
+                },
+                {
+                  type: "object",
+                  required: ["type", "closes_at"],
+                  properties: { type: { const: "open" }, closes_at: { type: "integer", format: "int64" } },
+                },
+                {
+                  type: "object",
+                  required: ["type", "opens_at"],
+                  properties: { type: { const: "closed" }, opens_at: { type: "integer", format: "int64" } },
+                },
+              ],
+            },
+            protocol_fees: {
+              oneOf: [
+                {
+                  type: "object",
+                  required: ["type", "premium_bps", "volume_bps"],
+                  properties: {
+                    type: { const: "quote" },
+                    premium_bps: { type: "integer" },
+                    volume_bps: { type: "integer" },
+                  },
+                },
+                {
+                  type: "object",
+                  required: ["type"],
+                  properties: { type: { enum: ["not_quote_token", "unavailable"] } },
                 },
               ],
             },
@@ -355,34 +414,40 @@ export function getOpenApiDocument(context: DeploymentContext) {
         },
         Market: {
           type: "object",
-          required: ["pda", "underlying", "quote", "expiry_ts", "is_put", "status", "settlement_price"],
+          required: ["pda", "underlying_mint", "quote_mint", "expiry_ts", "is_put", "status", "settlement", "products"],
           properties: {
             pda: { type: "string" },
-            underlying: { type: "string", description: "Underlying mint" },
-            quote: { type: "string", description: "Quote mint" },
+            underlying_mint: { type: "string" },
+            quote_mint: { type: "string" },
             expiry_ts: { type: "integer", format: "int64" },
             is_put: { type: "boolean" },
             status: { type: "string", enum: ["active", "closed", "finalized"] },
-            settlement_price: {
-              anyOf: [{ type: "integer", format: "int64" }, { type: "null" }],
-              description: "Settlement price at 1e9 scale; null until the market is finalized",
+            settlement: {
+              oneOf: [
+                { type: "object", required: ["type"], properties: { type: { const: "pending" } } },
+                {
+                  type: "object",
+                  required: ["type", "price"],
+                  properties: {
+                    type: { const: "fixed" },
+                    price: { $ref: "#/components/schemas/Amount", description: "Settlement price, 1e9 scale" },
+                  },
+                },
+              ],
+            },
+            products: {
+              type: "array",
+              items: { type: "string", enum: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"] },
             },
           },
           additionalProperties: true,
         },
         Maker: {
           type: "object",
-          required: [
-            "pda",
-            "owner",
-            "quote_signing",
-            "total_trades",
-            "total_volume",
-            "total_quotes",
-          ],
+          required: ["pda", "maker_owner", "quote_signing", "total_trades", "total_volume", "total_quotes"],
           properties: {
             pda: { type: "string" },
-            owner: { type: "string" },
+            maker_owner: { type: "string" },
             quote_signing: { type: "string" },
             total_trades: { type: "integer", format: "int64" },
             total_volume: { type: "string", description: "Exact decimal text" },
@@ -396,6 +461,7 @@ export function getOpenApiDocument(context: DeploymentContext) {
             "usd",
             "total_volume_24h",
             "total_trades_24h",
+            "spread_trades_24h",
             "active_markets",
             "active_makers",
             "connected_makers",
@@ -411,8 +477,9 @@ export function getOpenApiDocument(context: DeploymentContext) {
                 priced_trades_24h: { type: "integer", minimum: 0 },
               },
             },
-            total_volume_24h: { type: "string", description: "Exact decimal text" },
+            total_volume_24h: { type: "string", description: "Raw aggregate, exact decimal text; not dollars" },
             total_trades_24h: { type: "integer", format: "int64" },
+            spread_trades_24h: { type: "integer", format: "int64" },
             active_markets: { type: "integer", format: "int64" },
             active_makers: { type: "integer", format: "int64" },
             connected_makers: { type: "integer", format: "int64" },

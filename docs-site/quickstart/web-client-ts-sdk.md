@@ -131,7 +131,7 @@ ws.on("marketDescriptors", (descriptors) => { /* cache these */ });
 ws.getMarketDescriptors(); // tradable markets only
 ```
 
-Each market and descriptor carries `products`, the pair's products for that market's side. A put market (`is_put: true`) lists a subset of `cash_secured_put`, `put_spread` and `cash_put`. A call market lists a subset of `covered_call` and `call_spread`. `settlement_price` is `null` until the market settles. Offer the user only products that appear in `products`.
+Each market and descriptor carries `products`, the pair's products for that market's side. A put market (`is_put: true`) lists a subset of `cash_secured_put`, `put_spread` and `cash_put`. A call market lists a subset of `covered_call` and `call_spread`. `settlement` is `{ "type": "pending" }` until the market settles, then `{ "type": "fixed", "price" }`. Offer the user only products that appear in `products`.
 
 To list positions, pass the full filter message. `ALL_POSITIONS` selects everything:
 
@@ -163,9 +163,9 @@ ws.on("quoteReceived", (quote) => {
 
 await ws.createRfq({
   market_pda: marketPdaBase58,
-  terms: { type: "covered_call", strike: 136_000_000_000 },
+  terms: { type: "covered_call", strike: "136000000000" },
   side: "sell",
-  quantity: 1_000_000_000, // 1 SOL in lamports; must satisfy size_rule
+  quantity: "1000000000", // 1 SOL in lamports; must satisfy size_rule
   timeout_seconds: 30,
   request_id: crypto.randomUUID(), // required; also the idempotency key
 });
@@ -174,10 +174,10 @@ await ws.createRfq({
 Other products:
 
 ```typescript
-{ type: "cash_secured_put", strike: 136_000_000_000 }
-{ type: "call_spread", lower_strike: 150_000_000_000, upper_strike: 160_000_000_000 }
-{ type: "put_spread", lower_strike: 130_000_000_000, upper_strike: 140_000_000_000 }
-{ type: "cash_put", strike: 136_000_000_000 }
+{ type: "cash_secured_put", strike: "136000000000" }
+{ type: "call_spread", lower_strike: "150000000000", upper_strike: "160000000000" }
+{ type: "put_spread", lower_strike: "130000000000", upper_strike: "140000000000" }
+{ type: "cash_put", strike: "136000000000" }
 ```
 
 Spread and cash put strikes must be multiples of the underlying's `strike_tick` (`1e9`-scaled; read it from `TokenInfo.role`). A spread needs `lower_strike < upper_strike`, and a call spread needs `lower_strike > 0`. The market's `is_put` must match the product's side.
@@ -231,9 +231,9 @@ With `side: "buy"` you buy the product. The maker writes it from its Maker PDA c
 ```typescript
 await ws.createRfq({
   market_pda: marketPdaBase58,
-  terms: { type: "covered_call", strike: 150_000_000_000 },
+  terms: { type: "covered_call", strike: "150000000000" },
   side: "buy",
-  quantity: 1_000_000_000,
+  quantity: "1000000000",
   timeout_seconds: 30,
   request_id: crypto.randomUUID(),
 });
@@ -255,6 +255,10 @@ const { ixs } = await flows.buildDepositFundsIxs({
   market: (await fetchMarket(rpc, marketPda)).data,
 });
 ```
+
+Until `expiry_ts` you can take the deposit back with `flows.buildWithdrawFundsIxs` (same arguments); the position is open again and can be funded again. Native SOL comes back wrapped.
+
+To fund several bought positions of one wallet, `flows.buildDepositFundsBatchIxs({ programId, payer, owner, items: [{ position, market }] })` returns `transactions`, each a set of instructions for one transaction (up to nine deposits, fewer across markets), and `deposits` with each `positionPda` and `amount`. Sign the transactions together with `signAllTransactions`; each lands on its own.
 
 Without a deposit all collateral returns to the writer at expiry, also in the money; the position settles as `not_exercised`. A bought spread or cash put needs no deposit and settles in cash: `holder_payoff` is yours. While the chain has settled a position and the server has not sealed that slot, its state is `terminal_pending { slot, outcome }`; show it, but do not count it.
 
@@ -395,7 +399,7 @@ ws.on("orderFailed", (orderIdHex, reason, orderVersion) => {});
 ws.on("rfqClosed", (data) => {
   // Terminal: clean up RFQ state.
   // data.reason: "expired" | "taker_cancelled" | "filled" | "market_expired" | "no_eligible_makers" | "server_shutdown"
-  // data.your_quote and data.winner are null when they do not apply.
+  // data.your_quote and data.winner are { type: "none" } when they do not apply.
 });
 ```
 
