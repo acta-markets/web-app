@@ -1,13 +1,17 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { getRfqBackendUrl } from "@/lib/rfq-client";
+import { writeSession } from "@/lib/state/session-store";
+import { walletKey } from "@/lib/state/keys";
+import { recall, remember } from "@/lib/state/remembered";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatUsdSmart } from "@/lib/markets";
 import type { PositionInfo } from "@/lib/rfq-client";
 import { TOKENS, getNetwork } from "@/lib/tokens";
 import { PortfolioClient } from "./portfolio-client";
 
-const mocks = vi.hoisted(() => ({ markets: [] as unknown[], buildDeposit: vi.fn(), buildWithdraw: vi.fn(), sendTx: vi.fn(), sendAll: vi.fn(), client: {}, getClient: vi.fn(), page: vi.fn(), summary: vi.fn(), wallet: "wallet-a", live: [] as PositionInfo[], fetchPositions: vi.fn(), authenticated: true }));
+const mocks = vi.hoisted(() => ({ markets: [] as unknown[], buildDeposit: vi.fn(), buildWithdraw: vi.fn(), sendTx: vi.fn(), sendAll: vi.fn(), client: {}, getClient: vi.fn(), page: vi.fn(), summary: vi.fn(), wallet: "wallet-a", live: [] as PositionInfo[], fetchPositions: vi.fn(), authenticated: true, connected: true, expected: null as { address: string } | null }));
 vi.mock("@/lib/portfolio-api", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/portfolio-api")>(), fetchWalletPositions: mocks.page, fetchWalletPositionSummary: mocks.summary }));
-vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ isConnected: true, selectedAccount: { address: mocks.wallet } }) }));
+vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ isConnected: mocks.connected, selectedAccount: mocks.connected ? { address: mocks.wallet } : null, expectedAccount: mocks.expected }) }));
 vi.mock("@/components/solana/solana-connect-button", () => ({ SolanaConnectButton: () => null }));
 vi.mock("@/components/rfq/rfq-provider", () => ({ useRfqContext: () => ({ positions: mocks.live, markets: mocks.markets, marketDescriptors: [], isAuthenticated: mocks.authenticated, fetchPositions: mocks.fetchPositions, positionsFailed: false, getClient: mocks.getClient }) }));
 vi.mock("./portfolio-earnings-chart", () => ({ PortfolioEarningsChart: ({ points }: { points: unknown[] }) => <div data-testid="income-chart">{JSON.stringify(points)}</div> }));
@@ -593,6 +597,44 @@ describe("Portfolio states", () => {
     expect(document.body.textContent).not.toMatch(/unavailable/i);
   });
 
+  it("shows a returning wallet its page loading, not a request to connect, while the wallet reconnects", () => {
+    mocks.connected = false;
+    mocks.expected = { address: "wallet-a" };
+    mocks.authenticated = false;
+    try {
+      render(<PortfolioClient />);
+      expect(screen.getByRole("status").textContent).toBe("Loading your portfolio");
+      expect(screen.queryByText("Connect wallet")).toBeNull();
+      expect(screen.queryByText("Sign in to see your positions")).toBeNull();
+    } finally {
+      mocks.connected = true;
+      mocks.expected = null;
+    }
+  });
+
+  it("asks a wallet nobody remembers to connect", () => {
+    mocks.connected = false;
+    mocks.authenticated = false;
+    try {
+      render(<PortfolioClient />);
+      expect(screen.getByText("Connect wallet")).toBeTruthy();
+    } finally {
+      mocks.connected = true;
+    }
+  });
+
+  it("shows the page loading, not a sign-in request, while a stored session is being resumed", () => {
+    mocks.authenticated = false;
+    writeSession(getRfqBackendUrl(), mocks.wallet, "stored", 4_000_000_000);
+    try {
+      render(<PortfolioClient />);
+      expect(screen.getByRole("status").textContent).toBe("Loading your portfolio");
+      expect(screen.queryByText("Sign in to see your positions")).toBeNull();
+    } finally {
+      window.localStorage.clear();
+    }
+  });
+
   it("asks for the wallet sign-in instead of reporting errors while signed out", () => {
     mocks.authenticated = false;
     render(<PortfolioClient />);
@@ -610,5 +652,89 @@ describe("Portfolio states", () => {
     expect(screen.queryByRole("tab", { name: "24H" })).toBeNull();
     expect(screen.getByText("$123.00")).toBeTruthy();
     expect(screen.getByText("$23.00")).toBeTruthy();
+  });
+});
+
+
+describe("a returning wallet's last-loaded portfolio", () => {
+  const nowSec = () => Math.floor(Date.now() / 1000);
+  const bought = (pda = "bought") => ({
+    ...position(pda, nowSec() - 100), side: "buy", state: "open", market_pda: "m1", expiry_ts: nowSec() + 3600,
+    terms: { type: "covered_call", strike: "150000000000" }, quantity: "2000000000", price: "5000000000", total_premium: "9000000", settlement: undefined,
+  }) as unknown as PositionInfo;
+  /** What an earlier visit left on this device for a wallet. */
+  function saved(wallet: string) {
+    remember(walletKey(wallet, "positions"), [bought()]);
+    remember(walletKey(wallet, "history"), { positions: [position("closed", 1_800_000_000)], nextCursor: "more" });
+    remember(walletKey(wallet, "income-summary"), summary);
+  }
+  const away = () => { mocks.connected = false; mocks.expected = { address: "wallet-a" }; mocks.authenticated = false; };
+  afterEach(() => { mocks.connected = true; mocks.expected = null; });
+
+  it("is on screen before the wallet has reconnected, said to be last-loaded, with nothing to fund from it", () => {
+    saved("wallet-a");
+    away();
+    render(<PortfolioClient />);
+    expect(screen.getByText("Net P&L")).toBeTruthy();
+    expect(screen.getByTestId("income-chart").textContent).toContain('"v":123');
+    expect(screen.getByText(/^Your portfolio as of .+\. Updating\.$/)).toBeTruthy();
+    expect(screen.queryByText("Connect wallet")).toBeNull();
+    expect(screen.queryByText("Sign in to see your positions")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    // the card's Fund button is there but off, and the row offers none
+    const fund = screen.getAllByRole("button", { name: /^Fund/ }) as HTMLButtonElement[];
+    expect(fund.length).toBeGreaterThan(0);
+    expect(fund.every((button) => button.disabled)).toBe(true);
+    expect(mocks.page).not.toHaveBeenCalled();
+  });
+
+  it("is on screen for a connected wallet while its sign-in is still under way", () => {
+    saved("wallet-a");
+    mocks.authenticated = false;
+    render(<PortfolioClient />);
+    expect(screen.getByText("Net P&L")).toBeTruthy();
+    expect(screen.getByText(/^Your portfolio as of /)).toBeTruthy();
+    expect((screen.getAllByRole("button", { name: /^Fund/ }) as HTMLButtonElement[]).every((button) => button.disabled)).toBe(true);
+  });
+
+  it("is never shown for another wallet", () => {
+    saved("wallet-b");
+    away();
+    render(<PortfolioClient />);
+    expect(screen.queryByText("Net P&L")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Loading your portfolio");
+  });
+
+  it("gives way to the live portfolio once signed in, with its actions back and no marker", async () => {
+    saved("wallet-a");
+    mocks.live = [bought()];
+    mocks.page.mockResolvedValue({ positions: [position("closed", 1_800_000_000)], next_cursor: null });
+    render(<PortfolioClient />);
+    await waitFor(() => expect(mocks.page).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText(/^Your portfolio as of /)).toBeNull());
+    expect((screen.getAllByRole("button", { name: /^Fund/ }) as HTMLButtonElement[]).some((button) => !button.disabled)).toBe(true);
+  });
+
+  it("keeps the first page and the income summary for the next visit once they load", async () => {
+    mocks.page.mockResolvedValue({ positions: [position("closed", 1_800_000_000)], next_cursor: "page-2" });
+    render(<PortfolioClient />);
+    await screen.findByText("Net P&L");
+    await waitFor(() => expect(recall(walletKey("wallet-a", "income-summary"))).toEqual(summary));
+    expect(recall<{ positions: PositionInfo[]; nextCursor: string | null }>(walletKey("wallet-a", "history"))).toMatchObject({ nextCursor: "page-2", positions: [{ pda: "closed" }] });
+  });
+
+  it("keeps the history on screen while it is read again after a position settles", async () => {
+    mocks.page.mockResolvedValueOnce({ positions: [position("closed", 1_800_000_000)], next_cursor: null });
+    const view = render(<PortfolioClient />);
+    await screen.findByText("Net P&L");
+    fireEvent.click(screen.getByRole("tab", { name: "History" }));
+    expect(screen.getByText(/ call$/)).toBeTruthy();
+    // a position settles: the settled history is read again, and must not blank meanwhile
+    mocks.page.mockImplementation(() => new Promise(() => {}));
+    mocks.live = [{ ...position("just-settled", 1_800_000_100), revision: { slot: 1 } } as unknown as PositionInfo];
+    view.rerender(<PortfolioClient />);
+    await waitFor(() => expect(mocks.page).toHaveBeenCalledTimes(2));
+    expect(screen.getAllByText(/ call$/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Loading positions...")).toBeNull();
   });
 });

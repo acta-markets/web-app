@@ -54,6 +54,14 @@ function storageKeyFor(scope: StorageScope): string | null {
   if (!wallet || !backend || typeof window === "undefined") return null;
   return `${UNFINISHED_ORDER_KEY}:${encodeURIComponent(backend)}:${encodeURIComponent(wallet)}`;
 }
+/**
+ * Whether this wallet has an accepted order that has not finished, on this backend. Read-only,
+ * for a page that only needs to say so and point at Trade, where the order is reconciled.
+ */
+export function hasUnfinishedOrder(scope: StorageScope): boolean {
+  const key = storageKeyFor(scope);
+  return key !== null && readStoredOrder(key) !== null;
+}
 function readStoredOrder(key: string): StoredOrder | null {
   try {
     const value: unknown = JSON.parse(window.localStorage.getItem(key) ?? "null");

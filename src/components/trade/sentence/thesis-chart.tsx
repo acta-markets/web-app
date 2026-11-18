@@ -9,6 +9,8 @@ import { Chevron } from "@/components/app-ui/chevron";
 import { cn } from "@/lib/cn";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
+import { publicKey } from "@/lib/state/keys";
+import { useResource } from "@/lib/state/use-resource";
 import { loadPriceHistory } from "@/lib/trade/price-history";
 import type { Direction, ZoneLabel } from "@/lib/trade/thesis";
 
@@ -56,23 +58,35 @@ function downsample(points: Point[], max: number): Point[] {
   return Array.from({ length: max }, (_, i) => points[Math.round(i * step)]);
 }
 
-/** Price history from CoinGecko via `/api/market/history`; a range change keeps the old series until the new one lands. */
+const HISTORY_FRESH_MS = 5 * 60 * 1000;
+const HISTORY_SHOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Price history from CoinGecko via `/api/market/history`, through the shared cache: a series
+ * already loaded (this session, or an earlier one on this device) is drawn at once and
+ * replaced when a newer one lands. A range change keeps the old series up meanwhile; a change
+ * of asset does not, another asset's prices are never drawn under this one's name.
+ */
 function usePriceHistory(symbol: string, range: Range) {
-  const [state, setState] = useState<{ symbol: string; range: Range; points: Point[] } | null>(null);
-
-  useEffect(() => {
-    const ctl = new AbortController();
-    // retries a rate-limited source on its own, so the state is set once: with a series, or empty
-    void loadPriceHistory(symbol, range, ctl.signal).then((points) => {
-      if (!ctl.signal.aborted) setState({ symbol, range, points: downsample(points, MAX_POINTS) });
-    });
-    return () => ctl.abort();
-  }, [symbol, range]);
-
-  const sameAsset = state?.symbol === symbol;
+  const series = useResource<Point[]>({
+    key: publicKey("price-history", symbol, range),
+    load: async (signal) => {
+      const points = downsample(await loadPriceHistory(symbol, range, signal), MAX_POINTS);
+      // an empty answer is a failure or an asset without history: not worth keeping, asked again next time
+      if (points.length === 0) throw new Error("No price history");
+      return points;
+    },
+    initial: [],
+    pollMs: 0,
+    staleMs: HISTORY_FRESH_MS,
+    persist: true,
+    maxShowMs: HISTORY_SHOW_MS,
+  });
+  const last = useRef<{ symbol: string; points: Point[] } | null>(null);
+  if (!series.loading) last.current = { symbol, points: series.data };
   return {
-    points: sameAsset ? state.points : [],
-    loading: !sameAsset || state.range !== range,
+    points: series.loading ? (last.current?.symbol === symbol ? last.current.points : []) : series.data,
+    loading: series.loading,
   };
 }
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { readWelcomeSeen, signInFailureText, signInSteps, signInView, welcomeSeenKey, writeWelcomeSeen, type SignInInput } from "./onboarding";
+import { firstSignInDestination, readWelcomeSeen, signInFailureText, signInSteps, signInView, welcomeSeenKey, writeWelcomeSeen, type SignInInput } from "./onboarding";
 
 const base: SignInInput = {
   connection: "other",
@@ -106,5 +106,19 @@ describe("remembering a welcome", () => {
     expect(welcomeSeenKey("wss://devnet-api.acta.markets", " ")).toBeNull();
     writeWelcomeSeen(null);
     expect(readWelcomeSeen(null)).toBe(false);
+  });
+});
+
+describe("where a first sign-in lands", () => {
+  it("is Trade, from anywhere else in the app", () => {
+    expect(firstSignInDestination("/rewards", "/trade")).toBe("/trade");
+    expect(firstSignInDestination("/portfolio", "/trade")).toBe("/trade");
+    expect(firstSignInDestination("/earn/SomeVault", "/trade")).toBe("/trade");
+    expect(firstSignInDestination(null, "/trade")).toBe("/trade");
+  });
+
+  it("goes nowhere when the trader is already on Trade", () => {
+    expect(firstSignInDestination("/trade", "/trade")).toBeNull();
+    expect(firstSignInDestination("/trade2", "/trade")).toBe("/trade");
   });
 });

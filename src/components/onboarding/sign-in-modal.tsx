@@ -12,6 +12,7 @@ const TITLES: Record<Exclude<SignInView, "hidden">, string> = {
   sign: "Sign in with your wallet",
   checking: "Sign in with your wallet",
   failed: "Sign-in was not completed",
+  elsewhere: "This wallet is active elsewhere",
   welcome: "You are signed in",
 };
 
@@ -90,7 +91,17 @@ export function SignInModal({
   if (view === "hidden") return null;
   return (
     <AppModal open onClose={onClose} title={TITLES[view]} showHowItWorks={false} className="max-w-lg">
-      {view === "failed" ? (
+      {view === "elsewhere" ? (
+        <>
+          <p className={cn(TYPE_NOTE, "text-content-secondary")}>
+            It was opened in another tab or on another device, and one place at a time holds the connection. Nothing of yours changed.
+          </p>
+          <AppButton onClick={onRetry} className="self-start">
+            Use it here
+            <Chevron kind="go" className="h-4 w-4" />
+          </AppButton>
+        </>
+      ) : view === "failed" ? (
         <>
           <p className={cn(TYPE_NOTE, "text-content-secondary")}>{failure} You are not signed in, and nothing was charged or moved.</p>
           <AppButton onClick={onRetry} className="self-start">

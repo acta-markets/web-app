@@ -81,3 +81,26 @@ describe("SolanaConnectButton", () => {
     expect(disconnectWallet).not.toHaveBeenCalled();
   });
 });
+
+describe("a returning wallet", () => {
+  it("is shown by its address while it reconnects, never as Connect, before wallets are even detected", () => {
+    mocks.solana = { ...mocks.solana, isReady: false, expectedAccount: { address: ADDRESS } };
+    render(<SolanaConnectButton />);
+    expect(screen.getByRole("button", { name: /reconnecting\. Open wallet$/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("opens the wallet panel like every other state", () => {
+    mocks.solana = { ...mocks.solana, expectedAccount: { address: ADDRESS } };
+    render(<SolanaConnectButton />);
+    fireEvent.click(screen.getByRole("button", { name: /reconnecting/ }));
+    expect(mocks.openSidebar).toHaveBeenCalledOnce();
+  });
+
+  it("gives way to Connect once the app stops expecting it", () => {
+    mocks.solana = { ...mocks.solana, expectedAccount: null };
+    render(<SolanaConnectButton />);
+    expect(screen.getByRole("button", { name: "Connect" })).toBeTruthy();
+  });
+});

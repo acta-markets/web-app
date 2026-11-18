@@ -5,13 +5,14 @@ import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { SignInModal } from "@/components/onboarding/sign-in-modal";
 import { signInFailureText, type SignInView } from "@/lib/onboarding";
 
-type Scene = "sign-new" | "sign-returning" | "checking" | "declined" | "timeout" | "welcome-arriving" | "welcome-funded" | "welcome-league" | "welcome-mainnet";
+type Scene = "sign-new" | "sign-returning" | "checking" | "declined" | "timeout" | "elsewhere" | "welcome-arriving" | "welcome-funded" | "welcome-league" | "welcome-mainnet";
 const SCENES: Array<{ value: Scene; label: string }> = [
   { value: "sign-new", label: "Sign, new wallet" },
   { value: "sign-returning", label: "Sign, returning" },
   { value: "checking", label: "Signed, checking" },
   { value: "declined", label: "Declined" },
   { value: "timeout", label: "Timed out" },
+  { value: "elsewhere", label: "Active elsewhere" },
   { value: "welcome-arriving", label: "Welcome, funds arriving" },
   { value: "welcome-funded", label: "Welcome, funded" },
   { value: "welcome-league", label: "Welcome, league open" },
@@ -24,6 +25,7 @@ const VIEW: Record<Scene, SignInView> = {
   checking: "checking",
   declined: "failed",
   timeout: "failed",
+  elsewhere: "elsewhere",
   "welcome-arriving": "welcome",
   "welcome-funded": "welcome",
   "welcome-league": "welcome",

@@ -16,12 +16,16 @@ import { AppButton } from "@/components/app-ui/app-button";
 import { AppCard } from "@/components/app-ui/app-card";
 import { Check, X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { getRfqBackendUrl } from "@/lib/rfq-client";
+import { getRfqBackendUrl, type EarnAssetSummary, type TokenMarketsInfoData } from "@/lib/rfq-client";
+import type { TokenProtocolFees } from "@acta-markets/ts-sdk/ws";
+import { useRemembered } from "@/lib/state/remembered";
+import { earnSummaryKey, feesKey, lastKnownPrice, lastKnownSnapshot, marketsKey, primeTrade, referencePricesKey, SNAPSHOT_SHOW_MS, type SavedReferencePrices } from "@/lib/trade/last-known";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { displayQuoteSymbol, getToken, getTokenMint } from "@/lib/tokens";
 import { annualizeYield, grossFromIndicative1e9, previewFill } from "@acta-markets/ts-sdk/ws";
 import { DEFAULT_SIZE_UNITS, assetsForMenu, pickAsset, tradeAssets } from "@/lib/trade/assets";
+import { draftDetails, tradeDraftStore, tradeViewSearch, updateTradeDraft } from "@/lib/trade/draft";
 import { formatAmount, formatExpiryDay, formatTimeAway, formatUsdAmount } from "@/lib/trade/format";
 import {
   alignQuantityToRule,
@@ -67,6 +71,8 @@ import { ThesisSentence } from "./thesis-sentence";
 import { ThesisChart } from "./thesis-chart";
 
 const PRICE_SCALE = 1_000_000_000;
+// the saved copies are asked for as this file loads, so they are in memory by the first render
+primeTrade();
 // no top padding: the page's title sits right above and brings its own
 const CONTAINER = "mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6 max-md:px-3";
 /** The chosen strike if still listed, else the closest one by price. */
@@ -101,17 +107,31 @@ export function splitOutcome(title: string): [string, string] | null {
 export function SentenceTrade({
   mode,
   initialAsset,
+  initialDirection,
   footer,
 }: {
   /** "yield" sells the belief, "profit" pays for it */
   mode: "yield" | "profit";
   initialAsset?: string | null;
+  /** The direction the address names (`?dir=`), which wins over the remembered one. */
+  initialDirection?: string | null;
   /** a quiet line under the card, e.g. the link to how this works */
   footer?: React.ReactNode;
 }) {
   const side: TakerSide = mode === "yield" ? "sell" : "buy";
-  const { earnSummary, referralStatus, openReferralGate, isAuthenticated, assetSnapshots, getAssetSnapshots, protocolFeesBySymbol } = useRfqContext();
-  const { rpc, selectedAccount, signTransaction, signTransactionBytes } = useSolana();
+  const { earnSummary: liveEarnSummary, referralStatus, openReferralGate, isAuthenticated, assetSnapshots, getAssetSnapshots, protocolFeesBySymbol: liveFees, connectionState } = useRfqContext();
+  // What the page last loaded on this device, so a return visit draws it before the socket
+  // has answered: the asset list here, the selected asset's market data below. All of it is
+  // for display. A quote is only asked for from this session's own snapshot.
+  const savedEarnSummary = useRemembered<EarnAssetSummary[]>(earnSummaryKey(), { restore: true });
+  const savedIsRecent = savedEarnSummary.updatedAt > 0 && Date.now() - savedEarnSummary.updatedAt < SNAPSHOT_SHOW_MS;
+  const earnSummary = liveEarnSummary ?? (savedIsRecent ? (savedEarnSummary.data ?? null) : null);
+  const savedFees = useRemembered<Array<[string, TokenProtocolFees]>>(feesKey(), { restore: true });
+  const protocolFeesBySymbol = useMemo(
+    () => (liveFees.size > 0 || !savedFees.data ? liveFees : new Map(savedFees.data)),
+    [liveFees, savedFees.data],
+  );
+  const { rpc, selectedAccount, signTransaction, signTransactionBytes, expectedAccount } = useSolana();
   const { openSidebar } = useWalletSidebar();
   const walletAddress = selectedAccount?.address;
   const { isRequesting, failure, request, modalProps } = useQuoteRequest({ cancelOnUnmount: true });
@@ -126,8 +146,11 @@ export function SentenceTrade({
   // restart the refresh below, which costs one snapshot request per asset.
   const assetMintsKey = assets.map((a) => a.mint).join(",");
   const assetMints = useMemo(() => (assetMintsKey ? assetMintsKey.split(",") : []), [assetMintsKey]);
+  // Asked only over an open socket, and again as soon as it opens: the asset list can be on
+  // screen from the device before the socket is, and a request made then would be lost.
+  const socketOpen = connectionState === "connected" || connectionState === "authenticating" || connectionState === "authenticated";
   useEffect(() => {
-    if (assetMints.length === 0) return;
+    if (assetMints.length === 0 || !socketOpen) return;
     const refresh = () => { if (!document.hidden) getAssetSnapshots(assetMints); };
     refresh();
     const id = window.setInterval(refresh, 30_000);
@@ -136,17 +159,27 @@ export function SentenceTrade({
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [assetMints, getAssetSnapshots]);
+  }, [assetMints, getAssetSnapshots, socketOpen]);
+  const savedPrices = useRemembered<SavedReferencePrices>(referencePricesKey(), { restore: true });
+  // The setup the visitor left on this device is where the page starts: the asset, the
+  // direction, and for a day the price, date and size (`src/lib/trade/draft.ts`). What the
+  // address names wins over it. Everything remembered is a starting choice only: the market's
+  // own lists below decide what is on offer now.
+  const draftStore = useMemo(() => tradeDraftStore(), []);
+  const [startDraft] = useState(() => draftStore.read());
+  const [startDetails] = useState(() => draftDetails(startDraft, initialAsset ?? startDraft.asset));
   const [assetChoice, setAssetChoice] = useState<string | null>(null);
-  const [directionChoice, setDirectionChoice] = useState<Direction>("above");
-  const [expiryChoice, setExpiryChoice] = useState<number | null>(null);
-  const [strikeChoice, setStrikeChoice] = useState<number | null>(null);
+  const [directionChoice, setDirectionChoice] = useState<Direction>(
+    initialDirection === "above" || initialDirection === "below" ? initialDirection : (startDraft.direction ?? "above"),
+  );
+  const [expiryChoice, setExpiryChoice] = useState<number | null>(startDetails.expiryTs);
+  const [strikeChoice, setStrikeChoice] = useState<number | null>(startDetails.strike);
   /** the strike being considered in the open strike menu (hovered or arrowed to); the chart previews it */
   const [strikePreview, setStrikePreview] = useState<number | null>(null);
   /** what the user typed; null follows the suggested amount */
-  const [amountInput, setAmountInput] = useState<string | null>(null);
+  const [amountInput, setAmountInput] = useState<string | null>(startDetails.amount);
   /** token the amount is entered in; null follows the position's default */
-  const [denomChoice, setDenomChoice] = useState<boolean | null>(null);
+  const [denomChoice, setDenomChoice] = useState<boolean | null>(startDetails.inQuote);
   // The ticket under the chart starts closed behind one button, so the first screen is the
   // belief, the chart and that button. Every visit starts that way: it is not remembered, so
   // the page never opens differently from one load to the next.
@@ -161,12 +194,32 @@ export function SentenceTrade({
     });
   };
 
-  const asset = pickAsset(assets, assetChoice ?? initialAsset);
-  const snapshot = useTokenMarketsSnapshot(asset?.mint ?? null);
+  const asset = pickAsset(assets, assetChoice ?? initialAsset ?? startDraft.asset);
+  // Every choice is kept as it is made, and the address names the view (asset and direction),
+  // so leaving and coming back, a reload, or a copied link all open the same setup.
+  const assetSymbol = asset?.symbol ?? null;
+  useEffect(() => {
+    if (!assetSymbol) return;
+    updateTradeDraft(draftStore, { asset: assetSymbol, direction: directionChoice, mode, expiryTs: expiryChoice, strike: strikeChoice, amount: amountInput, inQuote: denomChoice });
+    if (typeof window === "undefined" || window.location.pathname !== "/trade") return;
+    const search = tradeViewSearch(window.location.search, { asset: assetSymbol, direction: directionChoice });
+    // replaceState, not the router: the address changes, the page is not asked for again
+    if (`?${search}` !== window.location.search) window.history.replaceState(null, "", `/trade?${search}`);
+  }, [draftStore, assetSymbol, directionChoice, mode, expiryChoice, strikeChoice, amountInput, denomChoice]);
+  // This session's own snapshot is the only one a quote is built from. Until it arrives, the
+  // one saved on the last visit is drawn in its place (and again through a dropped connection).
+  const liveSnapshot = useTokenMarketsSnapshot(asset?.mint ?? null);
+  const savedSnapshot = useRemembered<TokenMarketsInfoData>(asset ? marketsKey(asset.mint) : null, { restore: true });
+  const minuteNow = Math.floor(Date.now() / 60_000);
+  const lastKnown = useMemo(
+    () => (liveSnapshot ? null : lastKnownSnapshot({ data: savedSnapshot.data, updatedAt: savedSnapshot.updatedAt }, minuteNow * 60_000)),
+    [liveSnapshot, savedSnapshot.data, savedSnapshot.updatedAt, minuteNow],
+  );
+  const snapshot = liveSnapshot ?? lastKnown;
   const spot = spotFromSnapshot(snapshot);
   /** Spot for any listed underlying, from the picker's per-mint snapshots (selected one first). */
   const spotFor = (mint: string) =>
-    spotFromSnapshot(assetSnapshots.get(mint) ?? (mint === asset?.mint ? snapshot : null));
+    spotFromSnapshot(assetSnapshots.get(mint) ?? (mint === asset?.mint ? snapshot : null)) ?? lastKnownPrice(savedPrices.data, mint);
   const nowSec = Math.floor(Date.now() / 1000);
 
   // the sentence's direction maps straight onto the strategy for the mode: above is a put
@@ -323,9 +376,12 @@ export function SentenceTrade({
   }, [snapshot, asset, side, nowSec]);
 
   const cta = easyCta({
-    walletConnected: !!walletAddress,
+    // a returning wallet that is still reconnecting is not asked to connect
+    walletConnected: !!walletAddress || !!expectedAccount,
     referralGated: referralStatus === "required",
-    pricesLoading: !snapshot,
+    // only this session's own snapshot can be quoted from
+    pricesLoading: !liveSnapshot,
+    pricesLastKnown: !liveSnapshot && !!lastKnown,
     hasMarkets: expiries.length > 0,
     hasStrike: !!strike,
     // a buy has no indicative price: any listed strike is quotable
@@ -333,7 +389,7 @@ export function SentenceTrade({
     amountEntered: amount > 0,
     sizeViolation,
     insufficientBalance: side === "sell" && insufficientBalance,
-    connecting: !!walletAddress && !isAuthenticated,
+    connecting: (!!walletAddress && !isAuthenticated) || (!walletAddress && !!expectedAccount),
     requesting: isRequesting,
     // one label for both modes: the click asks for a quote, and the modal that follows confirms it
     ctaLabel: "Take trade",

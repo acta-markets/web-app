@@ -15,6 +15,8 @@ export type SignInView =
   | "checking"
   /** The signature did not happen. */
   | "failed"
+  /** Another tab or device took the wallet's session; this one can take it back. */
+  | "elsewhere"
   /** Signed in for the first time: what the trader has, and the way to a first trade. */
   | "welcome";
 
@@ -26,6 +28,8 @@ export type SignInInput = {
   dismissed: boolean;
   /** This sign-in ended without a signature. */
   failed: boolean;
+  /** The wallet's session was taken over by another tab or device. */
+  elsewhere?: boolean;
   /** The invite gate is up; it owns the screen. */
   gateOpen: boolean;
   /** Whether the wallet has traded: "pending" has not, "active" has, null is not known yet. */
@@ -43,6 +47,7 @@ export type SignInInput = {
  */
 export function signInView(i: SignInInput): SignInView {
   if (i.dismissed) return "hidden";
+  if (i.elsewhere && i.connection !== "authenticating") return "elsewhere";
   if (i.failed) return "failed";
   if (i.connection === "authenticating") return i.prompted ? "sign" : "hidden";
   if (i.connection === "authenticated" && i.prompted && !i.seen && !i.gateOpen) {
@@ -50,6 +55,15 @@ export function signInView(i: SignInInput): SignInView {
     if (i.takerStatus === null && !i.gaveUpWaiting) return "checking";
   }
   return "hidden";
+}
+
+/**
+ * Where a first sign-in lands. A new trader is taken to Trade, wherever they signed in, so the
+ * welcome's "first trade" is on the page behind it. Null when they are already there.
+ */
+export function firstSignInDestination(pathname: string | null, home: string): string | null {
+  if (pathname === home || pathname?.startsWith(`${home}/`)) return null;
+  return home;
 }
 
 export type SignInStep = { id: "sign" | "funds" | "trade"; label: string; state: "done" | "now" | "next" };

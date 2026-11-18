@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { EarnAssetSummary, TokenMarketsInfoData } from "@/lib/rfq-client";
 import { getTokenMint } from "@/lib/tokens";
+import { publicKey } from "@/lib/state/keys";
+import { tradeDraftStore, updateTradeDraft } from "@/lib/trade/draft";
+import { getQueryClient } from "@/lib/state/query-client";
+import { remember } from "@/lib/state/remembered";
 import { SentenceTrade, splitOutcome } from "./sentence-trade";
 
 const mocks = vi.hoisted(() => ({
@@ -450,5 +454,189 @@ describe("sentence trade", () => {
     act(() => vi.advanceTimersByTime(30_000));
     expect(mocks.context.cancelRfq).toHaveBeenCalledOnce();
     expect(screen.getByRole("alert").textContent).toBe("No quote came back in 30 seconds. Try again.");
+  });
+});
+
+
+describe("coming back to Trade before the socket has answered", () => {
+  const notLoadedYet = () => {
+    mocks.context = { ...mocks.context, earnSummary: null, tokenMarketsInfo: null };
+  };
+
+  it("draws the page from the asset list last loaded on this device", () => {
+    remember(publicKey("earn-summary"), summary());
+    notLoadedYet();
+    renderClosed(<SentenceTrade mode="yield" />);
+    expect(screen.queryByTestId("trade-skeleton")).toBeNull();
+    expect(screen.getByTestId("open-ticket")).toBeTruthy();
+  });
+
+  it("cannot ask for a quote from it: prices are still loading until this session's own snapshot arrives", () => {
+    remember(publicKey("earn-summary"), summary());
+    notLoadedYet();
+    connectWallet();
+    mocks.context = { ...mocks.context, earnSummary: null, tokenMarketsInfo: null };
+    render(<SentenceTrade mode="yield" />);
+    expect(screen.queryByRole("button", { name: "Take trade" })).toBeNull();
+    const button = screen.getByRole("button", { name: "Loading prices..." }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    fireEvent.click(button);
+    expect((mocks.context.submitRfq as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+  });
+
+  it("draws strikes and the premium from the market data last loaded, and still cannot quote from it", () => {
+    remember(publicKey("earn-summary"), summary());
+    remember(publicKey("markets", SOL), snapshot());
+    notLoadedYet();
+    connectWallet();
+    mocks.context = { ...mocks.context, earnSummary: null, tokenMarketsInfo: null };
+    render(<SentenceTrade mode="yield" />);
+    expect(select("Strike").value).toBe(String(95e9));
+    expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.10");
+    expect(screen.queryByRole("button", { name: "Take trade" })).toBeNull();
+    const button = screen.getByRole("button", { name: "Updating prices..." }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    fireEvent.click(button);
+    expect((mocks.context.submitRfq as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+  });
+
+  it("uses the saved fee schedule for that premium while the live one is on its way", () => {
+    remember(publicKey("earn-summary"), summary());
+    remember(publicKey("markets", SOL), snapshot());
+    remember(publicKey("protocol-fees"), [["USDC", { type: "quote", premium_bps: 0, volume_bps: 0 }]]);
+    notLoadedYet();
+    mocks.context = { ...mocks.context, protocolFeesBySymbol: new Map() };
+    render(<SentenceTrade mode="yield" />);
+    expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.10");
+  });
+
+  it("shows no premium from market data saved more than ten minutes ago", () => {
+    remember(publicKey("earn-summary"), summary());
+    getQueryClient().setQueryData(publicKey("markets", SOL), snapshot(), { updatedAt: now * 1000 - 11 * 60 * 1000 });
+    vi.spyOn(Date, "now").mockReturnValue(now * 1000 + 11 * 60 * 1000);
+    notLoadedYet();
+    render(<SentenceTrade mode="yield" />);
+    // the dates and strikes are still there to look at; the paid-now figure is not
+    expect(select("Strike").value).toBe(String(95e9));
+    expect(screen.getByTestId("trade-headline").textContent).not.toMatch(/\$\d/);
+  });
+
+  it("draws nothing from market data saved more than a day ago", () => {
+    remember(publicKey("earn-summary"), summary());
+    getQueryClient().setQueryData(publicKey("markets", SOL), snapshot(), { updatedAt: now * 1000 - 25 * 60 * 60 * 1000 });
+    notLoadedYet();
+    connectWallet();
+    mocks.context = { ...mocks.context, earnSummary: null, tokenMarketsInfo: null };
+    render(<SentenceTrade mode="yield" />);
+    expect(screen.getByRole("button", { name: "Loading prices..." })).toBeTruthy();
+    expect(screen.queryByTestId("trade-headline")?.textContent ?? "").not.toMatch(/\$\d/);
+  });
+
+  it("takes this session's own snapshot over the saved one as soon as it arrives", () => {
+    const saved = snapshot();
+    (saved as unknown as { reference_price: number }).reference_price = 50e9;
+    remember(publicKey("markets", SOL), saved);
+    connectWallet();
+    render(<SentenceTrade mode="yield" />);
+    expect(screen.getByRole("button", { name: "Take trade" })).toBeTruthy();
+  });
+
+  it("asks for the other assets' prices only once the socket is open, and again when it opens", () => {
+    remember(publicKey("earn-summary"), summary());
+    notLoadedYet();
+    mocks.context = { ...mocks.context, connectionState: "connecting" };
+    const view = render(<SentenceTrade mode="yield" />);
+    expect(mocks.context.getAssetSnapshots).not.toHaveBeenCalled();
+    mocks.context = { ...mocks.context, connectionState: "connected" };
+    view.rerender(<SentenceTrade mode="yield" />);
+    expect(mocks.context.getAssetSnapshots).toHaveBeenCalledTimes(1);
+    // signing in afterwards is the same open socket: no second round of requests
+    mocks.context = { ...mocks.context, connectionState: "authenticating" };
+    view.rerender(<SentenceTrade mode="yield" />);
+    mocks.context = { ...mocks.context, connectionState: "authenticated" };
+    view.rerender(<SentenceTrade mode="yield" />);
+    expect(mocks.context.getAssetSnapshots).toHaveBeenCalledTimes(1);
+  });
+
+  it("lists the other assets with the prices last read, until live ones arrive", () => {
+    remember(publicKey("earn-summary"), summary());
+    remember(publicKey("reference-prices"), { [JLP]: { price: 4.25, at: now * 1000 - 60_000 } });
+    notLoadedYet();
+    render(<SentenceTrade mode="yield" />);
+    expect([...select("Asset").options].find((o) => o.value === "JLP")?.textContent).toContain("$4.25");
+  });
+
+  it("does not list a price read more than a day ago", () => {
+    remember(publicKey("earn-summary"), summary());
+    remember(publicKey("reference-prices"), { [JLP]: { price: 4.25, at: now * 1000 - 25 * 60 * 60 * 1000 } });
+    notLoadedYet();
+    render(<SentenceTrade mode="yield" />);
+    expect([...select("Asset").options].find((o) => o.value === "JLP")?.textContent).not.toContain("$4.25");
+  });
+
+  it("waits for the live list when the saved one is more than a day old", () => {
+    getQueryClient().setQueryData(publicKey("earn-summary"), summary(), { updatedAt: now * 1000 - 25 * 60 * 60 * 1000 });
+    notLoadedYet();
+    renderClosed(<SentenceTrade mode="yield" />);
+    expect(screen.getByTestId("trade-skeleton")).toBeTruthy();
+  });
+
+  it("waits for the live list when nothing was saved", () => {
+    notLoadedYet();
+    renderClosed(<SentenceTrade mode="yield" />);
+    expect(screen.getByTestId("trade-skeleton")).toBeTruthy();
+  });
+
+  it("uses the live list as soon as there is one, whatever was saved", () => {
+    remember(publicKey("earn-summary"), []);
+    connectWallet();
+    render(<SentenceTrade mode="yield" />);
+    expect(screen.queryByTestId("trade-skeleton")).toBeNull();
+    expect(screen.getByRole("button", { name: "Take trade" })).toBeTruthy();
+  });
+});
+
+
+describe("the setup a visitor left", () => {
+  it("comes back after leaving the page: the direction and the typed size", () => {
+    const first = render(<SentenceTrade mode="profit" />);
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "42" } });
+    first.unmount();
+    render(<SentenceTrade mode="profit" />);
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("42");
+  });
+
+  it("names the view in the address without asking for the page again", () => {
+    window.history.replaceState(null, "", "/trade");
+    renderClosed(<SentenceTrade mode="yield" />);
+    expect(window.location.pathname).toBe("/trade");
+    expect(new URLSearchParams(window.location.search).get("asset")).toBe("SOL");
+    expect(new URLSearchParams(window.location.search).get("dir")).toBe("above");
+  });
+
+  it("leaves another page's address alone", () => {
+    window.history.replaceState(null, "", "/dev/quote-flow");
+    renderClosed(<SentenceTrade mode="yield" />);
+    expect(window.location.search).toBe("");
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("starts from what the address names, not from what was remembered", () => {
+    updateTradeDraft(tradeDraftStore(), { asset: "SOL", direction: "above", amount: "42", inQuote: true });
+    render(<SentenceTrade mode="profit" initialAsset="JLP" initialDirection="below" />);
+    // another asset than the remembered one: its size is not carried over
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).not.toBe("42");
+    expect(tradeDraftStore().read()).toMatchObject({ asset: "JLP", direction: "below" });
+  });
+
+  it("does not bring back a size left more than a day ago", () => {
+    updateTradeDraft(tradeDraftStore(), { asset: "SOL", amount: "42", inQuote: true }, now * 1000 - 25 * 60 * 60 * 1000);
+    render(<SentenceTrade mode="profit" />);
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).not.toBe("42");
+  });
+
+  it("remembers the mode for a visit that does not say one", () => {
+    renderClosed(<SentenceTrade mode="yield" />);
+    expect(tradeDraftStore().read().mode).toBe("yield");
   });
 });

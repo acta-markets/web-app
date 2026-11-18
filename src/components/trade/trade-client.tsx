@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { INLINE_PILL, INLINE_PILL_FACE, INLINE_PILL_GLYPH } from "@/components/app-ui/app-inline-select";
@@ -9,6 +9,8 @@ import { TYPE_LINK } from "@/components/app-ui/type-styles";
 import { Chevron } from "@/components/app-ui/chevron";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { cn } from "@/lib/cn";
+import { useLocalStore } from "@/lib/state/local-store";
+import { tradeDraftStore, updateTradeDraft } from "@/lib/trade/draft";
 import { SentenceTrade } from "@/components/trade/sentence/sentence-trade";
 
 type Mode = "yield" | "profit";
@@ -75,7 +77,11 @@ export function TradeClient() {
   const params = useSearchParams();
   // Profit is where the page lands; Yield is ?mode=yield. Anything else, the old ?mode=profit,
   // ?mode=pro and ?mode=easy links included, falls through to the default.
-  const mode: Mode = params.get("mode") === "yield" ? "yield" : "profit";
+  // The address decides when it says; a bare /trade (the nav link, the logo) opens the mode
+  // the visitor last used on this device.
+  const draft = useLocalStore(useMemo(() => tradeDraftStore(), []));
+  const asked = params.get("mode");
+  const mode: Mode = asked === "yield" ? "yield" : asked === "profit" ? "profit" : (draft.mode ?? "profit");
   const { connectionState, getEarnSummary } = useRfqContext();
 
   const wsReady =
@@ -86,6 +92,7 @@ export function TradeClient() {
   }, [wsReady, getEarnSummary]);
 
   function setMode(next: Mode) {
+    updateTradeDraft(tradeDraftStore(), { mode: next });
     const query = new URLSearchParams(params.toString());
     if (next === "yield") query.set("mode", "yield");
     else query.delete("mode");
@@ -115,6 +122,7 @@ export function TradeClient() {
       <SentenceTrade
         mode={mode}
         initialAsset={params.get("asset")}
+        initialDirection={params.get("dir")}
         // out of the title's way, still one click away: a quiet line under the card that
         // opens the guide, as the header links on Earn and Portfolio do
         footer={

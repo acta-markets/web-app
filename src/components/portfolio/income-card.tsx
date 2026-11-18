@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useViewPref } from "@/lib/state/view-prefs";
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { cn } from "@/lib/cn";
@@ -54,7 +55,7 @@ export function IncomeCard({
   state: "ready" | "pending" | "unavailable";
   nowSec: number;
 }) {
-  const [range, setRange] = useState<IncomeRange>("30d");
+  const [range, setRange] = useViewPref("incomeRange");
   const summary =
     summaries?.find((s) => s.quote_mint === quoteMint) ??
     summaries?.find((s) => s.quote_mint === TOKENS.USDC.mint[getNetwork()]) ??

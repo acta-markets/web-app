@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { numberFormat } from "@/lib/number-format";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import { TOKENS, displayQuoteSymbol, getNetwork } from "@/lib/tokens";
+import { lastUsedFirst } from "@/lib/wallet-memory";
 import { shortAddress, solscanUrl } from "@/lib/vaults/format";
 import { useTokenBalance } from "./use-token-balance";
 
@@ -70,7 +71,7 @@ function connectErrorMessage(walletName: string, err: unknown): string {
 
 function WalletSidebar() {
   const { isOpen, closeSidebar } = useWalletSidebar();
-  const { wallets, selectedWallet, selectedAccount, isConnecting, isReady, connectWallet, disconnectWallet } = useSolana();
+  const { wallets, selectedWallet, selectedAccount, isConnecting, isReady, lastWalletName, connectWallet, disconnectWallet } = useSolana();
   const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -193,6 +194,7 @@ function WalletSidebar() {
               connectingWallet={connectingWallet}
               isConnecting={isConnecting}
               error={connectError}
+              lastUsed={lastWalletName}
             />
           )}
         </div>
@@ -371,6 +373,7 @@ export function WalletListView({
   connectingWallet,
   isConnecting,
   error,
+  lastUsed,
 }: {
   wallets: Array<{ name: string; icon?: string }>;
   onConnect: (wallet: WalletType) => void;
@@ -378,6 +381,8 @@ export function WalletListView({
   isConnecting: boolean;
   /** Why the last attempt did not connect, in words for the user. */
   error?: string | null;
+  /** The wallet this browser connected with last time: listed first and marked. */
+  lastUsed?: string | null;
 }) {
   const walletIcons: Record<string, string> = {
     phantom: "/wallets/phantom.png",
@@ -402,7 +407,7 @@ export function WalletListView({
         </p>
       ) : null}
       <div className="space-y-2">
-        {wallets.map((wallet) => {
+        {lastUsedFirst(wallets, lastUsed).map((wallet) => {
           const icon = getWalletIcon(wallet);
           const isLoading = connectingWallet === wallet.name;
 
@@ -430,6 +435,7 @@ export function WalletListView({
               <span className="flex-1 text-left font-mono font-medium text-content-primary">
                 {wallet.name}
               </span>
+              {!isLoading && wallet.name === lastUsed ? <span className="font-mono text-xs text-content-secondary">Last used</span> : null}
               {isLoading ? (
                 <>
                   <span className="font-mono text-xs text-content-secondary">Approve in wallet</span>

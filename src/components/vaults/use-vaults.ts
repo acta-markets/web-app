@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActaHttpError } from "@/lib/vaults/api";
+import { publicKey } from "@/lib/state/keys";
+import { useResource } from "@/lib/state/use-resource";
+import { VAULTS_SAMPLE_MODE } from "@/lib/vaults/sample";
 import { loadUnsettledVaultPositions, loadVault, loadVaultCycles, loadVaultExposure, loadVaults } from "@/lib/vaults/source";
 import type { Vault, VaultCyclesPage, VaultExposure, VaultPosition } from "@/lib/vaults/types";
 
@@ -12,6 +15,17 @@ export type Loadable<T> = {
   refresh: () => void;
 };
 
+/** Sample vaults are made up: they get a key of their own and are never saved to the device. */
+const SOURCE = VAULTS_SAMPLE_MODE ? "sample" : "live";
+const SAVED = !VAULTS_SAMPLE_MODE;
+/** A vault's figures are worth showing for a day; older than that, the page waits for fresh ones. */
+const VAULT_SHOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A read that caches nothing: its state lives and dies with the component. This is what the
+ * money path uses (a depositor's balances and requests, which size a deposit and build its
+ * transaction). Reads for display go through `useResource` instead.
+ */
 export function usePolled<T>(load: (signal: AbortSignal) => Promise<T>, initial: T, key: string | null): Loadable<T> {
   const [data, setData] = useState<T>(initial);
   const [error, setError] = useState<Error | null>(null);
@@ -73,11 +87,17 @@ export function usePolled<T>(load: (signal: AbortSignal) => Promise<T>, initial:
 }
 
 export function useVaults(): Loadable<Vault[]> {
-  return usePolled(loadVaults, [], "vaults");
+  return useResource({ key: publicKey("vaults", SOURCE), load: loadVaults, initial: [], persist: SAVED, maxShowMs: VAULT_SHOW_MS });
 }
 
 export function useVault(pda: string | null): Loadable<Vault | null> {
-  return usePolled((signal) => (pda ? loadVault(pda, signal) : Promise.resolve(null)), null, pda);
+  return useResource({
+    key: pda ? publicKey("vault", SOURCE, pda) : null,
+    load: (signal) => loadVault(pda as string, signal),
+    initial: null,
+    persist: SAVED,
+    maxShowMs: VAULT_SHOW_MS,
+  });
 }
 
 /**
@@ -88,11 +108,13 @@ export function useVault(pda: string | null): Loadable<Vault | null> {
 export function useVaultCycles(pda: string | null): Loadable<VaultCyclesPage | null> & { disabled: boolean } {
   const [disabledFor, setDisabledFor] = useState<string | null>(null);
   const disabled = pda !== null && disabledFor === pda;
-  const state = usePolled(
-    (signal) => (pda ? loadVaultCycles(pda, signal) : Promise.resolve(null)),
-    null,
-    pda && !disabled ? `cycles:${pda}` : null,
-  );
+  const state = useResource({
+    key: pda && !disabled ? publicKey("vault-cycles", SOURCE, pda) : null,
+    load: (signal) => loadVaultCycles(pda as string, signal),
+    initial: null,
+    persist: SAVED,
+    maxShowMs: VAULT_SHOW_MS,
+  });
   const { error } = state;
   useEffect(() => {
     if (pda && error instanceof ActaHttpError && error.code === "db_disabled") setDisabledFor(pda);
@@ -100,14 +122,14 @@ export function useVaultCycles(pda: string | null): Loadable<VaultCyclesPage | n
   return { ...state, disabled };
 }
 
-/** Open positions at spot. Polled with the vault, only where the vault page shows them. */
+/** Open positions at spot. Polled with the vault, only where the vault page shows them. Kept in memory only: the page hides them rather than show old numbers. */
 export function useVaultExposure(pda: string): Loadable<VaultExposure | null> {
-  return usePolled((signal) => loadVaultExposure(pda, signal), null, `exposure:${pda}`);
+  return useResource({ key: publicKey("vault-exposure", SOURCE, pda), load: (signal) => loadVaultExposure(pda, signal), initial: null });
 }
 
 /** Premium and second strike for the exposure rows. */
 export function useUnsettledVaultPositions(pda: string): Loadable<VaultPosition[]> {
-  return usePolled((signal) => loadUnsettledVaultPositions(pda, signal), [], `positions:${pda}`);
+  return useResource({ key: publicKey("vault-open-positions", SOURCE, pda), load: (signal) => loadUnsettledVaultPositions(pda, signal), initial: [] });
 }
 
 /** Wall-clock seconds, refreshed on an interval, for countdowns and phase checks. */

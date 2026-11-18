@@ -5,6 +5,11 @@ import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 import type { VersionedTransaction } from "@solana/web3.js";
 
 import { getRpcEndpoint, getWalletChain } from "@/lib/network";
+import { getRfqBackendUrl } from "@/lib/rfq-client";
+import { forgetWallet } from "@/lib/state/keys";
+import { useLocalStore } from "@/lib/state/local-store";
+import { clearSession } from "@/lib/state/session-store";
+import { clearLastWallet, lastWalletStore, pickAccount, readLastWallet, writeLastWallet } from "@/lib/wallet-memory";
 
 const RPC_ENDPOINT = getRpcEndpoint();
 const WS_ENDPOINT = RPC_ENDPOINT.replace("https://", "wss://").replace("http://", "ws://");
@@ -12,6 +17,9 @@ const CHAIN = getWalletChain();
 
 const rpc = createSolanaRpc(RPC_ENDPOINT);
 const rpcSubscriptions = createSolanaRpcSubscriptions(WS_ENDPOINT);
+
+/** How long after the page is ready a remembered wallet's extension is waited for before the app stops expecting it. */
+const RESTORE_GRACE_MS = 1_500;
 
 export interface WalletAccount {
   address: string;
@@ -35,6 +43,14 @@ interface SolanaContextState {
   isConnected: boolean;
   isConnecting: boolean;
   isReady: boolean;
+  /** The wallet this browser connected with last time, to put first in the list; null when none is remembered. */
+  lastWalletName: string | null;
+  /**
+   * The wallet the app expects back: the one remembered from last time, while it is still
+   * being reconnected. Pages show that wallet's last-known view instead of asking to
+   * connect. Null once it is connected, has declined, or was never remembered.
+   */
+  expectedAccount: WalletAccount | null;
   
   connectWallet: (wallet: Wallet) => Promise<void>;
   disconnectWallet: () => Promise<void>;
@@ -71,6 +87,50 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   
   const walletsRef = React.useRef<Map<string, any>>(new Map());
+  /** Follows this browser's memory of the last wallet, including a disconnect made in another tab. */
+  const remembered = useLocalStore(lastWalletStore);
+  const lastWalletName = remembered?.name ?? null;
+  /** The reconnect of the remembered wallet has been tried, declined, or given up on. */
+  const [restoreSettled, setRestoreSettled] = useState(false);
+  /** The wallet names a silent reconnect has been tried with on this page load: once each. */
+  const restoreTried = React.useRef<Set<string>>(new Set());
+  /** True once the visitor connects or disconnects by hand; a silent reconnect never overrides that. */
+  const actedRef = React.useRef(false);
+
+  /**
+   * Reconnects the wallet used last time without asking: `silent` means the wallet answers
+   * only if it already trusts this site, and shows nothing otherwise. A wallet that is locked
+   * or no longer trusts the site stays remembered and is simply not connected.
+   */
+  const restoreLastWallet = useCallback(async () => {
+    const remembered = readLastWallet();
+    if (!remembered || actedRef.current) {
+      setRestoreSettled(true);
+      return;
+    }
+    if (restoreTried.current.has(remembered.name)) return;
+    const underlyingWallet = walletsRef.current.get(remembered.name);
+    const connectFeature = underlyingWallet?.features["standard:connect"];
+    // not registered yet: extensions announce themselves at their own pace, and the grace period covers it
+    if (!connectFeature) return;
+    restoreTried.current.add(remembered.name);
+    setIsConnecting(true);
+    try {
+      await connectFeature.connect({ silent: true });
+      if (actedRef.current) return;
+      const accounts: WalletAccount[] = underlyingWallet.accounts.map((a: any) => ({ address: a.address, publicKey: a.publicKey }));
+      const account = pickAccount(accounts, remembered.address);
+      if (!account) return;
+      setSelectedWallet({ name: underlyingWallet.name, icon: underlyingWallet.icon, accounts });
+      setSelectedAccount(account);
+      writeLastWallet({ name: underlyingWallet.name, address: account.address });
+    } catch (error) {
+      console.warn("[SolanaProvider] Could not reconnect the last wallet:", error);
+    } finally {
+      setIsConnecting(false);
+      setRestoreSettled(true);
+    }
+  }, []);
   
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -97,6 +157,8 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
         })));
         
         console.log("[SolanaProvider] Wallets updated:", solanaWallets.map(w => w.name));
+        // wallets register one by one after the page loads; the remembered one may be any of them
+        void restoreLastWallet();
       };
       
       updateWallets();
@@ -117,14 +179,39 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
         delete (window as any).__solanaWalletCleanup;
       }
     };
-  }, []);
+  }, [restoreLastWallet]);
   
   const isConnected = useMemo(() => {
     return !!(selectedWallet && selectedAccount);
   }, [selectedWallet, selectedAccount]);
+
+  // A remembered wallet that has not announced itself shortly after the page is ready is not coming.
+  useEffect(() => {
+    if (!isReady || restoreSettled) return;
+    const id = window.setTimeout(() => setRestoreSettled(true), RESTORE_GRACE_MS);
+    return () => window.clearTimeout(id);
+  }, [isReady, restoreSettled]);
+
+  const expectedAccount = useMemo<WalletAccount | null>(
+    () => (!isConnected && !restoreSettled && remembered ? { address: remembered.address } : null),
+    [isConnected, restoreSettled, remembered],
+  );
+
+  // Disconnecting in one tab disconnects them all: the wallet was forgotten there, so it is let go here.
+  const rememberedBefore = React.useRef(remembered);
+  useEffect(() => {
+    const before = rememberedBefore.current;
+    rememberedBefore.current = remembered;
+    if (before === null || remembered !== null || !selectedAccount) return;
+    void forgetWallet(selectedAccount.address);
+    setSelectedWallet(null);
+    setSelectedAccount(null);
+  }, [remembered, selectedAccount]);
   
   const connectWallet = useCallback(async (wallet: Wallet) => {
     try {
+      actedRef.current = true;
+      setRestoreSettled(true);
       setIsConnecting(true);
       console.log("[SolanaProvider] Connecting to:", wallet.name);
       
@@ -154,6 +241,8 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
           accounts
         });
         setSelectedAccount(accounts[0]);
+        // remembered for the next visit: the name and the public address only
+        writeLastWallet({ name: underlyingWallet.name, address: accounts[0].address });
       }
     } catch (error) {
       console.error("[SolanaProvider] Failed to connect:", error);
@@ -164,6 +253,16 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
   }, []);
   
   const disconnectWallet = useCallback(async () => {
+    // Leaving is a choice: the wallet is forgotten, so the next visit does not reconnect it.
+    actedRef.current = true;
+    setRestoreSettled(true);
+    clearLastWallet();
+    // Disconnecting signs the wallet out on this device and takes its data with it: its
+    // trading session, and everything of its own that was kept to show on the next visit.
+    if (selectedAccount) {
+      clearSession(getRfqBackendUrl(), selectedAccount.address);
+      void forgetWallet(selectedAccount.address);
+    }
     try {
       if (selectedWallet) {
         const underlyingWallet = walletsRef.current.get(selectedWallet.name);
@@ -179,7 +278,7 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("[SolanaProvider] Failed to disconnect:", error);
     }
-  }, [selectedWallet]);
+  }, [selectedWallet, selectedAccount]);
   
   const signMessage = useCallback(async (message: Uint8Array): Promise<Uint8Array> => {
     if (!selectedWallet || !selectedAccount) {
@@ -358,6 +457,8 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
       isConnected,
       isConnecting,
       isReady,
+      lastWalletName,
+      expectedAccount,
       connectWallet,
       disconnectWallet,
       signMessage,
@@ -365,7 +466,7 @@ export function SolanaWalletProvider({ children }: { children: ReactNode }) {
       signTransactionBytes,
       signAllTransactions,
     }),
-    [wallets, selectedWallet, selectedAccount, isConnected, isConnecting, isReady, connectWallet, disconnectWallet, signMessage, signTransaction, signTransactionBytes, signAllTransactions]
+    [wallets, selectedWallet, selectedAccount, isConnected, isConnecting, isReady, lastWalletName, expectedAccount, connectWallet, disconnectWallet, signMessage, signTransaction, signTransactionBytes, signAllTransactions]
   );
   
   return (

@@ -1,6 +1,7 @@
 "use client";
 
 import { TYPE_LABEL } from "@/components/app-ui/type-styles";
+import { useViewPref } from "@/lib/state/view-prefs";
 import * as React from "react";
 import { Share2 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -289,6 +290,9 @@ function GroupToggle({ symbol, count, open, onToggle }: { symbol: string; count:
   );
 }
 
+/** The columns a table can be ordered by; a remembered order naming anything else is ignored. */
+const SORT_KEYS: readonly SortKey[] = ["risk", "expiry", "size", "premium", "pnl"];
+
 function sortArrow(sort: SortState, key: SortKey): string {
   if (sort.key !== key) return "";
   return sort.dir === "asc" ? "▲" : "▼";
@@ -357,7 +361,10 @@ export function PositionsTable({
   /** Shown instead of the table when there are no rows. */
   empty?: React.ReactNode;
 }) {
-  const [sort, setSort] = React.useState<SortState>(DEFAULT_SORT);
+  // the order is a habit: it is kept per table and comes back on the next visit
+  const [savedSort, saveSort] = useViewPref(variant === "history" ? "portfolioSortHistory" : "portfolioSortOpen");
+  const sort: SortState = savedSort && (SORT_KEYS as readonly string[]).includes(savedSort.key) ? (savedSort as SortState) : DEFAULT_SORT;
+  const setSort = (next: SortState | ((current: SortState) => SortState)) => saveSort(typeof next === "function" ? next(sort) : next);
   /** Symbols whose group is folded shut; everything starts open so nothing hides by default. */
   const [collapsed, setCollapsed] = React.useState<Set<string>>(() => new Set());
   const narrow = useIsNarrow();

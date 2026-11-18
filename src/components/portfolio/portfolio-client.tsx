@@ -12,6 +12,12 @@ import type { PositionInfo } from "@/lib/rfq-client";
 import { TOKENS, getNetwork, normalizeTokenSymbol } from "@/lib/tokens";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
+import { getRfqBackendUrl } from "@/lib/rfq-client";
+import { asOfText } from "@/lib/state/freshness";
+import { walletKey } from "@/lib/state/keys";
+import { useRemembered } from "@/lib/state/remembered";
+import { useViewPref } from "@/lib/state/view-prefs";
+import { readSessionId } from "@/lib/state/session-store";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 import { openWrittenApr, summarizePnl, tradingStats } from "@/lib/portfolio-pnl";
 import { buildPositionRows, canFundRow, fundingSummary, isWorthExercising, markWithdrawn } from "@/lib/portfolio-positions";
@@ -64,33 +70,45 @@ function PageHeader() {
 }
 
 export function PortfolioClient() {
-  const [positionsTab, setPositionsTab] = useState<PositionsTab>("open");
+  const [positionsTab, setPositionsTab] = useViewPref("portfolioTab");
   /** Asset filter for the open positions; null means every asset. */
   const [tokenFilter, setTokenFilter] = useState<string | null>(null);
   /** Show only the bought options worth exercising at the current price. */
   const [exerciseOnly, setExerciseOnly] = useState(false);
-  const [quoteMint, setQuoteMint] = useState("");
-  const { isConnected: walletConnected, selectedAccount } = useSolana();
+  const [quoteMint, setQuoteMint] = useViewPref("incomeMint");
+  const { isConnected: walletConnected, selectedAccount, expectedAccount } = useSolana();
   const {
     positions: rfqPositions,
     isAuthenticated: rfqAuthenticated,
     fetchPositions: fetchRfqPositions,
     positionsFailed,
+    positionsLoaded,
     getClient,
     assetSnapshots,
     getAssetSnapshots,
     referralInfo,
   } = useRfqContext();
   const address = selectedAccount?.address ?? null;
+  // Whose page this is. On a return visit that is known before the wallet has reconnected.
+  const viewAddress = address ?? expectedAccount?.address ?? null;
 
-  const history = useWalletHistory(walletConnected && rfqAuthenticated ? address : null, rfqPositions, getClient);
+  // Until this session's own positions have arrived, the list last loaded for this wallet
+  // stands in for them. It is for looking at: nothing can be funded or withdrawn from it.
+  const savedPositions = useRemembered<PositionInfo[]>(viewAddress ? walletKey(viewAddress, "positions") : null);
+  const positionsLive = rfqAuthenticated && positionsLoaded !== false;
+  const positionsFromDevice = !positionsLive && rfqPositions.length === 0 && !!savedPositions.data;
+  const shownPositions = positionsFromDevice ? savedPositions.data! : rfqPositions;
+
+  const history = useWalletHistory(walletConnected && rfqAuthenticated ? address : null, rfqPositions, getClient, viewAddress);
+  const lastKnownAt = positionsFromDevice ? savedPositions.updatedAt : history.lastKnownAt;
+  const fromDevice = positionsFromDevice || history.lastKnown;
 
   // Live positions come from the socket, closed ones from the paged history. A position that
   // has just closed can be in both for a moment; the history copy carries its outcome.
   const allPositions = useMemo(() => {
     const closed = new Set(history.positions.map((p) => p.pda));
-    return [...rfqPositions.filter((p) => isLive(p) && !closed.has(p.pda)), ...history.positions];
-  }, [rfqPositions, history.positions]);
+    return [...shownPositions.filter((p) => isLive(p) && !closed.has(p.pda)), ...history.positions];
+  }, [shownPositions, history.positions]);
 
   const openExpiriesMs = useMemo(
     () => allPositions.filter(isOpen).map((p) => Number(p.expiry_ts) * 1000).filter((at) => at > 0),
@@ -211,7 +229,28 @@ export function PortfolioClient() {
   const hasIncome = history.summary?.some((s) => s.premium_all_time !== "0") ?? false;
   const nothingYet = !failed && !pending && allPositions.length === 0 && !hasIncome;
 
-  if (!walletConnected) {
+  // A returning wallet is on its way back: reconnecting, or connected and resuming its
+  // session without a signature. Neither is a moment to ask for a wallet or a sign-in.
+  const returning =
+    (!walletConnected && !!expectedAccount) || (walletConnected && !rfqAuthenticated && !!address && readSessionId(getRfqBackendUrl(), address) !== null);
+  if (returning && shownPositions.length === 0 && !history.lastKnown) {
+    return (
+      <div>
+        <PageHeader />
+        <div className={SHELL}>
+          <LoadingStatus />
+          <section className="flex flex-col gap-2">
+            <PerformanceSkeleton />
+          </section>
+          <section className="mt-8">
+            <PositionsSkeleton />
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (!walletConnected && !expectedAccount) {
     return (
       <div>
         <PageHeader />
@@ -231,6 +270,8 @@ export function PortfolioClient() {
   }
 
   const signedOut = !rfqAuthenticated;
+  // Funding and withdrawing sign with the wallet and act on the live list: only for a wallet that is here and signed in.
+  const actionable = walletConnected && rfqAuthenticated;
 
   return (
     <div>
@@ -243,7 +284,7 @@ export function PortfolioClient() {
         </p>
       ) : null}
 
-      {signedOut && rfqPositions.length === 0 ? (
+      {signedOut && shownPositions.length === 0 && !history.lastKnown ? (
         <PortfolioSignIn />
       ) : nothingYet ? (
         <PortfolioEmpty />
@@ -298,7 +339,7 @@ export function PortfolioClient() {
                     summary={funding}
                     nowMs={nowMs}
                     pending={buyDeposit.action === "fund"}
-                    busy={buyDeposit.action === "withdraw"}
+                    busy={buyDeposit.action === "withdraw" || !actionable}
                     onFund={(positions) => void buyDeposit.depositAll(positions)}
                     // the same two choices whenever the card is drawn, so its header does not change with the asset
                     filters={
@@ -311,7 +352,7 @@ export function PortfolioClient() {
                     rows={visibleOpenRows}
                     nowMs={nowMs}
                     grouped={groupedByUnderlying}
-                    deposit={buyDeposit}
+                    deposit={actionable ? buyDeposit : undefined}
                     share={{ referralCode: referralInfo?.referral_code }}
                     // the asset filter is the table's: the card above counts and funds what it leaves
                     filter={
@@ -345,9 +386,9 @@ export function PortfolioClient() {
                 ) : null}
               </div>
             )}
-            {signedOut ? (
+            {signedOut || fromDevice ? (
               <p className="font-mono text-[14px] leading-[1.45] tracking-[-0.02em] text-content-secondary">
-                Reconnecting. These are your last loaded positions.
+                {fromDevice && lastKnownAt ? `Your portfolio ${asOfText(lastKnownAt)}. Updating.` : "Reconnecting. These are your last loaded positions."}
               </p>
             ) : null}
           </section>

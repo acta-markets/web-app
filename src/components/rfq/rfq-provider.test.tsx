@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { ActaWsClient, ActaWsRequestError, type QuoteReceivedMessage } from "@acta-markets/ts-sdk/ws";
 import { RfqProvider, useRfqContext } from "./rfq-provider";
+import { getRfqBackendUrl } from "@/lib/rfq-client";
+import { readSessionId, writeSession } from "@/lib/state/session-store";
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), toast: vi.fn(), disconnect: vi.fn(), account: null as { address: string } | null, sign: vi.fn() }));
 vi.mock("@/lib/rfq-client", async importOriginal => ({
@@ -16,7 +18,7 @@ vi.mock("@/components/app-ui/app-modal", () => ({ AppModal: () => null }));
 vi.mock("@/components/referral/referral-gate-modal", () => ({ ReferralGateModal: () => null }));
 vi.mock("@/components/referral/ref-capture", () => ({ clearPendingRefCode: vi.fn() }));
 afterEach(cleanup);
-beforeEach(() => { vi.clearAllMocks(); mocks.create.mockReset(); mocks.account = null; });
+beforeEach(() => { vi.clearAllMocks(); mocks.create.mockReset(); mocks.account = null; window.localStorage.clear(); });
 
 async function setup() {
   const client = new ActaWsClient({ url: "ws://localhost", role: "taker", onDisconnect: "keep_quotes", products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], clientName: "test", clientVersion: "0" });
@@ -287,7 +289,7 @@ describe("token market response ownership", () => {
 });
 
 describe("stored resume credential expiry", () => {
-  afterEach(() => window.localStorage.removeItem("acta_rfq_ws_session"));
+  afterEach(() => window.localStorage.clear());
 
   it.each([undefined, null, 0, 1_000, 4_000_000_000])(
     "resumes only with a future expiry (%s)", async expiresAt => {
@@ -365,11 +367,13 @@ it("invalidates pending authentication when the selected wallet changes", async 
     await act(async () => { await rejected; });
     h.emit("authenticated", "wallet-A-session", 4_000_000_000);
     expect(h.result.current.isAuthenticated).toBe(false);
-    expect(window.localStorage.getItem("acta_rfq_ws_session")).not.toContain("wallet-A-session");
+    // a session that arrives for a wallet no longer selected is not kept for anyone
+    expect(JSON.stringify({ ...window.localStorage })).not.toContain("wallet-A-session");
     connect.mockImplementation(() => { h.emit("authenticated", "wallet-B-session", 4_000_000_000); });
     await act(() => h.result.current.authenticate(walletB, mocks.sign));
     expect(connect).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(window.localStorage.getItem("acta_rfq_ws_session")!)).toMatchObject({ walletAddress: walletB, sessionId: "wallet-B-session" });
+    expect(readSessionId(getRfqBackendUrl(), walletB)).toBe("wallet-B-session");
+    expect(readSessionId(getRfqBackendUrl(), walletA)).toBeNull();
     expect(h.result.current.isAuthenticated).toBe(true);
     mocks.account = { address: walletA };
     h.rerender();
@@ -494,5 +498,169 @@ describe("Portfolio position scope", () => {
     const getPositions = vi.spyOn(h.client, "getPositions").mockReturnValue("positions-request");
     act(() => h.result.current.fetchPositions());
     expect(getPositions).toHaveBeenCalledWith(expect.objectContaining({ status: ["open", "funded"] }));
+  });
+});
+
+
+describe("signing in on return", () => {
+  const wallet = "11111111111111111111111111111111";
+
+  it("resumes a stored session at once, with no wait, and says no signature is needed", async () => {
+    vi.useFakeTimers();
+    try {
+      writeSession(getRfqBackendUrl(), wallet, "stored", 4_000_000_000);
+      mocks.account = { address: wallet };
+      const h = await setup();
+      vi.spyOn(h.client, "getMyReferralInfo").mockReturnValue("referral");
+      const connect = vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {});
+      h.emit("connected");
+      await act(async () => { await Promise.resolve(); });
+      // not before the server has greeted the socket: the SDK could only queue it
+      expect(connect).not.toHaveBeenCalled();
+      h.emit("welcome", { server_now_at_ms: Date.now() });
+      await act(async () => { await Promise.resolve(); });
+      // no 900 ms: the resume asks the wallet for nothing
+      expect(connect).toHaveBeenCalledOnce();
+      expect(connect.mock.lastCall?.[1]).toEqual({ sessionId: "stored" });
+      expect(h.result.current.connectionState).toBe("authenticating");
+      expect(h.result.current.signInNeedsSignature).toBe(false);
+      h.unmount();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("still waits before a sign-in that will ask the wallet to sign", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.account = { address: wallet };
+      const h = await setup();
+      const connect = vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {});
+      h.emit("connected");
+      h.emit("welcome", { server_now_at_ms: Date.now() });
+      await act(async () => { vi.advanceTimersByTime(899); });
+      expect(connect).not.toHaveBeenCalled();
+      await act(async () => { vi.advanceTimersByTime(1); });
+      expect(connect).toHaveBeenCalledOnce();
+      expect(connect.mock.lastCall?.[1]).toBeUndefined();
+      expect(h.result.current.signInNeedsSignature).toBe(true);
+      h.unmount();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("does not ask to sign in while the socket is still connecting", async () => {
+    vi.useFakeTimers();
+    try {
+      writeSession(getRfqBackendUrl(), wallet, "stored", 4_000_000_000);
+      mocks.account = { address: wallet };
+      const h = await setup();
+      const connect = vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {});
+      h.emit("stateChange", "connecting");
+      await act(async () => { vi.advanceTimersByTime(2_000); });
+      expect(connect).not.toHaveBeenCalled();
+      h.emit("connected");
+      h.emit("welcome", { server_now_at_ms: Date.now() });
+      await act(async () => { await Promise.resolve(); });
+      expect(connect).toHaveBeenCalledOnce();
+      h.unmount();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("drops a stored session the server refuses, so the next attempt asks for a signature", async () => {
+    writeSession(getRfqBackendUrl(), wallet, "stale", 4_000_000_000);
+    mocks.account = { address: wallet };
+    const h = await setup();
+    const connect = vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {});
+    let attempt!: Promise<void>;
+    await act(async () => { attempt = h.result.current.authenticate(wallet, mocks.sign); });
+    expect(connect.mock.lastCall?.[1]).toEqual({ sessionId: "stale" });
+    const rejected = expect(attempt).rejects.toBeTruthy();
+    await act(async () => {
+      h.emit("error", { type: "Generic", data: { code: "session_conflict", message: "Authentication failed: session_conflict" } });
+      await rejected;
+    });
+    expect(readSessionId(getRfqBackendUrl(), wallet)).toBeNull();
+    await act(async () => { void h.result.current.authenticate(wallet, mocks.sign).catch(() => {}); });
+    expect(connect.mock.lastCall?.[1]).toBeUndefined();
+    expect(h.result.current.signInNeedsSignature).toBe(true);
+    h.unmount();
+  });
+
+  it("turns a resume into a signature sign-in when the session has run out on the server", async () => {
+    writeSession(getRfqBackendUrl(), wallet, "expired-there", 4_000_000_000);
+    mocks.account = { address: wallet };
+    const h = await setup();
+    vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {});
+    await act(async () => { void h.result.current.authenticate(wallet, mocks.sign).catch(() => {}); });
+    expect(h.result.current.signInNeedsSignature).toBe(false);
+    h.emit("authError", "session_expired");
+    expect(h.result.current.signInNeedsSignature).toBe(true);
+    expect(readSessionId(getRfqBackendUrl(), wallet)).toBeNull();
+    h.unmount();
+  });
+
+  it("says so when another tab takes the session, and clears that on the next sign-in", async () => {
+    mocks.account = { address: wallet };
+    const h = await setup();
+    vi.spyOn(h.client, "getMyReferralInfo").mockReturnValue("referral");
+    const connect = vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => { h.emit("authenticated", "s", 4_000_000_000); });
+    await act(() => h.result.current.authenticate(wallet, mocks.sign));
+    expect(h.result.current.sessionElsewhere).toBe(false);
+    vi.spyOn(h.client, "disconnect").mockImplementation(() => {});
+    h.emit("error", { type: "Generic", data: { code: "session_replaced", message: "replaced" } });
+    expect(h.result.current.sessionElsewhere).toBe(true);
+    await act(() => h.result.current.authenticate(wallet, mocks.sign));
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(h.result.current.sessionElsewhere).toBe(false);
+    h.unmount();
+  });
+});
+
+
+describe("a sign-in under way", () => {
+  const wallet = "11111111111111111111111111111111";
+
+  it("stays under way when the server's welcome reports the socket connected", async () => {
+    writeSession(getRfqBackendUrl(), wallet, "stored", 4_000_000_000);
+    mocks.account = { address: wallet };
+    const h = await setup();
+    vi.spyOn(h.client, "getMyReferralInfo").mockReturnValue("referral");
+    vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {});
+    await act(async () => { void h.result.current.authenticate(wallet, mocks.sign).catch(() => {}); });
+    expect(h.result.current.connectionState).toBe("authenticating");
+    // the SDK's own report when the welcome arrives, a moment after the sign-in was asked for
+    h.emit("stateChange", "connected");
+    expect(h.result.current.connectionState).toBe("authenticating");
+    expect(h.result.current.signInError).toBeNull();
+    h.emit("authenticated", "fresh", 4_000_000_000);
+    expect(h.result.current.connectionState).toBe("authenticated");
+    expect(h.result.current.signInError).toBeNull();
+    h.unmount();
+  });
+
+  it("still follows the SDK's connected report when no sign-in is under way", async () => {
+    const h = await setup();
+    h.emit("stateChange", "connecting");
+    h.emit("stateChange", "connected");
+    expect(h.result.current.connectionState).toBe("connected");
+    h.unmount();
+  });
+
+  it("reports a failure only when the attempt has really failed, and clears it on the next attempt", async () => {
+    mocks.account = { address: wallet };
+    const h = await setup();
+    vi.spyOn(h.client, "getMyReferralInfo").mockReturnValue("referral");
+    const connect = vi.spyOn(h.client, "connectAndAuthenticate").mockImplementation(() => {});
+    let attempt!: Promise<void>;
+    await act(async () => { attempt = h.result.current.authenticate(wallet, mocks.sign); });
+    expect(h.result.current.signInError).toBeNull();
+    const rejected = expect(attempt).rejects.toBeTruthy();
+    await act(async () => {
+      h.emit("error", { type: "client_generic", data: { message: "User rejected the request." } });
+      await rejected;
+    });
+    expect(h.result.current.signInError).toBe("User rejected the request.");
+    connect.mockImplementation(() => { h.emit("authenticated", "s", 4_000_000_000); });
+    await act(() => h.result.current.authenticate(wallet, mocks.sign));
+    expect(h.result.current.signInError).toBeNull();
+    h.unmount();
   });
 });

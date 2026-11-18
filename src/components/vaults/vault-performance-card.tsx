@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useViewPref } from "@/lib/state/view-prefs";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
 import { cn } from "@/lib/cn";
 import { formatPercent } from "@/lib/vaults/format";
@@ -27,8 +28,8 @@ export function VaultPerformanceCard({ vault, symbol, cycles, finished, nowSecs,
   unavailable?: boolean;
   truncated: boolean;
 }) {
-  const [series, setSeries] = useState<Series>("return");
-  const [range, setRange] = useState<Range>("all");
+  const [series, setSeries] = useViewPref("vaultSeries");
+  const [range, setRange] = useViewPref("vaultRange");
   const hour = Math.floor(nowSecs / 3_600) * 3_600;
   const returns = useMemo(() => cumulativeReturnSeries(finished), [finished]);
   const tvl = useMemo(() => tvlSeries(cycles, vault.main_decimals), [cycles, vault.main_decimals]);

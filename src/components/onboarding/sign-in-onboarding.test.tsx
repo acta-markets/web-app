@@ -9,13 +9,18 @@ const rfq = vi.hoisted(() => ({
     authenticate: vi.fn(() => Promise.resolve()),
     referralStatus: "unknown" as string,
     referralInfo: null as { status: "pending" | "active" } | null,
+    signInNeedsSignature: true,
+    signInError: null as string | null,
+    sessionElsewhere: false,
   },
 }));
 const wallet = vi.hoisted(() => ({ address: "WalletA" as string | null }));
 const balance = vi.hoisted(() => ({ usdc: null as number | null }));
 const season = vi.hoisted(() => ({ load: vi.fn(async () => null as unknown) }));
+const nav = vi.hoisted(() => ({ pathname: "/trade" as string | null, push: vi.fn() }));
 
 vi.mock("@/components/rfq/rfq-provider", () => ({ useRfqContext: () => rfq.value }));
+vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname, useRouter: () => ({ push: nav.push }) }));
 vi.mock("@/components/solana/solana-wallet-provider", () => ({
   useSolana: () => ({ isConnected: wallet.address !== null, selectedAccount: wallet.address ? { address: wallet.address } : null, signMessage: vi.fn() }),
 }));
@@ -45,9 +50,11 @@ beforeEach(() => {
   vi.useFakeTimers();
   window.localStorage.clear();
   wallet.address = "WalletA";
+  nav.pathname = "/trade";
+  nav.push.mockClear();
   balance.usdc = null;
   season.load.mockResolvedValue(null);
-  rfq.value = { connectionState: "connected", isAuthenticated: false, error: null, authenticate: vi.fn(() => Promise.resolve()), referralStatus: "unknown", referralInfo: null };
+  rfq.value = { connectionState: "connected", isAuthenticated: false, error: null, authenticate: vi.fn(() => Promise.resolve()), referralStatus: "unknown", referralInfo: null, signInNeedsSignature: true, signInError: null, sessionElsewhere: false };
 });
 
 afterEach(() => {
@@ -143,11 +150,56 @@ describe("signing in", () => {
   });
 });
 
+describe("where a first sign-in lands", () => {
+  it("takes a new trader to Trade, once, and keeps the welcome up", async () => {
+    nav.pathname = "/rewards";
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "authenticating" }, 900);
+    expect(nav.push).not.toHaveBeenCalled();
+    await go(view, { connectionState: "authenticated", isAuthenticated: true, referralInfo: { status: "pending" } });
+    expect(nav.push).toHaveBeenCalledTimes(1);
+    expect(nav.push).toHaveBeenCalledWith("/trade");
+    nav.pathname = "/trade";
+    await go(view, {});
+    expect(dialog()?.getAttribute("aria-label")).toBe("You are signed in");
+    expect(nav.push).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves nobody who is already on Trade", async () => {
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "authenticating" }, 900);
+    await go(view, { connectionState: "authenticated", isAuthenticated: true, referralInfo: { status: "pending" } });
+    expect(dialog()?.getAttribute("aria-label")).toBe("You are signed in");
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  it("leaves a returning trader where they signed in", async () => {
+    nav.pathname = "/portfolio";
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "authenticating" }, 900);
+    await go(view, { connectionState: "authenticated", isAuthenticated: true, referralInfo: { status: "active" } });
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+
+  it("leaves a wallet already welcomed on this browser where it signed in", async () => {
+    nav.pathname = "/rewards";
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "authenticating" }, 900);
+    await go(view, { connectionState: "authenticated", isAuthenticated: true, referralInfo: { status: "pending" } });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    nav.push.mockClear();
+    await go(view, { connectionState: "connected", isAuthenticated: false });
+    await go(view, { connectionState: "authenticating" }, 900);
+    await go(view, { connectionState: "authenticated", isAuthenticated: true, referralInfo: { status: "pending" } });
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+});
+
 describe("a sign-in that did not happen", () => {
   it("says so and offers another go, even when it was refused before the prompt went up", async () => {
     const view = render(<SignInOnboarding />);
     await go(view, { connectionState: "authenticating" }, 200);
-    await go(view, { connectionState: "disconnected", error: new Error("User rejected the request.") });
+    await go(view, { connectionState: "disconnected", signInError: "User rejected the request." });
     expect(dialog()?.getAttribute("aria-label")).toBe("Sign-in was not completed");
     expect(screen.getByText(/The message was declined in your wallet\. You are not signed in/)).toBeTruthy();
   });
@@ -155,18 +207,18 @@ describe("a sign-in that did not happen", () => {
   it("signs in again from Try again, and keeps the prompt up while it does", async () => {
     const view = render(<SignInOnboarding />);
     await go(view, { connectionState: "authenticating" }, 900);
-    await go(view, { connectionState: "disconnected", error: new Error("RFQ auth timeout") });
+    await go(view, { connectionState: "disconnected", signInError: "RFQ auth timeout" });
     expect(screen.getByText(/Your wallet did not answer in time/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(rfq.value.authenticate).toHaveBeenCalledWith("WalletA", expect.any(Function));
-    await go(view, { connectionState: "authenticating", error: null });
+    await go(view, { connectionState: "authenticating", signInError: null });
     expect(dialog()?.getAttribute("aria-label")).toBe("Sign in with your wallet");
   });
 
   it("reports a retry that could not even start", async () => {
     const view = render(<SignInOnboarding />);
     await go(view, { connectionState: "authenticating" }, 900);
-    await go(view, { connectionState: "disconnected", error: new Error("declined") });
+    await go(view, { connectionState: "disconnected", signInError: "declined" });
     rfq.value.authenticate.mockRejectedValueOnce(new Error("RFQ connection is unavailable"));
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await act(async () => {
@@ -186,15 +238,88 @@ describe("a sign-in that did not happen", () => {
     await go(view, { connectionState: "connected" });
     await go(view, { connectionState: "authenticating" }, 900);
     wallet.address = "WalletB";
-    await go(view, { connectionState: "disconnected", error: new Error("Wallet changed during sign-in") });
+    await go(view, { connectionState: "disconnected" });
     expect(dialog()).toBeNull();
   });
 
   it("stays closed once closed", async () => {
     const view = render(<SignInOnboarding />);
     await go(view, { connectionState: "authenticating" }, 900);
-    await go(view, { connectionState: "disconnected", error: new Error("declined") });
+    await go(view, { connectionState: "disconnected", signInError: "declined" });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(dialog()).toBeNull();
+  });
+});
+
+describe("resuming a stored session", () => {
+  it("prompts for nothing, however long it takes, and welcomes nobody", async () => {
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "authenticating", signInNeedsSignature: false }, 5_000);
+    expect(dialog()).toBeNull();
+    await go(view, { connectionState: "authenticated", isAuthenticated: true, referralInfo: { status: "pending" } }, 5_000);
+    expect(dialog()).toBeNull();
+  });
+
+  it("prompts once the server refuses the session and a signature is needed after all", async () => {
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "authenticating", signInNeedsSignature: false }, 2_000);
+    expect(dialog()).toBeNull();
+    await go(view, { signInNeedsSignature: true }, 900);
+    expect(dialog()?.getAttribute("aria-label")).toBe("Sign in with your wallet");
+  });
+});
+
+describe("a session taken over by another tab", () => {
+  it("is said, with a way to take it back here", async () => {
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "authenticated", isAuthenticated: true });
+    await go(view, { connectionState: "disconnected", isAuthenticated: false, sessionElsewhere: true });
+    expect(dialog()?.getAttribute("aria-label")).toBe("This wallet is active elsewhere");
+    fireEvent.click(screen.getByRole("button", { name: "Use it here" }));
+    expect(rfq.value.authenticate).toHaveBeenCalledWith("WalletA", expect.any(Function));
+  });
+
+  it("is not mistaken for a failed sign-in, and can be closed", async () => {
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "authenticated", isAuthenticated: true });
+    await go(view, { connectionState: "disconnected", isAuthenticated: false, sessionElsewhere: true });
+    expect(screen.queryByText(/was not completed/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(dialog()).toBeNull();
+  });
+
+  it("is not shown once the wallet is gone", async () => {
+    const view = render(<SignInOnboarding />);
+    wallet.address = null;
+    await go(view, { connectionState: "disconnected", sessionElsewhere: true });
+    expect(dialog()).toBeNull();
+  });
+});
+
+describe("a sign-in that is still on its way", () => {
+  it("is not called failed when the connection reports other states before it completes", async () => {
+    // a resume starts before the server's welcome; the welcome then reports "connected"
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "authenticating", signInNeedsSignature: false }, 100);
+    await go(view, { connectionState: "connected" }, 2_000);
+    expect(dialog()).toBeNull();
+    await go(view, { connectionState: "authenticated", isAuthenticated: true, referralInfo: { status: "active" } }, 2_000);
+    expect(dialog()).toBeNull();
+  });
+
+  it("is not called failed when the connection drops and comes back by itself", async () => {
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "authenticating" }, 900);
+    await go(view, { connectionState: "disconnected" }, 500);
+    expect(screen.queryByText(/was not completed/)).toBeNull();
+  });
+
+  it("does not carry one wallet's failure over to the next wallet", async () => {
+    const view = render(<SignInOnboarding />);
+    await go(view, { connectionState: "disconnected", signInError: "declined" });
+    expect(dialog()?.getAttribute("aria-label")).toBe("Sign-in was not completed");
+    wallet.address = "WalletB";
+    await go(view, { connectionState: "connected", signInError: null });
     expect(dialog()).toBeNull();
   });
 });

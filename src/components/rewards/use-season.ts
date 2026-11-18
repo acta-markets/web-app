@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Season, SeasonBoard, SeasonSubjectResult } from "@acta-markets/ts-sdk/http";
-import { usePolled, type Loadable } from "@/components/vaults/use-vaults";
+import type { Loadable } from "@/components/vaults/use-vaults";
+import { publicKey, walletKey } from "@/lib/state/keys";
+import { useResource, type ResourceOptions } from "@/lib/state/use-resource";
+import { useViewPref } from "@/lib/state/view-prefs";
 import { NO_AWARDS, type WalletAwards } from "@/lib/rewards/api";
 import { isRewardsSample, loadAwards, loadBoard, loadSeason, loadSubject } from "@/lib/rewards/source";
 import { TRADER, boardHasMore, defaultLeagueId, seasonLeagues } from "@/lib/rewards/view";
@@ -19,24 +22,41 @@ export function useRewardsSample(): boolean {
   return sample;
 }
 
+/** Sample data is made up: it gets keys of its own and is never saved to the device. */
+const source = (sample: boolean) => (sample ? "sample" : "live");
+const SEASON_SHOW_MS = 24 * 60 * 60 * 1000;
+
+/** The season read, shared by the Rewards page and the sign-in welcome. `enabled: false` asks for nothing. */
+export function seasonResource(sample: boolean, enabled = true): ResourceOptions<Season | null> {
+  return {
+    key: enabled ? publicKey("season", source(sample)) : null,
+    load: (signal) => loadSeason(sample, signal),
+    initial: null,
+    persist: !sample,
+    maxShowMs: SEASON_SHOW_MS,
+  };
+}
+
 export function useSeason(sample: boolean): Loadable<Season | null> {
-  return usePolled((signal) => loadSeason(sample, signal), null, `season:${sample}`);
+  return useResource(seasonResource(sample));
 }
 
 export function useSeasonSubject(sample: boolean, slug: string | null, wallet: string | null): Loadable<SeasonSubjectResult | null> {
-  return usePolled(
-    (signal) => loadSubject(sample, slug as string, wallet as string, signal),
-    null,
-    slug && wallet ? `subject:${sample}:${slug}:${wallet}` : null,
-  );
+  return useResource({
+    key: slug && wallet ? walletKey(wallet, "season-subject", source(sample), slug) : null,
+    load: (signal) => loadSubject(sample, slug as string, wallet as string, signal),
+    initial: null,
+    persist: !sample,
+  });
 }
 
 export function useSeasonAwards(sample: boolean, slug: string | null, wallet: string | null): Loadable<WalletAwards> {
-  return usePolled(
-    (signal) => loadAwards(sample, slug as string, wallet as string, signal),
-    NO_AWARDS,
-    slug && wallet ? `awards:${sample}:${slug}:${wallet}` : null,
-  );
+  return useResource({
+    key: slug && wallet ? walletKey(wallet, "season-awards", source(sample), slug) : null,
+    load: (signal) => loadAwards(sample, slug as string, wallet as string, signal),
+    initial: NO_AWARDS,
+    persist: !sample,
+  });
 }
 
 export type BoardScope = "season" | number;
@@ -53,14 +73,16 @@ export type BoardState = {
 /**
  * One board from its top. "Show more" asks for the same board with more rows rather than for
  * the next page: a board moves while it is open, and one request cannot repeat or skip a
- * trader at the seam between two.
+ * trader at the seam between two. The rows already shown stay up while the longer list loads.
  */
 export function useSeasonBoard(sample: boolean, slug: string | null, scope: BoardScope | null, currency: string | null, wallet: string | null): BoardState {
-  const key = slug && scope !== null && currency ? `board:${sample}:${slug}:${scope}:${currency}` : null;
-  const [asked, setAsked] = useState({ key, rows: BOARD_PAGE });
-  const rows = asked.key === key ? asked.rows : BOARD_PAGE;
-  const { data, loading, error, refresh } = usePolled<SeasonBoard | null>(
-    (signal) =>
+  const board = slug && scope !== null && currency ? `${source(sample)}:${slug}:${scope}:${currency}` : null;
+  const [asked, setAsked] = useState({ board, rows: BOARD_PAGE });
+  const rows = asked.board === board ? asked.rows : BOARD_PAGE;
+  const { data, loading, error, placeholder } = useResource<SeasonBoard | null>({
+    // the sample board puts the connected wallet on it, so there the wallet is part of the read
+    key: board ? publicKey("season-board", board, rows, sample ? wallet : null) : null,
+    load: (signal) =>
       loadBoard(
         sample,
         slug as string,
@@ -68,18 +90,20 @@ export function useSeasonBoard(sample: boolean, slug: string | null, scope: Boar
         wallet,
         signal,
       ),
-    null,
-    key,
-  );
-  const loadMore = useCallback(() => {
-    setAsked({ key, rows: Math.min(BOARD_MAX, rows + BOARD_PAGE) });
-    refresh();
-  }, [key, rows, refresh]);
+    initial: null,
+    // only the first page is worth keeping on the device
+    persist: !sample && rows === BOARD_PAGE,
+    maxShowMs: SEASON_SHOW_MS,
+    keepPrevious: true,
+  });
+  const loadMore = useCallback(() => setAsked({ board, rows: Math.min(BOARD_MAX, rows + BOARD_PAGE) }), [board, rows]);
+  // `keepPrevious` holds on to whatever was shown last, which after a change of board is another board's rows
+  const shown = placeholder && asked.board !== board ? null : data;
   return {
-    board: data,
-    loading,
+    board: shown,
+    loading: loading || placeholder,
     failed: error !== null,
-    canLoadMore: !!data && boardHasMore(data) && rows < BOARD_MAX,
+    canLoadMore: !!shown && !placeholder && boardHasMore(shown) && rows < BOARD_MAX,
     loadMore,
   };
 }
@@ -103,9 +127,10 @@ export type RewardsUi = {
 /** What the visitor has chosen on the page. A choice the season no longer offers falls back to the default. */
 export function useRewardsUi(season: Season | null, nowSecs: number, mainnet: boolean): RewardsUi {
   const [chosenLeague, setLeagueId] = useState<number | null>(null);
-  const [tab, setTab] = useState<RewardsTab>("rules");
-  const [wide, setWide] = useState(false);
-  const [chosenCurrency, setCurrency] = useState<string | null>(null);
+  // which tab, which scope and which points are habits, and come back on the next visit
+  const [tab, setTab] = useViewPref("rewardsTab");
+  const [wide, setWide] = useViewPref("rewardsWholeSeason");
+  const [chosenCurrency, setCurrency] = useViewPref("rewardsCurrency");
 
   // only the leagues' ids and phases matter here, so the clock is not a dependency
   const fallback = useMemo(

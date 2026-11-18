@@ -82,3 +82,28 @@ describe("Trade page modes", () => {
     expect(screen.getByRole("link", { name: "How it works" }).getAttribute("href")).toBe("/docs/guide/options");
   });
 });
+
+describe("the mode a visitor last used", () => {
+  it("opens for an address that names none, such as the nav link's", async () => {
+    const { tradeDraftStore, updateTradeDraft } = await import("@/lib/trade/draft");
+    updateTradeDraft(tradeDraftStore(), { mode: "yield" });
+    render(<TradeClient />);
+    expect(screen.getByText("Yield for default")).toBeTruthy();
+  });
+
+  it("gives way to the mode the address names", async () => {
+    const { tradeDraftStore, updateTradeDraft } = await import("@/lib/trade/draft");
+    updateTradeDraft(tradeDraftStore(), { mode: "yield" });
+    mocks.search = "mode=profit";
+    render(<TradeClient />);
+    expect(screen.getByText("Profit for default")).toBeTruthy();
+  });
+
+  it("is remembered when it is switched", async () => {
+    const { tradeDraftStore } = await import("@/lib/trade/draft");
+    render(<TradeClient />);
+    fireEvent.click(screen.getByRole("button", { name: "Trading mode: profit. Switch to yield" }));
+    expect(tradeDraftStore().read().mode).toBe("yield");
+    expect(screen.getByText("Yield for default")).toBeTruthy();
+  });
+});

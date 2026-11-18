@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
-import { usePolled } from "@/components/vaults/use-vaults";
+import { seasonResource } from "@/components/rewards/use-season";
 import { useTokenBalance } from "@/components/wallet/use-token-balance";
 import { IS_MAINNET } from "@/lib/network";
 import { numberFormat } from "@/lib/number-format";
-import { readWelcomeSeen, signInFailureText, signInView, welcomeSeenKey, writeWelcomeSeen } from "@/lib/onboarding";
-import { loadSeason } from "@/lib/rewards/source";
+import { APP_HOME } from "@/lib/app-enabled";
+import { firstSignInDestination, readWelcomeSeen, signInFailureText, signInView, welcomeSeenKey, writeWelcomeSeen } from "@/lib/onboarding";
 import { seasonLeagues } from "@/lib/rewards/view";
+import { useResource } from "@/lib/state/use-resource";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
 import { TOKENS, displayQuoteSymbol, getNetwork } from "@/lib/tokens";
 import { SignInModal, type SignInBalance } from "./sign-in-modal";
@@ -32,7 +34,7 @@ const sol = numberFormat({ minimumFractionDigits: 0, maximumFractionDigits: 4 })
  * Mounted once, inside the RFQ provider.
  */
 export function SignInOnboarding() {
-  const { connectionState, isAuthenticated, error, authenticate, referralStatus, referralInfo } = useRfqContext();
+  const { connectionState, isAuthenticated, authenticate, referralStatus, referralInfo, signInNeedsSignature, signInError, sessionElsewhere } = useRfqContext();
   const { isConnected, selectedAccount, signMessage } = useSolana();
   const wallet = isConnected ? (selectedAccount?.address ?? null) : null;
 
@@ -49,7 +51,7 @@ export function SignInOnboarding() {
   /** The referral info as it was when this sign-in began: anything else arrived after it. */
   const infoAtStart = useRef(referralInfo);
 
-  // Each sign-in starts clean; one that ends without a signature, for the same wallet, is a failure to report.
+  // Each sign-in starts clean.
   useEffect(() => {
     const before = previous.current;
     previous.current = { authenticating, wallet };
@@ -67,17 +69,32 @@ export function SignInOnboarding() {
       setDismissed(false);
       setFailure(null);
       setGaveUpWaiting(false);
-    } else if (!authenticating && before.authenticating && !isAuthenticated && wallet) {
-      setFailure(signInFailureText(error?.message));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authenticating, wallet, isAuthenticated]);
 
+  // A failed sign-in is what the provider says is one. The connection passing through other
+  // states on its way (the server's welcome arriving mid sign-in reports "connected") is not.
   useEffect(() => {
-    if (!authenticating || prompted) return;
+    if (signInError && wallet) {
+      setFailure(signInFailureText(signInError));
+      setDismissed(false);
+    }
+  }, [signInError, wallet]);
+
+  // Resuming a stored session asks the wallet for nothing, so there is nothing to prompt for,
+  // however long the resume takes. The prompt is for a signature only.
+  const needsSignature = signInNeedsSignature !== false;
+  useEffect(() => {
+    if (!authenticating || prompted || !needsSignature) return;
     const id = window.setTimeout(() => setPrompted(true), PROMPT_DELAY_MS);
     return () => window.clearTimeout(id);
-  }, [authenticating, prompted]);
+  }, [authenticating, prompted, needsSignature]);
+
+  // the notice that another tab took the session comes back each time it happens
+  useEffect(() => {
+    if (sessionElsewhere) setDismissed(false);
+  }, [sessionElsewhere]);
 
   const takerStatus = isAuthenticated && referralInfo && referralInfo !== infoAtStart.current ? referralInfo.status : null;
   useEffect(() => {
@@ -95,12 +112,30 @@ export function SignInOnboarding() {
     prompted,
     dismissed,
     failed: failure !== null,
+    elsewhere: sessionElsewhere === true && wallet !== null,
     gateOpen: referralStatus === "required",
     takerStatus,
     seen,
     gaveUpWaiting,
   });
   const welcome = view === "welcome";
+
+  // A first sign-in lands on Trade, once, with the welcome over it. The modal lives in the
+  // app's layout, so it stays up across the move.
+  const router = useRouter();
+  const pathname = usePathname();
+  const sentHome = useRef(false);
+  useEffect(() => {
+    if (!welcome) {
+      sentHome.current = false;
+      return;
+    }
+    if (sentHome.current) return;
+    sentHome.current = true;
+    const destination = firstSignInDestination(pathname, APP_HOME);
+    if (destination) router.push(destination);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [welcome]);
 
   // What the wallet holds, read only while the welcome is up, and often while funds are on their way.
   const network = getNetwork();
@@ -123,7 +158,7 @@ export function SignInOnboarding() {
   if (solBalance) balances.push({ symbol: "SOL", amount: sol.format(solBalance) });
 
   // A season is read only for the welcome; no season, or no answer, simply leaves the league line out.
-  const season = usePolled((signal) => loadSeason(false, signal), null, welcome ? "welcome-season" : null);
+  const season = useResource(seasonResource(false, welcome));
   const league = useMemo(() => {
     if (!season.data) return null;
     const live = seasonLeagues(season.data, Math.floor(Date.now() / 1000), { mainnet: IS_MAINNET }).open.find((l) => l.live);

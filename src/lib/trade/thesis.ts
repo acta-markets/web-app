@@ -527,6 +527,8 @@ export type EasyCtaState = {
   walletConnected: boolean;
   referralGated: boolean;
   pricesLoading: boolean;
+  /** prices are on screen from the last visit while this session's own are on their way */
+  pricesLastKnown?: boolean;
   hasMarkets: boolean;
   hasStrike: boolean;
   priced: boolean;
@@ -545,7 +547,7 @@ export type EasyCta = { label: string; action: "connect" | "redeem" | "quote" | 
 export function easyCta(s: EasyCtaState): EasyCta {
   if (!s.walletConnected) return { label: "Connect wallet to trade", action: "connect" };
   if (s.referralGated) return { label: "Redeem invite to trade", action: "redeem" };
-  if (s.pricesLoading) return { label: "Loading prices...", action: null };
+  if (s.pricesLoading) return { label: s.pricesLastKnown ? "Updating prices..." : "Loading prices...", action: null };
   if (!s.hasMarkets) return { label: "No markets right now", action: null };
   if (!s.hasStrike) return { label: "Choose a strike", action: null };
   if (!s.priced) return { label: "Premium unavailable", action: null };

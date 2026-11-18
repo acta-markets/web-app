@@ -81,6 +81,7 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 - `src/components/solana/solana-wallet-provider.tsx` - Wallet context provider
 - `src/components/solana/solana-connect-button.tsx` - Connect button component
 - Supports Phantom, Solflare, and other Wallet Standard wallets
+- The last connected wallet is remembered in this browser (`src/lib/wallet-memory.ts`, localStorage `acta_last_wallet`: the wallet's name and public address only) and reconnected on load with a silent connect, which a wallet answers only if it already trusts the site. Disconnecting forgets it. The wallet panel lists it first, marked "Last used".
 
 **Market prices and APR**: The market page uses the configured RFQ backend’s `GetTokenMarketsInfo.reference_price` and indicative premiums, refreshed together every 30 seconds. APR uses the existing SDK formula and is unavailable for stale indicatives. The backend owns oracle access; the frontend has no direct Hermes integration.
 
@@ -126,8 +127,20 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 **Sign-in and onboarding**: the modal that asks a wallet to sign in is also the first-run welcome. `src/components/onboarding/sign-in-onboarding.tsx` (mounted in `(app)/layout.tsx`) watches the RFQ connection and drives `sign-in-modal.tsx`; `src/lib/onboarding.ts` holds the rules (`signInView`).
 - The prompt goes up 800 ms into `authenticating`, so a resumed session never flashes it. A sign-in that ends without a signature shows "Sign-in was not completed" with Try again.
 - The welcome is the prompt's next state, never a modal of its own: only after a signature just given, only for a wallet that has never traded (`referralInfo.status === "pending"`), once per wallet and backend (localStorage `acta_welcome_seen:<backend>:<wallet>`), and never over the invite gate.
+- A first sign-in lands on Trade (`firstSignInDestination`): when the welcome comes up anywhere else in the app the visitor is taken to `/trade` once, with the welcome over it. A returning trader stays where they signed in.
 - Test funds are shown as the chain reports them (`useTokenBalance`), "Arriving" until then; no amount is promised in copy. The funds step exists on devnet only.
 - `/dev/sign-in` shows every state.
+
+**State and persistence**: every piece of state has one of four homes (`src/lib/state/`). Pick the home before writing the state.
+- **Server data** lives in the shared query cache (TanStack Query, `query-client.ts`), one copy per read, shared by every page and kept across navigation. A read for display goes through `useResource` (`use-resource.ts`); with `persist: true` it is also saved to IndexedDB (database `acta-state`, one entry per read) and shown on the next visit until a fresh read replaces it. Data the socket pushes (positions, referral info, the earn summary) is kept with `remember` and read with `useRemembered` (`remembered.ts`).
+- **Keys** are `[backend, scope, resource, ...]` (`keys.ts`): `publicKey(...)` for data anyone sees, `walletKey(wallet, ...)` for a wallet's own. The backend is first so devnet and mainnet never mix; the wallet is second so `forgetWallet` drops everything of one wallet, which disconnecting does (it also clears that wallet's session).
+- **Last-known data is for display only.** Nothing read back from the device may build an order, size a deposit or move funds. A read on the money path stays on `usePolled` (`src/components/vaults/use-vaults.ts`), which caches nothing, or on this session's own socket data; `isLive` in `freshness.ts` is the test an action must pass. Saving is opt-in per read, so a quote or a signing payload cannot be written by accident: never add `persist` to one.
+- **Trade's first screen** is drawn from what the device kept: the asset list, the selected asset's market snapshot and the fee schedule (`src/lib/trade/last-known.ts`; `primeTrade()` starts the reads as the page's code loads). `sentence-trade.tsx` uses `liveSnapshot ?? lastKnown` to draw and `liveSnapshot` alone to enable the button, which reads "Updating prices..." until then. Keep that split: a new use of the snapshot that reaches a quote must take `liveSnapshot`. A saved premium older than 10 minutes shows as no price; a saved snapshot older than a day is not used.
+- **Identity and small choices** go in localStorage through `createLocalStore` (`local-store.ts`): versioned, validated on the way back in, shared between tabs, and working in memory when storage refuses. `registry.ts` lists every browser key; a new key is added there first. Examples: the last wallet (`src/lib/wallet-memory.ts`), the session per backend and wallet (`session-store.ts`), view habits (`view-prefs.ts`, `useViewPref`), the Trade setup (`src/lib/trade/draft.ts`).
+- **What defines a view** (Trade's asset and direction) is also written to the address with `history.replaceState`, so a link reopens it. The address wins over what was remembered.
+- **Money-path state** (quotes, signing payloads, the accepted order) stays in memory. The one exception is the unfinished-order record in `use-rfq-order.ts`, which has its own format and is not part of this system; `UnfinishedTradeNotice` only reads it.
+- **Returning wallet**: `expectedAccount` from `useSolana()` is the remembered wallet while it reconnects. Pages render for it from the device copy instead of asking to connect, mark what they show as last-loaded, and offer no action until the wallet is connected and signed in.
+- Tests: `src/test/setup.ts` empties the cache, browser storage and the address after each test.
 
 **Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
 - Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)

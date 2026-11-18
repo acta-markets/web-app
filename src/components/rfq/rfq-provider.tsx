@@ -35,6 +35,11 @@ import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { ReferralGateModal } from "@/components/referral/referral-gate-modal";
 import { clearPendingRefCode } from "@/components/referral/ref-capture";
 import { useToast } from "@/components/app-ui/toast";
+import { getRfqBackendUrl } from "@/lib/rfq-client";
+import { clearSession, readSessionId, writeSession } from "@/lib/state/session-store";
+import { publicKey, walletKey } from "@/lib/state/keys";
+import { recall, remember } from "@/lib/state/remembered";
+import { spotFromSnapshot } from "@/lib/trade/strikes";
 
 interface RfqContextValue {
   /** Connection state */
@@ -88,12 +93,20 @@ interface RfqContextValue {
   error: Error | null;
   /** Authenticate with wallet (triggers signing prompt) */
   authenticate: (walletAddress: string, signMessage: (msg: Uint8Array) => Promise<Uint8Array>) => Promise<void>;
+  /** The sign-in under way needs the wallet to sign. False while a stored session is being resumed, which asks the wallet for nothing. */
+  signInNeedsSignature: boolean;
+  /** Why the last sign-in did not complete, or null. Set only when an attempt has really ended in failure; cleared by the next attempt. */
+  signInError: string | null;
+  /** Another tab or device took this wallet's session over; this one is no longer connected. */
+  sessionElsewhere: boolean;
   /** Disconnect */
   disconnect: () => void;
   /** Fetch positions (requires auth) */
   fetchPositions: () => void;
   /** the last positions request came back with an error */
   positionsFailed: boolean;
+  /** The signed-in wallet's positions have arrived in this session: `positions` is the live list, an empty one included. */
+  positionsLoaded: boolean;
   /** Get indicative prices for a market */
   getIndicativePrices: (market: string, positionType: "covered_call" | "cash_secured_put", side: TakerSide) => void;
   /** Submit RFQ request */
@@ -176,7 +189,6 @@ interface RfqProviderProps {
   children: ReactNode;
 }
 
-const RFQ_SESSION_KEY = "acta_rfq_ws_session";
 /** An earn summary asked for again within this window is the same answer; skip the request. */
 const EARN_SUMMARY_REPEAT_MS = 5_000;
 export const RFQ_TTL_SECONDS = 30;
@@ -206,37 +218,11 @@ function isMissingMarketDescriptorError(message: string): boolean {
   );
 }
 
-function loadStoredSessionId(walletAddress: string): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(RFQ_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      sessionId?: string;
-      walletAddress?: string;
-      expiresAt?: number | null;
-    };
-    if (!parsed.sessionId || !parsed.walletAddress) return null;
-    if (parsed.walletAddress !== walletAddress) return null;
-    if (typeof parsed.expiresAt !== "number" || !Number.isFinite(parsed.expiresAt) || parsed.expiresAt <= Math.floor(Date.now() / 1000)) {
-      return null;
-    }
-    return parsed.sessionId;
-  } catch {
-    return null;
-  }
-}
-
-function persistSession(walletAddress: string, sessionId: string, expiresAt: number) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(
-      RFQ_SESSION_KEY,
-      JSON.stringify({ walletAddress, sessionId, expiresAt })
-    );
-  } catch {
-  }
-}
+/** The session a wallet can resume with on this backend, or null. Kept per backend and wallet (`session-store.ts`). */
+const loadStoredSessionId = (walletAddress: string): string | null => readSessionId(getRfqBackendUrl(), walletAddress);
+const persistSession = (walletAddress: string, sessionId: string, expiresAt: number) => writeSession(getRfqBackendUrl(), walletAddress, sessionId, expiresAt);
+/** How long the sign-in waits after a wallet connects, so its signature popup does not land on top of the wallet's own connect popup. */
+const SIGNATURE_WARMUP_MS = 900;
 
 export function RfqProvider({ children }: RfqProviderProps) {
   const showDebugBadge = process.env.NEXT_PUBLIC_RFQ_DEBUG_BADGE === "true";
@@ -271,6 +257,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
   const earnSummaryRequestedAt = useRef(0);
   const [assetSnapshots, setAssetSnapshots] = useState<ReadonlyMap<string, TokenMarketsInfoData>>(new Map());
   const [error, setError] = useState<Error | null>(null);
+  const [positionsLoaded, setPositionsLoaded] = useState(false);
+  const [signInNeedsSignature, setSignInNeedsSignature] = useState(true);
+  const [signInError, setSignInError] = useState<string | null>(null);
+  /** The server has greeted this socket. Before that the SDK cannot start a sign-in, only queue it. */
+  const [welcomed, setWelcomed] = useState(false);
+  const [sessionElsewhere, setSessionElsewhere] = useState(false);
   const pendingRfqAuthWalletRef = useRef<string | null>(null);
   const authInFlightRef = useRef<{ wallet: string; promise: Promise<void>; controller: AbortController } | null>(null);
   const authWalletRef = useRef<string | null>(null);
@@ -372,6 +364,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
       client.on("welcome", (welcome) => {
         serverClockOffsetMsRef.current = Number(welcome.server_now_at_ms) - Date.now();
+        setWelcomed(true);
       });
 
       client.on("connected", () => {
@@ -386,6 +379,11 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
       client.on("stateChange", (state) => {
         console.log("[RfqProvider] State change:", state);
+        if (state === "disconnected" || state === "connecting" || state === "error") setWelcomed(false);
+        // The SDK reports "connected" when the server's welcome arrives. If a sign-in is already
+        // under way that is progress, not its end: the sign-in is still "authenticating" until
+        // it succeeds or fails.
+        if (state === "connected" && authInFlightRef.current) return;
         setConnectionState(state);
         if (state === "disconnected" || state === "connecting" || state === "error") {
           dropRfq();
@@ -403,6 +401,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
           return;
         }
         console.log("[RfqProvider] Authenticated, session:", sessionId);
+        setSignInError(null);
         setConnectionState("authenticated");
         if (walletAddressRef.current) {
           persistSession(walletAddressRef.current, sessionId, expiresAt);
@@ -427,6 +426,15 @@ export function RfqProvider({ children }: RfqProviderProps) {
         pendingReferralReqsRef.current.clear();
       });
 
+      // The server refused the session it was asked to resume. The SDK falls back to a fresh
+      // sign-in when the session has merely run out, which does need the wallet.
+      client.on("authError", (reason) => {
+        if (disposed || clientRef.current !== client) return;
+        console.warn("[RfqProvider] Stored session refused:", reason);
+        if (authWalletRef.current) clearSession(getRfqBackendUrl(), authWalletRef.current);
+        setSignInNeedsSignature(true);
+      });
+
       client.on("error", (serverErr) => {
         if (disposed || clientRef.current !== client) return;
         console.error("[RfqProvider] Error:", serverErr);
@@ -441,6 +449,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
         if (serverErr.type === "Generic" && serverErr.data.code === "session_replaced") {
           console.warn("[RfqProvider] Session replaced by newer connection, disconnecting.");
           client.disconnect();
+          // said on screen, with a way back: this tab would otherwise sit disconnected with no word
+          setSessionElsewhere(true);
           return;
         }
 
@@ -484,6 +494,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
         const derived: ReferralStatus = hasCode || data.status === "active" ? "redeemed" : "required";
         setReferralInfo(hasCode ? data : null);
         setReferralStatus((prev) => (prev === "unknown" ? derived : prev));
+        if (hasCode && authWalletRef.current) remember(walletKey(authWalletRef.current, "referral-info"), data);
       });
 
       client.on("requestError", ({ request_id, error }) => {
@@ -519,6 +530,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
           if (key.startsWith("USDC")) fees.set("USDC", t.protocol_fees);
         }
         setProtocolFeesBySymbol(fees);
+        // kept for the next visit's first screen (display only; the venue computes the real fill)
+        remember(publicKey("protocol-fees"), [...fees]);
       });
 
       client.on("earnSummary", (data) => {
@@ -532,6 +545,8 @@ export function RfqProvider({ children }: RfqProviderProps) {
         }
         console.log("[RfqProvider] Earn summary received:", data.assets?.length ?? 0, "assets");
         setEarnSummary(data.assets ?? []);
+        // kept for the next visit, so Trade can draw its asset list before the socket answers
+        remember(publicKey("earn-summary"), data.assets ?? []);
       });
 
       client.on("snapshot", (snap) => {
@@ -570,13 +585,22 @@ export function RfqProvider({ children }: RfqProviderProps) {
           && message.data.next_cursor === null) positionsRequestRef.current = null;
       });
 
+      // The latest list is also kept for the wallet's next visit (display only, see `remembered.ts`).
+      const rememberPositions = (list: PositionInfo[]) => {
+        const wallet = authWalletRef.current;
+        if (wallet && wallet === walletAddressRef.current) remember(walletKey(wallet, "positions"), list);
+      };
       client.on("positions", (p) => {
         console.log("[RfqProvider] Positions:", p);
         setPositions(p);
         setPositionsFailed(false);
+        setPositionsLoaded(true);
+        rememberPositions(p);
       });
       client.on("positionUpdated", () => {
-        setPositions([...client.state.positions.values()]);
+        const list = [...client.state.positions.values()];
+        setPositions(list);
+        rememberPositions(list);
       });
 
       client.on("tokenMarketsInfo", (data: TokenMarketsInfoData) => {
@@ -585,6 +609,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
         if (!pending || pending.requestId !== data.request_id) return;
         tokenMarketsRequest.current = null;
         setTokenMarketsInfo({ underlyingMint: pending.underlyingMint, data });
+        // The selected asset's market data, kept so a reload draws Trade at once. Display only:
+        // a quote is only ever asked for while `tokenMarketsInfo` above holds this session's own.
+        remember(publicKey("markets", pending.underlyingMint), data);
         const updates: Record<string, IndicativePricesMessage> = {};
         for (const mkt of data.markets ?? []) {
           for (const ind of mkt.indicatives ?? []) {
@@ -716,6 +743,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
         console.log("[RfqProvider] Authenticating wallet:", walletAddress, {
           resumeSession: !!maybeSessionId,
         });
+        setSignInNeedsSignature(!maybeSessionId);
+        setSessionElsewhere(false);
+        setSignInError(null);
         setConnectionState("authenticating");
 
         try {
@@ -754,10 +784,16 @@ export function RfqProvider({ children }: RfqProviderProps) {
           });
         } catch (err) {
           console.error("[RfqProvider] Authentication failed:", err);
+          // A stored session that did not get this wallet in is not offered again: the next
+          // attempt asks for a signature instead of failing the same way.
+          if (maybeSessionId && !controller.signal.aborted) clearSession(getRfqBackendUrl(), walletAddress);
           const serverErr = err as ActaWsClientError;
           if (clientRef.current === client && authInFlightRef.current?.controller === controller) {
             resetToAnonymous(client);
-            setError(new Error(serverErr?.type ? errorText(serverErr) : String(err)));
+            const reason = serverErr?.type ? errorText(serverErr) : String(err);
+            setError(new Error(reason));
+            // the one place a sign-in is known to have failed: this attempt, for this wallet, is over
+            setSignInError(reason);
           }
           throw err;
         }
@@ -775,10 +811,13 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
   useEffect(() => {
     const attempt = authInFlightRef.current;
+    // another wallet, or none: the previous one's failed sign-in is not this one's
+    setSignInError(null);
     if ((attempt && attempt.wallet !== walletAddress) || (authWalletRef.current && authWalletRef.current !== walletAddress)) {
       authInFlightRef.current = null;
       attempt?.controller.abort();
       authWalletRef.current = null;
+      setPositionsLoaded(false);
       if (clientRef.current) resetToAnonymous(clientRef.current);
     }
     if (!walletConnected || !walletAddress || !selectedAccount) {
@@ -792,15 +831,21 @@ export function RfqProvider({ children }: RfqProviderProps) {
     }
 
     pendingRfqAuthWalletRef.current = walletAddress;
-    setAuthWarmupDone(false);
-
     if (authWarmupTimerRef.current != null) {
       window.clearTimeout(authWarmupTimerRef.current);
-    }
-    authWarmupTimerRef.current = window.setTimeout(() => {
-      setAuthWarmupDone(true);
       authWarmupTimerRef.current = null;
-    }, 900);
+    }
+    // Resuming a stored session asks the wallet for nothing, so there is no popup to keep
+    // clear of and no reason to wait.
+    if (loadStoredSessionId(walletAddress)) {
+      setAuthWarmupDone(true);
+    } else {
+      setAuthWarmupDone(false);
+      authWarmupTimerRef.current = window.setTimeout(() => {
+        setAuthWarmupDone(true);
+        authWarmupTimerRef.current = null;
+      }, SIGNATURE_WARMUP_MS);
+    }
 
     return () => {
       if (authWarmupTimerRef.current != null) {
@@ -811,7 +856,10 @@ export function RfqProvider({ children }: RfqProviderProps) {
   }, [walletConnected, walletAddress, selectedAccount, resetToAnonymous]);
 
   useEffect(() => {
-    if (!walletConnected || !walletAddress || !rfqConnected || authInFlightRef.current || !authWarmupDone) {
+    // Only on a socket the server has greeted. Asked while the socket is still connecting, the
+    // SDK tears it down and starts over; asked before the welcome, it can only queue the
+    // request, and the welcome's own "connected" would then look like the sign-in ending.
+    if (!walletConnected || !walletAddress || connectionState !== "connected" || !welcomed || authInFlightRef.current || !authWarmupDone) {
       return;
     }
     if (pendingRfqAuthWalletRef.current !== walletAddress) {
@@ -821,7 +869,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     void authenticate(walletAddress, signMessage).catch((err) => {
       console.error("[RfqProvider] RFQ auth after wallet connect failed:", err);
     });
-  }, [walletConnected, walletAddress, rfqConnected, authWarmupDone, authenticate, signMessage]);
+  }, [walletConnected, walletAddress, connectionState, welcomed, authWarmupDone, authenticate, signMessage]);
 
   useEffect(() => {
     setReferralGateOpen(referralStatus === "required");
@@ -834,6 +882,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
     if (!wasConnected || walletConnected) return;
 
     console.log("[RfqProvider] Wallet disconnected; clearing per-user state");
+    setSessionElsewhere(false);
+    setSignInError(null);
+    setPositionsLoaded(false);
     setReferralStatus("unknown");
     setReferralInfo(null);
     setReferralError(null);
@@ -909,6 +960,12 @@ export function RfqProvider({ children }: RfqProviderProps) {
           next.set(mint, data);
           return next;
         });
+        // the price alone is kept for the next visit, so the picker opens with it (display only)
+        const price = spotFromSnapshot(data);
+        if (price != null) {
+          const key = publicKey("reference-prices");
+          remember(key, { ...(recall<Record<string, { price: number; at: number }>>(key) ?? {}), [mint]: { price, at: Date.now() } });
+        }
       }).catch(() => {
         // `market_not_found` / error: leave the mint absent so the picker shows a dash, never a stale price
       });
@@ -1150,9 +1207,13 @@ export function RfqProvider({ children }: RfqProviderProps) {
     getEarnSummary,
     error,
     authenticate,
+    signInNeedsSignature,
+    signInError,
+    sessionElsewhere,
     disconnect,
     fetchPositions,
     positionsFailed,
+    positionsLoaded,
     getIndicativePrices,
     submitRfq,
     acceptQuote,
