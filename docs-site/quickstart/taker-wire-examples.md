@@ -4,9 +4,9 @@ Payloads illustrate wire shapes. Replace abbreviated IDs, addresses, signatures 
 
 Concrete JSON for a full taker session and the common branch scenarios. Message shapes and field semantics are in [`../reference/taker-api.md`](../reference/taker-api.md). The narrative walkthrough is in [`taker-quickstart.md`](taker-quickstart.md).
 
-Pubkeys and mints are base58. `order_id` is 64 hex characters, with an optional `0x`. Amounts are `u64`: prices and strikes are `1e9`-scaled, `quantity` is in underlying atoms, premiums and collateral are quote atoms. Timestamps are Unix seconds unless the field name ends in `_ms`. Placeholders such as `MarketPdaBase58` stand in for real base58 values.
+Pubkeys and mints are base58. `order_id` is 64 hex characters, with an optional `0x`. Amounts are `u64` [decimal strings](../reference/ws-common.md#numbers): prices and strikes are `1e9`-scaled, `quantity` is in underlying atoms, premiums and collateral are quote atoms. Timestamps are Unix seconds unless the field name ends in `_ms`. Placeholders such as `MarketPdaBase58` stand in for real base58 values.
 
-Every frame carries all its fields. Absent facts are `null`, and state-dependent shapes are tagged unions.
+Every frame carries all its fields. Absent facts are tagged unions (`null` only as `next_cursor` on the last page), and state-dependent shapes are tagged unions.
 
 ## Complete Session (happy path, covered call)
 
@@ -42,7 +42,6 @@ Any `protocol_version` other than `1.0.0` gets an `Error` with `unsupported_prot
       "connection": { "type": "bucket", "per_second": 30, "burst": 60 },
       "wallet": { "type": "bucket", "per_second": 50, "burst": 100 },
       "rfqs": { "type": "bucket", "per_second": 10, "burst": 20 },
-      "quotes": { "type": "unlimited" },
       "queries": { "type": "bucket", "per_second": 20, "burst": 40 },
       "liquidity_provider": { "type": "not_applicable" }
     }
@@ -101,7 +100,7 @@ For takers `expires_at` is a number and `role` is `{ "type": "taker" }`. Persist
 
 ### 4) Snapshot (server -> client)
 
-Sent automatically after `AuthSuccess`. `markets` lists the active markets in the `MarketInfo` shape. `products` lists the pair's products that fit the market's side. A put market lists a subset of `cash_secured_put`, `put_spread` and `cash_put`; a call market lists a subset of `covered_call` and `call_spread`. `settlement_price` is `null` until the market settles. Fetch full descriptors (step 5) before creating an RFQ.
+Sent automatically after `AuthSuccess`. `markets` lists the active markets in the `MarketInfo` shape. `products` lists the pair's products that fit the market's side. A put market lists a subset of `cash_secured_put`, `put_spread` and `cash_put`; a call market lists a subset of `covered_call` and `call_spread`. `settlement` is `{ "type": "pending" }` until the market settles, then `{ "type": "fixed", "price" }`. Fetch full descriptors (step 5) before creating an RFQ.
 
 ```json
 {
@@ -172,9 +171,9 @@ Full descriptors carry `size_rule`, decimals and oracle PDAs, which you need to 
         "underlying_decimals": 9,
         "quote_decimals": 6,
         "size_rule": {
-          "min_size": 1000000000,
-          "max_size": 100000000000,
-          "step": 1000000000
+          "min_size": "1000000000",
+          "max_size": "100000000000",
+          "step": "1000000000"
         },
         "underlying_symbol": "SOL",
         "quote_symbol": "USDC"
@@ -221,9 +220,9 @@ Every field is required. `underlying_mints: []` and `quote_mints: []` mean every
   "data": {
     "request_id": "7a4c4b3e-2f1d-4c55-9a51-4f0d0e2b6a42",
     "market_pda": "MarketPdaBase58",
-    "terms": { "type": "covered_call", "strike": 136000000000 },
+    "terms": { "type": "covered_call", "strike": "136000000000" },
     "side": "sell",
-    "quantity": 5000000000,
+    "quantity": "5000000000",
     "timeout_seconds": 30
   }
 }
@@ -239,13 +238,13 @@ Every field is required. `underlying_mints: []` and `quote_mints: []` mean every
   "data": {
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
     "rfq_version": 1,
-    "terms": { "type": "covered_call", "strike": 136000000000 },
+    "terms": { "type": "covered_call", "strike": "136000000000" },
     "side": "sell",
     "request_id": "7a4c4b3e-2f1d-4c55-9a51-4f0d0e2b6a42",
     "expires_at": 1710000030,
     "created_at": 1710000000,
     "order_options": [
-      { "type": "covered_call", "strike": 136000000000 }
+      { "type": "covered_call", "strike": "136000000000" }
     ]
   }
 }
@@ -262,14 +261,14 @@ Each quote is firm and hash-bound through `order_id`. `net_price` is a display e
   "type": "QuoteReceived",
   "data": {
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
-    "terms": { "type": "covered_call", "strike": 136000000000 },
+    "terms": { "type": "covered_call", "strike": "136000000000" },
     "side": "sell",
     "maker_owner": "MakerAOwnerPubkeyBase58",
-    "price": 50000000,
+    "price": "50000000",
     "valid_until": 1710000330,
-    "nonce": 42,
+    "nonce": "42",
     "order_id": "0x1111111111111111111111111111111111111111111111111111111111111111",
-    "net_price": 49750000
+    "net_price": "49750000"
   }
 }
 ```
@@ -279,14 +278,14 @@ Each quote is firm and hash-bound through `order_id`. `net_price` is a display e
   "type": "QuoteReceived",
   "data": {
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
-    "terms": { "type": "covered_call", "strike": 136000000000 },
+    "terms": { "type": "covered_call", "strike": "136000000000" },
     "side": "sell",
     "maker_owner": "MakerBOwnerPubkeyBase58",
-    "price": 51000000,
+    "price": "51000000",
     "valid_until": 1710000335,
-    "nonce": 7,
+    "nonce": "7",
     "order_id": "0x2222222222222222222222222222222222222222222222222222222222222222",
-    "net_price": 50745000
+    "net_price": "50745000"
   }
 }
 ```
@@ -387,7 +386,7 @@ Terminal RFQ event; it follows `OrderConfirmed` on a fill. Drop per-RFQ state he
     "winner": {
       "type": "winner",
       "maker_owner": "MakerBOwnerPubkeyBase58",
-      "price": 51000000,
+      "price": "51000000",
       "transaction": {
         "type": "sent",
         "signature": "5eyk...base58sig"
@@ -422,18 +421,18 @@ After the position is projected, the session receives the full row. No subscript
       "quote_decimals": 6,
       "terms": {
         "type": "covered_call",
-        "strike": 136000000000
+        "strike": "136000000000"
       },
       "side": "sell",
       "state": "open",
-      "quantity": 5000000000,
-      "price": 51000000,
-      "total_premium": 253725,
+      "quantity": "5000000000",
+      "price": "51000000",
+      "total_premium": "253725",
       "created_at": 1710000012,
       "expiry_ts": 1710600000,
       "underlying_price": {
         "type": "available",
-        "price": 151000000000,
+        "price": "151000000000",
         "published_at": 1710000010
       }
     },
@@ -456,9 +455,9 @@ A put spread on a put market. The market lists `put_spread` in `products`. The s
   "data": {
     "request_id": "a1b2c3d4-0001-4a5b-8c6d-7e8f90a1b2c3",
     "market_pda": "PutMarketPdaBase58",
-    "terms": { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 },
+    "terms": { "type": "put_spread", "lower_strike": "130000000000", "upper_strike": "140000000000" },
     "side": "sell",
-    "quantity": 5000000000,
+    "quantity": "5000000000",
     "timeout_seconds": 30
   }
 }
@@ -474,13 +473,13 @@ A put spread on a put market. The market lists `put_spread` in `products`. The s
   "data": {
     "rfq_id": "b2c3d4e5-0002-4b6c-9d7e-8f90a1b2c3d4",
     "rfq_version": 1,
-    "terms": { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 },
+    "terms": { "type": "put_spread", "lower_strike": "130000000000", "upper_strike": "140000000000" },
     "side": "sell",
     "request_id": "a1b2c3d4-0001-4a5b-8c6d-7e8f90a1b2c3",
     "expires_at": 1710000030,
     "created_at": 1710000000,
     "order_options": [
-      { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 }
+      { "type": "put_spread", "lower_strike": "130000000000", "upper_strike": "140000000000" }
     ]
   }
 }
@@ -495,14 +494,14 @@ The gross price `G = 1.2` is below the width `10`. At 50 bps premium and 10 bps 
   "type": "QuoteReceived",
   "data": {
     "rfq_id": "b2c3d4e5-0002-4b6c-9d7e-8f90a1b2c3d4",
-    "terms": { "type": "put_spread", "lower_strike": 130000000000, "upper_strike": 140000000000 },
+    "terms": { "type": "put_spread", "lower_strike": "130000000000", "upper_strike": "140000000000" },
     "side": "sell",
     "maker_owner": "MakerAOwnerPubkeyBase58",
-    "price": 1200000000,
+    "price": "1200000000",
     "valid_until": 1710000330,
-    "nonce": 11,
+    "nonce": "11",
     "order_id": "0x3333333333333333333333333333333333333333333333333333333333333333",
-    "net_price": 1194000000
+    "net_price": "1194000000"
   }
 }
 ```
@@ -533,20 +532,20 @@ At settlement price `133` the intrinsic value is `7`. The maker receives `350000
       "quote_decimals": 6,
       "terms": {
         "type": "put_spread",
-        "lower_strike": 130000000000,
-        "upper_strike": 140000000000
+        "lower_strike": "130000000000",
+        "upper_strike": "140000000000"
       },
       "side": "sell",
       "state": "settled",
       "settlement": {
         "type": "cash",
-        "settlement_price": 133000000000,
-        "holder_payoff": 35000000,
-        "writer_return": 15000000
+        "settlement_price": "133000000000",
+        "holder_payoff": "35000000",
+        "writer_return": "15000000"
       },
-      "quantity": 5000000000,
-      "price": 1200000000,
-      "total_premium": 5970000,
+      "quantity": "5000000000",
+      "price": "1200000000",
+      "total_premium": "5970000",
       "created_at": 1710000012,
       "expiry_ts": 1710600000,
       "underlying_price": {
@@ -568,9 +567,9 @@ A cash put carries one strike `K`. It is economically a put spread with lower st
   "data": {
     "request_id": "c3d4e5f6-0003-4c7d-8e8f-90a1b2c3d4e5",
     "market_pda": "PutMarketPdaBase58",
-    "terms": { "type": "cash_put", "strike": 136000000000 },
+    "terms": { "type": "cash_put", "strike": "136000000000" },
     "side": "sell",
-    "quantity": 5000000000,
+    "quantity": "5000000000",
     "timeout_seconds": 30
   }
 }
@@ -821,18 +820,18 @@ Subscriptions and in-flight state are not replayed. Re-authenticate, resubscribe
         "quote_decimals": 6,
         "terms": {
           "type": "covered_call",
-          "strike": 136000000000
+          "strike": "136000000000"
         },
         "side": "sell",
         "state": "open",
-        "quantity": 5000000000,
-        "price": 51000000,
-        "total_premium": 253725,
+        "quantity": "5000000000",
+        "price": "51000000",
+        "total_premium": "253725",
         "created_at": 1710000012,
         "expiry_ts": 1710600000,
         "underlying_price": {
           "type": "available",
-          "price": 151000000000,
+          "price": "151000000000",
           "published_at": 1710000010
         }
       }

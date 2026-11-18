@@ -12,12 +12,12 @@ For JSON-layer integrations, see [`maker-quickstart.md`](maker-quickstart.md). M
 
 ```toml
 [dependencies]
-acta-maker-sdk = { version = "0.10.0", features = ["ws-client"] }
+acta-maker-sdk = { version = "0.12.0", features = ["ws-client"] }
 ```
 
-Version 0.10.0 speaks WS protocol `1.0.0` (`WS_PROTOCOL_VERSION`). The wire is closed: every field is present, absent facts are tagged unions (`null` only as `next_cursor` on the last page), and decoding rejects unknown message types, error codes, enum values and missing fields. This guide covers ordinary makers; vault operators use the `vault` feature, see the [vault operator guide](vault-operator-guide.md).
+The SDK speaks WS protocol `1.0.0` (`WS_PROTOCOL_VERSION`). The wire is closed: every field is present, absent facts are tagged unions (`null` only as `next_cursor` on the last page), and decoding rejects unknown message types, error codes, enum values and missing fields. This guide covers ordinary makers; vault operators use the `vault` feature, see the [vault operator guide](vault-operator-guide.md).
 
-Quote-only integrations need `ws-client`. `chain` adds Solana instruction builders (including `chain::vault`); `chain-rpc` adds on-chain reads; `http` adds the read-only HTTP client; `vault` adds the vault operator client and implies `ws-client` and `chain`.
+Quote-only integrations need `ws-client`. `chain` adds Solana instruction builders; `chain-rpc` adds on-chain reads; `http` adds the read-only HTTP client; `vault` adds `chain::vault` and the vault operator client and implies `ws-client` and `chain`.
 
 One key signs both the auth challenge and every quote: the `quote_signing` key stored in your on-chain Maker account. Acta registers it with the admin-gated, timelocked `RegisterMaker`; it may equal `maker_owner`.
 
@@ -172,7 +172,7 @@ For covered calls and cash-secured puts, `physical_premium(price, strike, quanti
 
 `RfqBroadcast.quantity` and `QuoteFilled.quantity` are underlying atoms; `Price` and `Strike` are 1e9-scaled per underlying token, independent of decimals. Mint decimals come only from `GetMarketDescriptors` on `/maker/data` (`underlying_decimals`, `quote_decimals` per `market_pda`); `MarketDecimals::observe(&message)` caches them and `get(market_pda)` returns them. `total_premium_quote_atoms(price, quantity, underlying_decimals, quote_decimals)` is the fill's gross premium (before protocol fees) in quote atoms with the contract's rounding; `Price::as_decimal()`, `Strike::as_decimal()` and `Quantity::to_units(decimals)` are for display.
 
-`QuoteExpiry` stores whole Unix seconds; use `QuoteExpiry::from_unix_seconds(...)` or `QuoteExpiry::after(...)` rather than putting a fractional `SystemTime` into a signed order. See the crate's `managed_quote` example (`cargo run --example managed_quote --features ws-client,http` from the 0.7.1 crate sources; API reference on [docs.rs](https://docs.rs/acta-maker-sdk)) for receiving recovery responses, checking epochs and handling stream gaps.
+`QuoteExpiry` stores whole Unix seconds; use `QuoteExpiry::from_unix_seconds(...)` or `QuoteExpiry::after(...)` rather than putting a fractional `SystemTime` into a signed order. See the crate's `managed_quote` example (`cargo run --example managed_quote --features ws-client,http`; API reference on [docs.rs](https://docs.rs/acta-maker-sdk)) for receiving recovery responses, checking epochs and handling stream gaps.
 
 `quote_in_epoch`, `replace_in_epoch` and `batch_quotes_in_epoch` (and their `try_` forms) return `NotReady` if the connection has changed. Do not replace the applied recovery epoch with the latest transport epoch just before sending.
 
@@ -205,7 +205,7 @@ is separate from `Rfqs`, so a maker that only sells never receives buys.
 - **Settlement.** The holder deposits strictly before expiry to exercise a physical
   buy. An unfunded in-the-money buy returns all collateral to you and settles as
   `not_exercised`; spreads and cash puts settle in cash with no deposit. `PositionInfo`
-  names the roles `writer` (you) and `holder` (the buyer). `chain::vault::build_settle_position_ix`
+  names the roles `writer` (you) and `holder` (the buyer). `chain::build_settle_position_ix`
   and `settle_position_sequence` settle a buy you wrote.
 - **Competition.** Vaults whose delegate holds `SIGN_WRITER_QUOTES` quote the same buys
   and write from their collateral leg.
@@ -370,7 +370,7 @@ For typed integrations, `MakerQuoteClient` exposes trading operations and `Maker
 
 `WsClientError` covers transport failures; the reconnection loop retries. `ManagedWsError::Closed` indicates the handle's connection task is no longer running; `QueueFull` that the outbound queue or writer lane is full. `SendAwaitError::Timeout` signals the `send_await` deadline elapsed; `Disconnected` indicates the connection went down before the response arrived; `QueueFull` that the request was never queued to the socket. Terminal session states surface through `subscribe_state()` as `Closed { reason }`: `Requested`, `SessionReplaced`, `UnsupportedProtocolVersion`, `AuthenticationRejected`, `ReconnectLimitReached`, `SessionPanicked`.
 
-Protocol-level errors arrive as `ServerMessage::Error` (session-level) or `ServerMessage::RequestError` (per-request, correlated by `request_id`), both carrying one `ServerError`. Error codes are a closed `WsErrorCode` enum: `ServerError::Generic { code, message }` carries the typed code, so match on `code`. A code outside the enum fails decoding. Quote outcomes arrive as `QuoteRejected { reason, message }`; besides validation reasons, `RateLimited` means the quote bucket is exhausted (the session stays up, retry later) and `TradingPaused` means the venue is paused. `QuoteRejectReason`, `CapError` and `PositionUpdateType` are exhaustive, so a `match` without a wildcard arm is checked against the wire. The full list is in [`../reference/maker-api.md`](../reference/maker-api.md). `ServerError::is_quote_race` marks the normal races of quoting against a moving RFQ (`RfqNotFound`, `RfqNotActive`, `RfqAlreadyLocked`, `QuoteLocked`, `QuoteNotFound`, `QuoteExpired`); the managed session logs those at debug and every other `RequestError` at error.
+Protocol-level errors arrive as `ServerMessage::Error` (session-level) or `ServerMessage::RequestError` (per-request, correlated by `request_id`), both carrying one `ServerError`. Error codes are a closed `WsErrorCode` enum: `ServerError::Generic { code, message }` carries the typed code, so match on `code`. A code outside the enum fails decoding. Branch on `error.action()`, an `acta_maker_sdk::ws::types::ErrorAction` (`Retry`, `Reauthenticate`, `Refresh`, `Reconcile`, `FixRequest`, `Stop`), never on `message`; for a `RequestError` use `error.action().for_delivery(delivery)`, which turns any action into `Reconcile` when `delivery` is `Unknown`. Quote outcomes arrive as `QuoteRejected { reason, message }`; besides validation reasons, `RateLimited` means the `liquidity_provider` bucket is exhausted (the session stays up, retry later) and `TradingPaused` means the venue is paused. `QuoteRejectReason`, `CapError` and `PositionUpdateType` are exhaustive, so a `match` without a wildcard arm is checked against the wire. The full list is in [`../reference/maker-api.md`](../reference/maker-api.md). `ServerError::is_quote_race` marks the normal races of quoting against a moving RFQ (`RfqNotFound`, `RfqNotActive`, `RfqAlreadyLocked`, `QuoteLocked`, `QuoteNotFound`, `QuoteExpired`); the managed session logs those at debug and every other `RequestError` at error.
 
 To count I/O, install a process-wide observer once: `acta_maker_sdk::io_observer::install(fn)`. It receives HTTP requests, statuses and body bytes per endpoint, WebSocket frames per stream and RPC methods. Nothing is recorded until one is installed.
 
