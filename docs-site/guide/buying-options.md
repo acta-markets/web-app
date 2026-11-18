@@ -22,6 +22,8 @@ To use a bought call or put, deposit before the expiry time: USDC for a call, th
 
 If you have not deposited by expiry, the option is not exercised, even when it is in the money. You lose the premium and the seller keeps everything. If you deposited and the option ends out of the money, your deposit comes back.
 
+Changed your mind? Until expiry, **Withdraw** in your portfolio takes the deposit back. The option then waits for a deposit again: if you do not deposit before expiry, it is not exercised.
+
 Your portfolio shows a Deposit button until expiry, then the state: Deposited, Will exercise, Deposit returns, Not exercised or Settling.
 
 ## Buy spreads and cash puts

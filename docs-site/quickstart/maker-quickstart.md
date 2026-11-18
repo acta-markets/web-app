@@ -100,11 +100,11 @@ Compute the premium, set `now + min_quote_validity_seconds <= valid_until <= mar
   "type": "Quote",
   "data": {
     "rfq_id": "8f3e7e6a-4f5c-4b7c-9f1d-1f2a3b4c5d6e",
-    "terms": { "type": "covered_call", "strike": 160000000000 },
+    "terms": { "type": "covered_call", "strike": "160000000000" },
     "side": "sell",
-    "price": 5000000000,
+    "price": "5000000000",
     "valid_until": 1710000120,
-    "nonce": 42,
+    "nonce": "42",
     "order_id": "0x9d1c2a6a0c2f5e7d9b4d8d8f2a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a",
     "signature": "<base58 of ed25519(order_id)>"
   }
@@ -118,11 +118,11 @@ A spread quote repeats the RFQ's two strikes:
   "type": "Quote",
   "data": {
     "rfq_id": "00000000-0000-0000-0000-000000000001",
-    "terms": { "type": "call_spread", "lower_strike": 100000000000, "upper_strike": 120000000000 },
+    "terms": { "type": "call_spread", "lower_strike": "100000000000", "upper_strike": "120000000000" },
     "side": "sell",
-    "price": 5000000000,
+    "price": "5000000000",
     "valid_until": 1799999900,
-    "nonce": 999,
+    "nonce": "999",
     "order_id": "0x0101010101010101010101010101010101010101010101010101010101010101",
     "signature": "<base58 of ed25519(order_id)>"
   }
@@ -139,7 +139,7 @@ Use `ReplaceQuote` for repricing: the swap is atomic and single-RTT. `CancelQuot
 
 `is_taker_buy` in the order-id preimage is `0` for side `sell`, where the taker writes, and `1` for side `buy`, where the maker writes. Implementations whose preimage builders default this field to `true` must override it explicitly.
 
-`QuoteRejected` carries `reason` and a `message`. Fix the cause before retrying; the same payload will fail again. Two reasons are not about the payload: `rate_limited` (the connection's quote bucket is empty; back off and re-sign with a fresh nonce) and `trading_paused` (the venue is paused; wait for it to resume).
+`QuoteRejected` carries `reason` and a `message`. Fix the cause before retrying; the same payload will fail again. Two reasons are not about the payload: `rate_limited` (the connection's `liquidity_provider` bucket is empty; back off and re-sign with a fresh nonce) and `trading_paused` (the venue is paused; wait for it to resume).
 
 ## Lifecycle events
 
@@ -168,6 +168,7 @@ Quoting and the lifecycle above are entirely off-chain (WebSocket). Your only on
 
 - `MakerDeposit` — deposit program quote balance; **required before quoting** (the fill's premium debit draws from it). [Layout](../reference/sandbox.md#on-chain-maker-instructions). `MakerWithdraw` retrieves idle balance.
 - `DepositFundsToPosition` — optional, after a covered-call or cash-secured-put fill: fund the settlement leg (`open` → `funded`) to avoid the ITM-unfunded liquidation loss. Spreads and cash puts have no funded step. [Layout](../reference/sandbox.md#on-chain-maker-instructions).
+- `WithdrawFundsFromPosition` — optional, strictly before expiry: take that deposit back (`funded` → `open`), for example once the position is safely out of the money. The position then settles, or is liquidated in the money, as unfunded. [Layout](../reference/sandbox.md#withdrawfundsfromposition).
 
 You do **not** settle or liquidate. Publishing the settlement price and finalizing markets is operator-side; settlement is keeper-driven; liquidating ITM-unfunded physical positions is permissionless. Your downside is bounded — fund the settlement leg of a physical position, or a third party liquidates and fronts the taker payout. See [`../reference/protocol-flow.md`](../reference/protocol-flow.md) for the risk model.
 
@@ -184,8 +185,8 @@ When indicative pricing is enabled on the server, a connected `/maker` session s
     "position_type": "covered_call",
     "side": "sell",
     "prices": [
-      { "strike": 150000000000, "price": 4500000000 },
-      { "strike": 160000000000, "price": 5000000000 }
+      { "strike": "150000000000", "price": "4500000000" },
+      { "strike": "160000000000", "price": "5000000000" }
     ]
   }
 }
