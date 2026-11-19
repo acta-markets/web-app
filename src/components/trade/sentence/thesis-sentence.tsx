@@ -376,7 +376,7 @@ export function ThesisSentence({
       <p className={cn(
         "-mt-1 tracking-[-0.02em] text-content-secondary max-md:mt-0",
         // on the trade page it is set as every other quiet note there: mono, 14px, regular
-        compact ? "font-mono text-[14px] font-normal leading-[1.45]" : "text-[18px] font-medium leading-[1.3] max-md:text-[15px]"
+        compact ? "font-mono text-[14px] font-normal leading-[1.45]" : "text-[16px] font-medium leading-[1.4] max-md:text-[14px]"
       )}>
         {move ?? " "}
       </p>

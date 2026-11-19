@@ -18,7 +18,7 @@ type Mode = "yield" | "profit";
     `word` completes the page title, "Get ___ on your thesis". */
 const MODES: Array<{ value: Mode; word: string }> = [
   { value: "profit", word: "profit" },
-  { value: "yield", word: "yield" },
+  { value: "yield", word: "shield" },
 ];
 
 /** The line under the title. The title already names the upside ("Get profit", "Get yield"),
