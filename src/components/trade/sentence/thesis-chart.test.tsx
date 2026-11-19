@@ -3,12 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart } from "./thesis-chart";
 
 const setData = vi.hoisted(() => vi.fn());
+/** The price under a pane y; null (the default) is a chart with no scale to read yet. */
+const coordinateToPrice = vi.hoisted(() => vi.fn<(y: number) => number | null>(() => null));
+const priceToCoordinate = vi.hoisted(() => vi.fn<(price: number) => number | null>(() => null));
 
 vi.mock("lightweight-charts", () => {
   const noop = () => {};
   return {
     createChart: () => ({
-      addSeries: () => ({ setData, createPriceLine: () => ({}), removePriceLine: noop, priceToCoordinate: () => null, coordinateToPrice: () => null }),
+      addSeries: () => ({ setData, createPriceLine: () => ({}), removePriceLine: noop, priceToCoordinate, coordinateToPrice }),
       remove: noop,
       applyOptions: noop,
       timeScale: () => ({ fitContent: noop, setVisibleRange: noop, setVisibleLogicalRange: noop, getVisibleLogicalRange: () => null, timeToCoordinate: () => null }),
@@ -27,6 +30,10 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  coordinateToPrice.mockReset();
+  coordinateToPrice.mockImplementation(() => null);
+  priceToCoordinate.mockReset();
+  priceToCoordinate.mockImplementation(() => null);
 });
 
 function mockHistory(points: Array<[number, number]>) {
@@ -139,6 +146,94 @@ describe("thesis chart", () => {
     fireEvent.pointerMove(surface, { clientX: 140, clientY: 140 });
     fireEvent.pointerUp(surface, { clientX: 140, clientY: 140 });
     expect(onDirection).toHaveBeenCalledTimes(2);
+
+    // the right button is the browser's menu, not a flip
+    fireEvent.pointerDown(surface, { clientX: 40, clientY: 40, button: 2 });
+    fireEvent.pointerUp(surface, { clientX: 40, clientY: 40, button: 2 });
+    expect(onDirection).toHaveBeenCalledTimes(2);
+  });
+
+  describe("strike handle", () => {
+    const strikes = [90, 95, 100, 105].map((strike) => ({ strike, strike1e9: strike * 1e9 }));
+
+    async function renderHandle() {
+      const onStrike = vi.fn();
+      mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+      render(<ThesisChart {...props} direction="above" strikes={strikes} onStrike={onStrike} />);
+      const handle = await screen.findByRole("slider", { name: "Strike" });
+      return { handle, onStrike };
+    }
+
+    it("steps the strike while the button is held", async () => {
+      const { handle, onStrike } = await renderHandle();
+      fireEvent.pointerDown(handle, { pointerId: 1, clientY: 200, button: 0, buttons: 1 });
+      expect(screen.getByTestId("strike-hand").getAttribute("data-grabbed")).toBe("true");
+      // 18 px a step; up is a higher strike
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 180, buttons: 1 });
+      expect(onStrike).toHaveBeenLastCalledWith(100 * 1e9);
+      fireEvent.pointerUp(handle, { pointerId: 1, clientY: 180 });
+      expect(screen.getByTestId("strike-hand").getAttribute("data-grabbed")).toBe("false");
+
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 100, buttons: 0 });
+      expect(onStrike).toHaveBeenCalledTimes(1);
+    });
+
+    it("puts the line where the pointer is: the price under it picks the nearest strike", async () => {
+      // a pane where y 130 is $95 and every pixel up is 10 cents
+      coordinateToPrice.mockImplementation((y) => 95 + (130 - y) / 10);
+      priceToCoordinate.mockImplementation((price) => 130 - (price - 95) * 10);
+      const { handle, onStrike } = await renderHandle();
+      fireEvent.pointerDown(handle, { pointerId: 1, clientY: 130, button: 0, buttons: 1 });
+      // 20 px up is $97: still nearest to 95, nothing moves
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 110, buttons: 1 });
+      expect(onStrike).not.toHaveBeenCalled();
+      // 60 px up is $101: the 100 strike
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 70, buttons: 1 });
+      expect(onStrike).toHaveBeenLastCalledWith(100 * 1e9);
+      // far below the lowest strike: the lowest, not past it
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 900, buttons: 1 });
+      expect(onStrike).toHaveBeenLastCalledWith(90 * 1e9);
+      expect(onStrike).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not re-fit the chart when another strike on offer is chosen", async () => {
+      mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+      const { rerender } = render(<ThesisChart {...props} direction="above" strikes={strikes} strike={95} />);
+      await screen.findByRole("slider", { name: "Strike" });
+      await waitFor(() => expect(setData.mock.calls.some(([data]) => data.length > 1)).toBe(true));
+      setData.mockClear();
+      rerender(<ThesisChart {...props} direction="above" strikes={strikes.map((s) => ({ ...s }))} strike={105} />);
+      rerender(<ThesisChart {...props} direction="above" strikes={strikes.map((s) => ({ ...s }))} strike={90} />);
+      expect(setData).not.toHaveBeenCalled();
+    });
+
+    it("lets go when the release never reaches the page", async () => {
+      const { handle, onStrike } = await renderHandle();
+      fireEvent.pointerDown(handle, { pointerId: 1, clientY: 200, button: 0, buttons: 1 });
+      // no pointerup: a browser menu or another window took it. The mouse comes back with
+      // the same pointer id and no button held.
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 120, buttons: 0 });
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 60, buttons: 0 });
+      expect(onStrike).not.toHaveBeenCalled();
+      expect(screen.getByTestId("strike-hand").getAttribute("data-grabbed")).toBe("false");
+    });
+
+    it("lets go when the pointer capture is lost", async () => {
+      const { handle, onStrike } = await renderHandle();
+      fireEvent.pointerDown(handle, { pointerId: 1, clientY: 200, button: 0, buttons: 1 });
+      fireEvent.lostPointerCapture(handle, { pointerId: 1 });
+      expect(screen.getByTestId("strike-hand").getAttribute("data-grabbed")).toBe("false");
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 120, buttons: 1 });
+      expect(onStrike).not.toHaveBeenCalled();
+    });
+
+    it("is not picked up by the right button", async () => {
+      const { handle, onStrike } = await renderHandle();
+      fireEvent.pointerDown(handle, { pointerId: 1, clientY: 200, button: 2, buttons: 2 });
+      expect(screen.getByTestId("strike-hand").getAttribute("data-grabbed")).toBe("false");
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 120, buttons: 2 });
+      expect(onStrike).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -174,6 +269,32 @@ describe("price domain", () => {
       const position = (strike - lo) / (hi - lo);
       expect(position).toBeGreaterThanOrEqual(0.379);
       expect(position).toBeLessThanOrEqual(0.621);
+    }
+  });
+
+  it("covers every strike on offer, the lowest and highest off the edges", () => {
+    const cases: Array<[number[], number[]]> = [
+      [[98, 102], [80, 85, 90, 95]], // all below the history
+      [[98, 102], [105, 110, 120]], // all above it
+      [[98, 102], [60, 100, 140]], // both sides
+      [[50, 150], [99, 100, 101]], // well inside it
+    ];
+    for (const [values, strikes] of cases) {
+      const [lo, hi] = priceDomain(values, strikes);
+      const at = (p: number) => (p - lo) / (hi - lo);
+      expect(at(Math.min(...strikes))).toBeGreaterThanOrEqual(0.219);
+      expect(at(Math.max(...strikes))).toBeLessThanOrEqual(0.781);
+      // and the history is still on the pane
+      expect(lo).toBeLessThanOrEqual(Math.min(...values));
+      expect(hi).toBeGreaterThanOrEqual(Math.max(...values));
+    }
+  });
+
+  it("is the same whichever of the offered strikes is chosen", () => {
+    const offered = [80, 85, 90, 95];
+    const whole = priceDomain([98, 102], offered);
+    for (const chosen of offered) {
+      expect(priceDomain([98, 102], [Math.min(chosen, ...offered), Math.max(chosen, ...offered)])).toEqual(whole);
     }
   });
 

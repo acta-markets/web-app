@@ -90,8 +90,16 @@ function usePriceHistory(symbol: string, range: Range) {
   };
 }
 
-/** Price domain covering history, spot and strike, padded, with the strike kept off the edges. */
-export function priceDomain(values: number[], strike: number | null): [number, number] {
+/** How far from the pane's top and bottom a lone strike is kept: both zones get room. */
+const LONE_STRIKE_MARGIN = 0.38;
+/** The same for the lowest and highest strike on offer. Smaller, so the strikes between them
+    spread over the pane and the line has somewhere to travel. */
+const OFFERED_STRIKES_MARGIN = 0.22;
+
+/** Price domain covering history, spot and every strike given, padded, with the strikes kept
+    off the edges. Given the whole list on offer, the domain does not depend on which strike is
+    chosen: choosing another one moves the line and leaves the chart where it is. */
+export function priceDomain(values: number[], strikes: number | readonly number[] | null): [number, number] {
   let lo = Math.min(...values);
   let hi = Math.max(...values);
   if (!(hi > lo)) {
@@ -102,10 +110,24 @@ export function priceDomain(values: number[], strike: number | null): [number, n
   const pad = (hi - lo) * 0.12;
   lo -= pad;
   hi += pad;
-  if (strike != null) {
-    const margin = 0.38;
-    if (strike - lo < margin * (hi - lo)) lo = (strike - margin * hi) / (1 - margin);
-    if (hi - strike < margin * (hi - lo)) hi = (strike - margin * lo) / (1 - margin);
+  const list = (strikes == null ? [] : typeof strikes === "number" ? [strikes] : strikes).filter(Number.isFinite);
+  if (list.length > 0) {
+    const low = Math.min(...list);
+    const high = Math.max(...list);
+    const m = high > low ? OFFERED_STRIKES_MARGIN : LONE_STRIKE_MARGIN;
+    const lowShort = (l: number, h: number) => low - l < m * (h - l);
+    const highShort = (l: number, h: number) => h - high < m * (h - l);
+    // stretch one end; if that leaves the other end short too, both strikes sit exactly on their margins
+    const stretchedLo = lowShort(lo, hi) ? (low - m * hi) / (1 - m) : lo;
+    const stretchedHi = highShort(lo, hi) ? (high - m * lo) / (1 - m) : hi;
+    if ((lowShort(lo, hi) && highShort(stretchedLo, hi)) || (highShort(lo, hi) && lowShort(lo, stretchedHi))) {
+      const span = (high - low) / (1 - 2 * m);
+      lo = low - m * span;
+      hi = high + m * span;
+    } else {
+      lo = stretchedLo;
+      hi = stretchedHi;
+    }
   }
   return [Math.max(0, lo), hi];
 }
@@ -548,6 +570,8 @@ export function ThesisChart({
   /** True between chart.remove() and the next mount; pending timers and cleanups must not touch a disposed chart. */
   const disposedRef = useRef(false);
   const domainRef = useRef<[number, number]>([0, 1]);
+  /** The history the domain was last fitted to. */
+  const pointsRef = useRef<Point[] | null>(null);
   const [geometry, setGeometry] = useState<Geometry | null>(null);
   /** One gentle attention pulse on the "your price" handle so its draggability reads at a glance. */
   const [pulse, setPulse] = useState(true);
@@ -611,7 +635,8 @@ export function ThesisChart({
     () => [...(strikes ?? [])].sort((a, b) => a.strike - b.strike),
     [strikes]
   );
-  const dragRef = useRef<{ pointerId: number; anchorY: number; index: number } | null>(null);
+  /** `grabY` is where on the handle it was picked up, measured from the strike line. */
+  const dragRef = useRef<{ pointerId: number; anchorY: number; index: number; grabY: number | null } | null>(null);
   /** The handle is held: its icon closes from an open hand to a grabbing one, as the cursor does. */
   const [grabbed, setGrabbed] = useState(false);
   const onStrikeRef = useRef(onStrike);
@@ -643,19 +668,58 @@ export function ThesisChart({
 
   const onDragPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      // only the main button holds the handle: a right-button press opens the browser's menu,
+      // which takes the release with it
+      if (e.button !== 0) return;
       const index = nearestStrikeIndex(strike);
       if (index < 0) return;
-      e.currentTarget.setPointerCapture(e.pointerId);
-      dragRef.current = { pointerId: e.pointerId, anchorY: e.clientY, index };
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      const paneTop = containerRef.current?.getBoundingClientRect().top;
+      const lineY = seriesRef.current?.priceToCoordinate(strike);
+      dragRef.current = {
+        pointerId: e.pointerId,
+        anchorY: e.clientY,
+        index,
+        grabY: paneTop != null && lineY != null ? e.clientY - paneTop - lineY : null,
+      };
       setGrabbed(true);
     },
     [nearestStrikeIndex, strike]
   );
 
+  /** Let go of the handle. A release does not always reach the page (a browser menu, another
+      window or a system gesture can take it), so the drag also ends when the capture is lost
+      and when a move arrives with no button held. Without that a mouse keeps one pointer id
+      for good, and every later pass over the handle would step the strike. */
+  const endDrag = useCallback((el: HTMLDivElement, pointerId: number) => {
+    if (dragRef.current?.pointerId !== pointerId) return;
+    dragRef.current = null;
+    setGrabbed(false);
+    if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId);
+  }, []);
+
   const onDragPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragRef.current;
       if (!drag || drag.pointerId !== e.pointerId) return;
+      if (e.buttons === 0) {
+        endDrag(e.currentTarget, e.pointerId);
+        return;
+      }
+      // The line follows the pointer: the price under it picks the nearest strike. The price
+      // range does not change with the strike, so the line lands where the pointer is.
+      const paneTop = containerRef.current?.getBoundingClientRect().top;
+      const price =
+        drag.grabY != null && paneTop != null ? seriesRef.current?.coordinateToPrice(e.clientY - paneTop - drag.grabY) : null;
+      if (price != null && Number.isFinite(price)) {
+        const at = nearestStrikeIndex(price);
+        if (at >= 0 && at !== drag.index) {
+          drag.index = at;
+          stepStrike(at);
+        }
+        return;
+      }
+      // no price scale to read yet: one strike per 18 px of travel
       const STEP = 18;
       let { anchorY, index } = drag;
       let dy = anchorY - e.clientY; // > 0 when the pointer moved up
@@ -678,18 +742,13 @@ export function ThesisChart({
         stepStrike(index);
       }
     },
-    [strikesAsc.length, stepStrike]
+    [strikesAsc.length, stepStrike, endDrag, nearestStrikeIndex]
   );
 
-  const onDragPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (dragRef.current?.pointerId === e.pointerId) {
-      dragRef.current = null;
-      setGrabbed(false);
-      if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
-    }
-  }, []);
+  const onDragPointerEnd = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => endDrag(e.currentTarget, e.pointerId),
+    [endDrag]
+  );
 
   const onDragKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -728,7 +787,8 @@ export function ThesisChart({
     }
   }, [direction]);
   const onChartPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    tapStartRef.current = { x: e.clientX, y: e.clientY };
+    // a right-button press is the browser's menu, not a flip
+    tapStartRef.current = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
   }, []);
   const onChartPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const start = tapStartRef.current;
@@ -821,21 +881,32 @@ export function ThesisChart({
     }
   }, [seriesData]);
 
-  // The price domain depends on the data and the strike. Re-apply it (and re-autoscale)
-  // only when either changes; this must not touch the time range. The live spot is read
-  // here for the initial fit but is deliberately NOT a dependency: a spot tick must not
-  // re-fit the view — that is what made the chart snap.
+  // The price domain depends on the data and on the strikes on offer, not on the chosen one:
+  // choosing another strike moves the line and leaves the chart where it is. Re-apply it (and
+  // re-autoscale) only when it really changes; this must not touch the time range. The live
+  // spot is read here for the initial fit but is deliberately NOT a dependency: a spot tick
+  // must not re-fit the view — that is what made the chart snap.
+  const lowestStrike = Math.min(strike, ...strikesAsc.map((s) => s.strike));
+  const highestStrike = Math.max(strike, ...strikesAsc.map((s) => s.strike));
   useEffect(() => {
     const series = seriesRef.current;
     if (!series) return;
-    domainRef.current = priceDomain([...points.map((p) => p.v), spot], strike);
-    series.setData(seriesData(spot));
+    const [lo, hi] = priceDomain([...points.map((p) => p.v), spot], [lowestStrike, highestStrike]);
+    if (pointsRef.current === points && lo === domainRef.current[0] && hi === domainRef.current[1]) {
+      // same scale: only the line moved, so place the handle on it at once
+      measureRef.current();
+    } else {
+      pointsRef.current = points;
+      domainRef.current = [lo, hi];
+      series.setData(seriesData(spot));
+    }
+    // the chart applies a new scale on its next frame; measuring again after it is harmless
     const t = setTimeout(() => {
       if (!disposedRef.current) measureRef.current();
     }, 120);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [points, strike]);
+  }, [points, strike, lowestStrike, highestStrike]);
 
   // A live spot tick only moves the line's last point and the NOW line/tag within the
   // stable range — re-measure, never re-fit.
@@ -1237,6 +1308,7 @@ export function ThesisChart({
             onPointerMove={onDragPointerMove}
             onPointerUp={onDragPointerEnd}
             onPointerCancel={onDragPointerEnd}
+            onLostPointerCapture={onDragPointerEnd}
             onKeyDown={onDragKeyDown}
           >
             <span className="flex items-center gap-1" aria-hidden="true">
