@@ -47,7 +47,7 @@ After `Hello` and `Welcome`, send:
 
 The `AuthRequest` challenge is the taker challenge with `Wallet:` set to the operator, followed by `\nVault: <vault_pda>` with no trailing newline (see [signing conventions](../reference/ws-common.md#what-to-sign)). Check it with `assertVaultAuthChallenge(challenge, operator, vault)` (TypeScript) or `validate_vault_auth_challenge(challenge, operator, vault)` (Rust); `validateAuthChallenge` rejects it. Then sign its original bytes and reply with `AuthChallenge`. `VaultAuthSuccess` returns `vault_pda`, `operator`, `operator_kind` (`governance` or `delegate`) and `permissions`.
 
-A vault writing an option for a maker uses the taker RFQ flow (`OPEN_AS_WRITER`). A vault buying an option acts as maker and signs holder quotes on sell RFQs (`SIGN_HOLDER_QUOTES`). A vault writing what a wallet buys also acts as maker: it asks on buy RFQs (`SIGN_WRITER_QUOTES`), the wallet signs `OpenPositionForVaultWriter` or `OpenSpreadForVaultWriter` with holder byte `1`, and the operator signs only the order id. Both sides arrive on the `vaults` channel: any expiry while Idle, only the cycle expiry while Active. A vault cannot request a buy as taker (`taker_buy_unsupported`).
+A vault writing an option for a maker uses the taker RFQ flow (`OPEN_AS_WRITER`). A vault buying an option acts as maker and signs holder quotes on sell RFQs (`SIGN_HOLDER_QUOTES`). A vault writing what a wallet buys also acts as maker: it asks on buy RFQs (`SIGN_WRITER_QUOTES`), the wallet signs `OpenPositionForVaultWriter` or `OpenSpreadForVaultWriter` with holder byte `1`, and the operator signs only the order id. Both sides arrive on the `vaults` channel: any expiry while Idle, only the cycle expiry while Active. A vault buys as taker too: with `BUY_FROM_MAKERS` it requests a buy RFQ and takes a maker's (`OpenPositionForVaultTakerBuy`, `OpenSpreadForVaultTakerBuy`) or another vault's quote (`OpenPositionBetweenVaultsTakerBuy`, `OpenSpreadBetweenVaultsTakerBuy`).
 
 A permission change can close an open session. Reconnect and authenticate again.
 
@@ -57,7 +57,7 @@ The session is subscribed to the `vaults` channel by default and receives `Vault
 
 An option the vault bought (as maker) is not funded at open. To exercise it in the money, the vault must fund it with `FUND_HOLDER` (or governance): strike × quantity in the quote asset for a call, or the quantity in the underlying for a put, paid from the matching leg. The vault then receives the collateral at settlement. Builders: TypeScript `planner.trading.fundHolderPosition(position)`, Rust `VaultManager::fund_holder_position` (feature `chain`).
 
-**Fund before expiry.** Once the market is finalized, anyone can liquidate an unfunded in-the-money position: the liquidator pays the writer and takes the collateral, and the vault loses the intrinsic value. Funding is still accepted after finalization until a settlement or liquidation lands, but then you are racing liquidators. Keep enough of the funding asset for every holder position you may need to exercise. The same applies to any maker that bought an option.
+**Fund before expiry.** Once the market is finalized, anyone can liquidate an unfunded in-the-money position: the liquidator pays the writer and takes the collateral, and the vault loses the intrinsic value. A position the vault bought from a maker or vault (instructions 82-85) is never liquidated: unfunded, it settles as not exercised and the collateral returns to the writer. Funding is still accepted after finalization until a settlement or liquidation lands, but then you are racing liquidators. Keep enough of the funding asset for every holder position you may need to exercise. The same applies to any maker that bought an option.
 
 ## Swaps
 
@@ -81,22 +81,27 @@ Request a vault swap quote for `main_to_second` or `second_to_main`. The backend
 
 ```json
 {
-  "type": "SwapQuoteResult",
+  "type": "Reply",
   "data": {
     "request_id": "<uuid>",
-    "execution_id": "<64 hex>",
-    "mode": "rebalance",
-    "tx_base64": "<base64 v0 VersionedTransaction>",
-    "last_valid_block_height": 312456789,
-    "in_amount": "10000000",
-    "quoted_out_amount": "60128",
-    "minimum_out_amount": "59827",
-    "valid_until": "1710000060"
+    "result": {
+      "type": "swap_quote",
+      "request_id": "<uuid>",
+      "execution_id": "<64 hex>",
+      "mode": "rebalance",
+      "tx_base64": "<base64 v0 VersionedTransaction>",
+      "last_valid_block_height": 312456789,
+      "in_amount": "10000000",
+      "quoted_out_amount": "60128",
+      "minimum_out_amount": "59827",
+      "valid_until": 1710000060,
+      "staging": "none"
+    }
   }
 }
 ```
 
-Amounts and `valid_until` (Unix seconds) are decimal strings. `last_valid_block_height` is a number: the block height the transaction's blockhash is valid through. The transaction carries its price section. An optional `staging` field is `"stage"` or `"unstage"` for one half of a two-transaction swap; it is absent for a single transaction. `execution_id` names the swap in every later message. A failed quote is a `RequestError` with a code from the [WS error catalog](../reference/ws-common.md#ws-error-codes).
+Amounts are decimal strings; `valid_until` (Unix seconds) and `last_valid_block_height` are numbers, the latter the block height the transaction's blockhash is valid through. The transaction carries its price section. An optional `staging` field is `"stage"` or `"unstage"` for one half of a two-transaction swap; it is absent for a single transaction. `execution_id` names the swap in every later message. A failed quote is a `RequestError` with a code from the [WS error catalog](../reference/ws-common.md#ws-error-codes).
 
 Review the terms and instructions, sign the transaction, then submit:
 
@@ -114,12 +119,12 @@ Review the terms and instructions, sign the transaction, then submit:
 The contract checks the route, pair, mode, permissions, phase, safety mode and price accounts. Normal rebalance cannot touch unpriced idle capital.
 
 ```json
-{ "type": "SwapSubmitResult", "data": { "request_id": "<new-uuid>", "execution_id": "<64 hex>" } }
+{ "type": "Reply", "data": { "request_id": "<new-uuid>", "result": { "type": "swap_submitted", "execution_id": "<64 hex>" } } }
 ```
 
-`SwapSubmitResult` means the swap is durably queued, not executed. A failed `SwapSubmit` carries [`delivery`](../reference/ws-common.md#requesterror-request-correlated-errors) for that request: `not_forwarded` means it was rejected before queueing, `unknown` means it may have been queued. Treat a swap as not executed only if every `SwapSubmit` you sent for it returned `not_forwarded`.
+`swap_submitted` means the swap is durably queued, not executed. A failed `SwapSubmit` carries [`delivery`](../reference/ws-common.md#reply-the-answer-to-a-command) for that request: `not_forwarded` means it was rejected before queueing, `unknown` means it may have been queued. Treat a swap as not executed only if every `SwapSubmit` you sent for it returned `not_forwarded`.
 
-Resolve `unknown`, a lost `SwapSubmitResult` or a restart with `GetSwapStatus` (TypeScript `getVaultSwapStatus({ execution_id })`, Rust `swap_status(execution_id)`):
+Resolve `unknown`, a lost `swap_submitted` reply or a restart with `GetSwapStatus` (TypeScript `getVaultSwapStatus({ execution_id })`, Rust `swap_status(execution_id)`):
 
 ```json
 { "type": "GetSwapStatus", "data": { "request_id": "<uuid>", "execution_id": "<64 hex>" } }

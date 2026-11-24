@@ -25,7 +25,7 @@ The TypeScript SDK exports `chain.flows.VaultManagerPlanner` to build vault inst
 
 The payout fields are `refundTo`, `sharesTo`, `sharesBackTo` and `liquidateVaultPosition(liquidator, { owner, paidTo }, position)`. JavaScript silently ignores older field names, and the payout goes to the canonical ATA. See [Capital transactions](vault-integration.md#capital-transactions).
 
-A bought option must be funded before expiry, or liquidators take its intrinsic value. See [Funding bought options](vault-integration.md#funding-bought-options).
+A bought option must be funded before expiry, or liquidators take its intrinsic value; one bought from a maker or vault (82-85) settles as not exercised instead. See [Funding bought options](vault-integration.md#funding-bought-options).
 
 ## Permissions
 
