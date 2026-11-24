@@ -524,10 +524,16 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
       }
     };
     const onOrderUpdate = ({ order_id, state }: OrderUpdateMessage) => {
-      if (state.type === "accepted") onAccepted(order_id);
-      else if (state.type === "submitted") onSubmitted(order_id, state.transaction_signature);
-      else if (state.type === "confirmed") onConfirmed(order_id, state.position_pda);
-      else onFailed(order_id, state.reason);
+      switch (state.type) {
+        case "accepted": return onAccepted(order_id);
+        case "submitted": return onSubmitted(order_id, state.transaction_signature);
+        case "confirmed": return onConfirmed(order_id, state.position_pda);
+        case "failed": return onFailed(order_id, state.reason);
+        default: {
+          const unhandled: never = state;
+          return unhandled;
+        }
+      }
     };
     const onRfqUpdate = ({ rfq_id, state }: RfqUpdateMessage) => {
       if (state.type === "available") onAvailableAgain({ rfq_id, reason: state.reason });
