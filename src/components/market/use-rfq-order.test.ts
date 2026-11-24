@@ -43,7 +43,7 @@ function setup({
   const snapshot = vi.spyOn(client, "getMyActiveRfqsAsync").mockResolvedValue(snapshotResult);
   const request = vi.spyOn(client, "request").mockResolvedValue({ request_id: "read", order_id: "order", state: { type: "unknown" } });
   const sign = vi.fn().mockResolvedValue({ serialize: () => new Uint8Array([1]) });
-  const cancel = vi.spyOn(client, "cancelRfq").mockReturnValue("cancel");
+  const cancel = vi.spyOn(client, "cancelRfq").mockResolvedValue("cancel");
   sdk.verify.mockReset().mockImplementation(async ({ txBase64, signer }: { txBase64: string; signer: WalletTransactionSigner }) => {
     const signed = await signer.signTransaction(Uint8Array.from(atob(txBase64), c => c.charCodeAt(0)));
     return btoa(String.fromCharCode(...signed));
@@ -68,7 +68,7 @@ describe("taker order flow", () => {
   it("ignores unrelated sponsored transactions and completion events", async () => {
     const h = setup(); await h.select();
     h.emit("sponsoredTxToSign", "other", "AQ==", 9999999999);
-    h.emit("orderSubmitted", "other", "sig"); h.emit("orderConfirmed", "other", "pda"); h.emit("orderFailed", "other", "failed");
+    h.emit("orderUpdate", { order_id: "other", order_version: 2, state: { type: "submitted", transaction_signature: "sig" } }); h.emit("orderUpdate", { order_id: "other", order_version: 4, state: { type: "confirmed", position_pda: "pda" } }); h.emit("orderUpdate", { order_id: "other", order_version: 3, state: { type: "failed", reason: "failed" } });
     expect(h.sign).not.toHaveBeenCalled(); expect(h.submit).not.toHaveBeenCalled();
     expect(h.result.current.flow.type).toBe("awaiting_signature");
   });
@@ -77,7 +77,7 @@ describe("taker order flow", () => {
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.submit).toHaveBeenCalledTimes(1));
-    h.emit("orderSubmitted", "order", "sig"); h.emit("orderConfirmed", "order", "pda");
+    h.emit("orderUpdate", { order_id: "order", order_version: 2, state: { type: "submitted", transaction_signature: "sig" } }); h.emit("orderUpdate", { order_id: "order", order_version: 4, state: { type: "confirmed", position_pda: "pda" } });
     expect(h.result.current.flow).toEqual({ type: "confirmed", orderId: "order", positionPda: "pda" });
     expect(h.result.current.txSignature).toBe("sig");
   });
@@ -166,7 +166,7 @@ describe("taker order flow", () => {
       ["reset", (h: ReturnType<typeof setup>) => act(() => h.result.current.reset())],
       ["unmount", (h: ReturnType<typeof setup>) => h.unmount()],
       ["disconnect", (h: ReturnType<typeof setup>) => h.emit("disconnected", 1006, "lost")],
-      ["RFQ close", (h: ReturnType<typeof setup>) => h.emit("rfqClosed", { rfq_id: "rfq", reason: "expired" })],
+      ["RFQ close", (h: ReturnType<typeof setup>) => h.emit("rfqUpdate", { rfq_id: "rfq", rfq_version: 1, state: { type: "closed", reason: "expired", winner: { type: "none" }, at: 0 } })],
       ["wallet change", (h: ReturnType<typeof setup>) => {
         h.options.scope = { walletAddress: "11111111111111111111111111111112", backendUrl: defaultScope.backendUrl };
         h.rerender();
@@ -213,7 +213,7 @@ describe("taker order flow", () => {
     it.each([
       ["reset", (h: ReturnType<typeof setup>) => act(() => h.result.current.reset())],
       ["disconnect", (h: ReturnType<typeof setup>) => h.emit("disconnected", 1006, "lost")],
-      ["RFQ close", (h: ReturnType<typeof setup>) => h.emit("rfqClosed", { rfq_id: "rfq", reason: "expired" })],
+      ["RFQ close", (h: ReturnType<typeof setup>) => h.emit("rfqUpdate", { rfq_id: "rfq", rfq_version: 1, state: { type: "closed", reason: "expired", winner: { type: "none" }, at: 0 } })],
       ["wallet change", (h: ReturnType<typeof setup>) => {
         h.options.scope = { walletAddress: "11111111111111111111111111111112", backendUrl: defaultScope.backendUrl };
         h.rerender();
@@ -276,19 +276,21 @@ describe("taker order flow", () => {
   });
   it("does not skip wallet signing when OrderAccepted arrives before sponsorship", async () => {
     const h = setup(); await h.select();
-    h.emit("orderAccepted", "order");
+    h.emit("orderUpdate", { order_id: "order", order_version: 1, state: { type: "accepted" } });
     expect(h.result.current.flow.type).toBe("awaiting_signature");
     expect(h.sign).not.toHaveBeenCalled();
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.sign).toHaveBeenCalledTimes(1));
   });
-  it.each(["orderAccepted", "orderSubmitted"] as const)("moves the owned submitting order to pending on %s", async event => {
+  it.each([
+    { order_version: 1, state: { type: "accepted" } },
+    { order_version: 2, state: { type: "submitted", transaction_signature: "sig" } },
+  ])("moves the owned submitting order to pending on $state.type", async update => {
     const h = setup(); h.submit.mockReturnValue(new Promise(() => {})); await h.select();
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.submit).toHaveBeenCalledTimes(1));
     expect(h.result.current.flow.type).toBe("submitting");
-    if (event === "orderAccepted") h.emit(event, "order");
-    else h.emit(event, "order", "sig");
+    h.emit("orderUpdate", { order_id: "order", ...update });
     expect(h.result.current.flow.type).toBe("pending");
   });
   it("keeps the unfinished record when reset closes a local flow", async () => {
@@ -346,7 +348,7 @@ describe("taker order flow", () => {
       orderId: "other-order", rfqId: "other-rfq", maker: "other-maker",
       originalSessionId: "auth-session", submission: "unsigned",
     }));
-    h.emit("orderConfirmed", "order", "pda");
+    h.emit("orderUpdate", { order_id: "order", order_version: 4, state: { type: "confirmed", position_pda: "pda" } });
     expect(h.result.current.flow.type).toBe("confirmed");
     expect(window.localStorage.getItem(storageKey(h.scope))).toContain('"orderId":"other-order"');
   });
@@ -356,7 +358,7 @@ describe("taker order flow", () => {
       orderId: "other-order", rfqId: "other-rfq", maker: "other-maker",
       originalSessionId: "auth-session", submission: "unsigned",
     }));
-    h.emit("orderSubmitted", "order", "sig");
+    h.emit("orderUpdate", { order_id: "order", order_version: 2, state: { type: "submitted", transaction_signature: "sig" } });
     expect(h.result.current.flow).toMatchObject({ type: "recovering", order: { orderId: "other-order" } });
     expect(h.result.current.txSignature).toBeNull();
   });
@@ -422,8 +424,8 @@ describe("taker order flow", () => {
   });
   it("attaches a transaction signature that arrives after confirmation", async () => {
     const h = setup(); await h.select();
-    h.emit("orderConfirmed", "order", "pda");
-    h.emit("orderSubmitted", "order", "late-sig");
+    h.emit("orderUpdate", { order_id: "order", order_version: 4, state: { type: "confirmed", position_pda: "pda" } });
+    h.emit("orderUpdate", { order_id: "order", order_version: 2, state: { type: "submitted", transaction_signature: "late-sig" } });
     expect(h.result.current.flow).toEqual({ type: "confirmed", orderId: "order", positionPda: "pda" });
     expect(h.result.current.txSignature).toBe("late-sig");
   });
@@ -437,8 +439,9 @@ describe("taker order flow", () => {
     const h = setup(); let resolve!: (tx: VersionedTransaction) => void;
     h.sign.mockImplementation(() => new Promise(r => { resolve = r; })); await h.select();
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
-    await waitFor(() => expect(h.sign).toHaveBeenCalled()); h.emit("error", { type: "SignatureTimeout" });
-    h.emit("rfqAvailableAgain", { rfq_id: "rfq", reason: "signature_timeout" });
+    await waitFor(() => expect(h.sign).toHaveBeenCalled());
+    h.emit("orderUpdate", { order_id: "order", order_version: 2, state: { type: "failed", reason: "signature timeout" } });
+    h.emit("rfqUpdate", { rfq_id: "rfq", rfq_version: 1, state: { type: "available", reason: "signature_timeout", at: 0 } });
     await act(async () => resolve({ serialize: () => new Uint8Array([1]) } as VersionedTransaction));
     expect(h.submit).not.toHaveBeenCalled(); expect(h.result.current.flow.type).toBe("failed");
   });
@@ -482,7 +485,7 @@ describe("taker order flow", () => {
     h.request.mockImplementation(() => new Promise(r => { resolve = r; }));
     await h.select(); h.emit("disconnected", 1006, "lost"); h.reauth();
     await waitFor(() => expect(h.request).toHaveBeenCalled());
-    h.emit("orderConfirmed", "order", "pda");
+    h.emit("orderUpdate", { order_id: "order", order_version: 4, state: { type: "confirmed", position_pda: "pda" } });
     await act(async () => resolve({ order_id: "order", state: { type: "unknown" } } as never));
     expect(h.result.current.flow.type).toBe("confirmed");
   });
@@ -547,7 +550,7 @@ describe("recovery with the current backend contract", () => {
     const h = setup(); await h.select();
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.submit).toHaveBeenCalledOnce());
-    h.emit("rfqAvailableAgain", { rfq_id: "rfq", reason: "tx_failed" });
+    h.emit("rfqUpdate", { rfq_id: "rfq", rfq_version: 1, state: { type: "available", reason: "tx_failed", at: 0 } });
     expect(h.result.current.flow).toMatchObject({ type: "failed", message: expect.stringContaining("not executed") });
     expect(window.localStorage.getItem(storageKey())).toBeNull();
     expect(h.request).not.toHaveBeenCalled();
@@ -638,10 +641,11 @@ describe("recovery with the current backend contract", () => {
     expect(window.localStorage.getItem(storageKey(nextScope))).toBeNull();
   });
 
-  it("fails the selected order when its RFQ is available again after a signature timeout", async () => {
+  it.each(["signature timeout", "transaction build failed"])("ends the selected order and frees its RFQ after %s", async reason => {
     const h = setup(); await h.select();
-    h.emit("rfqAvailableAgain", { rfq_id: "rfq", reason: "signature_timeout" });
-    await waitFor(() => expect(h.result.current.flow.type).toBe("failed"));
+    h.emit("orderUpdate", { order_id: "order", order_version: 2, state: { type: "failed", reason } });
+    h.emit("rfqUpdate", { rfq_id: "rfq", rfq_version: 1, state: { type: "available", reason: reason === "signature timeout" ? "signature_timeout" : "tx_build_failed", at: 0 } });
+    expect(h.result.current.flow).toEqual({ type: "failed", orderId: "order", message: reason });
     expect(h.sign).not.toHaveBeenCalled();
     expect(window.localStorage.getItem(storageKey(h.scope))).toBeNull();
   });
@@ -652,8 +656,8 @@ describe("recovery with the current backend contract", () => {
     h.snapshot.mockResolvedValue({ next_cursor: null, request_id: "snapshot", rfqs: [pendingSignature] });
     await h.select(); h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.sign).toHaveBeenCalled());
-    h.emit("error", { type: "SignatureTimeout" });
-    h.emit("rfqAvailableAgain", { rfq_id: "other", reason: "signature_timeout" });
+    h.emit("orderUpdate", { order_id: "other-order", order_version: 2, state: { type: "failed", reason: "signature timeout" } });
+    h.emit("rfqUpdate", { rfq_id: "other", rfq_version: 1, state: { type: "available", reason: "signature_timeout", at: 0 } });
     await act(async () => {});
     expect(h.result.current.flow.type).toBe("signing");
     expect(h.accept).toHaveBeenCalledTimes(1);
@@ -717,7 +721,7 @@ describe("recovery with the current backend contract", () => {
     const h = setup(); await h.select();
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.submit).toHaveBeenCalled());
-    h.emit("rfqAvailableAgain", { rfq_id: "rfq", reason: "signature_timeout" });
+    h.emit("rfqUpdate", { rfq_id: "rfq", rfq_version: 1, state: { type: "available", reason: "signature_timeout", at: 0 } });
     await waitFor(() => expect(h.result.current.flow.type).toBe("unknown"));
     expect(h.request).toHaveBeenCalledTimes(1);
   });
@@ -747,7 +751,7 @@ describe("recovery with the current backend contract", () => {
     const h = setup(); let resolve!: (value: Awaited<ReturnType<typeof h.client.getMyActiveRfqsAsync>>) => void;
     h.snapshot.mockImplementation(() => new Promise(r => { resolve = r; }));
     await h.select(); h.emit("disconnected", 1006, "lost"); act(() => h.result.current.checkStatus());
-    h.emit("orderConfirmed", "order", "pda");
+    h.emit("orderUpdate", { order_id: "order", order_version: 4, state: { type: "confirmed", position_pda: "pda" } });
     await act(async () => resolve({ next_cursor: null, request_id: "snapshot", rfqs: [pendingSignature] }));
     expect(h.result.current.flow).toEqual({ type: "confirmed", orderId: "order", positionPda: "pda" });
     expect(h.accept).toHaveBeenCalledTimes(1);

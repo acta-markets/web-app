@@ -21,7 +21,10 @@ import {
   type OptionTerms,
   type PositionType,
   type QuoteReceivedMessage,
+  type OrderUpdateMessage,
+  type ReplyMessage,
   type RfqCreatedMessage,
+  type RfqUpdateMessage,
   type TakerFillRfq,
 } from "@acta-markets/ts-sdk/ws";
 import type { TakerSide } from "@acta-markets/ts-sdk/types";
@@ -245,17 +248,18 @@ function redeemInvite(client: ActaWsClient, code: string): Promise<{ ok: boolean
   return new Promise((resolve) => {
     const done = (r: { ok: boolean; detail: string }) => { cleanup(); resolve(r); };
     const onRedeemed = (d: { referral_code: string }) => done({ ok: true, detail: `redeemed, referral_code=${d.referral_code}` });
-    const onReqErr = (e: { request_id?: string; error?: unknown }) => {
-      done({ ok: false, detail: `redeem rejected: ${JSON.stringify(e.error ?? e)}` });
+    const onReqErr = ({ result }: ReplyMessage) => {
+      if (result.type !== "error") return;
+      done({ ok: false, detail: `redeem rejected: ${JSON.stringify(result.error)}` });
     };
     const t = setTimeout(() => done({ ok: false, detail: "redeem timed out" }), 12_000);
     const cleanup = () => {
       clearTimeout(t);
       client.off("inviteRedeemed", onRedeemed);
-      client.off("requestError", onReqErr);
+      client.off("reply", onReqErr);
     };
     client.on("inviteRedeemed", onRedeemed);
-    client.on("requestError", onReqErr);
+    client.on("reply", onReqErr);
     try {
       client.redeemInvite(code);
     } catch (e) {
@@ -301,7 +305,7 @@ class CaseRunner {
     const t0 = Date.now();
 
     // Phase A — create the RFQ. Listeners are attached BEFORE the send so an
-    // rfqCreated echo that races the CommandAccepted ack is never dropped.
+    // rfqCreated echo that races the Reply accepted is never dropped.
     const created = await new Promise<{ rfqId: string } | { failure: CaseOutcome }>((resolve) => {
       let settled = false;
       const finish = (r: { rfqId: string } | { failure: CaseOutcome }) => {
@@ -313,8 +317,8 @@ class CaseRunner {
       const onCreated = (msg: RfqCreatedMessage) => {
         if (msg.request_id === requestId) finish({ rfqId: msg.rfq_id });
       };
-      const onReqErr = (d: { request_id: string; error: unknown }) => {
-        if (d.request_id === requestId) finish({ failure: { status: "FAIL", detail: `RFQ rejected: ${fmtServerError(d.error)}` } });
+      const onReqErr = ({ request_id, result }: ReplyMessage) => {
+        if (request_id === requestId && result.type === "error") finish({ failure: { status: "FAIL", detail: `RFQ rejected: ${fmtServerError(result.error)}` } });
       };
       const onDisc = (code: number, reason: string) => {
         finish({ failure: { status: "FAIL", detail: `disconnected during RFQ create (${code} ${reason})` } });
@@ -325,11 +329,11 @@ class CaseRunner {
       const cleanup = () => {
         clearTimeout(timer);
         this.client.off("rfqCreated", onCreated);
-        this.client.off("requestError", onReqErr);
+        this.client.off("reply", onReqErr);
         this.client.off("disconnected", onDisc);
       };
       this.client.on("rfqCreated", onCreated);
-      this.client.on("requestError", onReqErr);
+      this.client.on("reply", onReqErr);
       this.client.on("disconnected", onDisc);
       this.client.createRfq({
         market_pda: address(descriptor.market_descriptor.market_pda),
@@ -378,13 +382,13 @@ class CaseRunner {
           settle({ quote: q });
         }
       };
-      const onClosed = (msg: { rfq_id: string; reason: string }) => {
-        if (msg.rfq_id === rfqId) settle({ reason: msg.reason });
+      const onClosed = ({ rfq_id, state }: RfqUpdateMessage) => {
+        if (rfq_id === rfqId && state.type === "closed") settle({ reason: state.reason });
       };
       const t = setTimeout(() => settle(null), timeoutSeconds * 1000 + 15_000);
-      const cleanup = () => { clearTimeout(t); this.client.off("quoteReceived", onQuote); this.client.off("rfqClosed", onClosed); };
+      const cleanup = () => { clearTimeout(t); this.client.off("quoteReceived", onQuote); this.client.off("rfqUpdate", onClosed); };
       this.client.on("quoteReceived", onQuote);
-      this.client.on("rfqClosed", onClosed);
+      this.client.on("rfqUpdate", onClosed);
     });
   }
 
@@ -456,25 +460,18 @@ class CaseRunner {
   private waitOrder(orderId: string, ms: number): Promise<CaseOutcome> {
     return new Promise((resolve) => {
       const done = (r: CaseOutcome) => { cleanup(); resolve(r); };
-      const onConfirmed = (id: string, positionPda: string) => {
-        if (id === orderId) done({ status: "PASS", detail: `filled -> position ${positionPda}` });
-      };
-      const onSubmitted = (id: string, txSignature: string) => {
-        if (id === orderId) done({ status: "PASS", detail: `submitted -> tx ${txSignature}` });
-      };
-      const onFailed = (id: string, reason: string) => {
-        if (id === orderId) done({ status: "BLOCKED", detail: `on-chain order failed: ${reason}` });
+      const onUpdate = ({ order_id, state }: OrderUpdateMessage) => {
+        if (order_id !== orderId) return;
+        if (state.type === "confirmed") done({ status: "PASS", detail: `filled -> position ${state.position_pda}` });
+        else if (state.type === "submitted") done({ status: "PASS", detail: `submitted -> tx ${state.transaction_signature}` });
+        else if (state.type === "failed") done({ status: "BLOCKED", detail: `on-chain order failed: ${state.reason}` });
       };
       const t = setTimeout(() => { done({ status: "FAIL", detail: "no terminal order event within 60s" }); }, ms);
       const cleanup = () => {
         clearTimeout(t);
-        this.client.off("orderConfirmed", onConfirmed);
-        this.client.off("orderSubmitted", onSubmitted);
-        this.client.off("orderFailed", onFailed);
+        this.client.off("orderUpdate", onUpdate);
       };
-      this.client.on("orderConfirmed", onConfirmed);
-      this.client.on("orderSubmitted", onSubmitted);
-      this.client.on("orderFailed", onFailed);
+      this.client.on("orderUpdate", onUpdate);
     });
   }
 }
@@ -492,7 +489,6 @@ function classifyCreateError(e: unknown): string {
   if (m.includes("market_expired") || m.includes("market_finalized") || m.includes("market_disabled")) return `market unavailable: ${s}`;
   if (m.includes("invalid_quantity_size_rule")) return `invalid quantity/size rule: ${s}`;
   if (m.includes("invalid_strike")) return `invalid strike: ${s}`;
-  if (m.includes("taker_buy_unsupported")) return "taker buy unsupported for this product";
   if (m.includes("rate_limit") || m.includes("ratelimit")) return `rate limited: ${s}`;
   return `request error: ${s}`;
 }
@@ -589,10 +585,12 @@ async function main() {
   client.on("disconnected", (code, reason) => console.error(`# ws disconnected: ${code} ${reason}`));
 
   // Global event tap: records every RFQ/quote/error/disconnect for per-case diagnosis.
-  client.on("commandAccepted", (d: { request_id: string }) => tapEvent("commandAccepted", d.request_id, ""));
+  client.on("reply", ({ request_id, result }: ReplyMessage) =>
+    tapEvent(result.type === "error" ? "requestError" : "reply", request_id, result.type === "error" ? fmtServerError(result.error) : result.type));
   client.on("rfqCreated", (m: RfqCreatedMessage) => tapEvent("rfqCreated", m.request_id ?? m.rfq_id, `rfq_id=${m.rfq_id} ${m.terms.type}/${m.side}`));
-  client.on("requestError", (d: { request_id: string; error: unknown }) => tapEvent("requestError", d.request_id, fmtServerError(d.error)));
-  client.on("rfqClosed", (m: { rfq_id: string; reason: string }) => tapEvent("rfqClosed", m.rfq_id, m.reason));
+  client.on("rfqUpdate", ({ rfq_id, state }: RfqUpdateMessage) => {
+    if (state.type === "closed") tapEvent("rfqClosed", rfq_id, state.reason);
+  });
   client.on("rfqSkipped", (m: { rfq_id: string; cap_detail: unknown }) => tapEvent("rfqSkipped", m.rfq_id, fmtServerError(m.cap_detail)));
   client.on("rfqBroadcast", (m: { rfq_id: string; terms: OptionTerms; side: TakerSide }) => tapEvent("rfqBroadcast", m.rfq_id, `${m.terms.type}/${m.side}`));
   client.on("error", (e: ActaWsClientError) => tapEvent("error", null, fmtClientError(e)));

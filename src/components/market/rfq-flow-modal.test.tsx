@@ -45,7 +45,7 @@ function setup(previewOverrides: Partial<RfqOrderPreview> = {}, bestQuote: Quote
   vi.spyOn(client, "isAuthenticated").mockReturnValue(true);
   vi.spyOn(client, "getSessionId").mockReturnValue("credential");
   vi.spyOn(client, "getMyActiveRfqsAsync").mockResolvedValue({ next_cursor: null, request_id: "read", rfqs: [] });
-  const cancelOnServer = vi.spyOn(client, "cancelRfq").mockReturnValue("cancel");
+  const cancelOnServer = vi.spyOn(client, "cancelRfq").mockResolvedValue("cancel");
   const status = vi.spyOn(client, "request").mockResolvedValue({
     request_id: "read", order_id: "order", state: { type: "unknown" },
   });
@@ -131,10 +131,16 @@ describe("RFQ order modal", () => {
     await waitFor(() => expect(h.accept).toHaveBeenCalledWith("rfq", "maker", "order"));
   });
 
-  it.each(["orderAccepted", "orderSubmitted"])("shows status lookup after %s", async event => {
+  it.each([
+    { type: "accepted" },
+    { type: "submitted", transaction_signature: "signature" },
+  ])("shows status lookup after OrderUpdate $type", async state => {
     const h = setup();
+    h.submit.mockImplementation(() => new Promise(() => {}));
     await h.send();
-    h.emit(event, "order", ...(event === "orderSubmitted" ? ["signature", 2] : [2]));
+    expect(screen.getByText("Sending your trade to Solana")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Check status" })).toBeNull();
+    h.emit("orderUpdate", { order_id: "order", order_version: 2, state });
     expect(screen.getByRole("button", { name: "Check status" })).toBeTruthy();
     expect(screen.queryByText("Sending your trade to Solana")).toBeNull();
   });
@@ -145,7 +151,7 @@ describe("RFQ order modal", () => {
     expect(screen.getByText("Waiting for on-chain confirmation")).toBeTruthy();
     expect(screen.getByText("Your trade was submitted.")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "View on Solscan" })).toBeNull();
-    h.emit("orderSubmitted", "order", "sig123", 2);
+    h.emit("orderUpdate", { order_id: "order", order_version: 2, state: { type: "submitted", transaction_signature: "sig123" } });
     expect(screen.getByText("Your transaction was sent.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "View on Solscan" }).getAttribute("href")).toContain("/tx/sig123");
   });
@@ -177,7 +183,7 @@ describe("RFQ order modal", () => {
   it("restores a sent order without a market preview and keeps confirmation visible", async () => {
     const h = setup();
     await h.send();
-    h.emit("orderSubmitted", "order", "signature", 2);
+    h.emit("orderUpdate", { order_id: "order", order_version: 2, state: { type: "submitted", transaction_signature: "signature" } });
     h.reload();
     await screen.findByRole("button", { name: "Check status" });
     expect(screen.getByText("Your unfinished trade")).toBeTruthy();
@@ -185,7 +191,7 @@ describe("RFQ order modal", () => {
     expect(h.accept).toHaveBeenCalledOnce();
     expect(h.submit).toHaveBeenCalledOnce();
     expect(h.sign).toHaveBeenCalledOnce();
-    h.emit("orderConfirmed", "order", "position", 3);
+    h.emit("orderUpdate", { order_id: "order", order_version: 3, state: { type: "confirmed", position_pda: "position" } });
     expect(screen.getByText("Your trade is confirmed")).toBeTruthy();
     expect(screen.getByRole("link", { name: "View on Solscan" }).getAttribute("href")).toContain("signature");
     expect(localStorage.length).toBe(0);
@@ -330,7 +336,7 @@ describe("Buy", () => {
     it("once confirmed, reminds of the deposit in one line and makes Portfolio the main button", async () => {
       const h = setup(buyPreview, buyQuote);
       await h.send();
-      h.emit("orderConfirmed", "order", "position", 3);
+      h.emit("orderUpdate", { order_id: "order", order_version: 3, state: { type: "confirmed", position_pda: "position" } });
       expect(screen.getByText("Your trade is confirmed")).toBeTruthy();
       expect(screen.getByText("To exercise, fund it in Portfolio before expiry.")).toBeTruthy();
       expect(screen.getByRole("link", { name: "Fund in Portfolio" }).getAttribute("href")).toBe("/portfolio");
@@ -341,7 +347,7 @@ describe("Buy", () => {
       const h = setup({ ...buyPreview, thesis: "SOL will be above $150 on Nov 7" }, buyQuote);
       await h.send();
       expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
-      h.emit("orderConfirmed", "order", "position", 3);
+      h.emit("orderUpdate", { order_id: "order", order_version: 3, state: { type: "confirmed", position_pda: "position" } });
       fireEvent.click(screen.getByRole("button", { name: "Share" }));
       expect(screen.getByRole("dialog", { name: "Share your trade" })).toBeTruthy();
       const img = await screen.findByRole("img");

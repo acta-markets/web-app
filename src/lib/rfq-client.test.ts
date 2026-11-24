@@ -66,8 +66,13 @@ describe("web app authentication through the installed SDK", () => {
     await vi.waitFor(() => expect(socket.sent.some(raw => JSON.parse(raw).type === "RfqRequest")).toBe(true));
     const frame = socket.sent.map(raw => JSON.parse(raw)).find(message => message.type === "RfqRequest");
     expect(frame.data).toMatchObject({ terms: { type: "call_spread", lower_strike: "100000000000", upper_strike: "120000000000" }, side: "sell", quantity: "1000000000", timeout_seconds: 30 });
-    socket.receive({ type: "CommandAccepted", data: { request_id: request.request_id } });
-    await pending;
+    socket.receive({ type: "Reply", data: { request_id: request.request_id, result: { type: "accepted" } } });
+    socket.receive({ type: "RfqCreated", data: {
+      rfq_id: "00000000-0000-0000-0000-0000000000aa", rfq_version: 1, terms: request.terms, side: "sell",
+      request_id: request.request_id, expires_at: 2_000_000_000, created_at: 1_900_000_000,
+      order_options: [request.terms],
+    } });
+    expect((await pending).rfq_id).toBe("00000000-0000-0000-0000-0000000000aa");
   });
 
   it.each(["canonical", "order-sized"])("handles a %s challenge before the wallet", async kind => {

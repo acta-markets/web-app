@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppModal } from "@/components/app-ui/app-modal";
 import { ShareCardPanel } from "@/components/share/share-card";
 import { RFQ_TTL_SECONDS, useRfqContext } from "@/components/rfq/rfq-provider";
-import type { QuoteReceivedMessage } from "@/lib/rfq-client";
+import type { QuoteReceivedMessage, RfqUpdateMessage } from "@/lib/rfq-client";
 import { QuoteFlowView, quoteFlowTitle, type QuoteFlowOrder, type QuoteFlowStep } from "./quote-flow-view";
 import { useRfqOrder } from "./use-rfq-order";
 import type { VersionedTransaction } from "@solana/web3.js";
@@ -199,13 +199,13 @@ export function RfqFlowModal({
   useEffect(() => {
     const client = getClient();
     if (!client || flow.type !== "idle" || !quote) return;
-    const onClosed = (msg: { rfq_id: string }) => {
-      if (msg.rfq_id !== quote.rfq_id) return;
+    const onUpdate = ({ rfq_id, state }: RfqUpdateMessage) => {
+      if (state.type !== "closed" || rfq_id !== quote.rfq_id) return;
       setError("RFQ closed. Request a fresh quote.");
       setStep("failed");
     };
-    client.on("rfqClosed", onClosed);
-    return () => { client.off("rfqClosed", onClosed); };
+    client.on("rfqUpdate", onUpdate);
+    return () => { client.off("rfqUpdate", onUpdate); };
   }, [getClient, flow.type, quote]);
 
   useEffect(() => {

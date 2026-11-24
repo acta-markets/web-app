@@ -493,7 +493,9 @@ export function RfqProvider({ children }: RfqProviderProps) {
         if (hasCode && authWalletRef.current) remember(walletKey(authWalletRef.current, "referral-info"), data);
       });
 
-      client.on("requestError", ({ request_id, error }) => {
+      client.on("reply", ({ request_id, result }) => {
+        if (result.type !== "error") return;
+        const { error } = result;
         if (request_id === positionsRequestRef.current) {
           positionsRequestRef.current = null;
           setPositionsFailed(true);
@@ -637,7 +639,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
 
       client.on("rfqCreated", (msg) => {
         if (msg.request_id && abandonedRequestsRef.current.delete(msg.request_id)) {
-          client.cancelRfq(msg.rfq_id);
+          void client.cancelRfq(msg.rfq_id).catch(err => console.warn("[RfqProvider] CancelRfq failed:", err));
           return;
         }
         const pending = pendingRfqRef.current;
@@ -662,21 +664,22 @@ export function RfqProvider({ children }: RfqProviderProps) {
         }
         refreshBestQuote();
       });
-      client.on("rfqClosed", (msg) => {
+      client.on("rfqUpdate", ({ rfq_id, state }) => {
+        if (state.type !== "closed") return;
         const pending = pendingRfqRef.current;
-        if (!pending?.rfqId || msg.rfq_id !== pending.rfqId) return;
+        if (!pending?.rfqId || rfq_id !== pending.rfqId) return;
         dropRfq();
-        if (msg.reason === "no_eligible_makers") setError(new RfqNoMakersError());
-        else if (msg.reason === "server_shutdown") setError(new Error("The server restarted. Please create the request again."));
+        if (state.reason === "no_eligible_makers") setError(new RfqNoMakersError());
+        else if (state.reason === "server_shutdown") setError(new Error("The server restarted. Please create the request again."));
       });
 
-      client.on("orderSubmitted", (orderId, sig) => {
-        console.log("[RfqProvider] Order submitted:", orderId, sig);
-      });
-
-      client.on("orderConfirmed", (orderId, positionPda) => {
-        console.log("[RfqProvider] Order confirmed:", orderId, positionPda);
-        client.getMyReferralInfo();
+      client.on("orderUpdate", ({ order_id, state }) => {
+        if (state.type === "submitted") {
+          console.log("[RfqProvider] Order submitted:", order_id, state.transaction_signature);
+        } else if (state.type === "confirmed") {
+          console.log("[RfqProvider] Order confirmed:", order_id, state.position_pda);
+          client.getMyReferralInfo();
+        }
       });
 
       cleanup = () => {
@@ -980,7 +983,7 @@ export function RfqProvider({ children }: RfqProviderProps) {
     if (pending) {
       const client = clientRef.current;
       if (!pending.rfqId) abandonedRequestsRef.current.add(pending.requestId);
-      else if (client?.isAuthenticated()) client.cancelRfq(pending.rfqId);
+      else if (client?.isAuthenticated()) void client.cancelRfq(pending.rfqId).catch(err => console.warn("[RfqProvider] CancelRfq failed:", err));
     }
     dropRfq();
     setError(null);
@@ -1054,14 +1057,6 @@ export function RfqProvider({ children }: RfqProviderProps) {
       // could still be open, so a retry can never create a second RFQ.
       void client
         .createRfqOnce({ ...rfqRequest, request_id: requestId })
-        .then(({ created }) => {
-          const pending = pendingRfqRef.current;
-          if (pending?.requestId !== requestId) return;
-          // `earlier` means an attempt whose reply was lost had already created it. The id
-          // that matters is the venue's, which only `RfqCreated` carries: `createRfqOnce`
-          // returns the request id, and using it here made every incoming quote look stale.
-          if (created === "earlier") console.log("[RfqProvider] RFQ already existed for", requestId);
-        })
         .catch((err) => {
           const pending = pendingRfqRef.current;
           if (pending?.requestId !== requestId) return;

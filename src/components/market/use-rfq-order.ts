@@ -10,7 +10,9 @@ import {
   type ActaWsClient,
   type ConnectionState,
   type MyActiveRfqsMessage,
+  type OrderUpdateMessage,
   type QuoteReceivedMessage,
+  type RfqUpdateMessage,
   type TakerFillRfq,
 } from "@/lib/rfq-client";
 import { describeSignedMessage, messageBytesOf, resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
@@ -499,7 +501,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
           update({ type: "pending", order: active.order });
           reconcile();
         } else if (now === signing && error instanceof flows.VaultIntentError) {
-          if (client.isAuthenticated()) client.cancelRfq(active.order.rfqId);
+          if (client.isAuthenticated()) void client.cancelRfq(active.order.rfqId).catch(err => console.warn("[useRfqOrder] CancelRfq failed:", err));
           if (error.mismatch.kind === "walletMessage" && walletWires.current) {
             try {
               window.localStorage.setItem("acta.rfq.debug", JSON.stringify(walletWires.current));
@@ -521,28 +523,30 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
         }
       }
     };
+    const onOrderUpdate = ({ order_id, state }: OrderUpdateMessage) => {
+      if (state.type === "accepted") onAccepted(order_id);
+      else if (state.type === "submitted") onSubmitted(order_id, state.transaction_signature);
+      else if (state.type === "confirmed") onConfirmed(order_id, state.position_pda);
+      else onFailed(order_id, state.reason);
+    };
+    const onRfqUpdate = ({ rfq_id, state }: RfqUpdateMessage) => {
+      if (state.type === "available") onAvailableAgain({ rfq_id, reason: state.reason });
+      else if (state.type === "closed") onRfqEnded({ rfq_id, reason: state.reason });
+    };
     client.on("disconnected", onDisconnected);
     client.on("stateChange", onStateChange);
     client.on("myActiveRfqs", reconcile);
     client.on("sponsoredTxToSign", onSponsored);
-    client.on("orderAccepted", onAccepted);
-    client.on("orderConfirmed", onConfirmed);
-    client.on("orderSubmitted", onSubmitted);
-    client.on("orderFailed", onFailed);
-    client.on("rfqAvailableAgain", onAvailableAgain);
-    client.on("rfqClosed", onRfqEnded);
+    client.on("orderUpdate", onOrderUpdate);
+    client.on("rfqUpdate", onRfqUpdate);
     return () => {
       invalidateConnection();
       client.off("disconnected", onDisconnected);
       client.off("stateChange", onStateChange);
       client.off("myActiveRfqs", reconcile);
       client.off("sponsoredTxToSign", onSponsored);
-      client.off("orderAccepted", onAccepted);
-      client.off("orderConfirmed", onConfirmed);
-      client.off("orderSubmitted", onSubmitted);
-      client.off("orderFailed", onFailed);
-      client.off("rfqAvailableAgain", onAvailableAgain);
-      client.off("rfqClosed", onRfqEnded);
+      client.off("orderUpdate", onOrderUpdate);
+      client.off("rfqUpdate", onRfqUpdate);
     };
   }, [client, update, submitSignedTx, reconcile, invalidateConnection, saveUnfinished, stopPreparing]);
 
@@ -598,7 +602,7 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
     }
     invalidateConnection();
     accepted.current = null;
-    if (client?.isAuthenticated()) client.cancelRfq(active.order.rfqId);
+    if (client?.isAuthenticated()) void client.cancelRfq(active.order.rfqId).catch(err => console.warn("[useRfqOrder] CancelRfq failed:", err));
     update({ type: "failed", orderId: active.order.orderId, message: "Order cancelled. Nothing was submitted." });
   }, [client, invalidateConnection, restoreStored, storageKey, update]);
   const canAbandon = isOpen(flow) && abandonableOf(flow);

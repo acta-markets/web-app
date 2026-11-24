@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchPriceRoute, fetchVault } from "@acta-markets/ts-sdk";
 import { fetchVaultPriceRoutes, findPriceRoutePda, flows } from "@acta-markets/ts-sdk/chain";
-import { ActaWsClient, type ActaWsClientEvents, type SwapQuoteData } from "@acta-markets/ts-sdk/ws";
+import { ActaWsClient, type ActaWsClientEvents, type SwapQuote, type SwapQuoteData } from "@acta-markets/ts-sdk/ws";
 import { CLIENT_VERSION } from "@/lib/rfq-client";
 import { VersionedTransaction } from "@solana/web3.js";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
@@ -11,7 +11,7 @@ import type { VaultManager } from "@/lib/vaults/operator";
 import { pythFeedShards } from "@/lib/vaults/price-feeds";
 
 type VaultAuth = Parameters<ActaWsClientEvents["vaultAuthenticated"]>[0];
-export type VaultSwapQuote = Parameters<ActaWsClientEvents["swapQuoteResult"]>[0];
+export type VaultSwapQuote = SwapQuote;
 export type VaultSwapQuoteRequest = Omit<SwapQuoteData, "request_id" | "vault_pda">;
 
 const SWAP_TIMEOUT_MS = 30_000;
@@ -63,11 +63,13 @@ export function useVaultWs(vaultPda: string | null, enabled: boolean, onProjecti
     async (request: VaultSwapQuoteRequest, manager: VaultManager, minOutputFloor: bigint) => {
       if (!client || !auth) throw new Error("Vault session is not authenticated");
       const quoteRequest = { ...request, request_id: crypto.randomUUID(), vault_pda: auth.vault_pda };
-      const quote = await client.request(
-        "SwapQuoteResult",
+      const reply = await client.request(
+        "Reply",
         { type: "SwapQuote", data: quoteRequest },
         { timeoutMs: SWAP_TIMEOUT_MS },
       );
+      if (reply.type !== "swap_quote") throw new Error(`Unexpected swap quote reply: ${reply.type}`);
+      const { type: _, ...quote } = reply;
       const [{ main, second }, { data: vault }, tables] = await Promise.all([
         fetchVaultPriceRoutes(rpc, manager),
         fetchVault(rpc, manager.addresses.vault),
@@ -92,7 +94,7 @@ export function useVaultWs(vaultPda: string | null, enabled: boolean, onProjecti
       );
       const signed = await signTransaction(VersionedTransaction.deserialize(base64ToBytes(quote.tx_base64)));
       await client.request(
-        "SwapSubmitResult",
+        "Reply",
         {
           type: "SwapSubmit",
           data: {
