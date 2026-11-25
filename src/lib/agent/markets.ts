@@ -1,5 +1,5 @@
-import type { TokenInfo, TokenMarketsInfoData } from "@acta-markets/ts-sdk/ws";
-import { address } from "@solana/kit";
+import type { TokenMarkets } from "@acta-markets/ts-sdk/http";
+import type { TokenInfo } from "@acta-markets/ts-sdk/ws";
 import { buildStrikeOptions, indicativesFor, spotFromSnapshot, tradableExpiries } from "@/lib/trade/strikes";
 import { AgentError, plainSymbol, serverCode, toAgentError } from "./errors";
 import type { ActaSession } from "./session";
@@ -53,12 +53,12 @@ export async function findAsset(session: ActaSession, symbol: string): Promise<A
 }
 
 /** One asset's expiries, strikes and indicative premiums, straight from the venue. */
-export async function marketSnapshot(session: ActaSession, asset: Asset): Promise<TokenMarketsInfoData> {
-  const client = await session.connect();
+export async function marketSnapshot(session: ActaSession, asset: Asset): Promise<TokenMarkets> {
   try {
-    return await client.getTokenMarketsInfoAsync(address(asset.mint));
+    return await session.tokenMarkets(asset.mint);
   } catch (error) {
-    if (serverCode(error) === "market_not_found") {
+    const code = serverCode(error);
+    if (code === "market_not_found" || code === "unknown_mint") {
       throw new AgentError("no_markets", `${asset.symbol} has no markets open right now.`, "stop");
     }
     throw toAgentError(error);
@@ -71,8 +71,7 @@ const round = (value: number, digits: number) => Number(value.toFixed(digits));
 
 /** Assets on offer with the yield range selling each side has shown lately. */
 export async function listAssets(session: ActaSession) {
-  const client = await session.connect();
-  const summary = await client.getEarnSummaryAsync().catch((error) => {
+  const summary = await session.earnSummary().catch((error) => {
     throw toAgentError(error);
   });
   type Row = { asset: string; quote_token: string | null; nearest_expiry: string; sell_above_apr_pct: [number, number] | null; sell_below_apr_pct: [number, number] | null };

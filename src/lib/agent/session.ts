@@ -1,4 +1,4 @@
-import { ActaHttpClient } from "@acta-markets/ts-sdk/http";
+import { ActaHttpClient, ActaHttpError, type EarnSummary, type TokenMarkets } from "@acta-markets/ts-sdk/http";
 import {
   ActaWsClient,
   type ActaWsClientOptions,
@@ -40,10 +40,11 @@ export class ActaSession {
   constructor(
     readonly config: AgentConfig,
     readonly signer: ActaSigner | null,
-    private readonly options: { makeSocket?: ActaWsClientOptions["makeSocket"]; autoReconnect?: boolean } = {},
+    private readonly options: { makeSocket?: ActaWsClientOptions["makeSocket"]; autoReconnect?: boolean; http?: ActaHttpClient } = {},
   ) {
     this.rpc = createSolanaRpc(config.rpcUrl);
-    this.http = new ActaHttpClient({ baseUrl: config.apiUrl });
+    this.http =
+      options.http ?? new ActaHttpClient({ baseUrl: config.apiUrl, client: { name: config.clientName, version: config.clientVersion } });
   }
 
   /** The venue's clock in Unix seconds: quote validity is judged against it, not this machine's. */
@@ -144,7 +145,7 @@ export class ActaSession {
   async tokens(): Promise<TokenInfo[]> {
     const cached = this.tokenCache;
     if (cached && Date.now() - cached.at < REFERENCE_TTL_MS) return cached.value;
-    const value = this.connect().then((client) => client.getTokensAsync()).then((data) => data.tokens);
+    const value = this.http.tokens().then((tokens) => [...tokens.values()]);
     this.tokenCache = { at: Date.now(), value };
     value.catch(() => {
       if (this.tokenCache?.value === value) this.tokenCache = null;
@@ -162,6 +163,16 @@ export class ActaSession {
       if (this.descriptorCache?.value === value) this.descriptorCache = null;
     });
     return value;
+  }
+
+  /** One underlying's expiries, strikes and indicative premiums: the WS `TokenMarketsInfo`, over HTTP. */
+  tokenMarkets(mint: string): Promise<TokenMarkets> {
+    return this.http.tokenMarkets(mint);
+  }
+
+  /** APR range and nearest expiry per asset and product: the WS `EarnSummary`, over HTTP. */
+  earnSummary(): Promise<EarnSummary> {
+    return this.http.earnSummary();
   }
 
   close(): void {

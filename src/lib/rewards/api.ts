@@ -1,3 +1,4 @@
+import { CLIENT_VERSION } from "@/lib/rfq-client";
 import { ActaHttpClient, ActaHttpError } from "@acta-markets/ts-sdk/http";
 import type {
   Season,
@@ -18,7 +19,7 @@ import { getApiBaseUrl } from "@/lib/vaults/api";
 export type { Season, SeasonAward, SeasonAwardsPage, SeasonBoard, SeasonBoardQuery, SeasonSubjectResult };
 
 let httpClient: ActaHttpClient | null = null;
-const client = () => (httpClient ??= new ActaHttpClient({ baseUrl: getApiBaseUrl() }));
+const client = () => (httpClient ??= new ActaHttpClient({ baseUrl: getApiBaseUrl(), client: { name: "acta-web-app", version: CLIENT_VERSION } }));
 
 /** "Nothing there" is an answer, not a failure: no season published, or a wallet with no points. */
 export async function nullWhenMissing<T>(request: Promise<T>): Promise<T | null> {

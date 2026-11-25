@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { afterBody, aiCatalog, HOSTED_SERVER, hostedContext, rateLimiter, serverCard, shortCache } from "./hosted";
+import { listAssets, marketSnapshot } from "./markets";
 
 describe("hosted context", () => {
   it("has no wallet and may move nothing", () => {
@@ -19,6 +20,41 @@ describe("the server's version", () => {
     const pkg = JSON.parse(readFileSync(path.resolve(process.cwd(), "packages/mcp/package.json"), "utf8")) as { version: string };
     expect(HOSTED_SERVER.version).toBe(pkg.version);
     expect(JSON.stringify(serverCard("https://devnet.acta.markets"))).toContain(`"version":"${pkg.version}"`);
+  });
+});
+
+describe("hosted reads over HTTP", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const row = (symbol: string, type: string) => ({
+    underlying_symbol: symbol,
+    quote_symbol: "USDC",
+    position_type: type,
+    nearest_expiry_ts: 4_102_444_800,
+    apr: { type: "available", min: 0.1, max: 0.2 },
+  });
+
+  it("reads every page of the earn summary and opens no socket", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      urls.push(url);
+      const page = url.includes("cursor=")
+        ? { assets: [row("ETH", "covered_call")], next_cursor: null }
+        : { assets: [row("BTC", "cash_secured_put")], next_cursor: "c1" };
+      return Response.json(page);
+    }));
+    const { session } = hostedContext();
+    const result = await listAssets(session);
+    expect(result.assets.map((a) => a.asset)).toEqual(["BTC", "ETH"]);
+    expect(urls[0]).toMatch(/\/api\/v1\/earn-summary\?limit=200$/);
+    expect(urls[1]).toMatch(/cursor=c1/);
+    expect(session.state).toBe("not_connected");
+  });
+
+  it("an underlying with no market is no_markets, not a failure", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "no market uses this token", code: "unknown_mint" }, { status: 404 })));
+    const { session } = hostedContext();
+    await expect(marketSnapshot(session, { symbol: "BTC", mint: "mint", decimals: 8, token: {} as never })).rejects.toMatchObject({ code: "no_markets" });
   });
 });
 

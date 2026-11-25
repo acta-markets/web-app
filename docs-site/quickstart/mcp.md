@@ -163,8 +163,9 @@ would refuse for a limit.
 
 Once the signed transaction has been sent, the server says "nothing was traded" only when the venue
 reports that the order itself failed. The request for quotes closing or reopening is not that: the
-order is then `unknown`. `acta_get_order` settles it: the venue is asked, and an order too old to still
-land is looked for on chain and among the wallet's positions before it is closed as not executed.
+order is then `unknown`. `acta_get_order` settles it: the venue is asked, and its answer `expired`
+proves the order never executed. An order too old to still land that the venue cannot place is looked
+for on chain and among the wallet's positions in its market before it is closed as not executed.
 Until an order is settled the server places no other trade.
 
 An error carries `next`: `fix_request`, `retry`, `reconcile` or `stop`.

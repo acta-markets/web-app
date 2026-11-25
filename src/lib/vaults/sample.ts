@@ -67,6 +67,7 @@ export function makeVault(overrides: Partial<Vault> = {}): Vault {
     deposit_window_set_at: null,
     balances: { type: "unobserved" },
     staging: { type: "none" },
+    next_capital_step: { type: "none" },
     staged_generation: 0,
     policy: { max_open_positions: 4, max_rebalance_drift_bps: 100, min_main_liquidity_bps: 1000 },
     projection: { version: 1, slot: 1, transaction_index: 0, signature: "1".repeat(88), event_index: 0 },

@@ -21,7 +21,7 @@ Read the market descriptor for the market PDA, expiry, asset pair, decimals and 
 3. Send `AcceptQuote` for the selected `order_id` and maker.
 4. Receive `SponsoredTxToSign`. Verify the transaction against the accepted order, then sign the taker's slot.
 5. Send `SubmitSignedSponsoredTx` before the signing deadline.
-6. Track `OrderAccepted`, `OrderSubmitted` and `OrderConfirmed`. `OrderConfirmed` reports the opened position.
+6. Track the order's `OrderUpdate`: `accepted`, `submitted`, then `confirmed` with the opened position (or `failed`).
 
 The full quantity fills or nothing does. Expired quotes are rejected.
 

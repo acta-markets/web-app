@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import { ActaWsClient, ActaWsRequestError, type QuoteReceivedMessage } from "@acta-markets/ts-sdk/ws";
+import { ActaWsClient, ActaWsRequestError, type QuoteReceivedMessage, type RfqCreatedMessage } from "@acta-markets/ts-sdk/ws";
 import { RfqProvider, useRfqContext } from "./rfq-provider";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
 import { readSessionId, writeSession } from "@/lib/state/session-store";
@@ -20,12 +20,17 @@ vi.mock("@/components/referral/ref-capture", () => ({ clearPendingRefCode: vi.fn
 afterEach(cleanup);
 beforeEach(() => { vi.clearAllMocks(); mocks.create.mockReset(); mocks.account = null; window.localStorage.clear(); });
 
+/** The RfqCreated a create resolves with; only its rfq_id matters to these tests. */
+function created(rfq_id: string): RfqCreatedMessage {
+  return { rfq_id } as RfqCreatedMessage;
+}
+
 async function setup() {
   const client = new ActaWsClient({ url: "ws://localhost", role: "taker", onDisconnect: "keep_quotes", products: ["covered_call", "cash_secured_put", "call_spread", "put_spread", "cash_put"], clientName: "test", clientVersion: "0" });
   vi.spyOn(client, "connectAnonymous").mockImplementation(() => {});
-  const create = vi.spyOn(client, "createRfq").mockResolvedValue("request");
-  const createOnce = vi.spyOn(client, "createRfqOnce").mockResolvedValue({ rfqId: "request", created: "now" });
-  const cancel = vi.spyOn(client, "cancelRfq").mockReturnValue("cancel");
+  const create = vi.spyOn(client, "createRfq").mockResolvedValue(created("request"));
+  const createOnce = vi.spyOn(client, "createRfqOnce").mockResolvedValue(created("request"));
+  const cancel = vi.spyOn(client, "cancelRfq").mockResolvedValue("cancel");
   vi.spyOn(client, "isAuthenticated").mockReturnValue(true);
   vi.spyOn(client, "getMarketDescriptors").mockReturnValue("descriptors");
   vi.spyOn(client, "getPositions").mockReturnValue("positions");
@@ -78,21 +83,21 @@ describe("RFQ request ownership", () => {
   it("only clears the quote when its own RFQ closes", async () => {
     const h = await setup(); const id = h.submit();
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id }); h.emit("quoteReceived", h.quote("ours"));
-    h.emit("rfqClosed", { rfq_id: "other" }); expect(h.result.current.bestQuote).not.toBeNull();
-    h.emit("rfqClosed", { rfq_id: "ours" }); expect(h.result.current.bestQuote).toBeNull();
+    h.emit("rfqUpdate", { rfq_id: "other", rfq_version: 1, state: { type: "closed", reason: "expired", winner: { type: "none" }, at: 0 } }); expect(h.result.current.bestQuote).not.toBeNull();
+    h.emit("rfqUpdate", { rfq_id: "ours", rfq_version: 1, state: { type: "closed", reason: "expired", winner: { type: "none" }, at: 0 } }); expect(h.result.current.bestQuote).toBeNull();
     expect(h.result.current.error).toBeNull();
   });
   it("reports no makers at once when its own RFQ closes as no_eligible_makers", async () => {
     const h = await setup(); const id = h.submit();
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id });
-    h.emit("rfqClosed", { rfq_id: "other", reason: "no_eligible_makers" }); expect(h.result.current.error).toBeNull();
-    h.emit("rfqClosed", { rfq_id: "ours", reason: "no_eligible_makers" });
+    h.emit("rfqUpdate", { rfq_id: "other", rfq_version: 1, state: { type: "closed", reason: "no_eligible_makers", winner: { type: "none" }, at: 0 } }); expect(h.result.current.error).toBeNull();
+    h.emit("rfqUpdate", { rfq_id: "ours", rfq_version: 1, state: { type: "closed", reason: "no_eligible_makers", winner: { type: "none" }, at: 0 } });
     expect(h.result.current.error?.message).toBe("No makers are quoting this right now.");
   });
   it("does not turn an unrelated order failure into a global RFQ error", async () => {
     const h = await setup();
     const requestId = h.submit();
-    h.emit("orderFailed", "old-order", "relay error");
+    h.emit("orderUpdate", { order_id: "old-order", order_version: 3, state: { type: "failed", reason: "relay error" } });
     expect(h.result.current.error).toBeNull();
     h.emit("rfqCreated", { rfq_id: "new-rfq", request_id: requestId });
     h.emit("quoteReceived", h.quote("new-rfq"));
@@ -175,7 +180,7 @@ describe("RFQ request ownership", () => {
   });
   it("keeps the venue RFQ id from RfqCreated instead of the request id", async () => {
     const h = await setup();
-    h.createOnce.mockResolvedValueOnce({ rfqId: "request-id", created: "earlier" });
+    h.createOnce.mockResolvedValueOnce(created("request-id"));
     const id = h.submit();
     await act(async () => {});
     expect(h.result.current.error).toBeNull();
@@ -211,13 +216,13 @@ describe("RFQ request ownership", () => {
     expect(h.result.current.error?.message).toContain("may already exist");
     expect(h.cancel).not.toHaveBeenCalled();
   });
-  it("accepts RfqCreated before the CommandAccepted receipt", async () => {
+  it("accepts the RfqCreated push before the create resolves", async () => {
     const h = await setup();
-    let resolve!: (r: { rfqId: string; created: "now" | "earlier" }) => void;
+    let resolve!: (r: RfqCreatedMessage) => void;
     h.createOnce.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
     const id = h.submit();
     h.emit("rfqCreated", { rfq_id: "ours", request_id: id }); h.emit("quoteReceived", h.quote("ours"));
-    await act(async () => resolve({ rfqId: "ours", created: "now" }));
+    await act(async () => resolve(created("ours")));
     expect(h.result.current.bestQuote?.rfq_id).toBe("ours");
     expect(h.result.current.error).toBeNull();
     expect(h.cancel).not.toHaveBeenCalled();

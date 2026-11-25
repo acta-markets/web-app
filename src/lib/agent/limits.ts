@@ -44,7 +44,12 @@ const SIZE_OF: Record<Spend["what"], (usd: string) => string> = {
  * The limits are a ceiling the owner set, not a size to aim for. An agent told only "too big"
  * will shrink the trade until it fits; it is told to report it instead.
  */
-const OWNERS = "The owner set this limit: say what was refused, and use a different size only if the owner asked for one.";
+const OWNERS: Record<Spend["what"], string> = {
+  trade: "The owner set this limit: say what was refused, and use a different size only if the owner asked for one.",
+  deposit: "The owner set this limit: say what was refused, and use a different amount only if the owner asked for one.",
+  // a funding is one fixed amount: there is nothing smaller to try
+  funding: "The owner set this limit: say what was refused.",
+};
 
 /**
  * Whether the limits allow a spend, given what the journal already counts. Reads only: a dry
@@ -60,13 +65,13 @@ export function checkSpend(limits: Limits, entries: JournalEntry[], spend: Spend
   const size = SIZE_OF[spend.what](spend.usd.toFixed(2));
   if (spend.usd > limits.maxTradeUsd) {
     // A funding is one fixed amount: there is no smaller one to ask for.
-    throw new AgentError("over_trade_limit", `${size}; the limit per trade is $${limits.maxTradeUsd}. ${OWNERS}`, spend.what === "funding" ? "stop" : "fix_request", {
+    throw new AgentError("over_trade_limit", `${size}; the limit per trade is $${limits.maxTradeUsd}. ${OWNERS[spend.what]}`, spend.what === "funding" ? "stop" : "fix_request", {
       limit_usd: limits.maxTradeUsd,
     });
   }
   const left = remainingToday(limits, entries, spend.wallet, spend.nowSec);
   if (spend.usd > left) {
-    throw new AgentError("over_daily_limit", `${size}; $${left.toFixed(2)} is left of the $${limits.dailyUsd} allowed in 24 hours. ${OWNERS}`, "stop", {
+    throw new AgentError("over_daily_limit", `${size}; $${left.toFixed(2)} is left of the $${limits.dailyUsd} allowed in 24 hours. ${OWNERS[spend.what]}`, "stop", {
       remaining_usd: left,
     });
   }

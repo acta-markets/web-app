@@ -16,7 +16,7 @@
     "build:sak": "node scripts/build-mcp.mjs sak-plugin"
   },
   "dependencies": {
-    "@acta-markets/ts-sdk": "^0.8.2",
+    "@acta-markets/ts-sdk": "^0.9.0",
     "@microsoft/clarity": "^1.0.2",
     "@modelcontextprotocol/server": "^2.4.0",
     "@privy-io/react-auth": "^3.9.1",

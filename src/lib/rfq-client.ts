@@ -19,6 +19,8 @@ export type {
   PositionInfo,
   QuoteReceivedMessage,
   MyActiveRfqsMessage,
+  OrderUpdateMessage,
+  RfqUpdateMessage,
   IndicativePricesMessage,
   TokenCapInfo,
   TokenCapsMessage,

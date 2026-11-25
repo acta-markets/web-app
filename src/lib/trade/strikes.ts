@@ -1,5 +1,6 @@
 import { computeApyFromScaledPrices, quotedPrice } from "@acta-markets/ts-sdk/ws";
-import type { TokenMarketIndicatives, TokenMarketsInfoData } from "@/lib/rfq-client";
+import type { TokenMarkets } from "@acta-markets/ts-sdk/http";
+import type { TokenMarketIndicatives } from "@/lib/rfq-client";
 import { wireAmount } from "@/lib/spreads";
 import { isQqqExpiry, restrictsToFridayExpiry } from "./market-hours";
 
@@ -17,14 +18,14 @@ export type StrikeOption = {
   bestPrice: number | null;
 };
 
-export function spotFromSnapshot(data: TokenMarketsInfoData | null | undefined): number | null {
+export function spotFromSnapshot(data: TokenMarkets | null | undefined): number | null {
   const reference = data?.reference_price;
   return reference != null && Number(reference) > 0 ? Number(reference) / PRICE_SCALE : null;
 }
 
 /** One side's markets, nearest expiry first. With `nowSec`, expired markets are dropped. */
 export function expiriesForSide(
-  data: TokenMarketsInfoData | null | undefined,
+  data: TokenMarkets | null | undefined,
   isPut: boolean,
   nowSec?: number
 ): ExpiryOption[] {
@@ -43,7 +44,7 @@ export function expiriesForSide(
  * trading cutoff can still be listed with no strikes; it has nothing to trade.
  */
 export function tradableExpiries(
-  data: TokenMarketsInfoData | null | undefined,
+  data: TokenMarkets | null | undefined,
   isPut: boolean,
   positionType: string,
   side: TokenMarketIndicatives["side"],
@@ -56,7 +57,7 @@ export function tradableExpiries(
 
 /** Every strike listed on one side across its unexpired dates, as 1e9 wire values, low to high. */
 export function strikesForSide(
-  data: TokenMarketsInfoData | null | undefined,
+  data: TokenMarkets | null | undefined,
   isPut: boolean,
   positionType: string,
   side: TokenMarketIndicatives["side"],
@@ -73,7 +74,7 @@ export function strikesForSide(
 }
 
 export function indicativesFor(
-  data: TokenMarketsInfoData | null | undefined,
+  data: TokenMarkets | null | undefined,
   marketPda: string | null | undefined,
   positionType: string,
   side: TokenMarketIndicatives["side"]

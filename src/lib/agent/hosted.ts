@@ -1,3 +1,4 @@
+import { ActaHttpClient } from "@acta-markets/ts-sdk/http";
 import { devnetConfig } from "./config";
 import { memoryJournal } from "./journal";
 import type { ResultCache } from "./mcp";
@@ -10,18 +11,23 @@ import type { AgentContext } from "./trade";
  */
 
 /** The same version as `packages/mcp/package.json`: one tool list, one number. A test holds the two equal. */
-export const HOSTED_SERVER = { name: "acta", version: "0.3.0" } as const;
+export const HOSTED_SERVER = { name: "acta", version: "0.4.0" } as const;
 /** The card's name: the site's domain reversed, then the server. */
 export const HOSTED_CARD_NAME = "markets.acta/acta";
 export const HOSTED_DESCRIPTION = "Read Acta's options markets and yield vaults on Solana devnet. No key, no sign-in.";
 
+// Shared across requests so repeated reads revalidate by ETag (a cheap 304) instead of refetching.
+let hostedHttp: ActaHttpClient | null = null;
+
 /**
- * A context for one request: an anonymous session that is closed when the request ends. A
- * socket kept between requests would go stale while the function is frozen.
+ * A context for one request, with no signer. Its tools read the backend over HTTP and open no
+ * socket; the session is still closed when the request ends, should one ever be opened.
  */
 export function hostedContext(clientVersion: string = HOSTED_SERVER.version): AgentContext {
+  const config = devnetConfig({ clientName: "acta-site-mcp", clientVersion });
+  hostedHttp ??= new ActaHttpClient({ baseUrl: config.apiUrl, client: { name: config.clientName, version: config.clientVersion } });
   return {
-    session: new ActaSession(devnetConfig({ clientName: "acta-site-mcp", clientVersion }), null, { autoReconnect: false }),
+    session: new ActaSession(config, null, { autoReconnect: false, http: hostedHttp }),
     // nothing here can move funds; the limits say so as well
     limits: { readOnly: true, maxTradeUsd: 0, dailyUsd: 0, allowedAssets: [] },
     journal: memoryJournal(),
