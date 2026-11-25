@@ -14,6 +14,7 @@ import {
   type TakerFillRfq,
 } from "@/lib/rfq-client";
 import { describeSignedMessage, messageBytesOf, resolveKeeper, resolveLookupTables } from "@/lib/sponsored-tx";
+import { FILL_BOUNDS } from "@/lib/trade/fill";
 
 type OrderSubmission = "unsigned" | "sent";
 type SelectedOrder = {
@@ -35,7 +36,6 @@ type OrderFlow =
   | { type: "failed"; orderId: string; message: string };
 
 const UNFINISHED_ORDER_KEY = "acta_rfq_unfinished_order";
-const FILL_BOUNDS = { maxUnitLimit: 400_000, maxUnitPriceMicroLamports: 100_000 };
 
 function isOpen(flow: OrderFlow): flow is OpenOrder {
   return flow.type !== "idle" && flow.type !== "confirmed" && flow.type !== "failed";

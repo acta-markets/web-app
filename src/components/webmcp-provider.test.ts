@@ -54,4 +54,24 @@ describe("WebMCP registration", () => {
     cleanup?.();
     expect(provideContext).toHaveBeenLastCalledWith({ tools: [] });
   });
+
+  it("filters markets by the name the backend accepts", async () => {
+    const provideContext = vi.fn();
+    registerWebMcpTools({ provideContext }, "https://devnet.acta.markets/");
+    const listMarkets = (provideContext.mock.calls[0][0].tools as WebMcpTool[])[1];
+
+    const fetchMock = vi.fn(async (_input: URL | string) => new Response(JSON.stringify({ markets: [], next_cursor: null })));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const mint = "DQF6mZd6e8x1K8dVgxTmNbTifyyzV24HTyEaHAfr98XU";
+      await listMarkets.execute({ underlying: mint });
+      const url = new URL(String(fetchMock.mock.calls[0][0]));
+      expect(url.origin).toBe("https://devnet-api.acta.markets");
+      // `underlying` is a 400 on the backend: the filter is `underlying_mint`
+      expect([...url.searchParams.keys()]).toEqual(["underlying_mint"]);
+      expect(url.searchParams.get("underlying_mint")).toBe(mint);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

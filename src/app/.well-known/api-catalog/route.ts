@@ -28,6 +28,16 @@ export function GET(request: Request) {
           },
         ],
       },
+      // The site's MCP endpoint: the read-only tools. Added after the HTTP API, which stays first.
+      ...(context.environment === "devnet"
+        ? [
+            {
+              anchor: `${context.siteOrigin}/mcp`,
+              "service-desc": [{ href: `${context.siteOrigin}/mcp/server-card`, type: "application/mcp-server-card+json" }],
+              "service-doc": [{ href: `${context.siteOrigin}/agent`, type: "text/html" }],
+            },
+          ]
+        : []),
     ],
   };
 

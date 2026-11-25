@@ -40,6 +40,12 @@ export const SITE_IMAGES = {
     line: `On ${lineupAssetsText()}. Deposit what you already hold.`,
     alt: (siteName) => `Earn on ${siteName}: income vaults on ${lineupAssetsText()}`,
   },
+  /** Agent: what the page is for, in its own words. No tool count, which would go stale. */
+  agent: {
+    headline: "Give an agent\nits own wallet",
+    line: "It reads markets and trades here over MCP.",
+    alt: (siteName) => `Agent on ${siteName}: connect an AI agent over MCP`,
+  },
 } satisfies Record<string, SiteImage>;
 
 export type SiteImageName = keyof typeof SITE_IMAGES;

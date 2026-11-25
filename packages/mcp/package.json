@@ -1,0 +1,48 @@
+{
+  "name": "@acta-markets/mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Acta: options and curated yield vaults on Solana. Runs on your machine with its own wallet, inside limits you set. Devnet.",
+  "license": "MIT",
+  "homepage": "https://devnet.acta.markets/agent",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/acta-markets/web-app.git",
+    "directory": "packages/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/acta-markets/web-app/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "solana",
+    "options",
+    "acta",
+    "ai-agents"
+  ],
+  "type": "module",
+  "bin": {
+    "acta-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "npm --prefix ../.. run build:mcp"
+  },
+  "dependencies": {
+    "@acta-markets/ts-sdk": "^0.8.2",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "@solana/kit": "^5.1.0",
+    "@solana/web3.js": "^1.98.4",
+    "zod": "^4.6.6"
+  }
+}

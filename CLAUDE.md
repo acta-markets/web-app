@@ -11,6 +11,7 @@ npm run start    # Start production server
 npm run lint     # Run ESLint
 npm test         # Run tests
 npm run test:watch  # Run tests in watch mode
+npm run build:mcp   # Build packages/mcp/dist/cli.js, the MCP server an agent runs
 ```
 
 ## Post-Push Deployment Workflow (Required)
@@ -73,7 +74,7 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 
 **Next.js 14 App Router** with two route groups:
 - `(marketing)` - Landing page at `/`. While the app is enabled the middleware sends a browser that opens `/` on to `/trade` (307), so people skip the landing page; an agent asking for markdown still gets the home document, and with the app disabled `/` is the landing page.
-- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (Easy mode; `?mode=pro` is a placeholder), `/portfolio`, `/rewards` (leagues, points and boards), `/market/[asset]` (the previous market page, reached by direct URL)
+- `(app)` - Protected app routes: `/earn` (vaults), `/earn/[vault]`, `/trade` (Easy mode; `?mode=pro` is a placeholder), `/portfolio`, `/rewards` (leagues, points and boards), `/agent`, `/market/[asset]` (the previous market page, reached by direct URL)
 
 **Middleware** (`middleware.ts`) gates app routes based on `NEXT_PUBLIC_APP_ENABLED`. When disabled, app routes redirect to landing but `/api/whitelist` remains accessible.
 
@@ -110,7 +111,7 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 **Site metadata**: what a page says about itself in a tab, a search result and a link preview comes from `src/lib/site-metadata.ts`.
 - A page states its title, one line and its address through `pageMetadata({ title, description, path, image, index })`; the site's name, the canonical link, `og:url` and the picture follow. On devnet the name is "Acta Devnet" and every description ends "Devnet: test funds only." (from `IS_MAINNET`), and `siteOrigin()` is always `https://devnet.acta.markets` there, never the Vercel project's production address.
 - A page that sets any `openGraph` field replaces the layout's whole set, picture included. So never set `openGraph` by hand on a page: use `pageMetadata`, which always names a picture.
-- Preview pictures are named, not file-convention images: `src/lib/site-images.ts` says what each shows (`site`, `trade`, `earn`), `src/lib/site-image.tsx` draws it in the share card's frame (`cardFrame` in `src/lib/share/card-image.tsx`), `/og/[name]` serves it. No rate goes on a picture: the lineup's rates are assumptions.
+- Preview pictures are named, not file-convention images: `src/lib/site-images.ts` says what each shows (`site`, `trade`, `earn`, `agent`), `src/lib/site-image.tsx` draws it in the share card's frame (`cardFrame` in `src/lib/share/card-image.tsx`), `/og/[name]` serves it. No rate goes on a picture: the lineup's rates are assumptions.
 - `index: false` on pages that are one wallet's own or not offered (`/portfolio`, `/referrals`, `/spreads`, `/trade2`); `/data-room` is noindex in its layout. The sitemap (`getSitemapUrls`) leaves out `/` while the app is on, because it redirects to `/trade`.
 - Icons: `icon.svg`, `apple-icon.tsx`, `/app-icon/[size]` (PNG; the manifest's icons) and `favicon.ico`, which is the 16/32/48 PNGs in one file. After changing the logomark run `node scripts/make-favicon.mjs` with the dev server up. `manifest.ts` is the web manifest.
 - `not-found.tsx` and `error.tsx` exist at the root and inside `(app)`; both draw `src/components/site/status-view.tsx`. `/dev/states` shows them (`?missing=1` triggers a real `notFound()`).
@@ -141,6 +142,17 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 - **Money-path state** (quotes, signing payloads, the accepted order) stays in memory. The one exception is the unfinished-order record in `use-rfq-order.ts`, which has its own format and is not part of this system; `UnfinishedTradeNotice` only reads it.
 - **Returning wallet**: `expectedAccount` from `useSolana()` is the remembered wallet while it reconnects. Pages render for it from the device copy instead of asking to connect, mark what they show as last-loaded, and offer no action until the wallet is connected and signed in.
 - Tests: `src/test/setup.ts` empties the cache, browser storage and the address after each test.
+
+**Agents (MCP)**: an AI agent uses Acta through two MCP servers built from one tool list. Devnet only.
+- `src/lib/agent/` - the headless core, no React and no `NEXT_PUBLIC_*` reads: `tools.ts` (the tool list, plain data), `catalog.ts` (input schemas, zod 4), `handlers.ts`, `session.ts` (one lazy venue connection), `markets.ts`, `trade.ts` (quote, limit check, sign, submit, confirm in one call), `positions.ts`, `vaults.ts`, `exercise.ts` (fund a bought option), `send.ts` (a wallet-paid transaction), `limits.ts`, `journal.ts`, `signer.ts` (a key file, or any signer through `ACTA_SIGNER_MODULE`), `mcp.ts` (the MCP server over the catalog), `hosted.ts`, `install.ts` (what the page and docs show: `agentTools`, the one step that adds Acta to each AI tool, and `agentPrompt`, the prompt any other agent follows to connect itself)
+- `src/lib/trade/quotes.ts` and `fill.ts` - which quote wins and how a served fill is verified and signed; shared with the web app
+- `packages/mcp/` - the server an agent's owner runs on their own machine. The first tool call makes its own devnet wallet in `~/.acta-mcp` (`ACTA_KEYPAIR` or `ACTA_SIGNER_MODULE` override it), so setup needs no key (`npm run build:mcp`, then `node packages/mcp/smoke.mjs` drives it over stdio). Published by hand: `cd packages/mcp && npm publish` (it rebuilds first). After the first publish set `MCP_PUBLISHED` in `install.ts`; bump `version` for each later one
+- `packages/sak-plugin/` - the same tools as a Solana Agent Kit v2 plugin (`npm run build:sak`). It has its own `node_modules` (the kit is on zod 3) and its own `tsconfig.json`; the root `tsconfig.json` excludes it, so check it with `npx tsc --noEmit -p packages/sak-plugin`
+- `/mcp` - the site's endpoint: read-only tools, no key, a venue session per request closed when the reply's body ends. `/mcp/server-card` and `/.well-known/ai-catalog.json` point at it
+- `/agent` - the page, and its markdown twin (`getAgentMarkdown`). The page is one widget (`src/components/agent/connect-agent.tsx`): eight buttons (seven makers and "Other agents", `PROVIDERS` in `install.ts`), then two steps for the tool picked. A new tool is one entry in `agentTools` plus its id under a maker in `PROVIDERS`, with a step that was run or read in the tool's own docs. Keep the buttons at eight: a new tool goes under "Other agents" unless it replaces a maker. A maker's mark is a file in `public/images/agent-tools/`, drawn as a mask in the text colour
+- A new tool goes in `tools.ts`, `catalog.ts` and `handlers.ts`; tests hold the three to each other and to the trading skill. A tool that moves funds must be `local` and refuse when `limits.readOnly`; one that trades must also take a limit price and go through `checkTrade` and the journal
+- Nothing from the venue reaches an agent as raw text: use `plainText` and `plainSymbol` (`errors.ts`)
+- `docs-site/quickstart/mcp.md` is the public description; `docs/agent-readiness.md` the inventory
 
 **Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
 - Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)

@@ -98,6 +98,17 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 - `docs/vaults-integration.md` - data sources, polling budget and UI rules
 - `NEXT_PUBLIC_VAULTS_SAMPLE=1` swaps in fixture vaults from `src/lib/vaults/sample-data.json` in development (loaded on demand by `sample.ts`); production builds ignore it
 
+**Agents (MCP)**: an AI agent uses Acta through two MCP servers built from one tool list. Devnet only.
+- `src/lib/agent/` - the headless core, no React and no `NEXT_PUBLIC_*` reads: `tools.ts` (the tool list, plain data), `catalog.ts` (input schemas, zod 4), `handlers.ts`, `session.ts` (one lazy venue connection), `markets.ts`, `trade.ts` (quote, limit check, sign, submit, confirm in one call), `positions.ts`, `vaults.ts`, `exercise.ts` (fund a bought option), `send.ts` (a wallet-paid transaction), `limits.ts`, `journal.ts`, `signer.ts` (a key file, or any signer through `ACTA_SIGNER_MODULE`), `mcp.ts` (the MCP server over the catalog), `hosted.ts`, `install.ts` (what the page and docs show: `agentTools`, the one step that adds Acta to each AI tool, and `agentPrompt`, the prompt any other agent follows to connect itself)
+- `src/lib/trade/quotes.ts` and `fill.ts` - which quote wins and how a served fill is verified and signed; shared with the web app
+- `packages/mcp/` - the server an agent's owner runs on their own machine. The first tool call makes its own devnet wallet in `~/.acta-mcp` (`ACTA_KEYPAIR` or `ACTA_SIGNER_MODULE` override it), so setup needs no key (`npm run build:mcp`, then `node packages/mcp/smoke.mjs` drives it over stdio). Published by hand: `cd packages/mcp && npm publish` (it rebuilds first). After the first publish set `MCP_PUBLISHED` in `install.ts`; bump `version` for each later one
+- `packages/sak-plugin/` - the same tools as a Solana Agent Kit v2 plugin (`npm run build:sak`). It has its own `node_modules` (the kit is on zod 3) and its own `tsconfig.json`; the root `tsconfig.json` excludes it, so check it with `npx tsc --noEmit -p packages/sak-plugin`
+- `/mcp` - the site's endpoint: read-only tools, no key, a venue session per request closed when the reply's body ends. `/mcp/server-card` and `/.well-known/ai-catalog.json` point at it
+- `/agent` - the page, and its markdown twin (`getAgentMarkdown`). The page is one widget (`src/components/agent/connect-agent.tsx`): eight buttons (seven makers and "Other agents", `PROVIDERS` in `install.ts`), then two steps for the tool picked. A new tool is one entry in `agentTools` plus its id under a maker in `PROVIDERS`, with a step that was run or read in the tool's own docs. Keep the buttons at eight: a new tool goes under "Other agents" unless it replaces a maker. A maker's mark is a file in `public/images/agent-tools/`, drawn as a mask in the text colour
+- A new tool goes in `tools.ts`, `catalog.ts` and `handlers.ts`; tests hold the three to each other and to the trading skill. A tool that moves funds must be `local` and refuse when `limits.readOnly`; one that trades must also take a limit price and go through `checkTrade` and the journal
+- Nothing from the venue reaches an agent as raw text: use `plainText` and `plainSymbol` (`errors.ts`)
+- `docs-site/quickstart/mcp.md` is the public description; `docs/agent-readiness.md` the inventory
+
 **Tokens**: Centralized token configuration in `src/lib/tokens.ts`:
 - Token mints for mainnet/devnet (switched via `NEXT_PUBLIC_SOLANA_NETWORK`)
 - Token metadata (decimals, logos)

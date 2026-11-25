@@ -5,13 +5,14 @@ import { usePathname } from "next/navigation";
 import { ActaLogo } from "@/components/acta-logo";
 import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 
-export type AppTab = "earn" | "trade" | "portfolio" | "rewards" | "spreads";
+export type AppTab = "earn" | "trade" | "portfolio" | "rewards" | "agent" | "spreads";
 
 const TABS: ReadonlyArray<{ value: AppTab; label: string; href: string; soon?: boolean }> = [
   { value: "trade", label: "Trade", href: "/trade" },
   { value: "earn", label: "Earn", href: "/earn" },
   { value: "portfolio", label: "Portfolio", href: "/portfolio" },
   { value: "rewards", label: "Rewards", href: "/rewards" },
+  { value: "agent", label: "Agent", href: "/agent" },
 ];
 
 /** Market pages are reached from the Trade table, so they keep Trade highlighted. */
@@ -21,6 +22,7 @@ export function activeAppTab(pathname: string | null): AppTab | null {
   if (under("/trade") || under("/market")) return "trade";
   if (under("/portfolio")) return "portfolio";
   if (under("/rewards")) return "rewards";
+  if (under("/agent")) return "agent";
   if (under("/spreads")) return "spreads";
   return null;
 }
@@ -37,8 +39,9 @@ export function AppNav() {
         </Link>
       </div>
       {/* One tab row for both layouts: a full-width third row on mobile, inline from md up.
-          Four tabs share a phone's width, so there the gap and the side padding are at their smallest. */}
-      <div className="order-last grid w-full grid-cols-4 gap-1 md:order-none md:flex md:w-auto md:items-center md:gap-2">
+          Five tabs share a phone's width, so there the gap and the side padding are at their smallest
+          and the columns follow the labels: Portfolio and Rewards are wider than the rest. */}
+      <div className="order-last grid w-full grid-cols-[1fr_1fr_1.4fr_1.2fr_1fr] gap-1 md:order-none md:flex md:w-auto md:items-center md:gap-2">
         {TABS.map((t) => {
           const isActive = t.value === active;
           return (

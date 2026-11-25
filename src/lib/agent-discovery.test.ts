@@ -10,7 +10,11 @@ import {
   getSitemapUrls,
   getTradeMarkdown,
   getVaultsMarkdown,
+  getAgentMarkdown,
 } from "@/lib/agent-discovery";
+
+import { agentPrompt, agentTools, localConfig } from "@/lib/agent/install";
+import { TOOL_LIST } from "@/lib/agent/tools";
 
 describe("agent discovery", () => {
   it.each([undefined, "mainnet-beta"])("uses the app network for production discovery with %s", network => {
@@ -87,6 +91,7 @@ describe("agent discovery", () => {
     expect(getSitemapUrls(context, { appEnabled: true })).toEqual([
       "https://devnet.acta.markets/earn",
       "https://devnet.acta.markets/trade",
+      "https://devnet.acta.markets/agent",
       "https://devnet.acta.markets/partners",
     ]);
     const urls = getSitemapUrls(context);
@@ -104,8 +109,34 @@ describe("agent discovery", () => {
       "https://devnet.acta.markets/earn",
       "https://devnet.acta.markets/earn/Vau1tAddre55",
       "https://devnet.acta.markets/trade",
+      "https://devnet.acta.markets/agent",
       "https://devnet.acta.markets/partners",
     ]);
+  });
+
+  it("tells an agent how to connect, with every tool and the same commands the page shows", () => {
+    const markdown = getAgentMarkdown(getDeploymentContext("https://devnet.acta.markets/agent"));
+    expect(markdown).toContain("https://devnet.acta.markets/mcp");
+    for (const tool of TOOL_LIST) expect(markdown, tool.name).toContain(`\`${tool.name}\``);
+    expect(markdown).toContain(agentPrompt("https://devnet.acta.markets"));
+    expect(markdown).toContain(localConfig());
+    for (const tool of agentTools("https://devnet.acta.markets")) {
+      for (const setup of [tool.read, tool.trade]) {
+        if (setup?.block?.label === "Terminal") expect(markdown, tool.name).toContain(setup.block.text);
+      }
+    }
+    // what it is, said before anything else is asked of the reader
+    expect(markdown).toContain("test funds");
+    expect(markdown).toMatch(/never place the trade again/);
+    // a code fence that never closed would swallow the rest of the page
+    expect((markdown.match(/```/g) ?? []).length % 2).toBe(0);
+    expect(markdown).not.toMatch(/undefined|\[object/);
+  });
+
+  it("does not offer the devnet tools on another environment", () => {
+    const markdown = getAgentMarkdown(getDeploymentContext("https://beta.acta.markets/agent"));
+    expect(markdown).toContain("devnet only");
+    expect(markdown).not.toContain("Every balance is test funds");
   });
 
   it("makes environment and safety boundaries explicit in markdown", () => {

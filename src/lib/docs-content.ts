@@ -37,6 +37,7 @@ const DOCS_DESCRIPTIONS: Record<string, string> = {
   "guide/returns-and-risks": "NAV, value per share, vault returns, management and performance fees, and risks to deposited assets.",
   "protocol/vault-accounting": "Vault NAV and equity checkpoints, share supply, price per share, fee dilution, and final redemption.",
   "quickstart/agents": "Run a headless client against Acta: idempotent RFQs and fills, error actions, units, and rate limits.",
+  "quickstart/mcp": "Connect an AI agent to Acta over MCP: the hosted read-only server, the server you run with its own wallet, the tools and the limits.",
   "protocol/vault-owner": "Create and bootstrap a vault, configure governance and delegates, trade options, swap assets, and process capital.",
   "reference/protocol-flow":
     "Actors, RFQ mechanics, trade lifecycle, settlement scenarios, economics, fees, and protocol risk.",
