@@ -11,7 +11,7 @@ import type { AgentContext } from "./trade";
  */
 
 /** The same version as `packages/mcp/package.json`: one tool list, one number. A test holds the two equal. */
-export const HOSTED_SERVER = { name: "acta", version: "0.3.0" } as const;
+export const HOSTED_SERVER = { name: "acta", version: "0.4.0" } as const;
 /** The card's name: the site's domain reversed, then the server. */
 export const HOSTED_CARD_NAME = "markets.acta/acta";
 export const HOSTED_DESCRIPTION = "Read Acta's options markets and yield vaults on Solana devnet. No key, no sign-in.";
