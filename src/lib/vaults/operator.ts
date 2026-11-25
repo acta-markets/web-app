@@ -18,24 +18,10 @@ import {
   type SolanaRpcApiMainnet,
 } from "@solana/kit";
 import { fetchVaultDepositRequests, fetchVaultWithdrawRequests } from "./api";
+import { createVaultManager, withComputeUnitLimit, type VaultManager } from "./planner";
 import type { Vault } from "./types";
 
-export type VaultManager = flows.VaultManagerPlanner;
-
-export async function createVaultManager(vault: Vault, actor: string): Promise<VaultManager> {
-  const manager = await flows.VaultManagerPlanner.create({
-    vaultId: new Uint8Array(getBase16Encoder().encode(vault.vault_id)),
-    actor: createNoopSigner(address(actor)),
-    delegateAuthority: address(vault.primary_delegate),
-    mainMint: address(vault.main_mint),
-    secondMint: address(vault.second_mint),
-    shareMint: address(vault.share_mint),
-    mainTokenProgram: vault.main_token_program === "token_2022" ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
-    secondTokenProgram: vault.second_token_program === "token_2022" ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID,
-  });
-  if (manager.addresses.vault !== vault.vault_pda) throw new Error("vault id does not derive the vault address");
-  return manager;
-}
+export { createVaultManager, withComputeUnitLimit, type VaultManager };
 
 export type VaultOperatorRole = { kind: "governance" | "delegate"; permissions: number };
 
@@ -82,15 +68,6 @@ export const fetchAllVaultDepositRequests = (pda: string, signal?: AbortSignal):
 
 export const fetchAllVaultWithdrawRequests = (pda: string, signal?: AbortSignal): Promise<VaultWithdrawRequest[]> =>
   collectPages((cursor) => fetchVaultWithdrawRequests(pda, { cursor, limit: 200 }, signal));
-
-const COMPUTE_BUDGET_PROGRAM_ID = address("ComputeBudget111111111111111111111111111111");
-
-export function withComputeUnitLimit(instructions: Instruction[], units: number): Instruction[] {
-  const data = new Uint8Array(5);
-  data[0] = 2;
-  new DataView(data.buffer).setUint32(1, units, true);
-  return [{ programAddress: COMPUTE_BUDGET_PROGRAM_ID, accounts: [], data }, ...instructions];
-}
 
 export function capitalBatchComputeUnits(users: number): number {
   const n = Math.min(users, flows.VAULT_CAPITAL_BATCH_USERS);

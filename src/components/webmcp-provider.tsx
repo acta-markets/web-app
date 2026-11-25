@@ -58,8 +58,10 @@ function createTools(href: string): WebMcpTool[] {
         apiCatalog: `${context.siteOrigin}/.well-known/api-catalog`,
         openapi: `${context.siteOrigin}/openapi.json`,
         authentication: `${context.siteOrigin}/auth.md`,
+        agents: `${context.siteOrigin}/agent`,
+        mcp: `${context.siteOrigin}/mcp`,
         tradingSafety:
-          "Public discovery is read-only. Trading requires wallet authentication and explicit user review and signature of each sponsored transaction.",
+          "Public discovery is read-only. On this site, trading requires wallet authentication and the person's review and signature of each sponsored transaction. An agent trades only through an MCP server its owner runs with their own key and limits; see the agents page.",
       }),
     },
     {
@@ -91,7 +93,8 @@ function createTools(href: string): WebMcpTool[] {
         }
 
         const url = new URL("/api/v1/markets", context.apiOrigin);
-        if (underlying) url.searchParams.set("underlying", underlying);
+        // The backend's filter is `underlying_mint`; an unknown name is a 400, not an unfiltered list.
+        if (underlying) url.searchParams.set("underlying_mint", underlying);
 
         const response = await fetch(url, {
           method: "GET",

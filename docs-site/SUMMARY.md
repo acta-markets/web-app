@@ -61,3 +61,4 @@
 * [Endpoints and maker registration](reference/sandbox.md)
 * [Integration FAQ](reference/faq.md)
 * [Agents and automation](quickstart/agents.md)
+* [MCP server for agents](quickstart/mcp.md)

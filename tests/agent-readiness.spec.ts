@@ -1,4 +1,15 @@
+import { readdirSync, statSync } from "node:fs";
+import path from "node:path";
 import { expect, test } from "@playwright/test";
+
+/** Every guide page on disk: the docs sitemap lists each one, so a fixed count would go stale with the next page. */
+function docsPageCount(directory = path.resolve("docs-site")): number {
+  return readdirSync(directory).reduce((count, entry) => {
+    const absolute = path.join(directory, entry);
+    if (statSync(absolute).isDirectory()) return count + docsPageCount(absolute);
+    return count + (entry.endsWith(".md") && entry !== "SUMMARY.md" ? 1 : 0);
+  }, 0);
+}
 
 test.describe("agent discovery HTTP contracts", () => {
   test("serves robots and sitemap", async ({ request }) => {
@@ -191,7 +202,8 @@ test.describe("agent discovery HTTP contracts", () => {
         .matchAll(/<loc>https:\/\/docs\.acta\.markets([^<]*)<\/loc>/g),
     ].map((match) => match[1] || "/");
 
-    expect(paths).toHaveLength(16);
+    expect(paths.length).toBeGreaterThan(0);
+    expect(paths).toHaveLength(docsPageCount());
 
     for (const path of paths) {
       const [html, markdown] = await Promise.all([

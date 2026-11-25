@@ -21,6 +21,8 @@ describe("activeAppTab", () => {
     ["/portfolio", "portfolio"],
     ["/rewards", "rewards"],
     ["/rewardsome", null],
+    ["/agent", "agent"],
+    ["/agents", null],
     ["/spreads", "spreads"],
     ["/referrals", null],
     ["/earnings", null],
@@ -40,11 +42,12 @@ describe("AppNav", () => {
     expect(screen.getByRole("link", { name: "Rewards" }).getAttribute("href")).toBe("/rewards");
   });
 
-  it("lists Trade first, then Earn, Portfolio and Rewards", () => {
+  it("lists Trade first, then Earn, Portfolio, Rewards and Agent", () => {
     nav.pathname = "/earn";
     render(<AppNav />);
     const labels = screen.getAllByRole("link").map((a) => a.textContent).filter(Boolean);
-    expect(labels).toEqual(["Trade", "Earn", "Portfolio", "Rewards"]);
+    expect(labels).toEqual(["Trade", "Earn", "Portfolio", "Rewards", "Agent"]);
+    expect(screen.getByRole("link", { name: "Agent" }).getAttribute("href")).toBe("/agent");
   });
 
   it("does not surface Spreads in the header while it is unbuilt", () => {

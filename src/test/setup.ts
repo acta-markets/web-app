@@ -9,7 +9,8 @@ afterEach(() => {
   getQueryClient().clear();
   forgetRestores();
   if (typeof window === "undefined") return;
-  window.localStorage.clear();
-  window.sessionStorage.clear();
+  // Optional: newer Node has its own Web Storage, which can leave these undefined under jsdom.
+  window.localStorage?.clear();
+  window.sessionStorage?.clear();
   if (window.location.search || window.location.hash) window.history.replaceState(null, "", window.location.pathname);
 });

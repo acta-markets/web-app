@@ -18,7 +18,7 @@ import {
   type Rpc,
   type SolanaRpcApiMainnet,
 } from "@solana/kit";
-import { withComputeUnitLimit, type VaultManager } from "./operator";
+import { withComputeUnitLimit, type VaultManager } from "./planner";
 import type { Vault } from "./types";
 import { liveShareSupply } from "./view";
 

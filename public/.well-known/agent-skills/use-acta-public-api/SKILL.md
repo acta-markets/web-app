@@ -20,11 +20,13 @@ Do not replace a discovered devnet endpoint with beta, or beta with devnet. If n
 Use only the `GET` operations declared in the discovered OpenAPI document. Typical resources include:
 
 - `/health`, `/ready`, and `/live` for service state;
-- `/api/v1/markets` and `/api/v1/markets/{pda}` for tradable markets;
+- `/api/v1/tokens` and `/api/v1/prices` for tokens, their sizing and their oracle prices;
+- `/api/v1/markets` for tradable markets. There is no single-market route: filter the list with `underlying_mint`, `quote_mint`, `expiry_ts` or `is_put`. An unknown filter name is a 400;
+- `/api/v1/vaults`, `/api/v1/vaults/{pda}` and `/api/v1/vaults/{pda}/cycles` for vaults;
 - `/api/v1/makers` and `/api/v1/makers/{pda}` for registered makers;
 - `/api/v1/stats` for public protocol statistics.
 
-Treat timestamps as Unix seconds, prices and strikes as integers at 1e9 scale, quantities as underlying-token atomic units, and Solana addresses as base58 strings. Preserve integer values exactly; do not round large wire values through floating-point conversions.
+Treat timestamps as Unix seconds, prices and strikes as whole numbers at 1e9 scale, quantities as underlying-token atomic units, and Solana addresses as base58 strings. Amounts, prices and strikes arrive as decimal strings. Preserve them exactly; do not round large wire values through floating-point conversions. Lists are paged: pass `next_cursor` back as `cursor` until it is null.
 
 Report the environment, API origin, retrieval time, and any non-200 response with the result. Do not present stale or unavailable data as current.
 

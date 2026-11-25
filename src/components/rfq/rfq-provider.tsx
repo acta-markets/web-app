@@ -30,6 +30,7 @@ import {
 import { ALL_POSITIONS, type TokenProtocolFees } from "@acta-markets/ts-sdk/ws";
 import { isCashSettledTerms, isSpreadTerms, isWireAmount, lowerStrike, quoteMatchesProduct, requireStrikeTick, spreadTerms, strikeTicksByMint, validSpreadPremium, wireAmount, type ProductTerms, type TakerSide } from "@/lib/spreads";
 import { RfqNoMakersError } from "@/lib/rfq-collateral";
+import { beatsQuote } from "@/lib/trade/quotes";
 import { rememberReferenceTokens } from "@/lib/tokens";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { ReferralGateModal } from "@/components/referral/referral-gate-modal";
@@ -204,11 +205,6 @@ function isAuthFailureError(err: ActaWsClientError): boolean {
 function errorText(err: ActaWsClientError): string {
   return err.type === "client_generic" || err.type === "Generic" ? err.data.message : err.type;
 }
-
-const quotePrice = (quote: QuoteReceivedMessage) => Number(isCashSettledTerms(quote.terms) ? quote.price : quote.net_price ?? quote.price);
-// A buyer pays the gross price, so net_price plays no part in ranking.
-const beatsQuote = (quote: QuoteReceivedMessage, best: QuoteReceivedMessage) =>
-  quote.side === "buy" ? Number(quote.price) < Number(best.price) : quotePrice(quote) > quotePrice(best);
 
 function isMissingMarketDescriptorError(message: string): boolean {
   const lower = message.toLowerCase();

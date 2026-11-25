@@ -51,9 +51,15 @@ describe("site root", () => {
   });
 
   it("leaves every other page alone", () => {
-    for (const path of ["/trade", "/earn", "/portfolio", "/rewards", "/partners"]) {
+    for (const path of ["/trade", "/earn", "/portfolio", "/rewards", "/partners", "/agent", "/mcp"]) {
       expect(middleware(request(path)).headers.get("location")).toBeNull();
     }
+  });
+
+  it("closes the Agent page with the app, and leaves the MCP endpoint answering", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_ENABLED", "false");
+    expect(location(middleware(request("/agent")))).toBe("/?app=closed");
+    expect(middleware(request("/mcp")).headers.get("location")).toBeNull();
   });
 });
 
@@ -62,6 +68,12 @@ describe("docs host", () => {
 
   it("serves a guide page from its short address", () => {
     expect(docs("/guide/vaults").headers.get("x-middleware-rewrite")).toContain("/docs/guide/vaults");
+  });
+
+  it("leaves the Agent page and the MCP endpoint to the app: neither is a guide page", () => {
+    for (const path of ["/agent", "/mcp", "/mcp/server-card", "/.well-known/ai-catalog.json"]) {
+      expect(docs(path).headers.get("x-middleware-rewrite"), path).toBeNull();
+    }
   });
 
   it("leaves the site's own icons, manifest and preview image alone: they are files, not guide pages", () => {

@@ -58,3 +58,16 @@ export function AppButtonLink({
     />
   );
 }
+
+/** The same button as a plain anchor, for an address the router must not touch: another app's link, a download. */
+export function AppButtonAnchor({
+  variant = "primary",
+  size = "md",
+  className,
+  ...props
+}: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+  variant?: Variant;
+  size?: Size;
+}) {
+  return <a className={cn(base, variants[variant], sizes[size], className)} {...props} />;
+}

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   acceptsMarkdown,
   DOCS_SITE_ORIGIN,
+  getAgentMarkdown,
   getDiscoveryLinkHeader,
   getHomeMarkdown,
   getRequestDeploymentContext,
@@ -13,12 +14,14 @@ import { APP_HOME, isAppEnabled } from "@/lib/app-enabled";
 // Where the site root sends a person while the app is on: the app opens on Trade, not on the landing page.
 export { APP_HOME };
 
-const BLOCKED_PAGE_PREFIXES = ["/earn", "/trade", "/trade2", "/portfolio", "/market", "/rewards"];
-const MARKDOWN_PATHS = new Set(["/", "/earn", "/trade"]);
+const BLOCKED_PAGE_PREFIXES = ["/earn", "/trade", "/trade2", "/portfolio", "/market", "/rewards", "/agent"];
+const MARKDOWN_PATHS = new Set(["/", "/earn", "/trade", "/agent"]);
 const DOCS_HOSTNAME = "docs.acta.markets";
 const DOCS_RESERVED_PATHS = [
   "/_next",
   "/.well-known",
+  // the Agent page and the MCP endpoint belong to the app's host, not to a guide
+  "/agent",
   "/api",
   // the site's own icons, manifest and preview image: files, not guide pages
   "/app-icon",
@@ -30,6 +33,7 @@ const DOCS_RESERVED_PATHS = [
   "/images",
   "/llms.txt",
   "/manifest.webmanifest",
+  "/mcp",
   "/og",
   "/openapi.json",
   "/robots.txt",
@@ -79,6 +83,8 @@ function markdownForPath(req: NextRequest): string | null {
       return getVaultsMarkdown(context);
     case "/trade":
       return getTradeMarkdown(context);
+    case "/agent":
+      return getAgentMarkdown(context);
     default:
       return null;
   }
