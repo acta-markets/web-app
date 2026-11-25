@@ -1,6 +1,6 @@
 {
   "name": "@acta-markets/mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server for Acta: options and curated yield vaults on Solana. Trades options and uses the vaults from your machine with its own wallet, inside limits you set. Devnet.",
   "license": "MIT",
   "homepage": "https://devnet.acta.markets/agent",

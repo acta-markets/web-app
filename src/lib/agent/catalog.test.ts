@@ -71,4 +71,19 @@ describe("tool catalog", () => {
     expect(place.safeParse({ ...trade, limit_premium: 1, side: "short" }).success).toBe(false);
     expect(place.safeParse({ ...trade, limit_premium: 1, size: 0 }).success).toBe(false);
   });
+
+  it("says what is wrong with a date or an order id in words a model can act on", () => {
+    const said = (name: string, input: unknown) => {
+      const result = TOOLS.find((tool) => tool.name === name)!.input.safeParse(input);
+      return result.success ? null : result.error.issues.map((issue) => issue.message).join(" ");
+    };
+    const trade = { asset: "BTC", side: "sell", view: "above", strike: 58000, expiry: "2026-11-27", size: 0.001 };
+    expect(said("acta_preview_trade", trade)).toBeNull();
+    // the expiry as Unix seconds is taken too
+    expect(said("acta_preview_trade", { ...trade, expiry: "1795766400" })).toBeNull();
+    expect(said("acta_preview_trade", { ...trade, expiry: "27 November 2026" })).toMatch(/YYYY-MM-DD/);
+    expect(said("acta_preview_trade", { ...trade, expiry: "2026-11-27T08:00:00Z" })).toMatch(/YYYY-MM-DD/);
+    expect(said("acta_get_order", { order_id: "ab".repeat(32) })).toBeNull();
+    expect(said("acta_get_order", { order_id: "abc" })).toMatch(/64 hex characters/);
+  });
 });

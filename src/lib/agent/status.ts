@@ -85,7 +85,7 @@ export async function status(ctx: AgentContext) {
       daily_usd: limits.dailyUsd,
       remaining_today_usd: Number(remainingToday(limits, entries, signer.address, session.nowSec()).toFixed(2)),
       allowed_assets: limits.allowedAssets ?? "all listed",
-      counted_as: "strike times size per trade; a vault deposit by its dollar value",
+      counted_as: "strike times size for a trade and for funding a bought option; a vault deposit by its dollar value",
     },
     unsettled_orders: unsettledOrders(entries, signer.address).map((e) => e.orderId),
   };

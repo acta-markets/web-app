@@ -1,6 +1,8 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { afterBody, aiCatalog, hostedContext, rateLimiter, serverCard, shortCache } from "./hosted";
+import { afterBody, aiCatalog, HOSTED_SERVER, hostedContext, rateLimiter, serverCard, shortCache } from "./hosted";
 
 describe("hosted context", () => {
   it("has no wallet and may move nothing", () => {
@@ -9,6 +11,14 @@ describe("hosted context", () => {
     expect(context.limits.readOnly).toBe(true);
     // constructing it opens nothing: the session connects on the first tool that needs the venue
     expect(context.session.state).toBe("not_connected");
+  });
+});
+
+describe("the server's version", () => {
+  it("is one number: the site's endpoint and its card say what the package on npm says", () => {
+    const pkg = JSON.parse(readFileSync(path.resolve(process.cwd(), "packages/mcp/package.json"), "utf8")) as { version: string };
+    expect(HOSTED_SERVER.version).toBe(pkg.version);
+    expect(JSON.stringify(serverCard("https://devnet.acta.markets"))).toContain(`"version":"${pkg.version}"`);
   });
 });
 

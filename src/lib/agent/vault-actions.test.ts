@@ -23,7 +23,7 @@ vi.mock("@/lib/vaults/depositor", async (original) => ({
   buildCancelWithdrawInstructions: () => [{ kind: "cancel_withdraw" }],
   buildEmergencyRefundInstructions: () => [{ kind: "refund" }],
 }));
-vi.mock("./send", () => ({ sendFromWallet: (...args: unknown[]) => chain.sent(...args) }));
+vi.mock("./send", async (original) => ({ ...(await original<typeof import("./send")>()), sendFromWallet: (...args: unknown[]) => chain.sent(...args) }));
 
 const { listVaultPositions, vaultCancelRequest, vaultDeposit, vaultProcessRequest, vaultWithdraw } = await import("./vault-actions");
 
@@ -137,6 +137,30 @@ describe("a deposit that goes through", () => {
     const ctx = context(openVault());
     chain.sent.mockRejectedValueOnce(new AgentError("send_failed", "no answer", "retry"));
     expect(await code(vaultDeposit(ctx, { vault: PDA, amount: 25 }))).toBe("send_failed");
+    expect(spentSince(await ctx.journal.read(), WALLET, NOW - 10)).toBe(25);
+  });
+
+  it("two at once cannot both use the last of the day: one is sent, one is refused", async () => {
+    const ctx = context(openVault(), { ...DEFAULT_LIMITS, dailyUsd: 40 });
+    const results = await Promise.all([code(vaultDeposit(ctx, { vault: PDA, amount: 25 })), code(vaultDeposit(ctx, { vault: PDA, amount: 25 }))]);
+    expect(results.sort()).toEqual(["over_daily_limit", null].sort());
+    expect(chain.sent).toHaveBeenCalledTimes(1);
+    expect(spentSince(await ctx.journal.read(), WALLET, NOW - 10)).toBe(25);
+  });
+
+  it("is held to the day a trade already used", async () => {
+    const ctx = context(openVault(), { ...DEFAULT_LIMITS, dailyUsd: 40 });
+    await ctx.journal.append({ orderId: "ab".repeat(32), rfqId: "r", state: "accepted", at: NOW - 5, wallet: WALLET, asset: "BTC", side: "sell", notionalUsd: 30 });
+    expect(await code(vaultDeposit(ctx, { vault: PDA, amount: 25 }))).toBe("over_daily_limit");
+    expect(await code(vaultDeposit(ctx, { vault: PDA, amount: 25, dry_run: true }))).toBe("over_daily_limit");
+    expect(chain.sent).not.toHaveBeenCalled();
+  });
+
+  it("keeps two deposits apart in the journal, so one failing does not uncount the other", async () => {
+    const ctx = context(openVault());
+    await vaultDeposit(ctx, { vault: PDA, amount: 25 });
+    chain.sent.mockRejectedValueOnce(new AgentError("transaction_failed", "failed on chain", "stop"));
+    expect(await code(vaultDeposit(ctx, { vault: PDA, amount: 10 }))).toBe("transaction_failed");
     expect(spentSince(await ctx.journal.read(), WALLET, NOW - 10)).toBe(25);
   });
 

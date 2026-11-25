@@ -30,10 +30,10 @@ import type { Vault } from "@/lib/vaults/types";
 import { vaultView } from "@/lib/vaults/view";
 import { explorerUrl } from "./config";
 import { AgentError, plainSymbol, plainText } from "./errors";
-import { latestByOrder } from "./journal";
-import { remainingToday } from "./limits";
+import { latestCounted } from "./journal";
+import { checkSpend, reserveSpend, type Spend } from "./limits";
 import { isoTime } from "./markets";
-import { sendFromWallet } from "./send";
+import { nothingMoved, sendFromWallet } from "./send";
 import type { ActaSession } from "./session";
 import type { AgentContext } from "./trade";
 
@@ -197,13 +197,9 @@ export async function vaultDeposit(ctx: AgentContext, input: { vault: string; am
   const price = usdPrice(vault);
   if (price === null) throw new AgentError("cannot_value", "The venue has no price for this vault's token right now, so the deposit cannot be checked against the spending limits.", "retry");
   const usd = whole(amount, vault.main_decimals) * price;
-  if (usd > limits.maxTradeUsd) {
-    throw new AgentError("over_trade_limit", `This deposit is about $${usd.toFixed(2)}; the limit per trade is $${limits.maxTradeUsd}.`, "fix_request", { limit_usd: limits.maxTradeUsd });
-  }
-  const left = remainingToday(limits, await journal.read(), wallet, nowSec);
-  if (usd > left) {
-    throw new AgentError("over_daily_limit", `This deposit is about $${usd.toFixed(2)}; $${left.toFixed(2)} is left of the $${limits.dailyUsd} allowed in 24 hours.`, "stop", { remaining_usd: left });
-  }
+  const spend: Spend = { wallet, asset: token, usd, nowSec, what: "deposit" };
+  // Here for the dry run and for a quick refusal. The check that counts is `reserveSpend` below.
+  checkSpend(limits, await journal.read(), spend);
 
   const summary = {
     network: session.config.network,
@@ -217,12 +213,13 @@ export async function vaultDeposit(ctx: AgentContext, input: { vault: string; am
 
   const wrapLamports = isNativeVault(vault) && amount > state.mainTokenBalance ? amount - state.mainTokenBalance : 0n;
   const instructions = await buildRequestDepositInstructions(depositor, amount, wrapLamports);
-  // Counted before it is sent, so a crash between the two cannot leave a deposit the limits never saw.
-  const entry = { orderId: `vault:${vault.vault_pda}:${nowSec}`, rfqId: "", wallet, asset: token, side: "deposit" as const, notionalUsd: usd };
-  await journal.append({ ...entry, state: "confirmed", at: nowSec });
+  // Checked and counted in one step, before it is sent: two deposits in flight cannot both use
+  // the same room, and a crash between counting and sending cannot leave one the limits never saw.
+  const entry = { orderId: `vault:${vault.vault_pda}:${crypto.randomUUID()}`, rfqId: "", wallet, asset: token, side: "deposit" as const, notionalUsd: usd };
+  await reserveSpend(ctx, spend, { ...entry, state: "reserved", at: nowSec });
   const signature = await sendFromWallet(session, instructions).catch(async (error) => {
-    // Simulated and refused, or failed on chain: nothing left the wallet.
-    if (error instanceof AgentError && error.code !== "send_failed") await journal.append({ ...entry, state: "failed", at: Math.floor(session.nowSec()) });
+    // Refused by the chain: nothing left the wallet. Any other failure leaves it counted.
+    if (nothingMoved(error)) await journal.append({ ...entry, state: "failed", at: Math.floor(session.nowSec()) });
     throw error;
   });
   await journal.append({ ...entry, state: "confirmed", at: Math.floor(session.nowSec()), txSignature: signature });
@@ -290,9 +287,7 @@ export async function vaultCancelRequest(ctx: AgentContext, input: { vault: stri
     const instructions = refund ? buildEmergencyRefundInstructions(depositor, unwrap) : buildCancelDepositInstructions(depositor, unwrap);
     const signature = await sendFromWallet(session, instructions);
     // The deposit is back in the wallet, so it no longer counts against the day's limit.
-    const counted = latestByOrder(await ctx.journal.read())
-      .filter((e) => e.wallet === wallet && e.side === "deposit" && e.state === "confirmed" && e.orderId.startsWith(`vault:${vault.vault_pda}:`))
-      .at(-1);
+    const counted = latestCounted(await ctx.journal.read(), wallet, `vault:${vault.vault_pda}:`);
     if (counted) await ctx.journal.append({ ...counted, state: "abandoned", at: Math.floor(session.nowSec()) });
     return {
       status: refund ? "refunded" : "cancelled",

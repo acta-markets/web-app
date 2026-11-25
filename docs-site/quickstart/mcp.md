@@ -86,6 +86,10 @@ For a client that reads servers from a file:
 }
 ```
 
+A desktop app starts the server with the system's short `PATH`, not your shell's, so a Node installed
+by a version manager may not be found (`spawn npx ENOENT`). Put the full path in `command` instead:
+`which npx` prints it.
+
 On devnet the venue funds a new wallet with test assets the first time it signs in. Ask the agent
 for `acta_status` to see the address and the balances.
 
@@ -134,7 +138,8 @@ sponsored transaction, submits it once and waits for confirmation.
 
 `limit_premium` is in the quote token for the whole trade: the least to receive when selling, the most
 to pay when buying. `acta_preview_trade` returns a `limit_premium_hint`. With `dry_run: true` the call
-quotes and checks the limit and trades nothing.
+checks the owner's limits, quotes and trades nothing. A dry run and a preview refuse what the real call
+would refuse for a limit.
 
 | `status` | Meaning |
 |---|---|
@@ -142,6 +147,12 @@ quotes and checks the limit and trades nothing.
 | `dry_run` | The limit was met; nothing was traded |
 | `limit_not_met` | The best quote was worse than the limit; nothing was traded |
 | `unknown` | Sent, and the result has not arrived. Never place it again: call `acta_get_order` |
+
+Once the signed transaction has been sent, the server says "nothing was traded" only when the venue
+reports that the order itself failed. The request for quotes closing or reopening is not that: the
+order is then `unknown`. `acta_get_order` settles it: the venue is asked, and an order too old to still
+land is looked for on chain and among the wallet's positions before it is closed as not executed.
+Until an order is settled the server places no other trade.
 
 An error carries `next`: `fix_request`, `retry`, `reconcile` or `stop`.
 
@@ -190,16 +201,24 @@ them.
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `ACTA_MAX_TRADE_USD` | Largest strike x size of one trade, or dollar value of one vault deposit | 2500 |
-| `ACTA_DAILY_LIMIT_USD` | Most strike x size and vault deposits in any 24 hours | 10000 |
+| `ACTA_MAX_TRADE_USD` | Largest strike x size of one trade or one option funding, or dollar value of one vault deposit | 2500 |
+| `ACTA_DAILY_LIMIT_USD` | Most strike x size, option funding and vault deposits in any 24 hours | 10000 |
 | `ACTA_ALLOWED_ASSETS` | The only assets it may trade, comma separated | every listed asset |
 | `ACTA_READ_ONLY` | `1`: never trade or fund | off |
 | `ACTA_RPC_URL` | Solana devnet RPC | the public one |
 | `ACTA_STATE_DIR` | Where the order journal is kept | `~/.acta-mcp` |
 
-The journal is a file of one line per order change. It is what keeps the day's total across restarts,
+The journal is a file of one line per change. It is what keeps the day's total across restarts,
 and what stops an order that was signed before a crash from being signed again: on the next trade the
 server first looks every unsettled order up at the venue.
+
+Everything that takes funds out of the wallet is counted: a trade, funding a bought option and a vault
+deposit. Each is checked against the limits and written in the journal in one step, under a lock, right
+before it is sent. Calls made at the same time, or by two servers on the same wallet, are counted one
+after the other and cannot each pass alone. A deposit or a funding that is taken back stops counting.
+
+The limits are a ceiling. An agent may fill them, so set them to what you accept losing, not to what
+you expect it to trade.
 
 No tool sends funds to an address.
 

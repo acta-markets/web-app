@@ -34,7 +34,9 @@ export function localCommand(cliPath = CLI_PLACEHOLDER): Command {
 }
 
 const shell = ({ command, args }: Command) => [command, ...args].join(" ");
-const json = (value: unknown) => JSON.stringify(value, null, 2);
+/** Indented JSON with a list of plain values kept on one line, so an entry is as short as it reads. */
+const json = (value: unknown) =>
+  JSON.stringify(value, null, 2).replace(/\[\n\s+([^[\]{}]*?)\n\s+\]/g, (_, inner: string) => `[${inner.split(/,\n\s+/).join(", ")}]`);
 
 /** Getting the server onto the machine. Empty once it is on npm: `npx` fetches it. */
 export function buildSteps(): string[] {
@@ -191,6 +193,8 @@ const PROVIDERS: ReadonlyArray<{ id: string; name: string; icon: string; apps: R
 export type AgentProvider = { id: string; name: string; icon: string; apps: AgentTool[] };
 
 const DSH_NOTE = "If the file already has entries, add this one to the list. Then start a new session";
+/** The desktop app starts servers with the system's short PATH, not the shell's, so a Node installed by nvm is not found. */
+const DSH_TRADE_NOTE = `${DSH_NOTE}. It needs Node 22 or later. If the app cannot find npx, put its full path in command: run "which npx" for it`;
 const ZCODE_NOTE = "A new task picks it up. In an open one, send /reload";
 
 /** The entry DeepSeek Harness takes in its patch file: its MCP client plugin, pointed at one server. */
@@ -342,7 +346,7 @@ export function agentTools(siteOrigin: string): AgentTool[] {
         "DeepSeek Harness",
         "~/.dsh/cordis.patch.yml",
         dshYaml(["transport: stdio", `command: ${local.command}`, `args: ${JSON.stringify(local.args)}`, "toolCallTimeoutMs: 180000"]),
-        fill ?? DSH_NOTE,
+        fill ?? DSH_TRADE_NOTE,
       ),
       read: entry("DeepSeek Harness", "~/.dsh/cordis.patch.yml", dshYaml(["transport: streamable-http", `url: ${url}`]), DSH_NOTE),
     },
@@ -488,12 +492,15 @@ export function agentProviders(siteOrigin: string): AgentProvider[] {
   }));
 }
 
-/** The limits a person can set, with what each defaults to. */
-export const LIMIT_SETTINGS: ReadonlyArray<{ name: string; meaning: string; fallback: string }> = [
-  { name: "ACTA_MAX_TRADE_USD", meaning: "Largest strike times size of one trade, or dollar value of one vault deposit", fallback: "2500" },
-  { name: "ACTA_DAILY_LIMIT_USD", meaning: "Most strike times size and vault deposits in any 24 hours", fallback: "10000" },
-  { name: "ACTA_ALLOWED_ASSETS", meaning: "The only assets it may trade, comma separated", fallback: "every listed asset" },
-  { name: "ACTA_READ_ONLY", meaning: "Set to 1 and it never trades", fallback: "off" },
+/**
+ * The limits a person can set. `label` and `shown` are what the page says (the default as a
+ * figure); `name` is the server setting that changes it, `fallback` that setting's default.
+ */
+export const LIMIT_SETTINGS: ReadonlyArray<{ name: string; label: string; shown: string; meaning: string; fallback: string }> = [
+  { name: "ACTA_MAX_TRADE_USD", label: "Per trade", shown: "$2,500", meaning: "Largest strike times size of one trade or one option funding, or dollar value of one vault deposit", fallback: "2500" },
+  { name: "ACTA_DAILY_LIMIT_USD", label: "Per day", shown: "$10,000", meaning: "Most strike times size, option funding and vault deposits in any 24 hours", fallback: "10000" },
+  { name: "ACTA_ALLOWED_ASSETS", label: "Assets", shown: "All listed", meaning: "The only assets it may trade, comma separated", fallback: "every listed asset" },
+  { name: "ACTA_READ_ONLY", label: "Read only", shown: "Off", meaning: "Set to 1 and it never trades", fallback: "off" },
 ];
 
 /** What to ask an agent that only reads. */

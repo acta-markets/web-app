@@ -1,22 +1,24 @@
 import {
+  ALL_POSITIONS,
   previewFill,
   totalPremiumQuoteAtoms,
   type ActaWsClient,
   type MarketDescriptorInfo,
   type OptionTerms,
+  type OrderExecutionState,
   type QuoteReceivedMessage,
   type QuoteTokenFees,
   type TokenMarketsInfoData,
 } from "@acta-markets/ts-sdk/ws";
-import { address } from "@solana/kit";
+import { address, signature as toSignature } from "@solana/kit";
 import { quoteMatchesProduct } from "@/lib/spreads";
 import { readFillParties, signTakerFill, takerFillRfq } from "@/lib/trade/fill";
 import { bestQuote, isFillable } from "@/lib/trade/quotes";
 import { indicativesFor, spotFromSnapshot, tradableExpiries } from "@/lib/trade/strikes";
 import { explorerUrl } from "./config";
 import { AgentError, plainSymbol, plainText, toAgentError } from "./errors";
-import { unsettledOrders, type Journal, type JournalEntry, type JournalState } from "./journal";
-import { checkTrade, type Limits } from "./limits";
+import { latestByOrder, unsettledOrders, type Journal, type JournalEntry, type JournalState } from "./journal";
+import { checkSpend, checkTrade, reserveSpend, type Limits } from "./limits";
 import { findAsset, isoDay, isoTime, marketSnapshot, strategyFor, type Asset, type Side, type Strategy, type View } from "./markets";
 import type { ActaSession } from "./session";
 
@@ -30,9 +32,14 @@ const MAX_QUOTE_WAIT_MS = 10_000;
 const SIGN_MARGIN_SECONDS = 5;
 const SERVED_TX_TIMEOUT_MS = 35_000;
 const CONFIRM_TIMEOUT_MS = 75_000;
+/** Once the venue says the RFQ ended, how much longer to wait for word on the order itself. */
+const AFTER_RFQ_ENDED_MS = 15_000;
+/** A position is looked for from this long before the order's last journal line: clocks differ, and the line is written after the wait. */
+const POSITION_MATCH_SLACK_SECONDS = 300;
 /**
  * A signed fill carries a recent blockhash and cannot land once it has aged out (about a
- * minute and a half). Past this, an order whose outcome was never heard did not execute.
+ * minute and a half). Past this an order can no longer execute; whether it already did is
+ * then looked up on chain (`traceOrder`).
  */
 const SIGNED_ORDER_DEAD_SECONDS = 600;
 
@@ -52,7 +59,7 @@ export type AgentContext = {
   session: ActaSession;
   limits: Limits;
   journal: Journal;
-  /** one trade at a time: two calls in flight could each pass the limits alone */
+  /** one trade at a time in this process: an order with no final state blocks the next */
   placing: boolean;
   /** set once a status has waited for devnet to fund a new wallet, so only the first one waits */
   fundingAwaited?: boolean;
@@ -280,8 +287,14 @@ function noQuote(round: QuoteRound): AgentError {
 
 /** A live quote for the exact trade, and what it would mean. Nothing is accepted. */
 export async function previewTrade(ctx: AgentContext, input: TradeInput) {
-  const { session } = ctx;
+  const { session, limits, journal } = ctx;
   const trade = await resolveTrade(session, input);
+  // A preview is of a trade this agent could place: over the owner's limits it is refused here,
+  // as the real call would refuse it, and no desk is asked. Read only places nothing, so there
+  // a preview is information and the limits do not apply.
+  if (session.signer && !limits.readOnly) {
+    checkSpend(limits, await journal.read(), { wallet: session.signer.address, asset: trade.asset.symbol, usd: trade.notionalUsd, nowSec: session.nowSec(), what: "trade" });
+  }
   const client = await session.connect();
   const round = await requestQuotes(session, client, trade);
   if (!round.closed) client.cancelRfq(round.rfqId);
@@ -302,7 +315,9 @@ function watchOrder(client: ActaWsClient, orderId: string, rfqId: string) {
     | { type: "served"; txBase64: string; deadline: number }
     | { type: "submitted"; signature: string }
     | { type: "confirmed"; positionPda: string }
-    | { type: "failed"; reason: string };
+    // `order`: the venue says this order failed. `rfq`: the RFQ ended or reopened, which is
+    // final only while nothing has been sent.
+    | { type: "failed"; reason: string; source: "order" | "rfq" };
   const events: Event[] = [];
   let wake = () => {};
   const push = (event: Event) => {
@@ -319,13 +334,13 @@ function watchOrder(client: ActaWsClient, orderId: string, rfqId: string) {
     if (id === orderId) push({ type: "confirmed", positionPda });
   };
   const onFailed = (id: string, reason: string) => {
-    if (id === orderId) push({ type: "failed", reason });
+    if (id === orderId) push({ type: "failed", reason, source: "order" });
   };
   const onAgain = (m: { rfq_id: string; reason: string }) => {
-    if (m.rfq_id === rfqId) push({ type: "failed", reason: m.reason });
+    if (m.rfq_id === rfqId) push({ type: "failed", reason: m.reason, source: "rfq" });
   };
   const onClosed = (m: { rfq_id: string; reason: string }) => {
-    if (m.rfq_id === rfqId && m.reason !== "filled") push({ type: "failed", reason: m.reason });
+    if (m.rfq_id === rfqId && m.reason !== "filled") push({ type: "failed", reason: m.reason, source: "rfq" });
   };
   client.on("sponsoredTxToSign", onServed);
   client.on("orderSubmitted", onSubmitted);
@@ -362,26 +377,129 @@ function watchOrder(client: ActaWsClient, orderId: string, rfqId: string) {
   };
 }
 
+type OrderWatch = ReturnType<typeof watchOrder>;
+
+export type OrderOutcome =
+  | { state: "confirmed"; positionPda: string }
+  | { state: "failed"; reason: string }
+  /** `venueSaid`: why the venue ended the RFQ, when it did. Not a verdict on the order. */
+  | { state: "unknown"; venueSaid: string | null };
+
+/**
+ * What became of an order once its signed transaction was handed to the venue. From here on
+ * only two things are final: the venue confirming it, and the venue saying the order itself
+ * failed. The RFQ closing or reopening is neither, because the transaction may already be on
+ * its way: it shortens the wait and the order is then reported as unknown, to be looked up.
+ */
+export async function awaitOutcome(
+  watch: Pick<OrderWatch, "next">,
+  lookUp: () => Promise<OrderExecutionState | null>,
+  timeoutMs: number = CONFIRM_TIMEOUT_MS,
+  afterRfqEndedMs: number = AFTER_RFQ_ENDED_MS,
+): Promise<OrderOutcome> {
+  let deadline = Date.now() + timeoutMs;
+  let venueSaid: string | null = null;
+  for (;;) {
+    const left = deadline - Date.now();
+    if (left <= 0) return { state: "unknown", venueSaid };
+    const event = await watch.next(["confirmed"], Math.min(5_000, left));
+    if (event?.type === "confirmed") return { state: "confirmed", positionPda: event.positionPda };
+    // After any other word from the venue, and every few seconds without one, ask it directly.
+    const status = await lookUp();
+    if (status?.type === "confirmed") return { state: "confirmed", positionPda: status.position_pda };
+    if (event?.type !== "failed") continue;
+    if (event.source === "order") return { state: "failed", reason: event.reason };
+    venueSaid ??= event.reason;
+    deadline = Math.min(deadline, Date.now() + afterRfqEndedMs);
+  }
+}
+
+type Trace = { state: "confirmed"; positionPda?: string } | { state: "failed" } | { state: "unreadable" };
+
+/**
+ * Looks for an order the venue has no answer for, once its transaction is too old to land:
+ * first the transaction itself on chain, by the signature the venue reported, then the wallet's
+ * positions for one this order would have opened. Found in neither, it did not execute. If
+ * either cannot be read, nothing is concluded.
+ */
+async function traceOrder(ctx: AgentContext, client: ActaWsClient, entry: JournalEntry, claimed: ReadonlySet<string>): Promise<Trace> {
+  const { session } = ctx;
+  let landed = false;
+  // What the venue reported as the signature; text that is not one is treated as none.
+  const reported = (() => {
+    try {
+      return entry.txSignature ? toSignature(entry.txSignature) : null;
+    } catch {
+      return null;
+    }
+  })();
+  if (reported) {
+    try {
+      const { value } = await session.rpc.getSignatureStatuses([reported], { searchTransactionHistory: true }).send();
+      const status = value[0];
+      if (status?.err) return { state: "failed" };
+      landed = status != null;
+    } catch {
+      return { state: "unreadable" };
+    }
+  }
+  // Lines written before the order's terms were kept have nothing to match a position on.
+  if (!entry.market || !entry.strike || !entry.quantity) return landed ? { state: "confirmed" } : { state: "failed" };
+  try {
+    const page = await client.getPositionsPageAsync({ ...ALL_POSITIONS, status: [], limit: 200 }, { applyToState: false });
+    const position = page.positions.find(
+      (p) =>
+        p.market_pda === entry.market
+        && p.side === entry.side
+        && p.quantity === entry.quantity
+        && "strike" in p.terms
+        && p.terms.strike === entry.strike
+        && Number(p.created_at) >= entry.at - POSITION_MATCH_SLACK_SECONDS
+        // not one another order in the journal already opened
+        && !claimed.has(p.pda),
+    );
+    if (position) return { state: "confirmed", positionPda: position.pda };
+    return landed ? { state: "confirmed" } : { state: "failed" };
+  } catch {
+    return landed ? { state: "confirmed" } : { state: "unreadable" };
+  }
+}
+
 /**
  * Brings the journal's open orders up to date from the venue. An order still open afterwards
  * blocks new trades: its funds may yet move, and the limits must count it.
+ *
+ * The venue's lookup answers pending, confirmed or unknown, and unknown is not proof that
+ * nothing executed. So an order is closed as failed only when it was never signed, or when its
+ * transaction is too old to land and was looked for and not found.
  */
 export async function settleJournal(ctx: AgentContext, wallet: string): Promise<JournalEntry[]> {
   const { session, journal } = ctx;
-  const open = unsettledOrders(await journal.read(), wallet);
+  const entries = await journal.read();
+  const open = unsettledOrders(entries, wallet);
   if (open.length === 0) return [];
   const client = await session.connect();
+  const claimed = new Set(latestByOrder(entries).flatMap((e) => (e.positionPda ? [e.positionPda] : [])));
   const still: JournalEntry[] = [];
   for (const entry of open) {
     const status = await client.getOrderStatusAsync(entry.orderId).catch(() => null);
     const at = Math.floor(session.nowSec());
     if (status?.type === "confirmed") {
       await journal.append({ ...entry, state: "confirmed", at, positionPda: status.position_pda });
+      claimed.add(status.position_pda);
     } else if (status?.type === "unknown" && entry.state === "accepted") {
       // accepted but never signed: nothing of ours could have reached the chain
       await journal.append({ ...entry, state: "abandoned", at });
     } else if (status?.type === "unknown" && at - entry.at > SIGNED_ORDER_DEAD_SECONDS) {
-      await journal.append({ ...entry, state: "failed", at });
+      const trace = await traceOrder(ctx, client, entry, claimed);
+      if (trace.state === "unreadable") {
+        still.push(entry);
+      } else if (trace.state === "confirmed") {
+        await journal.append({ ...entry, state: "confirmed", at, ...(trace.positionPda ? { positionPda: trace.positionPda } : {}) });
+        if (trace.positionPda) claimed.add(trace.positionPda);
+      } else {
+        await journal.append({ ...entry, state: "failed", at });
+      }
     } else {
       still.push(entry);
     }
@@ -424,9 +542,9 @@ export async function placeTrade(ctx: AgentContext, input: PlaceInput) {
         { order_ids: unsettled.map((e) => e.orderId) },
       );
     }
-    if (!input.dry_run) {
-      checkTrade(limits, await journal.read(), { wallet, asset: trade.asset.symbol, notionalUsd: trade.notionalUsd, nowSec: session.nowSec() });
-    }
+    // Before any desk is asked, and on a dry run too: a dry run that skipped this would
+    // approve a trade the real call refuses.
+    checkTrade(limits, await journal.read(), { wallet, asset: trade.asset.symbol, notionalUsd: trade.notionalUsd, nowSec: session.nowSec() });
 
     const round = await requestQuotes(session, client, trade);
     const cancel = () => {
@@ -464,21 +582,29 @@ export async function placeTrade(ctx: AgentContext, input: PlaceInput) {
     }
 
     const orderId = quote.order_id;
-    const record = (state: JournalState, extra: Partial<JournalEntry> = {}) =>
-      journal.append({
-        orderId,
-        rfqId: round.rfqId,
-        state,
-        at: Math.floor(session.nowSec()),
-        wallet,
-        asset: trade.asset.symbol,
-        side: trade.strategy.side,
-        notionalUsd: trade.notionalUsd,
-        ...extra,
-      });
+    const line = (state: JournalState, extra: Partial<JournalEntry> = {}): JournalEntry => ({
+      orderId,
+      rfqId: round.rfqId,
+      state,
+      at: Math.floor(session.nowSec()),
+      wallet,
+      asset: trade.asset.symbol,
+      side: trade.strategy.side,
+      notionalUsd: trade.notionalUsd,
+      market: trade.descriptor.market_descriptor.market_pda,
+      ...("strike" in trade.terms ? { strike: String(trade.terms.strike) } : {}),
+      quantity: trade.quantity.toString(),
+      ...extra,
+    });
+    const record = (state: JournalState, extra: Partial<JournalEntry> = {}) => journal.append(line(state, extra));
     const watch = watchOrder(client, orderId, round.rfqId);
     try {
-      await record("accepted");
+      // The check that counts: against the journal as it is now, and written in the same step,
+      // so nothing else in flight (a deposit, another server on this wallet) can use the same room.
+      await reserveSpend(ctx, { wallet, asset: trade.asset.symbol, usd: trade.notionalUsd, nowSec: session.nowSec(), what: "trade" }, line("accepted")).catch((error) => {
+        cancel();
+        throw error;
+      });
       try {
         await client.acceptQuote(round.rfqId, quote.maker_owner, orderId);
       } catch (error) {
@@ -525,34 +651,28 @@ export async function placeTrade(ctx: AgentContext, input: PlaceInput) {
         throw new AgentError("not_submitted", `The venue did not take the signed transaction (${plainText(outcome.error.type, 60)}). Nothing was traded.`, outcome.action === "retry" ? "retry" : "stop");
       }
 
-      let positionPda: string | null = outcome?.type === "reconciled" && outcome.state.type === "confirmed" ? outcome.state.position_pda : null;
-      let failure: string | null = null;
-      const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
-      while (!positionPda && !failure && Date.now() < deadline) {
-        const event = await watch.next(["confirmed"], 5_000);
-        if (event?.type === "confirmed") positionPda = event.positionPda;
-        else if (event?.type === "failed") failure = event.reason;
-        else {
-          const status = await client.getOrderStatusAsync(orderId).catch(() => null);
-          if (status?.type === "confirmed") positionPda = status.position_pda;
-        }
-      }
+      // The signed transaction is with the venue. Nothing below may say "nothing was traded"
+      // unless the venue said so about this order.
+      const lookUp = () => client.getOrderStatusAsync(orderId).catch(() => null);
+      const result: OrderOutcome = outcome?.type === "reconciled" && outcome.state.type === "confirmed"
+        ? { state: "confirmed", positionPda: outcome.state.position_pda }
+        : await awaitOutcome(watch, lookUp);
       const txSignature = watch.signature();
 
-      if (positionPda) {
-        await record("confirmed", { positionPda, txSignature });
+      if (result.state === "confirmed") {
+        await record("confirmed", { positionPda: result.positionPda, txSignature });
         return {
           status: "confirmed",
           network: session.config.network,
           ...fill.summary,
           order_id: orderId,
-          position: positionPda,
+          position: result.positionPda,
           transaction: txSignature ? explorerUrl(session.config, "tx", txSignature) : null,
         };
       }
-      if (failure) {
+      if (result.state === "failed") {
         await record("failed", { txSignature });
-        throw new AgentError("order_failed", `The order was not executed (${plainText(failure, 80)}). Nothing was traded.`, "retry");
+        throw new AgentError("order_failed", `The venue reported that the order failed (${plainText(result.reason, 80)}). Nothing was traded.`, "retry");
       }
       await record("unknown", { txSignature });
       return {
@@ -560,7 +680,8 @@ export async function placeTrade(ctx: AgentContext, input: PlaceInput) {
         network: session.config.network,
         ...fill.summary,
         order_id: orderId,
-        note: "The order was sent and its result has not arrived. Do not place it again. Check acta_get_order with this order_id, or acta_list_positions.",
+        ...(result.venueSaid ? { venue_said: plainText(result.venueSaid, 60) } : {}),
+        note: `The order was sent and its result is not known${result.venueSaid ? ": the venue ended the request for quotes, which does not say whether the order executed" : ""}. Do not place it again. Check acta_get_order with this order_id, or acta_list_positions.`,
       };
     } finally {
       watch.stop();
@@ -579,13 +700,24 @@ export async function getOrder(ctx: AgentContext, orderId: string) {
     throw toAgentError(error);
   });
   if (session.signer) await settleJournal(ctx, session.signer.address);
+  if (status.type !== "unknown") {
+    return { network: session.config.network, order_id: orderId, status: status.type, position: status.type === "confirmed" ? status.position_pda : null };
+  }
+  // The venue has no answer. This server's own record may: it looks an old order up on chain.
+  const own = session.signer
+    ? latestByOrder(await ctx.journal.read()).find((e) => e.orderId.toLowerCase() === orderId.toLowerCase() && e.wallet === session.signer!.address)
+    : undefined;
+  if (own?.state === "confirmed") {
+    return { network: session.config.network, order_id: orderId, status: "confirmed", position: own.positionPda ?? null, note: "The venue has no result for this order; it was found on chain." };
+  }
+  if (own?.state === "failed" || own?.state === "abandoned") {
+    return { network: session.config.network, order_id: orderId, status: "not_executed", position: null, note: "The order did not execute: nothing was traded." };
+  }
   return {
     network: session.config.network,
     order_id: orderId,
-    status: status.type,
-    position: status.type === "confirmed" ? status.position_pda : null,
-    note: status.type === "unknown"
-      ? "The venue has no result for this order. That is not proof it did not execute: check acta_list_positions before trading again."
-      : undefined,
+    status: "unknown",
+    position: null,
+    note: "The venue has no result for this order. That is not proof it did not execute: check acta_list_positions before trading again.",
   };
 }

@@ -9,6 +9,13 @@ import type { ActaSession } from "./session";
  * a fresh blockhash, simulated first, signed, checked to be what was simulated, sent, and
  * awaited until confirmed. A fill is not sent here: the venue's keeper pays for that one.
  */
+/**
+ * True when a failed send is known to have moved nothing: the chain refused it in simulation,
+ * or it landed and failed. Anything else (the RPC went away mid-send) leaves the outcome open,
+ * and what was counted for it stays counted.
+ */
+export const nothingMoved = (error: unknown): boolean => error instanceof AgentError && (error.code === "would_fail" || error.code === "transaction_failed");
+
 export async function sendFromWallet(session: ActaSession, instructions: Instruction[]): Promise<string> {
   const signer = session.signer;
   if (!signer) throw new AgentError("no_wallet", "This server has no wallet.", "stop");

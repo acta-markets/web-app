@@ -14,7 +14,10 @@ const asset = z.string().min(1).max(12).describe("Asset symbol as acta_list_asse
 const side = z.enum(["sell", "buy"]).describe("sell: deposit and get paid a premium now. buy: pay a premium for the right to trade at the strike");
 const view = z.enum(["above", "below"]).describe("Where you believe the price will be at expiry, relative to the strike");
 const strike = z.number().positive().describe("The price in the sentence, in dollars. Must be a strike acta_get_market lists for that date");
-const expiry = z.string().min(8).max(12).describe("The date in the sentence, YYYY-MM-DD, as acta_get_market lists it");
+const expiry = z
+  .string()
+  .regex(/^(\d{4}-\d{2}-\d{2}|\d{9,11})$/, "expiry is a date written YYYY-MM-DD, such as 2026-11-27, as acta_get_market lists it")
+  .describe("The date in the sentence, YYYY-MM-DD, as acta_get_market lists it");
 const size = z.number().positive().describe("How much of the asset the option is on, in whole units of the asset (0.1 means 0.1 BTC)");
 
 const trade = { asset, side, view, strike, expiry, size };
@@ -54,7 +57,12 @@ const INPUTS: Record<string, z.ZodObject> = {
   acta_fund_position: z.object({ position: z.string().min(32).max(44).describe("The position's address, as acta_list_positions gives it") }),
   acta_withdraw_funding: z.object({ position: z.string().min(32).max(44).describe("The position's address, as acta_list_positions gives it") }),
   acta_list_positions: z.object({ status: z.enum(["open", "closed", "all"]).optional().describe("open (default), closed, or all") }),
-  acta_get_order: z.object({ order_id: z.string().length(64).describe("The order_id acta_place_trade returned") }),
+  acta_get_order: z.object({
+      order_id: z
+        .string()
+        .regex(/^[0-9a-fA-F]{64}$/, "order_id is the 64 hex characters acta_place_trade returned as order_id")
+        .describe("The order_id acta_place_trade returned"),
+    }),
 };
 
 export const TOOLS: ReadonlyArray<ToolSpec> = TOOL_LIST.map((tool) => {

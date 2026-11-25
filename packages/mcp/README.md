@@ -48,14 +48,18 @@ Environment variables of the server, set where your agent keeps its MCP servers.
 
 | Variable | What it does | Default |
 |---|---|---|
-| `ACTA_MAX_TRADE_USD` | Largest strike times size of one trade, or dollar value of one vault deposit | 2500 |
-| `ACTA_DAILY_LIMIT_USD` | Most strike times size and vault deposits in any 24 hours | 10000 |
+| `ACTA_MAX_TRADE_USD` | Largest strike times size of one trade or one option funding, or dollar value of one vault deposit | 2500 |
+| `ACTA_DAILY_LIMIT_USD` | Most strike times size, option funding and vault deposits in any 24 hours | 10000 |
 | `ACTA_ALLOWED_ASSETS` | The only assets it may trade, comma separated | every listed asset |
 | `ACTA_READ_ONLY` | Set to 1 and it never trades | off |
 | `ACTA_KEYPAIR` | A key file to use in place of the wallet it makes (a JSON array, as `solana-keygen` writes it) | none |
 | `ACTA_SIGNER_MODULE` | An ES module that returns a signer, for a KMS or a custody service | none |
 | `ACTA_RPC_URL` | Solana devnet RPC | the public one |
 | `ACTA_STATE_DIR` | Where the wallet and the order journal are kept | `~/.acta-mcp` |
+
+A trade, funding a bought option and a vault deposit all count. Each is checked and written down in
+one step under a lock, so calls made at the same time (or two servers on one wallet) cannot each pass
+alone, and a dry run or a preview refuses what the real call would refuse.
 
 The server enforces the limits and keeps the day's total on disk, so no tool can raise them and a
 restart does not reset them. An agent that can edit its own settings can change them, so the wallet

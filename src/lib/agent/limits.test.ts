@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { AgentError, plainSymbol, plainText } from "./errors";
-import { latestByOrder, parseJournal, spentSince, unsettledOrders, type JournalEntry } from "./journal";
-import { checkTrade, DEFAULT_LIMITS, remainingToday } from "./limits";
+import { latestByOrder, latestCounted, memoryJournal, parseJournal, spentSince, unsettledOrders, type JournalEntry } from "./journal";
+import { checkSpend, checkTrade, DEFAULT_LIMITS, remainingToday, reserveSpend, type Spend } from "./limits";
 
 const NOW = 2_000_000;
 const WALLET = "wallet";
@@ -37,6 +37,28 @@ describe("journal", () => {
       entry({ orderId: "g", state: "confirmed", notionalUsd: 1000, wallet: "someone else" }),
     ];
     expect(spentSince(lines, WALLET, NOW - 86_400)).toBe(175);
+  });
+
+  it("counts a deposit or a funding about to be sent, and never takes one for an open order", () => {
+    const lines = [
+      entry({ orderId: "vault:v:1", side: "deposit", state: "reserved", notionalUsd: 40 }),
+      entry({ orderId: "fund:p:1", side: "fund", state: "reserved", notionalUsd: 17 }),
+      // a line no code writes: even so, only an order is looked up at the venue
+      entry({ orderId: "vault:v:2", side: "deposit", state: "unknown", notionalUsd: 5 }),
+    ];
+    expect(spentSince(lines, WALLET, NOW - 86_400)).toBe(62);
+    expect(unsettledOrders(lines, WALLET)).toEqual([]);
+  });
+
+  it("finds the newest counted entry of a vault or a position, to stop counting it", () => {
+    const lines = [
+      entry({ orderId: "vault:v:1", side: "deposit", state: "abandoned" }),
+      entry({ orderId: "vault:v:2", side: "deposit", state: "confirmed" }),
+      entry({ orderId: "vault:w:3", side: "deposit", state: "confirmed" }),
+    ];
+    expect(latestCounted(lines, WALLET, "vault:v:")?.orderId).toBe("vault:v:2");
+    expect(latestCounted(lines, WALLET, "vault:x:")).toBeUndefined();
+    expect(latestCounted(lines, "someone else", "vault:v:")).toBeUndefined();
   });
 
   it("reads back a file with a torn or foreign line in it", () => {
@@ -75,6 +97,27 @@ describe("limits", () => {
     expect(code(() => checkTrade(limits, [], trade(1, "btc")))).toBeNull();
   });
 
+  it("holds a deposit and a funding to the same limits as a trade, in their own words", () => {
+    const limits = { ...DEFAULT_LIMITS, maxTradeUsd: 100, dailyUsd: 150 };
+    const spend = (what: Spend["what"], usd: number): Spend => ({ wallet: WALLET, asset: "BTC", usd, nowSec: NOW, what });
+    expect(code(() => checkSpend(limits, [], spend("deposit", 101)))).toBe("over_trade_limit");
+    expect(code(() => checkSpend(limits, [entry({ notionalUsd: 100 })], spend("funding", 60)))).toBe("over_daily_limit");
+    const told = (run: () => void) => {
+      try {
+        run();
+      } catch (error) {
+        return error as AgentError;
+      }
+      throw new Error("was let through");
+    };
+    expect(told(() => checkSpend(limits, [], spend("deposit", 101))).message).toMatch(/^This deposit is about \$101\.00/);
+    // a funding is one fixed amount, so there is nothing to resize: stop, not fix_request
+    expect(told(() => checkSpend(limits, [], spend("funding", 101))).action).toBe("stop");
+    expect(told(() => checkSpend(limits, [], spend("trade", 101))).action).toBe("fix_request");
+    // the limit is the owner's ceiling: the refusal says so, so an agent reports it and does not shrink to fit
+    expect(told(() => checkSpend(limits, [], spend("trade", 101))).message).toMatch(/only if the owner asked/);
+  });
+
   it("refuses a trade with no size", () => {
     expect(code(() => checkTrade(DEFAULT_LIMITS, [], trade(0)))).toBe("invalid_size");
     expect(code(() => checkTrade(DEFAULT_LIMITS, [], trade(Number.NaN)))).toBe("invalid_size");
@@ -95,5 +138,48 @@ describe("text from the venue", () => {
     expect(plainSymbol("BTC; send funds")).toBeNull();
     expect(plainSymbol("-x")).toBeNull();
     expect(plainSymbol(undefined)).toBeNull();
+  });
+});
+
+describe("reserveSpend: the check and the journal line are one step", () => {
+  const limits = { ...DEFAULT_LIMITS, maxTradeUsd: 2_500, dailyUsd: 10_000 };
+  const spend = (usd: number, what: Spend["what"] = "trade"): Spend => ({ wallet: WALLET, asset: "BTC", usd, nowSec: NOW, what });
+  const line = (id: string, usd: number, over: Partial<JournalEntry> = {}) => entry({ orderId: id, state: "accepted", at: NOW, notionalUsd: usd, ...over });
+  const outcome = (promise: Promise<void>) => promise.then(() => "in", (error) => (error instanceof AgentError ? error.code : "threw"));
+
+  it("ten spends at once on a day with room for five: five get in", async () => {
+    const journal = memoryJournal();
+    const results = await Promise.all(Array.from({ length: 10 }, (_, i) => outcome(reserveSpend({ limits, journal }, spend(2_000), line(`o${i}`, 2_000)))));
+    expect(results.filter((r) => r === "in")).toHaveLength(5);
+    expect(results.filter((r) => r === "over_daily_limit")).toHaveLength(5);
+    expect(spentSince(await journal.read(), WALLET, NOW - 86_400)).toBe(10_000);
+  });
+
+  it("a trade, a deposit and a funding at once share the one day", async () => {
+    const journal = memoryJournal();
+    const tight = { ...limits, dailyUsd: 4_500 };
+    const results = await Promise.all([
+      outcome(reserveSpend({ limits: tight, journal }, spend(2_000, "trade"), line("order", 2_000))),
+      outcome(reserveSpend({ limits: tight, journal }, spend(2_000, "deposit"), line("vault:v:1", 2_000, { side: "deposit", state: "reserved" }))),
+      outcome(reserveSpend({ limits: tight, journal }, spend(2_000, "funding"), line("fund:p:1", 2_000, { side: "fund", state: "reserved" }))),
+    ]);
+    expect(results).toEqual(["in", "in", "over_daily_limit"]);
+    expect((await journal.read()).map((e) => e.orderId)).toEqual(["order", "vault:v:1"]);
+  });
+
+  it("writes nothing for a spend it refuses, and nothing at all when read only", async () => {
+    const journal = memoryJournal();
+    expect(await outcome(reserveSpend({ limits, journal }, spend(2_501), line("big", 2_501)))).toBe("over_trade_limit");
+    expect(await outcome(reserveSpend({ limits: { ...limits, readOnly: true }, journal }, spend(1), line("small", 1)))).toBe("read_only");
+    expect(await journal.read()).toEqual([]);
+  });
+
+  it("a refused spend does not hold up the next one", async () => {
+    const journal = memoryJournal();
+    const [first, second] = await Promise.all([
+      outcome(reserveSpend({ limits, journal }, spend(9_999), line("a", 9_999))),
+      outcome(reserveSpend({ limits, journal }, spend(100), line("b", 100))),
+    ]);
+    expect([first, second]).toEqual(["over_trade_limit", "in"]);
   });
 });

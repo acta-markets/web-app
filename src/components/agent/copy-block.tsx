@@ -7,8 +7,8 @@ import { cn } from "@/lib/cn";
 
 /**
  * Text a person pastes somewhere else: a prompt, a command, a config, a URL. The button copies
- * exactly what is shown. With `action` the copy is the block's one job and gets a full button
- * under the text; without it, a quiet "Copy" in the corner.
+ * exactly what is shown. With `action` the copy is the block's one job and gets a full button:
+ * beside a single line, under anything longer. Without it, a quiet "Copy" in the corner.
  */
 export function CopyBlock({
   text,
@@ -50,6 +50,19 @@ export function CopyBlock({
         >
           <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
         </button>
+      </div>
+    );
+  }
+  // One line and one job: the text and its button share a row, with no heading over them.
+  if (action && !text.includes("\n")) {
+    return (
+      <div className={cn("flex items-center gap-4 border border-bg-border bg-bg-primary p-3 pl-4 max-md:flex-col max-md:items-stretch max-md:gap-3 max-md:p-3", className)}>
+        <code aria-label={label} className={cn(TYPE_NOTE, "min-w-0 flex-1 break-words text-content-primary")}>
+          {text}
+        </code>
+        <AppButton type="button" onClick={copy} className="shrink-0 pl-5 pr-5">
+          <span aria-live="polite">{copied ? "Copied" : action}</span>
+        </AppButton>
       </div>
     );
   }

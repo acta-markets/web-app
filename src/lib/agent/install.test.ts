@@ -182,6 +182,10 @@ describe("adding the server to each tool", () => {
     ]);
     if (MCP_PUBLISHED) expect(trade.text).toContain(`        args: ["-y","${MCP_PACKAGE}"]`);
     expect(tool("deepseek-harness").read!.block!.text).toContain(`        transport: streamable-http\n        url: ${SITE}/mcp`);
+    // The desktop app starts servers without the shell's PATH: the step that runs npx says what to do then.
+    expect(tool("deepseek-harness").trade!.note).toMatch(/Node 22 or later/);
+    expect(tool("deepseek-harness").trade!.note).toMatch(/which npx/);
+    expect(tool("deepseek-harness").read!.note).not.toMatch(/npx/);
   });
 
   it("writes ZCode's entry the way its settings screen takes one", () => {
@@ -194,6 +198,26 @@ describe("adding the server to each tool", () => {
 
   it("hands every other agent the prompt", () => {
     expect(tool("other").trade!.block).toEqual({ label: "Prompt", text: agentPrompt(SITE), wrap: true });
+  });
+});
+
+describe("the limits the page shows", () => {
+  it("shows each default as the figure the server really uses", async () => {
+    const { DEFAULT_LIMITS } = await import("./limits");
+    const shown = Object.fromEntries(LIMIT_SETTINGS.map((setting) => [setting.name, setting.shown]));
+    expect(shown.ACTA_MAX_TRADE_USD).toBe(`$${DEFAULT_LIMITS.maxTradeUsd.toLocaleString("en-US")}`);
+    expect(shown.ACTA_DAILY_LIMIT_USD).toBe(`$${DEFAULT_LIMITS.dailyUsd.toLocaleString("en-US")}`);
+    expect(LIMIT_SETTINGS.find((s) => s.name === "ACTA_MAX_TRADE_USD")!.fallback).toBe(String(DEFAULT_LIMITS.maxTradeUsd));
+    expect(DEFAULT_LIMITS.readOnly).toBe(false);
+    expect(DEFAULT_LIMITS.allowedAssets).toBeNull();
+  });
+});
+
+describe("a config entry", () => {
+  it("keeps a list of arguments on one line and is still the same JSON", () => {
+    const text = tool("cursor").trade!.block!.text;
+    if (MCP_PUBLISHED) expect(text).toContain(`"args": ["-y", "${MCP_PACKAGE}"]`);
+    expect(JSON.parse(text)).toEqual({ mcpServers: { acta: MCP_PUBLISHED ? { command: "npx", args: ["-y", MCP_PACKAGE] } : expect.anything() } });
   });
 });
 

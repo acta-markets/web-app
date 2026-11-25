@@ -261,7 +261,7 @@ Set in the server's environment by the person who runs it. The server enforces t
 
 ${limits}
 
-A limit counts strike times size for a trade and the dollar value for a vault deposit, and the day's total is kept on disk, so restarting the server does not reset it.
+A limit counts strike times size for a trade and for funding a bought option, and the dollar value for a vault deposit. Each is checked and written down in one step, so calls made at the same time cannot each pass alone, and the day's total is kept on disk, so restarting the server does not reset it. A dry run and a preview are held to the same limits.
 
 ## What an agent cannot do
 

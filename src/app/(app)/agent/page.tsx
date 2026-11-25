@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { AgentPage } from "@/components/agent/agent-page";
-import { getDeploymentContext } from "@/lib/agent-discovery";
 import { pageMetadata, siteOrigin } from "@/lib/site-metadata";
 
 export const metadata: Metadata = pageMetadata({
@@ -11,6 +10,5 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default function Page() {
-  const origin = siteOrigin();
-  return <AgentPage siteOrigin={origin} apiOrigin={getDeploymentContext(origin).apiOrigin} />;
+  return <AgentPage siteOrigin={siteOrigin()} />;
 }

@@ -13,7 +13,7 @@
       "type": "skill-md",
       "description": "Read markets and place options trades on Acta (Solana devnet, test funds) through its MCP server. Use when the user asks to check what Acta offers, get a live quote, sell an option for premium, buy a call or put, or review their Acta positions. Requires the Acta MCP tools (names starting acta_). Do not use it to move funds to an address, to trade on mainnet, or without the user having asked for a trade.",
       "url": "/.well-known/agent-skills/trade-on-acta/SKILL.md",
-      "digest": "sha256:deb6aaafec1022dbfa13a677b410915f4873a9b596396ad1dfa1293dfdde2e4b"
+      "digest": "sha256:24d2cc63c5ca51ffeff449c93d1ec8941e1347c7e8436b486eed0c21656bbac4"
     }
   ]
 }

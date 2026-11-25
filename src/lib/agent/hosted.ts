@@ -9,7 +9,8 @@ import type { AgentContext } from "./trade";
  * holds no key, signs nothing and keeps no session between requests.
  */
 
-export const HOSTED_SERVER = { name: "acta", version: "0.1.0" } as const;
+/** The same version as `packages/mcp/package.json`: one tool list, one number. A test holds the two equal. */
+export const HOSTED_SERVER = { name: "acta", version: "0.3.0" } as const;
 /** The card's name: the site's domain reversed, then the server. */
 export const HOSTED_CARD_NAME = "markets.acta/acta";
 export const HOSTED_DESCRIPTION = "Read Acta's options markets and yield vaults on Solana devnet. No key, no sign-in.";

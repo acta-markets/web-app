@@ -3,8 +3,10 @@ import type { Rpc, SolanaRpcApiMainnet } from "@solana/kit";
 import { buildBuyDepositInstructions, buildBuyWithdrawInstructions } from "@/lib/trade/buy-deposit";
 import { explorerUrl } from "./config";
 import { AgentError, plainSymbol, toAgentError } from "./errors";
+import { latestCounted } from "./journal";
+import { checkSpend, reserveSpend, type Spend } from "./limits";
 import { isoTime, optionName } from "./markets";
-import { sendFromWallet } from "./send";
+import { nothingMoved, sendFromWallet } from "./send";
 import type { AgentContext } from "./trade";
 
 const PRICE_SCALE = 1_000_000_000;
@@ -13,6 +15,10 @@ const PRICE_SCALE = 1_000_000_000;
  * Funding a bought option, and taking the funding back. A bought call or put pays out only if
  * its holder has paid in what exercising costs before expiry: the strike's worth of the quote
  * token for a call, the asset itself for a put. Until expiry the funding can be withdrawn.
+ *
+ * Funding takes that much out of the wallet, so the owner's limits count it as they count a
+ * trade: by strike times size, against the per-trade and the daily limit. Taken back, it stops
+ * counting.
  */
 
 async function ownPosition(ctx: AgentContext, pda: string): Promise<PositionInfo> {
@@ -59,28 +65,33 @@ function describe(position: PositionInfo) {
 }
 
 export async function fundPosition(ctx: AgentContext, input: { position: string }) {
-  const { session, limits } = ctx;
+  const { session, limits, journal } = ctx;
   if (limits.readOnly) throw new AgentError("read_only", "This agent is set to read only: it cannot fund a position.", "stop");
   const position = await ownPosition(ctx, input.position);
   const funding = fundingOf(position);
+  const signer = session.signer!;
   const asset = plainSymbol(position.underlying_symbol) ?? "";
-  if (limits.allowedAssets && !limits.allowedAssets.includes(asset.toUpperCase())) {
-    throw new AgentError("asset_not_allowed", `This agent may only trade ${limits.allowedAssets.join(", ")}.`, "stop");
-  }
-  if (funding.usd > limits.maxTradeUsd) {
-    throw new AgentError("over_trade_limit", `Funding this takes $${funding.usd.toFixed(2)}; the limit per trade is $${limits.maxTradeUsd}.`, "stop", { limit_usd: limits.maxTradeUsd });
-  }
+  const spend: Spend = { wallet: signer.address, asset, usd: funding.usd, nowSec: Math.floor(session.nowSec()), what: "funding" };
+  // A quick refusal. The check that counts is `reserveSpend` below.
+  checkSpend(limits, await journal.read(), spend);
   if (position.state === "funded") throw new AgentError("already_funded", "This position is already funded.", "stop");
   if (Number(position.expiry_ts) <= session.nowSec()) throw new AgentError("expired", "This option has expired; it can no longer be funded.", "stop");
 
-  const signer = session.signer!;
   const instructions = await buildBuyDepositInstructions(session.rpc as unknown as Rpc<SolanaRpcApiMainnet>, signer.address, {
     pda: position.pda,
     market: position.market_pda,
   }).catch((error) => {
     throw new AgentError("chain_unreadable", `The position could not be read from chain: ${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`, "retry");
   });
-  const signature = await sendFromWallet(session, instructions);
+  // Checked and counted in one step before it is sent, like a trade and a vault deposit.
+  const entry = { orderId: `fund:${position.pda}:${crypto.randomUUID()}`, rfqId: "", wallet: signer.address, asset, side: "fund" as const, notionalUsd: funding.usd };
+  await reserveSpend(ctx, spend, { ...entry, state: "reserved", at: spend.nowSec });
+  const signature = await sendFromWallet(session, instructions).catch(async (error) => {
+    // Refused by the chain: nothing left the wallet. Any other failure leaves it counted.
+    if (nothingMoved(error)) await journal.append({ ...entry, state: "failed", at: Math.floor(session.nowSec()) });
+    throw error;
+  });
+  await journal.append({ ...entry, state: "confirmed", at: Math.floor(session.nowSec()), txSignature: signature });
   return {
     status: "funded",
     network: session.config.network,
@@ -107,6 +118,9 @@ export async function withdrawFunding(ctx: AgentContext, input: { position: stri
     throw new AgentError("chain_unreadable", `The position could not be read from chain: ${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`, "retry");
   });
   const signature = await sendFromWallet(session, instructions);
+  // The funding is back in the wallet, so it no longer counts against the day's limit.
+  const counted = latestCounted(await ctx.journal.read(), signer.address, `fund:${position.pda}:`);
+  if (counted) await ctx.journal.append({ ...counted, state: "abandoned", at: Math.floor(session.nowSec()) });
   return {
     status: "withdrawn",
     network: session.config.network,
