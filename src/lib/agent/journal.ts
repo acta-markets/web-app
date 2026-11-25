@@ -26,7 +26,8 @@ export type JournalEntry = {
   at: number;
   wallet: string;
   asset: string;
-  side: "sell" | "buy";
+  /** `deposit`: a vault deposit, counted by its dollar value. It has no order to look up. */
+  side: "sell" | "buy" | "deposit";
   /** strike times size, in dollars: what the limits count */
   notionalUsd: number;
   positionPda?: string;

@@ -30,6 +30,10 @@ describe("tool catalog", () => {
       expect(hints.destructiveHint).toBe(tool.effect === "funds");
     }
     expect(TOOLS.filter((tool) => tool.effect === "funds").map((tool) => tool.name)).toEqual([
+      "acta_vault_deposit",
+      "acta_vault_withdraw",
+      "acta_vault_cancel_request",
+      "acta_vault_process_request",
       "acta_place_trade",
       "acta_fund_position",
       "acta_withdraw_funding",

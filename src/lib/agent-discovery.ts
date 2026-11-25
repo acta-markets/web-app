@@ -214,7 +214,7 @@ It serves the tools that need no wallet. It holds no key and cannot trade.
 
 ## Trade: a wallet on your machine
 
-The server runs on your machine. The first time a tool is called it makes its own devnet wallet (\`${WALLET_FILE}\`) and uses it from then on. The key stays there: the site never sees it. It reads too, so it takes the place of the read-only server.
+The server runs on your machine. The first time a tool is called it makes its own wallet (\`${WALLET_FILE}\`) and uses it from then on. The key stays there: the site never sees it. It reads too, so it takes the place of the read-only server.
 
 ${build.length ? `Build it (Node 22 or later):\n\n\`\`\`bash\n${build.join("\n")}\n\`\`\`\n\nThen add it, from that folder:` : "Add it:"}
 
@@ -226,7 +226,7 @@ For a client that reads servers from a file${build.length ? ", with the folder y
 ${localConfig()}
 \`\`\`
 
-On devnet the venue funds a new wallet with test assets the first time it signs in. Call \`acta_status\` to see the balances. To use a key you already have, set \`ACTA_KEYPAIR\` to its file.
+Call \`acta_status\` to see the wallet's address and balances. To use a key you already have, set \`ACTA_KEYPAIR\` to its file.
 
 ## Tools
 
@@ -243,6 +243,16 @@ ${tools}
 5. If a result is \`unknown\`, never place the trade again. Look it up with \`acta_get_order\`.
 6. A bought option pays out only if it is funded before expiry: \`acta_fund_position\`, when its owner asks.
 
+## How an agent should use a vault
+
+1. \`acta_list_vaults\`, then \`acta_get_vault\`: what the vault takes, whether it takes deposits now, its fees, what it holds and its past cycles.
+2. \`acta_vault_deposit\` with \`dry_run: true\` checks the vault, the wallet and the limits. Without it the deposit is requested: it leaves the wallet now and buys shares when the vault processes requests between cycles.
+3. \`acta_list_vault_positions\`: the wallet's shares, their value at the last booked price, and any pending request.
+4. \`acta_vault_withdraw\` requests a withdrawal of shares. It is paid when the vault processes requests, at the price it books then.
+5. \`acta_vault_cancel_request\` takes back a request the vault has not processed yet.
+
+A vault sells options with its deposits. Its share price can fall as well as rise, and past returns are history, not a promise.
+
 Amounts are whole tokens and dollars, never atomic units.
 
 ## Limits
@@ -251,7 +261,7 @@ Set in the server's environment by the person who runs it. The server enforces t
 
 ${limits}
 
-A limit counts strike times size, and the day's total is kept on disk, so restarting the server does not reset it.
+A limit counts strike times size for a trade and the dollar value for a vault deposit, and the day's total is kept on disk, so restarting the server does not reset it.
 
 ## What an agent cannot do
 

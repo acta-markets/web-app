@@ -82,11 +82,11 @@ export function agentPrompt(siteOrigin: string): string {
   const numbered = steps.map(([first, ...rest], i) => [`${i + 1}. ${first}`, ...rest.map((line) => `   ${line}`)].join("\n"));
 
   return [
-    "Connect yourself to Acta, an options venue on Solana. This is devnet: test funds only.",
+    "Connect yourself to Acta, an options venue on Solana.",
     "",
     ...numbered,
     "",
-    `The server needs no key and no settings. On its first call it makes its own devnet wallet in ${WALLET_FILE.replace(/\/[^/]+$/, "")} and the venue funds it with test assets.`,
+    `The server needs no key and no settings. On its first call it makes its own wallet in ${WALLET_FILE.replace(/\/[^/]+$/, "")}.`,
     "Do not place a trade until I ask for one. Never open or print the key file.",
     `The full guide is ${siteOrigin.replace(/\/$/, "")}/agent`,
   ].join("\n");
@@ -143,7 +143,7 @@ function gooseLink(server: { cmd: string; arg: string[] } | { url: string; type:
   }
   params.set("id", MCP_SERVER_NAME);
   params.set("name", "Acta");
-  params.set("description", "Options on Solana devnet");
+  params.set("description", "Options on Solana");
   // Goose asks for %20, not the + a form would use.
   return `goose://extension?${params.toString().replace(/\+/g, "%20")}`;
 }
@@ -165,8 +165,8 @@ function lmStudioLink(entry: object): string {
 }
 
 /**
- * The grid: one button for each maker people know, and one for everything else. Seven and a
- * catch-all, so the page stays a choice a person makes at a glance. `apps` are the maker's
+ * The grid: one button for each maker people know, and one for everything else. Nine and a
+ * catch-all, two rows of five, so the page stays a choice a person makes at a glance. `apps` are the maker's
  * tools in the order they are offered; the first is the one shown when the button is picked.
  * `icon` is a file in `public/images/agent-tools`, drawn in the text colour.
  */
@@ -176,6 +176,8 @@ const PROVIDERS: ReadonlyArray<{ id: string; name: string; icon: string; apps: R
   { id: "cursor", name: "Cursor", icon: "cursor.svg", apps: ["cursor"] },
   { id: "copilot", name: "GitHub Copilot", icon: "githubcopilot.svg", apps: ["vscode", "copilot-cli"] },
   { id: "gemini", name: "Gemini", icon: "googlegemini.svg", apps: ["gemini-cli"] },
+  { id: "deepseek", name: "DeepSeek", icon: "deepseek.svg", apps: ["deepseek-harness"] },
+  { id: "glm", name: "GLM (Z.ai)", icon: "zai.svg", apps: ["zcode"] },
   { id: "hermes", name: "Hermes", icon: "hermes.png", apps: ["hermes"] },
   { id: "openclaw", name: "OpenClaw", icon: "openclaw.svg", apps: ["openclaw"] },
   {
@@ -187,6 +189,20 @@ const PROVIDERS: ReadonlyArray<{ id: string; name: string; icon: string; apps: R
 ];
 
 export type AgentProvider = { id: string; name: string; icon: string; apps: AgentTool[] };
+
+const DSH_NOTE = "If the file already has entries, add this one to the list. Then start a new session";
+const ZCODE_NOTE = "A new task picks it up. In an open one, send /reload";
+
+/** The entry DeepSeek Harness takes in its patch file: its MCP client plugin, pointed at one server. */
+function dshYaml(config: string[]): string {
+  return [
+    "- insert:",
+    `    - id: ${MCP_SERVER_NAME}-mcp`,
+    "      name: '@deepseek-ai/dsh-mcp-client'",
+    "      config:",
+    ...[`serverName: ${MCP_SERVER_NAME}`, ...config].map((line) => `        ${line}`),
+  ].join("\n");
+}
 
 const HERMES_NOTE = "It lists the tools it found and asks to enable them: press Enter. Then start a new session, or send /reload-mcp";
 
@@ -318,6 +334,23 @@ export function agentTools(siteOrigin: string): AgentTool[] {
       name: "Codex",
       trade: command("Codex", `codex mcp add ${name} -- ${run}`),
       read: command("Codex", `codex mcp add ${name} --url ${url}`, null),
+    },
+    {
+      id: "deepseek-harness",
+      name: "DeepSeek Harness",
+      trade: entry(
+        "DeepSeek Harness",
+        "~/.dsh/cordis.patch.yml",
+        dshYaml(["transport: stdio", `command: ${local.command}`, `args: ${JSON.stringify(local.args)}`, "toolCallTimeoutMs: 180000"]),
+        fill ?? DSH_NOTE,
+      ),
+      read: entry("DeepSeek Harness", "~/.dsh/cordis.patch.yml", dshYaml(["transport: streamable-http", `url: ${url}`]), DSH_NOTE),
+    },
+    {
+      id: "zcode",
+      name: "ZCode",
+      trade: entry("ZCode", "Settings > MCP Servers > New > JSON", { mcpServers: { [name]: local } }, fill ?? ZCODE_NOTE),
+      read: entry("ZCode", "Settings > MCP Servers > New > JSON", { mcpServers: { [name]: { type: "http", url } } }, ZCODE_NOTE),
     },
     {
       id: "hermes",
@@ -457,8 +490,8 @@ export function agentProviders(siteOrigin: string): AgentProvider[] {
 
 /** The limits a person can set, with what each defaults to. */
 export const LIMIT_SETTINGS: ReadonlyArray<{ name: string; meaning: string; fallback: string }> = [
-  { name: "ACTA_MAX_TRADE_USD", meaning: "Largest strike times size of one trade", fallback: "2500" },
-  { name: "ACTA_DAILY_LIMIT_USD", meaning: "Most strike times size in any 24 hours", fallback: "10000" },
+  { name: "ACTA_MAX_TRADE_USD", meaning: "Largest strike times size of one trade, or dollar value of one vault deposit", fallback: "2500" },
+  { name: "ACTA_DAILY_LIMIT_USD", meaning: "Most strike times size and vault deposits in any 24 hours", fallback: "10000" },
   { name: "ACTA_ALLOWED_ASSETS", meaning: "The only assets it may trade, comma separated", fallback: "every listed asset" },
   { name: "ACTA_READ_ONLY", meaning: "Set to 1 and it never trades", fallback: "off" },
 ];

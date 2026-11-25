@@ -18,6 +18,8 @@ const expiry = z.string().min(8).max(12).describe("The date in the sentence, YYY
 const size = z.number().positive().describe("How much of the asset the option is on, in whole units of the asset (0.1 means 0.1 BTC)");
 
 const trade = { asset, side, view, strike, expiry, size };
+const vault = z.string().min(32).max(44).describe("The vault's address, as acta_list_vaults gives it");
+const vaultRequest = z.enum(["deposit", "withdrawal"]).describe("Which of the wallet's pending requests in the vault");
 
 const INPUTS: Record<string, z.ZodObject> = {
   acta_status: z.object({}),
@@ -29,7 +31,20 @@ const INPUTS: Record<string, z.ZodObject> = {
       expiry: expiry.optional(),
     }),
   acta_list_vaults: z.object({}),
-  acta_get_vault: z.object({ vault: z.string().min(32).max(44).describe("The vault's address, as acta_list_vaults gives it") }),
+  acta_get_vault: z.object({ vault }),
+  acta_list_vault_positions: z.object({ vault: vault.optional() }),
+  acta_vault_deposit: z.object({
+      vault,
+      amount: z.number().positive().describe("How much of the vault's deposit token to deposit, in whole tokens (25.5 means 25.5 USDC)"),
+      dry_run: z.boolean().optional().describe("true: check the vault, the wallet and the limits, send nothing"),
+    }),
+  acta_vault_withdraw: z.object({
+      vault,
+      shares: z.number().positive().optional().describe("How many shares to withdraw, as acta_list_vault_positions gives them. Leave out when all is true"),
+      all: z.boolean().optional().describe("true: withdraw every share the wallet holds in the vault"),
+    }),
+  acta_vault_cancel_request: z.object({ vault, request: vaultRequest }),
+  acta_vault_process_request: z.object({ vault, request: vaultRequest }),
   acta_preview_trade: z.object(trade),
   acta_place_trade: z.object({
       ...trade,

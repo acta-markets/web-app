@@ -5,6 +5,7 @@ import { getMarket, listAssets } from "./markets";
 import { listPositions } from "./positions";
 import { status } from "./status";
 import { getOrder, placeTrade, previewTrade, type AgentContext, type PlaceInput, type TradeInput } from "./trade";
+import { listVaultPositions, vaultCancelRequest, vaultDeposit, vaultProcessRequest, vaultWithdraw } from "./vault-actions";
 import { getVault, listVaults } from "./vaults";
 
 // Inputs arrive already checked against the tool's schema in the catalog.
@@ -17,6 +18,11 @@ export const HANDLERS: Record<string, Handler> = {
   acta_get_market: (ctx, input: Parameters<typeof getMarket>[1]) => getMarket(ctx.session, input),
   acta_list_vaults: (ctx) => listVaults(ctx.session),
   acta_get_vault: (ctx, input: { vault: string }) => getVault(ctx.session, input),
+  acta_list_vault_positions: (ctx, input: Parameters<typeof listVaultPositions>[1]) => listVaultPositions(ctx, input),
+  acta_vault_deposit: (ctx, input: Parameters<typeof vaultDeposit>[1]) => vaultDeposit(ctx, input),
+  acta_vault_withdraw: (ctx, input: Parameters<typeof vaultWithdraw>[1]) => vaultWithdraw(ctx, input),
+  acta_vault_cancel_request: (ctx, input: Parameters<typeof vaultCancelRequest>[1]) => vaultCancelRequest(ctx, input),
+  acta_vault_process_request: (ctx, input: Parameters<typeof vaultProcessRequest>[1]) => vaultProcessRequest(ctx, input),
   acta_preview_trade: (ctx, input: TradeInput) => previewTrade(ctx, input),
   acta_place_trade: (ctx, input: PlaceInput) => placeTrade(ctx, input),
   acta_fund_position: (ctx, input: { position: string }) => fundPosition(ctx, input),

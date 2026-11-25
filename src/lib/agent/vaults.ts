@@ -1,4 +1,6 @@
-import { vaultView } from "@/lib/vaults/view";
+import { flows } from "@acta-markets/ts-sdk/chain";
+import { depositBlockMessage, depositCap, withdrawBlockMessage } from "@/lib/vaults/rules";
+import { exposureView, vaultView } from "@/lib/vaults/view";
 import { AgentError, plainSymbol, plainText } from "./errors";
 import { isoTime } from "./markets";
 import type { ActaSession } from "./session";
@@ -14,7 +16,7 @@ async function symbolOf(session: ActaSession, mint: string): Promise<string | nu
   return plainSymbol(tokens?.get(mint)?.symbol);
 }
 
-function summary(vault: VaultRow, depositToken: string | null) {
+function summary(vault: VaultRow, depositToken: string | null, nowSec: number) {
   const returns = vault.performance?.returns;
   return {
     vault: vault.vault_pda,
@@ -22,7 +24,8 @@ function summary(vault: VaultRow, depositToken: string | null) {
     name: vault.metadata?.name ? plainText(vault.metadata.name, 60) : null,
     curator: vault.metadata?.curator ? plainText(vault.metadata.curator, 60) : null,
     deposit_token: depositToken,
-    accepting_deposits: vault.accepting_deposits,
+    // By the contract's rules, which close deposits for more reasons than the vault's own switch.
+    deposits_open: flows.requestDepositBlock(vault, nowSec) === null,
     phase: vault.phase,
     safety: vault.safety,
     share_price: Number(vault.share_price) / PRICE_SCALE,
@@ -42,10 +45,11 @@ function summary(vault: VaultRow, depositToken: string | null) {
 
 export async function listVaults(session: ActaSession) {
   const vaults = (await session.http.vaults()).map(vaultView);
-  const rows = await Promise.all(vaults.map(async (v) => summary(v, await symbolOf(session, v.main_mint))));
+  const nowSec = session.nowSec();
+  const rows = await Promise.all(vaults.map(async (v) => summary(v, await symbolOf(session, v.main_mint), nowSec)));
   return {
     network: session.config.network,
-    note: "A vault takes deposits in its deposit_token and sells options with them each cycle. return_pct is history after fees, null until enough cycles have finished.",
+    note: "A vault takes deposits in its deposit_token and sells options with them each cycle. A deposit or a withdrawal is a request, processed between cycles. return_pct is history after fees, null until enough cycles have finished.",
     vaults: rows,
   };
 }
@@ -56,10 +60,21 @@ export async function getVault(session: ActaSession, input: { vault: string }) {
   if (!raw) throw new AgentError("unknown_vault", "No open vault has that address.", "fix_request");
   const vault = vaultView(raw);
   const token = await symbolOf(session, vault.main_mint);
-  const cycles = await session.http.vaultCycles(input.vault, { limit: 8 }).catch(() => null);
+  const [cycles, exposure, tokens] = await Promise.all([
+    session.http.vaultCycles(input.vault, { limit: 8 }).catch(() => null),
+    session.http.vaultExposure(input.vault).then(exposureView, () => null),
+    session.http.tokens().catch(() => null),
+  ]);
+  const nowSec = session.nowSec();
+  const depositBlock = flows.requestDepositBlock(vault, nowSec);
+  const withdrawBlock = flows.requestWithdrawBlock(vault, nowSec);
+  const cap = depositCap(vault.capacity);
   return {
     network: session.config.network,
-    ...summary(vault, token),
+    ...summary(vault, token, nowSec),
+    deposits: depositBlock === null ? "open" : depositBlockMessage(depositBlock, vault),
+    withdrawal_requests: withdrawBlock === null ? "open" : withdrawBlockMessage(withdrawBlock, vault),
+    room_left: cap ? { amount: Number(cap.remaining) / 10 ** vault.main_decimals, token } : "no cap",
     fees_bps: { performance: vault.performance_fee_bps, management: vault.management_fee_bps },
     pending: { deposits: vault.pending_deposit_count, withdrawals: vault.pending_withdraw_count },
     withdrawals: `A deposit or a withdrawal is a request, processed at the end of the cycle; after ${Math.round(vault.capital_fallback_delay_seconds / 3600)} hours unprocessed, the depositor may process it.`,
@@ -67,6 +82,16 @@ export async function getVault(session: ActaSession, input: { vault: string }) {
       expiry: isoTime(Number(c.expiry_ts)),
       state: c.state.type,
       return_pct: "return_pct" in c.state && c.state.return_pct.type === "available" ? c.state.return_pct.value : null,
+    })) ?? null,
+    // The options the vault holds right now: what its depositors are exposed to.
+    holds: exposure?.positions.map((p) => ({
+      option: p.position_type,
+      role: p.role,
+      asset: plainSymbol(tokens?.get(p.underlying_mint)?.symbol),
+      strike: Number(p.strike) / PRICE_SCALE,
+      size: p.underlying_decimals == null ? null : Number(p.quantity) / 10 ** p.underlying_decimals,
+      expiry: isoTime(Number(p.expiry_ts)),
+      in_the_money: p.itm,
     })) ?? null,
     page: `${session.config.siteUrl}/earn/${vault.vault_pda}`,
   };

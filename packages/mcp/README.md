@@ -3,8 +3,8 @@
 An MCP server for [Acta](https://devnet.acta.markets/agent): options and curated yield vaults on
 Solana. It runs on your machine, over stdio, with a wallet it makes there. Devnet: test funds only.
 
-It reads markets, asks trading desks for live quotes, places trades and funds bought options, inside
-limits you set.
+It reads markets, asks trading desks for live quotes, places trades, funds bought options, and
+deposits into and withdraws from the yield vaults, inside limits you set.
 
 ## Add it to your agent
 
@@ -38,7 +38,9 @@ that makes any other agent do all of this itself.
 
 An agent that trades can lose what its wallet holds, up to the limits you set. Every trade is final.
 A sold option that ends on the wrong side converts the deposit at the strike. A bought option that
-ends on the wrong side expires and its premium is gone.
+ends on the wrong side expires and its premium is gone. A vault sells options with its deposits, so
+its share price can fall, and a deposit or a withdrawal there is a request that waits for the cycle
+to end.
 
 ## Settings
 
@@ -46,8 +48,8 @@ Environment variables of the server, set where your agent keeps its MCP servers.
 
 | Variable | What it does | Default |
 |---|---|---|
-| `ACTA_MAX_TRADE_USD` | Largest strike times size of one trade | 2500 |
-| `ACTA_DAILY_LIMIT_USD` | Most strike times size in any 24 hours | 10000 |
+| `ACTA_MAX_TRADE_USD` | Largest strike times size of one trade, or dollar value of one vault deposit | 2500 |
+| `ACTA_DAILY_LIMIT_USD` | Most strike times size and vault deposits in any 24 hours | 10000 |
 | `ACTA_ALLOWED_ASSETS` | The only assets it may trade, comma separated | every listed asset |
 | `ACTA_READ_ONLY` | Set to 1 and it never trades | off |
 | `ACTA_KEYPAIR` | A key file to use in place of the wallet it makes (a JSON array, as `solana-keygen` writes it) | none |
@@ -65,6 +67,8 @@ writes a key yourself and prints only its address.
 ## Tools
 
 `acta_status`, `acta_list_assets`, `acta_get_market`, `acta_list_vaults`, `acta_get_vault`,
+`acta_list_vault_positions`, `acta_vault_deposit`, `acta_vault_withdraw`, `acta_vault_cancel_request`,
+`acta_vault_process_request`,
 `acta_preview_trade`, `acta_place_trade`, `acta_fund_position`, `acta_withdraw_funding`,
 `acta_list_positions`, `acta_get_order`. What each does:
 [docs.acta.markets/quickstart/mcp](https://docs.acta.markets/quickstart/mcp).

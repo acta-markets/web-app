@@ -5,12 +5,12 @@ import { pageMetadata, siteOrigin } from "@/lib/site-metadata";
 
 export const metadata: Metadata = pageMetadata({
   title: "Agent",
-  description: "Connect an AI agent to Acta over MCP. It reads markets and vaults with no key, and trades with a wallet you make and limits you set.",
+  description: "Connect your AI trading agent to Acta over MCP. It reads markets and vaults, and trades with its own wallet inside limits you set.",
   path: "/agent",
   image: "agent",
 });
 
 export default function Page() {
   const origin = siteOrigin();
-  return <AgentPage siteOrigin={origin} apiOrigin={getDeploymentContext(origin).apiOrigin} docsHref="/docs/quickstart/mcp" />;
+  return <AgentPage siteOrigin={origin} apiOrigin={getDeploymentContext(origin).apiOrigin} />;
 }

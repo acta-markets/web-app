@@ -16,7 +16,7 @@ one step for each tool instead: Claude, ChatGPT, Codex, Cursor, Hermes, OpenClaw
 and more, with a button where the tool has an install link.
 
 ```text
-Connect yourself to Acta, an options venue on Solana. This is devnet: test funds only.
+Connect yourself to Acta, an options venue on Solana.
 
 1. Add an MCP server to yourself under the name "acta", for every project, replacing any server already called that. It needs Node 22 or later:
    command: npx
@@ -24,7 +24,7 @@ Connect yourself to Acta, an options venue on Solana. This is devnet: test funds
 2. If the acta tools are not there until you are restarted, tell me to restart you and stop.
 3. Call acta_status and tell me the wallet's address, what it holds and its limits.
 
-The server needs no key and no settings. On its first call it makes its own devnet wallet in ~/.acta-mcp and the venue funds it with test assets.
+The server needs no key and no settings. On its first call it makes its own wallet in ~/.acta-mcp.
 Do not place a trade until I ask for one. Never open or print the key file.
 The full guide is https://devnet.acta.markets/agent
 ```
@@ -103,7 +103,12 @@ To build the server from source instead, see the package's
 | `acta_list_assets` | Reads the assets on offer and the indicative yield of selling each side | no |
 | `acta_get_market` | Reads one asset's price, tradable dates and strikes with indicative premiums | no |
 | `acta_list_vaults` | Reads the vaults: what each takes, its size and past returns | no |
-| `acta_get_vault` | Reads one vault's fees, pending requests and recent cycles | no |
+| `acta_get_vault` | Reads one vault: whether it takes deposits now, its room, fees, what it holds and recent cycles | no |
+| `acta_list_vault_positions` | Reads what the wallet holds in vaults: shares, their value and pending requests | yes |
+| `acta_vault_deposit` | Moves funds: requests a deposit into a vault | yes |
+| `acta_vault_withdraw` | Moves funds: requests a withdrawal of shares | yes |
+| `acta_vault_cancel_request` | Moves funds: takes back a pending deposit or withdrawal request | yes |
+| `acta_vault_process_request` | Moves funds: processes the wallet's own request once the vault has left it past its delay | yes |
 | `acta_preview_trade` | Asks the desks for a live quote; trades nothing | yes |
 | `acta_place_trade` | Places a trade at a limit or better. Moves the wallet's funds | yes |
 | `acta_fund_position` | Pays in what exercising a bought option costs. Moves the wallet's funds | yes |
@@ -112,7 +117,9 @@ To build the server from source instead, see the package's
 | `acta_get_order` | Reads where one order stands | yes |
 
 Covered calls and cash-secured puts, sold or bought, are supported, and so is funding a bought
-option. Spreads, cash puts and vault deposits are not served by these tools yet; use the app for those.
+option. Vaults are served in full: reading them, depositing, withdrawing, and cancelling or processing
+a request. A deposit or a withdrawal is a request the vault processes between cycles. Spreads and cash
+puts are not served by these tools yet; use the app for those.
 
 A bought option pays out only if it is funded before expiry: the strike's worth of the quote token
 for a call, the asset for a put. If it then ends out of the money, what was paid in comes back.
@@ -183,8 +190,8 @@ them.
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `ACTA_MAX_TRADE_USD` | Largest strike x size of one trade | 2500 |
-| `ACTA_DAILY_LIMIT_USD` | Most strike x size in any 24 hours | 10000 |
+| `ACTA_MAX_TRADE_USD` | Largest strike x size of one trade, or dollar value of one vault deposit | 2500 |
+| `ACTA_DAILY_LIMIT_USD` | Most strike x size and vault deposits in any 24 hours | 10000 |
 | `ACTA_ALLOWED_ASSETS` | The only assets it may trade, comma separated | every listed asset |
 | `ACTA_READ_ONLY` | `1`: never trade or fund | off |
 | `ACTA_RPC_URL` | Solana devnet RPC | the public one |

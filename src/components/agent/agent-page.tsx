@@ -1,4 +1,4 @@
-import { AppPageHeader, AppPageHeaderLink } from "@/components/app-ui/app-page-header";
+import { AppPageHeader } from "@/components/app-ui/app-page-header";
 import { AppPill } from "@/components/app-ui/app-pill";
 import { TYPE_LABEL, TYPE_NOTE } from "@/components/app-ui/type-styles";
 import { LIMIT_SETTINGS } from "@/lib/agent/install";
@@ -30,17 +30,15 @@ function Section({ id, title, lead, children }: { id: string; title: string; lea
 const GRID = "grid grid-cols-1 gap-px border border-bg-border bg-bg-border md:grid-cols-2";
 const CELL = "flex flex-col gap-1.5 bg-bg-primary px-5 py-4";
 
-export function AgentPage({ siteOrigin, apiOrigin, docsHref }: { siteOrigin: string; apiOrigin: string; docsHref: string }) {
+export function AgentPage({ siteOrigin, apiOrigin }: { siteOrigin: string; apiOrigin: string }) {
   return (
     <>
       <AppPageHeader
         title="Agent"
-        subtitle="Connect your AI agent. It reads the market and trades with its own wallet"
-        action={<AppPageHeaderLink href={docsHref}>How it works</AppPageHeaderLink>}
+        subtitle="Connect your AI trading agent to the fastest options venue on Solana"
       />
       <div className="mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6 max-md:px-3">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
-          <p className={cn(TYPE_NOTE, "text-content-secondary")}>Devnet: test funds only. Nothing here is real money.</p>
+        <div className="flex justify-end pb-4">
           <VenueStatus apiOrigin={apiOrigin} />
         </div>
 

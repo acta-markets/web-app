@@ -50,6 +50,16 @@ Place a trade only when the user asked for that trade. A general question about 
 - `acta_fund_position` pays in what exercising costs (the strike's worth of the quote token for a call, the asset for a put). Do it only when the user asks. If the option ends out of the money, what was paid in comes back. `acta_withdraw_funding` takes it back before expiry.
 - An error carries `next`: `fix_request` (change the input, the details say how), `retry`, `reconcile` (look the order up, do not repeat it) or `stop`.
 
+## Vaults
+
+A vault takes deposits in one token and sells options with them each cycle. Its share price can fall as well as rise.
+
+- `acta_list_vaults`, then `acta_get_vault`: whether the vault takes deposits right now, its fees, what it holds and its past cycles. Past returns are history, not a promise.
+- `acta_vault_deposit`: first with `dry_run: true`, then for real only when the user asked for that deposit. It is a request: the amount leaves the wallet now and buys shares when the vault processes requests between cycles.
+- `acta_list_vault_positions`: the wallet's shares, their value at the last booked price and any pending request.
+- `acta_vault_withdraw` requests a withdrawal of shares; it is paid when the vault processes requests, at the price booked then. Tell the user it is not immediate.
+- `acta_vault_cancel_request` takes back a request the vault has not processed. `acta_vault_process_request` is only for a request the vault has left past its delay; it is refused until then.
+
 ## Rules
 
 - Amounts are whole tokens and dollars: `0.1` is 0.1 BTC. Never atomic units.

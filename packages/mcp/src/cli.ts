@@ -31,8 +31,8 @@ Environment
   ACTA_KEYPAIR             path to a key file to use instead (a JSON array, as solana-keygen writes it)
   ACTA_SIGNER_MODULE       instead of a key file: path to an ES module whose default export returns
                            { address, signMessage(bytes), signTransaction?(wire) }, for a KMS or custody signer
-  ACTA_MAX_TRADE_USD       largest strike x size of one trade         (default ${DEFAULT_LIMITS.maxTradeUsd})
-  ACTA_DAILY_LIMIT_USD     most strike x size in any 24 hours         (default ${DEFAULT_LIMITS.dailyUsd})
+  ACTA_MAX_TRADE_USD       largest strike x size of one trade, or dollar value of one vault deposit (default ${DEFAULT_LIMITS.maxTradeUsd})
+  ACTA_DAILY_LIMIT_USD     most strike x size and vault deposits in any 24 hours (default ${DEFAULT_LIMITS.dailyUsd})
   ACTA_ALLOWED_ASSETS      comma-separated symbols the agent may trade (default: all listed)
   ACTA_READ_ONLY           1: never trade, whatever is asked
   ACTA_RPC_URL             Solana devnet RPC                           (default: the public one)

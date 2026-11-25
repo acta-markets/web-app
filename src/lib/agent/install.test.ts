@@ -21,8 +21,11 @@ const tool = (id: string) => tools.find((t) => t.id === id)!;
 describe("the prompt a person pastes to their agent", () => {
   const prompt = agentPrompt(SITE);
 
-  it("says what this is and what the money is before it asks for anything", () => {
-    expect(prompt.split("\n")[0]).toBe("Connect yourself to Acta, an options venue on Solana. This is devnet: test funds only.");
+  it("says what this is before it asks for anything, and names no environment", () => {
+    // Which network it is comes from the server (acta_status says so), not from a line of copy.
+    expect(prompt.split("\n")[0]).toBe("Connect yourself to Acta, an options venue on Solana.");
+    // The site's own address may carry a network name; the words around it must not.
+    expect(prompt.replace(/https?:\/\/\S+/g, "")).not.toMatch(/devnet|mainnet|test funds/i);
   });
 
   it("leaves nothing for the person to fill in", () => {
@@ -59,12 +62,23 @@ describe("adding the server to each tool", () => {
     const ids = tools.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids[0]).toBe("claude-code");
-    expect(ids.length).toBe(23);
+    expect(ids.length).toBe(25);
   });
 
-  it("shows eight buttons: seven makers, then everything else", () => {
+  it("shows ten buttons: nine makers, then everything else", () => {
     const providers = agentProviders(SITE);
-    expect(providers.map((p) => p.name)).toEqual(["Claude", "OpenAI", "Cursor", "GitHub Copilot", "Gemini", "Hermes", "OpenClaw", "Other agents"]);
+    expect(providers.map((p) => p.name)).toEqual([
+      "Claude",
+      "OpenAI",
+      "Cursor",
+      "GitHub Copilot",
+      "Gemini",
+      "DeepSeek",
+      "GLM (Z.ai)",
+      "Hermes",
+      "OpenClaw",
+      "Other agents",
+    ]);
     // every tool sits under exactly one button, and no button is empty
     expect(providers.flatMap((p) => p.apps.map((app) => app.id))).toEqual(tools.map((t) => t.id));
     for (const p of providers) expect(p.apps.length, p.name).toBeGreaterThan(0);
@@ -154,6 +168,28 @@ describe("adding the server to each tool", () => {
     expect(tool("hermes").read!.block!.text).toBe(`hermes mcp add acta --url ${SITE}/mcp`);
     expect(tool("gemini-cli").trade!.block!.text).toBe(`gemini mcp add -s user acta npx -y ${MCP_PACKAGE}`);
     expect(tool("gemini-cli").read!.block!.text).toBe(`gemini mcp add -s user --transport http acta ${SITE}/mcp`);
+  });
+
+  it("writes DeepSeek Harness's entry as its MCP client plugin, in the patch file's shape", () => {
+    const trade = tool("deepseek-harness").trade!.block!;
+    expect(trade.label).toBe("~/.dsh/cordis.patch.yml");
+    expect(trade.text.split("\n").slice(0, 5)).toEqual([
+      "- insert:",
+      "    - id: acta-mcp",
+      "      name: '@deepseek-ai/dsh-mcp-client'",
+      "      config:",
+      "        serverName: acta",
+    ]);
+    if (MCP_PUBLISHED) expect(trade.text).toContain(`        args: ["-y","${MCP_PACKAGE}"]`);
+    expect(tool("deepseek-harness").read!.block!.text).toContain(`        transport: streamable-http\n        url: ${SITE}/mcp`);
+  });
+
+  it("writes ZCode's entry the way its settings screen takes one", () => {
+    expect(tool("zcode").read!.block!.label).toBe("Settings > MCP Servers > New > JSON");
+    expect(JSON.parse(tool("zcode").read!.block!.text)).toEqual({ mcpServers: { acta: { type: "http", url: `${SITE}/mcp` } } });
+    if (MCP_PUBLISHED) {
+      expect(JSON.parse(tool("zcode").trade!.block!.text)).toEqual({ mcpServers: { acta: { command: "npx", args: ["-y", MCP_PACKAGE] } } });
+    }
   });
 
   it("hands every other agent the prompt", () => {

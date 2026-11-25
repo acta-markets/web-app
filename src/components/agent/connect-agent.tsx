@@ -10,12 +10,12 @@ import { CopyBlock } from "./copy-block";
 
 /**
  * Connecting an agent: pick who makes it, do one thing, ask it something. The page is this
- * widget. Eight buttons, seven makers and everything else; a maker with several tools shows
+ * widget. Ten buttons, nine makers and everything else; a maker with several tools shows
  * them as a row to pick from. Every tool has the same two steps, so a person reads only theirs.
  */
 
 const MODE_LINE: Record<ConnectMode, string> = {
-  trade: "Runs on your machine with a devnet wallet it makes there. It reads and trades.",
+  trade: "Runs on your machine with a wallet it makes there. It reads and trades.",
   read: "The site's own server. No wallet and no sign in, and it cannot trade.",
 };
 
@@ -68,7 +68,7 @@ export function ConnectAgent({ siteOrigin }: { siteOrigin: string }) {
 
   return (
     <div className="border border-bg-border bg-bg-primary">
-      <div role="radiogroup" aria-label="Who makes your agent" className="-mb-px -mr-px grid grid-cols-2 overflow-hidden md:grid-cols-4">
+      <div role="radiogroup" aria-label="Who makes your agent" className="-mb-px -mr-px grid grid-cols-2 overflow-hidden md:grid-cols-5">
         {providers.map((p) => {
           const active = p.id === provider.id;
           return (
