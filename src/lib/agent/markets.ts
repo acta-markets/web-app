@@ -1,4 +1,5 @@
-import type { TokenInfo, TokenMarketsInfoData } from "@acta-markets/ts-sdk/ws";
+import type { TokenMarkets } from "@acta-markets/ts-sdk/http";
+import type { TokenInfo } from "@acta-markets/ts-sdk/ws";
 import { buildStrikeOptions, indicativesFor, spotFromSnapshot, tradableExpiries } from "@/lib/trade/strikes";
 import { AgentError, plainSymbol, serverCode, toAgentError } from "./errors";
 import type { ActaSession } from "./session";
@@ -52,7 +53,7 @@ export async function findAsset(session: ActaSession, symbol: string): Promise<A
 }
 
 /** One asset's expiries, strikes and indicative premiums, straight from the venue. */
-export async function marketSnapshot(session: ActaSession, asset: Asset): Promise<TokenMarketsInfoData> {
+export async function marketSnapshot(session: ActaSession, asset: Asset): Promise<TokenMarkets> {
   try {
     return await session.tokenMarkets(asset.mint);
   } catch (error) {

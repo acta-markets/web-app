@@ -1,3 +1,4 @@
+import type { TokenMarkets } from "@acta-markets/ts-sdk/http";
 import {
   ALL_POSITIONS,
   previewFill,
@@ -12,7 +13,6 @@ import {
   type QuoteReceivedMessage,
   type QuoteTokenFees,
   type RfqUpdateMessage,
-  type TokenMarketsInfoData,
   type TradeTransaction,
 } from "@acta-markets/ts-sdk/ws";
 import { address, signature as toSignature } from "@solana/kit";
@@ -69,7 +69,7 @@ export type AgentContext = {
 type ResolvedTrade = {
   asset: Asset;
   strategy: Strategy;
-  data: TokenMarketsInfoData;
+  data: TokenMarkets;
   descriptor: MarketDescriptorInfo;
   terms: OptionTerms;
   strike: number;

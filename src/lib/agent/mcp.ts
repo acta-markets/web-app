@@ -15,7 +15,8 @@ export type ResultCache = { get(key: string): unknown | undefined; set(key: stri
 /** The AI client that runs this server, as its MCP `initialize` named itself. */
 function aiClientOf(server: McpServer): string {
   const info = server.server.getClientVersion();
-  return info ? `${info.name}/${info.version}` : "unknown";
+  // Self-reported and sent in an HTTP header: printable ASCII only, and short.
+  return info ? `${info.name}/${info.version}`.replace(/[^\x20-\x7e]/g, "?").slice(0, 48) : "unknown";
 }
 
 export function buildMcpServer(
