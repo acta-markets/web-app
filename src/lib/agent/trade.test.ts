@@ -66,7 +66,7 @@ async function context(
     if (!status) throw new Error("offline");
     return status;
   });
-  const getPositionsPageAsync = vi.fn(async () => {
+  const getPositionsPageAsync = vi.fn(async (_args: { market_pda: unknown; cursor: unknown }): Promise<{ positions: unknown[]; next_cursor: string | null }> => {
     if (found.positions instanceof Error) throw found.positions;
     return { positions: found.positions ?? [], next_cursor: null };
   });
@@ -162,6 +162,19 @@ describe("settleJournal: what a restart finds", () => {
     const { ctx, journal } = await context([old()], unknown, undefined, { positions: [opened(over)] });
     expect(await settleJournal(ctx, WALLET)).toEqual([]);
     expect(await stateOf(journal)).toBe("failed");
+  });
+
+  it("looks through every page of the order's market, not the wallet's first page", async () => {
+    const { ctx, journal, getPositionsPageAsync } = await context([old()], unknown);
+    getPositionsPageAsync
+      .mockResolvedValueOnce({ positions: [], next_cursor: "p2" })
+      .mockResolvedValueOnce({ positions: [opened()], next_cursor: null });
+    expect(await settleJournal(ctx, WALLET)).toEqual([]);
+    expect(await stateOf(journal)).toBe("confirmed");
+    expect(getPositionsPageAsync.mock.calls.map(([args]) => [args.market_pda, args.cursor])).toEqual([
+      [{ type: "only", value: MARKET }, { type: "start" }],
+      [{ type: "only", value: MARKET }, { type: "after", id: "p2" }],
+    ]);
   });
 
   it("a position another order in the journal already opened is not counted twice", async () => {

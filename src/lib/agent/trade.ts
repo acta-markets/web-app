@@ -6,10 +6,12 @@ import {
   totalPremiumQuoteAtoms,
   TRADE_RFQ_TIMEOUTS,
   type ActaWsClient,
+  type Cursor,
   type MarketDescriptorInfo,
   type NotTradedReason,
   type OptionTerms,
   type OrderExecutionState,
+  type PositionInfo,
   type QuoteReceivedMessage,
   type QuoteTokenFees,
   type RfqUpdateMessage,
@@ -353,20 +355,26 @@ async function traceOrder(ctx: AgentContext, client: ActaWsClient, entry: Journa
   }
   // Lines written before the order's terms were kept have nothing to match a position on.
   if (!entry.market || !entry.strike || !entry.quantity) return landed ? { state: "confirmed" } : { state: "failed" };
+  const market = entry.market;
+  const matches = (p: PositionInfo) =>
+    p.market_pda === market
+    && p.side === entry.side
+    && p.quantity === entry.quantity
+    && "strike" in p.terms
+    && p.terms.strike === entry.strike
+    && Number(p.created_at) >= entry.at - POSITION_MATCH_SLACK_SECONDS
+    // not one another order in the journal already opened
+    && !claimed.has(p.pda);
   try {
-    const page = await client.getPositionsPageAsync({ ...ALL_POSITIONS, status: [], limit: 200 }, { applyToState: false });
-    const position = page.positions.find(
-      (p) =>
-        p.market_pda === entry.market
-        && p.side === entry.side
-        && p.quantity === entry.quantity
-        && "strike" in p.terms
-        && p.terms.strike === entry.strike
-        && Number(p.created_at) >= entry.at - POSITION_MATCH_SLACK_SECONDS
-        // not one another order in the journal already opened
-        && !claimed.has(p.pda),
-    );
-    if (position) return { state: "confirmed", positionPda: position.pda };
+    // Only the order's market, every page of it.
+    let cursor: Cursor = { type: "start" };
+    for (;;) {
+      const page = await client.getPositionsPageAsync({ ...ALL_POSITIONS, market_pda: { type: "only", value: address(market) }, cursor }, { applyToState: false });
+      const position = page.positions.find(matches);
+      if (position) return { state: "confirmed", positionPda: position.pda };
+      if (page.next_cursor === null) break;
+      cursor = { type: "after", id: page.next_cursor };
+    }
     return landed ? { state: "confirmed" } : { state: "failed" };
   } catch {
     return landed ? { state: "confirmed" } : { state: "unreadable" };
