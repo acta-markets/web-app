@@ -1,8 +1,8 @@
 # Protocol changelog
 
-## Next (not deployed)
+## 2026-11-25
 
-Program instructions 82-85, `acta-maker-sdk` 0.13.1 and `@acta-markets/ts-sdk` 0.9.0. The servers do not run it yet.
+Program instructions 82-85, `acta-maker-sdk` 0.13.1 and `@acta-markets/ts-sdk` 0.9.0, live on devnet.
 Breaking on the wire; the protocol string stays `1.0.0`, so an older client passes `Hello` and then
 fails on the first quote, RFQ or reply message.
 
@@ -59,8 +59,10 @@ fails on the first quote, RFQ or reply message.
 
 | Server | `acta-maker-sdk` | `@acta-markets/ts-sdk` |
 |---|---|---|
-| Deployed today | 0.12.0 | 0.8.2 |
-| Next (this entry) | 0.13.1 | 0.9.0 |
+| Before 2026-11-25 | 0.12.0 | 0.8.2 |
+| From 2026-11-25 | 0.13.1 | 0.9.0 |
+
+## 2026-11-16
 
 Program instruction `WithdrawFundsFromPosition` (discriminant 81) and `@acta-markets/ts-sdk`
 0.8.1–0.8.2. Additive: no wire change.
