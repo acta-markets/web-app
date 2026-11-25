@@ -16,8 +16,8 @@ export const HOSTED_CARD_NAME = "markets.acta/acta";
 export const HOSTED_DESCRIPTION = "Read Acta's options markets and yield vaults on Solana devnet. No key, no sign-in.";
 
 /**
- * A context for one request: an anonymous session that is closed when the request ends. A
- * socket kept between requests would go stale while the function is frozen.
+ * A context for one request, with no signer. Its tools read the backend over HTTP and open no
+ * socket; the session is still closed when the request ends, should one ever be opened.
  */
 export function hostedContext(clientVersion: string = HOSTED_SERVER.version): AgentContext {
   return {

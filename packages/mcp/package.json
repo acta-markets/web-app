@@ -39,7 +39,7 @@
     "prepublishOnly": "npm --prefix ../.. run build:mcp"
   },
   "dependencies": {
-    "@acta-markets/ts-sdk": "^0.8.2",
+    "@acta-markets/ts-sdk": "^0.9.0",
     "@modelcontextprotocol/server": "^2.4.0",
     "@solana/kit": "^5.1.0",
     "@solana/web3.js": "^1.98.4",

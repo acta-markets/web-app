@@ -1,4 +1,5 @@
-import { ActaWsRequestError } from "@acta-markets/ts-sdk/ws";
+import { ActaHttpError } from "@acta-markets/ts-sdk/http";
+import { ActaWsRequestError, type ServerError } from "@acta-markets/ts-sdk/ws";
 
 /**
  * What a tool tells an agent when it cannot do what was asked: a code it can branch on, what to
@@ -53,8 +54,12 @@ const ACTIONS: Record<string, AgentAction> = {
 
 /** The venue's code for a refused request: `market_not_found`, `insufficient_collateral`, and so on. */
 export function serverCode(error: unknown): string | null {
+  if (error instanceof ActaHttpError) return error.code;
   if (!(error instanceof ActaWsRequestError) || !error.error) return null;
-  const server = error.error;
+  return serverErrorCode(error.error);
+}
+
+export function serverErrorCode(server: ServerError): string {
   return server.type === "Generic" ? String(server.data.code) : String(server.type);
 }
 
@@ -72,6 +77,9 @@ export function toAgentError(error: unknown): AgentError {
       detail ? `The venue refused the request: ${detail}` : `The venue refused the request (${plainText(code, 60)}).`,
       ACTIONS[error.action] ?? "stop",
     );
+  }
+  if (error instanceof ActaHttpError) {
+    return new AgentError(plainText(error.code, 60) || "request_failed", `The venue refused the request (${plainText(error.code, 60)}).`, error.retryable ? "retry" : "stop");
   }
   const message = error instanceof Error ? error.message : String(error);
   return new AgentError("internal", plainText(message, 300) || "Unexpected failure", "stop");

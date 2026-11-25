@@ -79,7 +79,7 @@ function contextFor(agent: SolanaAgentKit, options: ActaPluginOptions): AgentCon
     // The kit's wallet signs transaction objects. It must only sign: the venue broadcasts a fill.
     signTransaction: async (wire: Uint8Array) => (await wallet.signTransaction(VersionedTransaction.deserialize(wire))).serialize(),
   });
-  const config = devnetConfig({ rpcUrl: options.rpcUrl, clientName: "acta-sak-plugin", clientVersion: "0.1.0" });
+  const config = devnetConfig({ rpcUrl: options.rpcUrl, clientName: "acta-sak-plugin", clientVersion: "0.2.0" });
   return {
     session: new ActaSession(config, signer),
     limits: { ...DEFAULT_LIMITS, ...options.limits },

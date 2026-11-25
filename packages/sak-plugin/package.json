@@ -1,6 +1,6 @@
 {
   "name": "@acta-markets/solana-agent-kit-plugin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Acta for Solana Agent Kit: read options markets, get live quotes and place trades. Devnet.",
   "type": "module",
@@ -19,7 +19,7 @@
     "solana-agent-kit": "^2.0.0"
   },
   "dependencies": {
-    "@acta-markets/ts-sdk": "^0.8.2",
+    "@acta-markets/ts-sdk": "^0.9.0",
     "@solana/kit": "^5.1.0",
     "@solana/web3.js": "^1.98.4",
     "zod": "^4.6.6",

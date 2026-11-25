@@ -4,6 +4,7 @@ import { AgentError } from "./errors";
 import { memoryJournal, spentSince, unsettledOrders, type JournalEntry } from "./journal";
 import { DEFAULT_LIMITS, type Limits } from "./limits";
 import type { ActaSession } from "./session";
+import type { TradeOutcome, TradeRfqArgs } from "@acta-markets/ts-sdk/ws";
 import type { AgentContext } from "./trade";
 
 // The market is whatever `MARKET_DATA` says and a fill is signed without a chain: what is under
@@ -12,7 +13,7 @@ import type { AgentContext } from "./trade";
 const MARKET = "iUBW1FecuRAN2r8QhrM7cTVD9gcfxivxF5WL6w1j5qg";
 const EXPIRY = Date.UTC(2026, 10, 27, 8) / 1000;
 const STRIKE = "58000000000000";
-const parties = vi.hoisted(() => ({ read: vi.fn(async () => ({ makerVault: null, keeper: "keeper" })) }));
+const tables = vi.hoisted(() => ({ read: vi.fn(async () => ({})) }));
 vi.mock("./markets", async (original) => ({
   ...(await original<typeof import("./markets")>()),
   findAsset: async () => ({ symbol: "BTC", mint: "mint", decimals: 8, token: {} }),
@@ -25,12 +26,17 @@ vi.mock("@/lib/trade/strikes", async (original) => ({
   spotFromSnapshot: () => 60_000,
 }));
 vi.mock("@/lib/trade/fill", () => ({
-  readFillParties: () => parties.read(),
-  signTakerFill: async () => "signed",
-  takerFillRfq: () => ({}),
+  takerFill: async (_rpc: unknown, signer: { address: string }, onSigned: () => Promise<void>) => ({
+    keeper: "keeper",
+    taker: signer.address,
+    bounds: {},
+    signer: { address: signer.address, signMessage: async () => (await onSigned(), new Uint8Array(64)) },
+    makerVault: async () => null,
+    lookupTables: () => tables.read(),
+  }),
 }));
 
-const { awaitOutcome, getOrder, placeTrade, previewTrade, settleJournal } = await import("./trade");
+const { getOrder, placeTrade, previewTrade, settleJournal } = await import("./trade");
 
 const NOW = 2_000_000;
 const WALLET = "wallet";
@@ -75,7 +81,7 @@ async function context(
     config: { network: "devnet" },
     nowSec: () => NOW,
     rpc: { getSignatureStatuses },
-    connect: async () => ({ getOrderStatusAsync, getPositionsPageAsync }),
+    connect: async () => ({ getOrderStatusAsync, getPositionsPageAsync, cancelRfq: async () => "req" }),
   } as unknown as ActaSession;
   const ctx: AgentContext = { session, limits: DEFAULT_LIMITS, journal, placing: false };
   return { ctx, journal, getOrderStatusAsync, getPositionsPageAsync, getSignatureStatuses };
@@ -87,6 +93,12 @@ describe("settleJournal: what a restart finds", () => {
     const { ctx, journal } = await context([entry({ state: "signed" })], { [ORDER]: { type: "confirmed", position_pda: "pos" } });
     expect(await settleJournal(ctx, WALLET)).toEqual([]);
     expect((await journal.read()).at(-1)).toMatchObject({ state: "confirmed", positionPda: "pos" });
+  });
+
+  it("an order the venue proved expired is failed", async () => {
+    const { ctx, journal } = await context([entry({ state: "unknown" })], { [ORDER]: { type: "expired" } });
+    expect(await settleJournal(ctx, WALLET)).toEqual([]);
+    expect(await stateOf(journal)).toBe("failed");
   });
 
   it("an order accepted and never signed is let go: nothing of ours reached the chain", async () => {
@@ -233,64 +245,17 @@ describe("getOrder", () => {
     expect(result.note).toMatch(/not proof/);
   });
 
+  it("an order the venue proved expired did not execute", async () => {
+    const { ctx } = await context([], { [ORDER]: { type: "expired" } });
+    expect(await getOrder(ctx, ORDER)).toMatchObject({ status: "not_executed", position: null });
+  });
+
   it("reports what looking the order up on chain concluded, when the venue has no answer", async () => {
     const line = entry({ state: "unknown", at: NOW - 601, txSignature: SIGNATURE });
     const landed = await context([line], { [ORDER]: { type: "unknown" } }, undefined, { onChain: { err: null } });
     expect(await getOrder(landed.ctx, ORDER)).toMatchObject({ status: "confirmed" });
     const failed = await context([line], { [ORDER]: { type: "unknown" } }, undefined, { onChain: { err: "failed" } });
     expect(await getOrder(failed.ctx, ORDER)).toMatchObject({ status: "not_executed", position: null });
-  });
-});
-
-describe("awaitOutcome: what a sent order is said to be", () => {
-  type Heard = { type: "confirmed"; positionPda: string } | { type: "failed"; reason: string; source: "order" | "rfq" };
-  /** A watch that hears `events` one after another, then nothing. */
-  const watch = (events: Heard[]) =>
-    ({
-      next: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 1));
-        return events.shift() ?? null;
-      },
-    }) as unknown as Parameters<typeof awaitOutcome>[0];
-  const venue = (...answers: unknown[]) => vi.fn(async () => (answers.shift() ?? { type: "unknown" }) as never);
-  const run = (events: Heard[], lookUp = venue()) => awaitOutcome(watch(events), lookUp, 120, 25);
-
-  it.each([
-    ["the RFQ closed", "expired"],
-    ["the RFQ was cancelled", "taker_cancelled"],
-    ["the RFQ reopened after a failed transaction", "tx_failed"],
-    ["the venue shut down", "server_shutdown"],
-  ])("%s: unknown, never failed", async (_name, reason) => {
-    expect(await run([{ type: "failed", reason, source: "rfq" }])).toEqual({ state: "unknown", venueSaid: reason });
-  });
-
-  it("the venue says the order itself failed: failed", async () => {
-    expect(await run([{ type: "failed", reason: "tx_failed", source: "order" }])).toEqual({ state: "failed", reason: "tx_failed" });
-  });
-
-  it("a failure the venue's own lookup contradicts is confirmed", async () => {
-    const lookUp = venue({ type: "confirmed", position_pda: "pos" });
-    expect(await run([{ type: "failed", reason: "tx_failed", source: "order" }], lookUp)).toEqual({ state: "confirmed", positionPda: "pos" });
-  });
-
-  it("the RFQ ended and the order was confirmed after all", async () => {
-    expect(await run([{ type: "failed", reason: "expired", source: "rfq" }, { type: "confirmed", positionPda: "pos" }])).toEqual({ state: "confirmed", positionPda: "pos" });
-    const lookUp = venue({ type: "confirmed", position_pda: "pos" });
-    expect(await run([{ type: "failed", reason: "expired", source: "rfq" }], lookUp)).toEqual({ state: "confirmed", positionPda: "pos" });
-  });
-
-  it("the RFQ ended and then the venue failed the order: failed", async () => {
-    expect(await run([{ type: "failed", reason: "expired", source: "rfq" }, { type: "failed", reason: "tx_failed", source: "order" }])).toEqual({ state: "failed", reason: "tx_failed" });
-  });
-
-  it("the RFQ ending shortens the wait", async () => {
-    const started = Date.now();
-    await awaitOutcome(watch([{ type: "failed", reason: "expired", source: "rfq" }]), venue(), 5_000, 25);
-    expect(Date.now() - started).toBeLessThan(1_000);
-  });
-
-  it("nothing heard at all: unknown", async () => {
-    expect(await run([])).toEqual({ state: "unknown", venueSaid: null });
   });
 });
 
@@ -313,10 +278,24 @@ describe("placeTrade and previewTrade against a venue", () => {
         });
         return { rfqId: "rfq", created: "now" };
       }),
-      cancelRfq: vi.fn(),
-      acceptQuote: vi.fn(async () => later(() => emit("sponsoredTxToSign", ORDER, "dHg=", 0))),
-      submitOrderOnce: vi.fn(async () => ({ type: "accepted" }) as unknown),
+      cancelRfq: vi.fn(async () => "req"),
       getOrderStatusAsync: vi.fn(async () => ({ type: "unknown" }) as unknown),
+      /** What the order comes to once it was signed and submitted. */
+      submitted: vi.fn(async (): Promise<TradeOutcome> => ({ type: "unknown", rfq_id: "rfq", order_id: ORDER, transaction: { type: "unreported" } })),
+      /** What the SDK does with this agent's hooks; the SDK's own tests hold the protocol. */
+      tradeRfq: vi.fn(async (args: TradeRfqArgs): Promise<TradeOutcome> => {
+        if (args.selection.type !== "best" || !args.selection.acceptable(QUOTE as never)) {
+          return { type: "not_traded", reason: { type: "no_acceptable_quote", quotes_seen: 1 } };
+        }
+        emit("sponsoredTxToSign", ORDER, "dHg=", 0);
+        try {
+          await args.fill.lookupTables("dHg=");
+          if ("signMessage" in args.fill.signer) await args.fill.signer.signMessage(new Uint8Array());
+        } catch (error) {
+          return { type: "not_traded", reason: { type: "not_signed", message: String(error) } };
+        }
+        return client.submitted();
+      }),
     };
     const journal = memoryJournal();
     const session = {
@@ -342,8 +321,8 @@ describe("placeTrade and previewTrade against a venue", () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    parties.read.mockClear();
-    parties.read.mockImplementation(async () => ({ makerVault: null, keeper: "keeper" }));
+    tables.read.mockClear();
+    tables.read.mockImplementation(async () => ({}));
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -371,7 +350,7 @@ describe("placeTrade and previewTrade against a venue", () => {
     const { ctx, journal, client } = venue();
     const { result } = await finish(placeTrade(ctx, { ...trade, limit_premium: 0, dry_run: true }));
     expect(result).toMatchObject({ status: "dry_run" });
-    expect(client.acceptQuote).not.toHaveBeenCalled();
+    expect(client.tradeRfq).not.toHaveBeenCalled();
     expect(await journal.read()).toEqual([]);
   });
 
@@ -389,11 +368,8 @@ describe("placeTrade and previewTrade against a venue", () => {
   });
 
   it("a trade that confirms is counted once", async () => {
-    const { ctx, journal, client, emit, later } = venue();
-    client.submitOrderOnce.mockImplementation(async () => {
-      later(() => emit("orderConfirmed", ORDER, "pos"));
-      return { type: "accepted" };
-    });
+    const { ctx, journal, client } = venue();
+    client.submitted.mockResolvedValue({ type: "filled", rfq_id: "rfq", order_id: ORDER, position_pda: "pos" as never, transaction: { type: "unreported" } });
     const { result } = await finish(placeTrade(ctx, { ...trade, limit_premium: 0 }));
     expect(result).toMatchObject({ status: "confirmed", position: "pos", order_id: ORDER });
     expect(await states(journal)).toEqual(["accepted", "signed", "confirmed"]);
@@ -401,39 +377,30 @@ describe("placeTrade and previewTrade against a venue", () => {
     expect(spentSince(await journal.read(), WALLET, NOW - 10)).toBe(58);
   });
 
-  it("room taken while the desks were quoting: the trade is refused at the last step, and nothing is accepted", async () => {
+  it("room taken while the desks were quoting: the trade is refused at the last step, and nothing is signed", async () => {
     const { ctx, journal, client } = venue({ ...DEFAULT_LIMITS, dailyUsd: 100 });
-    // another call's deposit lands between this trade's first check and its acceptance
-    parties.read.mockImplementation(async () => {
+    // another call's deposit lands between this trade's first check and its signing
+    tables.read.mockImplementation(async () => {
       await journal.append(entry({ orderId: "vault:v:1", side: "deposit", state: "reserved", at: NOW, notionalUsd: 60 }));
-      return { makerVault: null, keeper: "keeper" };
+      return {};
     });
     expect(await finish(placeTrade(ctx, { ...trade, limit_premium: 0 }))).toEqual({ code: "over_daily_limit" });
-    expect(client.acceptQuote).not.toHaveBeenCalled();
-    expect(client.cancelRfq).toHaveBeenCalled();
+    expect(client.submitted).not.toHaveBeenCalled();
     expect(await states(journal)).toEqual(["reserved"]);
   });
 
-  it("the RFQ closing before anything is signed ends the attempt: nothing was traded", async () => {
-    const { ctx, journal, client, emit, later } = venue();
-    client.acceptQuote.mockImplementation(async () => later(() => emit("rfqClosed", { rfq_id: "rfq", reason: "expired" })));
-    expect(await finish(placeTrade(ctx, { ...trade, limit_premium: 0 }))).toEqual({ code: "not_served" });
-    expect(await states(journal)).toEqual(["accepted", "abandoned"]);
-    expect(spentSince(await journal.read(), WALLET, NOW - 10)).toBe(0);
+  it("the RFQ closing before anything is served ends the attempt: nothing was traded or counted", async () => {
+    const { ctx, journal, client } = venue();
+    client.tradeRfq.mockResolvedValueOnce({ type: "not_traded", reason: { type: "rfq_closed", reason: "expired" } });
+    expect(await finish(placeTrade(ctx, { ...trade, limit_premium: 0 }))).toEqual({ code: "no_quote" });
+    expect(await journal.read()).toEqual([]);
   });
 
-  it.each([
-    ["closes", "rfqClosed", "expired"],
-    ["becomes available again", "rfqAvailableAgain", "tx_failed"],
-  ])("the RFQ %s after the transaction was sent: unknown, counted, never 'nothing was traded'", async (_name, event, reason) => {
-    const { ctx, journal, client, emit, later } = venue();
-    client.submitOrderOnce.mockImplementation(async () => {
-      later(() => emit(event, { rfq_id: "rfq", reason }));
-      return { type: "accepted" };
-    });
+  it("an order sent with no final word is unknown, counted, never 'nothing was traded'", async () => {
+    const { ctx, journal } = venue();
     const { result, code } = await finish(placeTrade(ctx, { ...trade, limit_premium: 0 }));
     expect(code).toBeUndefined();
-    expect(result).toMatchObject({ status: "unknown", order_id: ORDER, venue_said: reason });
+    expect(result).toMatchObject({ status: "unknown", order_id: ORDER });
     expect(JSON.stringify(result)).not.toMatch(/nothing was traded/i);
     expect(await states(journal)).toEqual(["accepted", "signed", "unknown"]);
     expect(spentSince(await journal.read(), WALLET, NOW - 10)).toBe(58);
@@ -442,11 +409,8 @@ describe("placeTrade and previewTrade against a venue", () => {
   });
 
   it("the venue failing the order after it was sent is final: failed, and no longer counted", async () => {
-    const { ctx, journal, client, emit, later } = venue();
-    client.submitOrderOnce.mockImplementation(async () => {
-      later(() => emit("orderFailed", ORDER, "tx_failed"));
-      return { type: "accepted" };
-    });
+    const { ctx, journal, client } = venue();
+    client.submitted.mockResolvedValue({ type: "not_traded", reason: { type: "order_failed", reason: "tx_failed" } });
     expect(await finish(placeTrade(ctx, { ...trade, limit_premium: 0 }))).toEqual({ code: "order_failed" });
     expect(await states(journal)).toEqual(["accepted", "signed", "failed"]);
     expect(spentSince(await journal.read(), WALLET, NOW - 10)).toBe(0);

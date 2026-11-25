@@ -41,9 +41,9 @@ async function serve(request: Request): Promise<Response> {
   if (!allow(caller(request))) {
     return withCors(Response.json({ error: "rate_limited", message: "Too many requests. Try again in a minute." }, { status: 429, headers: { "Retry-After": "60" } }));
   }
-  // One context per request: the session opens only if a tool needs the venue, and is closed
-  // when the reply has been read to its end. An older client is answered with a stream that
-  // starts before the tool finishes, so closing when the handler returns would cut the tool off.
+  // One context per request. Its tools read over HTTP; the session is closed when the reply has
+  // been read to its end. An older client is answered with a stream that starts before the tool
+  // finishes, so closing when the handler returns would cut the tool off.
   const context = hostedContext();
   const close = () => context.session.close();
   const handler = createMcpHandler(() => buildMcpServer(() => context, "hosted", HOSTED_SERVER, cache), { responseMode: "json" });

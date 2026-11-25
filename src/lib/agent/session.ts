@@ -1,9 +1,12 @@
-import { ActaHttpClient } from "@acta-markets/ts-sdk/http";
+import { fetchAllPages } from "@acta-markets/ts-sdk";
+import { ActaHttpClient, ActaHttpError } from "@acta-markets/ts-sdk/http";
 import {
   ActaWsClient,
   type ActaWsClientOptions,
+  type EarnSummaryData,
   type MarketDescriptorInfo,
   type TokenInfo,
+  type TokenMarketsInfoData,
   type WelcomeMessage,
 } from "@acta-markets/ts-sdk/ws";
 import { createSolanaRpc } from "@solana/kit";
@@ -144,7 +147,7 @@ export class ActaSession {
   async tokens(): Promise<TokenInfo[]> {
     const cached = this.tokenCache;
     if (cached && Date.now() - cached.at < REFERENCE_TTL_MS) return cached.value;
-    const value = this.connect().then((client) => client.getTokensAsync()).then((data) => data.tokens);
+    const value = this.http.tokens().then((tokens) => [...tokens.values()]);
     this.tokenCache = { at: Date.now(), value };
     value.catch(() => {
       if (this.tokenCache?.value === value) this.tokenCache = null;
@@ -162,6 +165,28 @@ export class ActaSession {
       if (this.descriptorCache?.value === value) this.descriptorCache = null;
     });
     return value;
+  }
+
+  /** One underlying's expiries, strikes and indicative premiums: the WS `TokenMarketsInfo`, over HTTP. */
+  tokenMarkets(mint: string): Promise<TokenMarketsInfoData> {
+    return this.pages<TokenMarketsInfoData>(`/tokens/${encodeURIComponent(mint)}/markets`, (all, page) => all.markets.push(...page.markets));
+  }
+
+  /** APR range and nearest expiry per asset and product: the WS `EarnSummary`, over HTTP. */
+  earnSummary(): Promise<EarnSummaryData> {
+    return this.pages<EarnSummaryData>("/earn-summary", (all, page) => all.assets.push(...page.assets));
+  }
+
+  // Reference reads need no socket, so the read-only tools open none.
+  private pages<T extends { next_cursor: string | null }>(path: string, append: (all: T, page: T) => void): Promise<T> {
+    return fetchAllPages<T>(async (cursor, limit) => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (cursor.type === "after") params.set("cursor", cursor.id);
+      const response = await fetch(`${this.config.apiUrl}/api/v1${path}?${params}`, { headers: { Accept: "application/json" }, cache: "no-store" });
+      if (response.ok) return (await response.json()) as T;
+      const body = (await response.json().catch(() => null)) as { code?: unknown; error?: unknown } | null;
+      throw new ActaHttpError(response.status, typeof body?.code === "string" ? body.code : "http_error", typeof body?.error === "string" ? body.error : response.statusText);
+    }, append);
   }
 
   close(): void {
