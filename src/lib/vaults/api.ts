@@ -1,3 +1,4 @@
+import { CLIENT_VERSION } from "@/lib/rfq-client";
 import { ActaHttpClient } from "@acta-markets/ts-sdk/http";
 import type { VaultPageQuery, VaultPositionsQuery } from "@acta-markets/ts-sdk/http";
 import { getRfqBackendUrl } from "@/lib/rfq-client";
@@ -15,7 +16,7 @@ export function getApiBaseUrl(): string {
 }
 
 let httpClient: ActaHttpClient | null = null;
-const client = () => (httpClient ??= new ActaHttpClient({ baseUrl: getApiBaseUrl() }));
+const client = () => (httpClient ??= new ActaHttpClient({ baseUrl: getApiBaseUrl(), client: { name: "acta-web-app", version: CLIENT_VERSION } }));
 
 export const fetchVaults = async (signal?: AbortSignal) => (await client().vaults(signal)).map(vaultView);
 export const fetchTokens = (signal?: AbortSignal) => client().tokens(signal);

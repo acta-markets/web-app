@@ -129,11 +129,12 @@ async function serve(): Promise<void> {
   // Built on the first tool call: a client may start this process only to list the tools, and
   // that must read or make no key, sign nothing and open no socket.
   let context: Promise<AgentContext> | null = null;
-  const getContext = () => {
+  const getContext = (aiClient: string) => {
     context ??= (async () => {
       const signer = keyPath ? await readKey(path.resolve(keyPath)) : signerModule ? await moduleSigner(signerModule) : await ownSigner();
       return {
-        session: new ActaSession(config, signer),
+        // The venue sees which AI client trades through this server.
+        session: new ActaSession({ ...config, clientVersion: `${VERSION} (${aiClient})` }, signer),
         limits,
         journal: fileJournal(stateDir(), config.network),
         placing: false,

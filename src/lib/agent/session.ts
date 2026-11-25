@@ -43,10 +43,11 @@ export class ActaSession {
   constructor(
     readonly config: AgentConfig,
     readonly signer: ActaSigner | null,
-    private readonly options: { makeSocket?: ActaWsClientOptions["makeSocket"]; autoReconnect?: boolean } = {},
+    private readonly options: { makeSocket?: ActaWsClientOptions["makeSocket"]; autoReconnect?: boolean; http?: ActaHttpClient } = {},
   ) {
     this.rpc = createSolanaRpc(config.rpcUrl);
-    this.http = new ActaHttpClient({ baseUrl: config.apiUrl });
+    this.http =
+      options.http ?? new ActaHttpClient({ baseUrl: config.apiUrl, client: { name: config.clientName, version: config.clientVersion } });
   }
 
   /** The venue's clock in Unix seconds: quote validity is judged against it, not this machine's. */

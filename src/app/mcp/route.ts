@@ -33,6 +33,14 @@ function caller(request: Request): string {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
 }
 
+/** One line per tool call: which tool, from which address, by which client. */
+async function logToolCall(request: Request): Promise<void> {
+  const message: unknown = await request.clone().json().catch(() => null);
+  if (typeof message !== "object" || message === null || (message as { method?: unknown }).method !== "tools/call") return;
+  const tool = (message as { params?: { name?: unknown } }).params?.name;
+  console.info(JSON.stringify({ event: "mcp_tool_call", tool: typeof tool === "string" ? tool : "unknown", caller: caller(request), user_agent: request.headers.get("user-agent") ?? "unknown" }));
+}
+
 async function serve(request: Request): Promise<Response> {
   // The tools read devnet. On any other deployment there is nothing true to serve.
   if (getRequestDeploymentContext(request).environment !== "devnet") {
@@ -44,6 +52,7 @@ async function serve(request: Request): Promise<Response> {
   // One context per request. Its tools read over HTTP; the session is closed when the reply has
   // been read to its end. An older client is answered with a stream that starts before the tool
   // finishes, so closing when the handler returns would cut the tool off.
+  await logToolCall(request);
   const context = hostedContext();
   const close = () => context.session.close();
   const handler = createMcpHandler(() => buildMcpServer(() => context, "hosted", HOSTED_SERVER, cache), { responseMode: "json" });

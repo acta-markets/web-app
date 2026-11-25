@@ -12,8 +12,14 @@ import type { AgentContext } from "./trade";
 /** Remembers a read's answer for a short while, so a busy public endpoint does not ask the venue the same thing twice. */
 export type ResultCache = { get(key: string): unknown | undefined; set(key: string, value: unknown): void };
 
+/** The AI client that runs this server, as its MCP `initialize` named itself. */
+function aiClientOf(server: McpServer): string {
+  const info = server.server.getClientVersion();
+  return info ? `${info.name}/${info.version}` : "unknown";
+}
+
 export function buildMcpServer(
-  getContext: () => AgentContext | Promise<AgentContext>,
+  getContext: (aiClient: string) => AgentContext | Promise<AgentContext>,
   surface: ToolSurface,
   info: { name: string; version: string },
   cache?: ResultCache,
@@ -31,7 +37,7 @@ export function buildMcpServer(
           // Only what changes nothing is remembered, and only by what was asked.
           const key = cache && tool.effect === "read" ? `${tool.name}:${JSON.stringify(input ?? {})}` : null;
           const cached = key ? cache?.get(key) : undefined;
-          const result = cached ?? (await runTool(await getContext(), tool, input));
+          const result = cached ?? (await runTool(await getContext(aiClientOf(server)), tool, input));
           if (key && cached === undefined) cache?.set(key, result);
           return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
         } catch (error) {

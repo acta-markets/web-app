@@ -194,7 +194,7 @@ Spreads and cash puts are cash-settled in the quote mint. The writer posts colla
 import { ActaHttpClient } from "@acta-markets/ts-sdk/http";
 import { SpreadType, spreadPremium, spreadSettlement } from "@acta-markets/ts-sdk/chain";
 
-const venue = await new ActaHttpClient({ baseUrl: "https://devnet-api.acta.markets" })
+const venue = await new ActaHttpClient({ baseUrl: "https://devnet-api.acta.markets", client: { name: "my-app", version: "1.0.0" } })
   .venue(AbortSignal.timeout(5_000));
 
 const terms = {
