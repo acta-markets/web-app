@@ -193,8 +193,12 @@ const PROVIDERS: ReadonlyArray<{ id: string; name: string; icon: string; apps: R
 export type AgentProvider = { id: string; name: string; icon: string; apps: AgentTool[] };
 
 const DSH_NOTE = "If the file already has entries, add this one to the list. Then start a new session";
-/** The desktop app starts servers with the system's short PATH, not the shell's, so a Node installed by nvm is not found. */
-const DSH_TRADE_NOTE = `${DSH_NOTE}. It needs Node 22 or later. If the app cannot find npx, put its full path in command: run "which npx" for it`;
+/**
+ * The desktop app starts servers with the system's short PATH, not the shell's, so a Node
+ * installed by a version manager is not found. The full path of npx alone is not enough: npx
+ * starts `node` by name, so node's folder has to be on the server's PATH as well.
+ */
+const DSH_TRADE_NOTE = `${DSH_NOTE}. It needs Node 22 or later. The desktop app does not see your shell's PATH. If the server does not start there, run "which npx", put that full path in command, and add env: { PATH: "<its folder>:/usr/bin:/bin" } so node is found too`;
 const ZCODE_NOTE = "A new task picks it up. In an open one, send /reload";
 
 /** The entry DeepSeek Harness takes in its patch file: its MCP client plugin, pointed at one server. */

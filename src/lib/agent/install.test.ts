@@ -185,6 +185,8 @@ describe("adding the server to each tool", () => {
     // The desktop app starts servers without the shell's PATH: the step that runs npx says what to do then.
     expect(tool("deepseek-harness").trade!.note).toMatch(/Node 22 or later/);
     expect(tool("deepseek-harness").trade!.note).toMatch(/which npx/);
+    // npx starts node by name, so the full path of npx is not enough: node's folder goes on PATH too.
+    expect(tool("deepseek-harness").trade!.note).toMatch(/env: \{ PATH: /);
     expect(tool("deepseek-harness").read!.note).not.toMatch(/npx/);
   });
 

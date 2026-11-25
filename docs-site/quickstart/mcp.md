@@ -87,8 +87,21 @@ For a client that reads servers from a file:
 ```
 
 A desktop app starts the server with the system's short `PATH`, not your shell's, so a Node installed
-by a version manager may not be found (`spawn npx ENOENT`). Put the full path in `command` instead:
-`which npx` prints it.
+by a version manager may not be found (`spawn npx ENOENT`, or `env: node: No such file or directory`).
+The full path of `npx` alone is not enough, because `npx` starts `node` by name. Give both: the full
+path in `command`, and its folder first on the server's `PATH`. `which npx` prints the path.
+
+```json
+{
+  "mcpServers": {
+    "acta": {
+      "command": "/Users/you/.nvm/versions/node/v24.0.0/bin/npx",
+      "args": ["-y", "@acta-markets/mcp"],
+      "env": { "PATH": "/Users/you/.nvm/versions/node/v24.0.0/bin:/usr/bin:/bin" }
+    }
+  }
+}
+```
 
 On devnet the venue funds a new wallet with test assets the first time it signs in. Ask the agent
 for `acta_status` to see the address and the balances.
