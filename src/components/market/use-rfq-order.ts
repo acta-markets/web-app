@@ -298,6 +298,8 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
       if (!isCurrent() || msg.order_id !== order.orderId) return;
       if (msg.state.type === "confirmed") {
         update({ type: "confirmed", orderId: msg.order_id, positionPda: msg.state.position_pda });
+      } else if (msg.state.type === "expired") {
+        update({ type: "failed", orderId: msg.order_id, message: "The order expired without executing. Nothing was traded." });
       } else if (msg.state.type === "pending" && !awaitingSignature) {
         promoteSent(order);
       } else {
@@ -371,22 +373,27 @@ export function useRfqOrder({ getClient, acceptQuote, submitSignedTx, signTransa
       setTxSignature(signature);
       update({ type: "pending", order: active.order });
     };
+    // `OrderUpdate` `failed` is the venue's last word on the order, before or after it was sent.
     const onFailed = (id: string, reason: string) => {
       const active = current.current;
       if (!isOpen(active) || !owns(id)) return;
+      update({
+        type: "failed",
+        orderId: id,
+        message: submissionOf(active) === "unsigned" ? reason : `The transaction failed and was not executed (${reason}). Request a fresh quote.`,
+      });
+    };
+    // The RFQ ending says nothing final about an order already sent: it is looked up.
+    const onRfqEnded = (message: { rfq_id: string; reason: string }) => {
+      if (preparing.current?.rfqId === message.rfq_id) stopPreparing();
+      const active = current.current;
+      if (!isOpen(active) || active.order.rfqId !== message.rfq_id) return;
       if (submissionOf(active) === "unsigned") {
-        update({ type: "failed", orderId: id, message: reason });
+        update({ type: "failed", orderId: active.order.orderId, message: message.reason });
         return;
       }
       update({ type: "unknown", order: active.order, submission: "sent", abandonable: false });
       reconcile();
-    };
-    const onRfqEnded = (message: { rfq_id: string; reason: string }) => {
-      if (preparing.current?.rfqId === message.rfq_id) stopPreparing();
-      const active = current.current;
-      if (isOpen(active) && active.order.rfqId === message.rfq_id) {
-        onFailed(active.order.orderId, message.reason);
-      }
     };
     const onAvailableAgain = (message: { rfq_id: string; reason: string }) => {
       if (message.reason !== "tx_failed") {

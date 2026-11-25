@@ -435,6 +435,31 @@ describe("taker order flow", () => {
     h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
     await waitFor(() => expect(h.submit).toHaveBeenCalledTimes(1));
   });
+  it("an order the venue fails after it was sent is failed, not unknown", async () => {
+    const h = setup(); await h.select();
+    h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
+    await waitFor(() => expect(h.submit).toHaveBeenCalledTimes(1));
+    h.emit("orderUpdate", { order_id: "order", order_version: 3, state: { type: "failed", reason: "tx_failed" } });
+    expect(h.result.current.flow).toMatchObject({ type: "failed", orderId: "order" });
+    expect(window.localStorage.getItem(storageKey(h.scope))).toBeNull();
+  });
+  it("the RFQ closing after the order was sent is looked up, not taken as failure", async () => {
+    const h = setup(); await h.select();
+    h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
+    await waitFor(() => expect(h.submit).toHaveBeenCalledTimes(1));
+    h.emit("rfqUpdate", { rfq_id: "rfq", rfq_version: 2, state: { type: "closed", reason: "expired", winner: { type: "none" }, at: 0 } });
+    await waitFor(() => expect(h.request).toHaveBeenCalled());
+    expect(h.result.current.flow).toMatchObject({ type: "unknown", submission: "sent" });
+  });
+  it("an order the venue proved expired is failed", async () => {
+    const h = setup(); await h.select();
+    h.emit("sponsoredTxToSign", "order", "AQ==", 9999999999);
+    await waitFor(() => expect(h.submit).toHaveBeenCalledTimes(1));
+    h.request.mockResolvedValue({ request_id: "read", order_id: "order", state: { type: "expired" } });
+    h.emit("rfqUpdate", { rfq_id: "rfq", rfq_version: 2, state: { type: "closed", reason: "expired", winner: { type: "none" }, at: 0 } });
+    await waitFor(() => expect(h.result.current.flow).toMatchObject({ type: "failed", message: expect.stringMatching(/expired/) }));
+    expect(window.localStorage.getItem(storageKey(h.scope))).toBeNull();
+  });
   it("does not submit a wallet result after the server aborts signature collection", async () => {
     const h = setup(); let resolve!: (tx: VersionedTransaction) => void;
     h.sign.mockImplementation(() => new Promise(r => { resolve = r; })); await h.select();
