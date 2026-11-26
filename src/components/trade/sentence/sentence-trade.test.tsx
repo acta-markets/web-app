@@ -274,6 +274,19 @@ describe("sentence trade", () => {
     expect(screen.getByRole("option", { name: "Jan 22" }).getAttribute("aria-selected")).toBe("true");
   });
 
+  it("opens on the middle date, so the wheel starts with a date on each side", () => {
+    const data = snapshot();
+    const late = data.markets[1];
+    (data.markets as unknown[]).push(
+      { ...late, market_pda: "put-later", expiry_ts: now + 21 * day },
+      { ...late, market_pda: "put-latest", expiry_ts: now + 28 * day },
+    );
+    mocks.context.tokenMarketsInfo = { underlyingMint: SOL, data };
+    render(<SentenceTrade mode="yield" />);
+    const dates = screen.getAllByRole("option").filter((o) => o.closest("[role=listbox]"));
+    expect(dates.map((o) => o.getAttribute("aria-selected"))).toEqual(["false", "true", "false", "false"]);
+  });
+
   it("shows the expiry as a wheel in the sentence, the chosen date marked and the next one a click away", () => {
     render(<SentenceTrade mode="yield" />);
     // no expiry dropdown: every date is a row of the wheel

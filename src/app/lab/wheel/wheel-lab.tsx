@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AppCard } from "@/components/app-ui/app-card";
 import { ThesisSentence } from "@/components/trade/sentence/thesis-sentence";
+import { defaultExpiryIndex } from "@/lib/trade/strikes";
 import type { Direction } from "@/lib/trade/thesis";
 
 const ASSETS = [
@@ -14,7 +15,6 @@ const ASSETS = [
 const STRIKES = ["$60,000", "$61,000", "$61,500", "$62,500", "$63,000"].map((label, i) => ({ value: String(i), label }));
 
 const WEEKS = ["Nov 27", "Dec 4", "Dec 11", "Dec 18"];
-const MANY = [...WEEKS, "Dec 25", "Jan 1", "Jan 8", "Jan 15", "Jan 29", "Feb 26", "Mar 26", "Jun 25"];
 
 function dates(labels: ReadonlyArray<string>) {
   return labels.map((label, i) => ({ value: String(i), label, detail: `sample date ${i + 1} of ${labels.length}` }));
@@ -25,7 +25,8 @@ function Sample({ title, labels }: { title: string; labels: ReadonlyArray<string
   const [asset, setAsset] = useState("BTC");
   const [direction, setDirection] = useState<Direction>("above");
   const [strike, setStrike] = useState("1");
-  const [expiry, setExpiry] = useState("0");
+  // as on Trade: it opens on the middle date
+  const [expiry, setExpiry] = useState(() => String(defaultExpiryIndex(labels.length)));
   const expiries = dates(labels);
   const chosen = expiries.find((e) => e.value === expiry)?.label ?? "";
   return (
@@ -65,7 +66,6 @@ export function WheelLab() {
         </p>
       </header>
       <Sample title="Four dates, as the app lists today" labels={WEEKS} />
-      <Sample title="Twelve dates, to feel a longer spin" labels={MANY} />
     </main>
   );
 }

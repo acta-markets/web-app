@@ -41,6 +41,7 @@ import {
 } from "@/lib/trade/sizing";
 import {
   buildStrikeOptions,
+  defaultExpiryIndex,
   defaultStrikeIndex,
   tradableExpiries,
   indicativesFor,
@@ -238,7 +239,8 @@ export function SentenceTrade({
       : direction === "above" ? "buy_call" : "buy_put";
   const info = strategyInfo(strategy);
   const expiries = info.isPut ? putExpiries : callExpiries;
-  const expiry = expiries.find((e) => e.expiryTs === expiryChoice) ?? expiries[0] ?? null;
+  // with no date chosen the thesis opens on the middle one, so the wheel has a date on each side
+  const expiry = expiries.find((e) => e.expiryTs === expiryChoice) ?? expiries[defaultExpiryIndex(expiries.length)] ?? null;
 
   const strikeOptions = useMemo(
     () =>

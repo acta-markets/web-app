@@ -120,6 +120,14 @@ export function buildStrikeOptions(
 }
 
 /**
+ * The date a thesis opens on when none is chosen: the middle one, the earlier of two middles.
+ * The expiry wheel then starts with a date on each side of it. -1 when empty.
+ */
+export function defaultExpiryIndex(count: number): number {
+  return count > 0 ? Math.floor((count - 1) / 2) : -1;
+}
+
+/**
  * The nearest priced strike on the out-of-the-money side of spot (below it for a put,
  * above it for a call); else the first priced strike. With nothing priced, the nearest
  * out-of-the-money strike, else the first one. -1 when empty.
