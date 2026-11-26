@@ -73,7 +73,7 @@ export function AppWheel({
     latest.current = { options, value, selected, onChange, disabled };
   });
 
-  const drag = React.useRef<{ pointer: number; y: number; top: number; moved: boolean } | null>(null);
+  const drag = React.useRef<{ moved: boolean } | null>(null);
   const touching = React.useRef(false);
   const swallowClick = React.useRef(false);
   const mounted = React.useRef(false);
@@ -222,40 +222,53 @@ export function AppWheel({
   };
 
   // A thumb scrolls the box itself. A mouse has no such gesture, so a press and a pull turn it.
+  // The pull is followed on the window: a quick one has left the wheel before its first move.
+  const release = React.useRef<(() => void) | null>(null);
+  React.useEffect(() => () => release.current?.(), []);
   const onPointerDown = (event: React.PointerEvent<HTMLSpanElement>) => {
     if (disabled || event.pointerType !== "mouse" || event.button !== 0) return;
-    drag.current = { pointer: event.pointerId, y: event.clientY, top: event.currentTarget.scrollTop, moved: false };
-  };
-  const onPointerMove = (event: React.PointerEvent<HTMLSpanElement>) => {
-    const held = drag.current;
-    if (!held || held.pointer !== event.pointerId) return;
     const el = event.currentTarget;
-    const pulled = event.clientY - held.y;
-    if (!held.moved) {
-      if (Math.abs(pulled) < DRAG_START_PX) return;
-      held.moved = true;
-      el.setPointerCapture?.(event.pointerId);
-      // the snap would pull every step of the drag back to a row
-      el.style.scrollSnapType = "none";
-    }
-    el.scrollTop = held.top - pulled;
-  };
-  const onPointerEnd = (event: React.PointerEvent<HTMLSpanElement>) => {
-    const held = drag.current;
-    if (!held || held.pointer !== event.pointerId) return;
-    drag.current = null;
-    if (!held.moved) return;
-    const el = event.currentTarget;
-    // the click that ends a drag lands on whichever row is under the pointer: not a choice
-    swallowClick.current = true;
-    setTimeout(() => {
-      swallowClick.current = false;
-    }, 0);
-    const index = wheelIndex(el.scrollTop, rowHeight(), options.length);
-    const target = options[index]?.disabled ? selected : index;
-    moveTo(target, true);
-    el.style.scrollSnapType = "";
-    choose(target);
+    const held = { pointer: event.pointerId, y: event.clientY, top: el.scrollTop, moved: false };
+    const onMove = (move: PointerEvent) => {
+      if (move.pointerId !== held.pointer) return;
+      const pulled = move.clientY - held.y;
+      if (!held.moved) {
+        if (Math.abs(pulled) < DRAG_START_PX) return;
+        held.moved = true;
+        // the snap would pull every step of the drag back to a row
+        el.style.scrollSnapType = "none";
+      }
+      el.scrollTop = held.top - pulled;
+    };
+    const onEnd = (end: PointerEvent) => {
+      if (end.pointerId !== held.pointer) return;
+      release.current?.();
+      if (!held.moved) return;
+      // the click that ends a drag lands on whichever row is under the pointer: not a choice
+      swallowClick.current = true;
+      setTimeout(() => {
+        swallowClick.current = false;
+      }, 0);
+      const now = latest.current;
+      const index = wheelIndex(el.scrollTop, rowHeight(), now.options.length);
+      const target = now.options[index]?.disabled ? now.selected : index;
+      moveTo(target, true);
+      el.style.scrollSnapType = "";
+      const option = now.options[target];
+      if (option && !now.disabled && option.value !== now.value) now.onChange(option.value);
+    };
+    release.current?.();
+    drag.current = held;
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+    release.current = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+      drag.current = null;
+      release.current = null;
+    };
   };
 
   return (
@@ -293,9 +306,6 @@ export function AppWheel({
         tabIndex={disabled ? -1 : 0}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerEnd}
-        onPointerCancel={onPointerEnd}
         className={cn(
           "absolute inset-0 block select-none snap-y snap-mandatory overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary",
