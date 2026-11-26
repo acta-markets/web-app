@@ -1,4 +1,5 @@
 import type { EarnAssetSummary } from "@/lib/rfq-client";
+import { EDITION, isHiddenAsset, type Edition } from "@/lib/edition";
 import { normalizeTokenSymbol } from "@/lib/tokens";
 
 export type TradeAsset = {
@@ -11,20 +12,21 @@ export type TradeAsset = {
   maxApr: number | null;
 };
 
-const PREFERRED = ["SOL", "JITOSOL", "JLP", "ZBTC", "ETH", "PUMP", "BONK"];
+const PREFERRED = ["SOL", "JITOSOL", "LST", "JLP", "ZBTC", "ETH", "PUMP", "BONK"];
 
 /**
  * Tradable underlyings from the earn summary, one per mint. Every underlying the venue
  * reports is kept — the earn summary is the source of truth for what is tradable. The
  * static token list only supplies logos and canonical display names via
- * `normalizeTokenSymbol`; it never gates a mint out.
+ * `normalizeTokenSymbol`; it never gates a mint out. The one thing that does is the edition
+ * (`src/lib/edition.ts`): a partner build leaves out the assets it does not offer.
  */
-export function tradeAssets(summary: EarnAssetSummary[] | null): TradeAsset[] {
+export function tradeAssets(summary: EarnAssetSummary[] | null, edition: Edition = EDITION): TradeAsset[] {
   if (!summary) return [];
   const byMint = new Map<string, TradeAsset>();
   for (const row of summary) {
     const symbol = normalizeTokenSymbol(row.underlying_symbol);
-    if (!row.underlying_mint) continue;
+    if (!row.underlying_mint || isHiddenAsset(row.underlying_symbol, edition)) continue;
     const entry = byMint.get(row.underlying_mint) ??
       { symbol, mint: row.underlying_mint, hasPut: false, hasCall: false, maxApr: null };
     if (row.position_type === "cash_secured_put") entry.hasPut = true;
@@ -44,7 +46,7 @@ export function tradeAssets(summary: EarnAssetSummary[] | null): TradeAsset[] {
 export type AssetGroup = "Crypto" | "Stocks & gold";
 const STOCKS_AND_GOLD = new Set(["QQQ", "TSLA", "SPY", "SPYX", "NVDA", "NVDAX", "XAU"]);
 /** Crypto's opening order in the picker; the rest follow alphabetically. */
-const CRYPTO_LEAD = ["BTC", "ZBTC", "ETH", "SOL", "JITOSOL"];
+const CRYPTO_LEAD = ["BTC", "ZBTC", "ETH", "SOL", "JITOSOL", "LST"];
 
 export function assetGroup(symbol: string): AssetGroup {
   return STOCKS_AND_GOLD.has(symbol.trim().toUpperCase()) ? "Stocks & gold" : "Crypto";

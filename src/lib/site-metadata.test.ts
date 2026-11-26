@@ -70,6 +70,14 @@ describe("the Trade title for a link that preselects an asset", () => {
     expect(tradeTitle(["SOL", "BTC"])).toBe("Trade SOL");
   });
 
+  it("names LST, and in the P0 edition does not name jitoSOL, which that build leaves out", () => {
+    expect(tradeTitle("lst")).toBe("Trade LST");
+    expect(tradeTitle("JITOSOL")).toBe("Trade jitoSOL");
+    expect(tradeTitle("JITOSOL", "p0")).toBe("Trade");
+    expect(tradeTitle("jitosol", "p0")).toBe("Trade");
+    expect(tradeTitle("LST", "p0")).toBe("Trade LST");
+  });
+
   it("ignores anything else, so a link cannot write its own title", () => {
     expect(tradeTitle(undefined)).toBe("Trade");
     expect(tradeTitle("NOTATOKEN")).toBe("Trade");

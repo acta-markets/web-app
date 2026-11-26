@@ -27,8 +27,24 @@ describe("devnet branch build environment", () => {
     });
   });
 
+  it("holds the p0 branch to devnet too, and turns the P0 edition on there only", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SOLANA_NETWORK", "mainnet");
+    vi.stubEnv("NEXT_PUBLIC_RFQ_WS_URL", "wss://beta-api.acta.markets");
+
+    expect(await configEnvFor("p0")).toEqual({
+      NEXT_PUBLIC_SOLANA_NETWORK: "devnet",
+      NEXT_PUBLIC_RFQ_WS_URL: "",
+      NEXT_PUBLIC_API_URL: "",
+      NEXT_PUBLIC_SOLANA_RPC_URL: "",
+      NEXT_PUBLIC_EDITION: "p0",
+    });
+    expect(await configEnvFor("devnet")).not.toHaveProperty("NEXT_PUBLIC_EDITION");
+  });
+
   it("leaves other branches and local builds alone", async () => {
     expect(await configEnvFor("main")).toEqual({});
+    expect(await configEnvFor("p0-something")).toEqual({});
+    expect(await configEnvFor("constructor")).toEqual({});
     expect(await configEnvFor(undefined)).toEqual({});
   });
 });

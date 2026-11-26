@@ -46,6 +46,17 @@ export const TOKENS: Record<string, TokenConfig> = {
       devnet: "So11111111111111111111111111111111111111112",
     },
   },
+  // P0's staked SOL. The devnet mint is the venue's test token for it.
+  LST: {
+    symbol: "LST",
+    name: "Liquid Staking Token",
+    decimals: 9,
+    logo: "/tokens/lst.png",
+    mint: {
+      mainnet: "LSTxxxnJzKDFSLr4dUkPcmCf5VyryEqzPLz5j4bpxFp",
+      devnet: "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh",
+    },
+  },
   JLP: {
     symbol: "JLP",
     name: "Jupiter LP",

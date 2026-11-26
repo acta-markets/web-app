@@ -1,3 +1,4 @@
+import { EDITION, isHiddenAsset, type Edition } from "./edition";
 import type { Metadata } from "next";
 import { configuredSiteOrigin } from "./agent-discovery";
 import { IS_MAINNET } from "./network";
@@ -99,10 +100,12 @@ export function pageMetadata(input: PageMetadataInput): Metadata {
 /**
  * The Trade page's title for a link that preselects an asset (`?asset=BTC`): "Trade BTC".
  * Only a token the app knows is named, written the app's way, so a link cannot put words of
- * its own into the title.
+ * its own into the title. An asset this edition leaves out is not named either: the page
+ * opens on another asset.
  */
-export function tradeTitle(asset: string | string[] | undefined): string {
+export function tradeTitle(asset: string | string[] | undefined, edition: Edition = EDITION): string {
   const requested = Array.isArray(asset) ? asset[0] : asset;
-  const symbol = requested && /^[A-Za-z0-9]{1,12}$/.test(requested) ? getToken(requested)?.symbol : undefined;
+  const known = requested && /^[A-Za-z0-9]{1,12}$/.test(requested) && !isHiddenAsset(requested, edition);
+  const symbol = known ? getToken(requested)?.symbol : undefined;
   return symbol ? `Trade ${symbol}` : "Trade";
 }

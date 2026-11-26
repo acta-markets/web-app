@@ -7,6 +7,7 @@ export const COINGECKO_IDS: Readonly<Record<string, string>> = {
   BTC: "bitcoin",
   BONK: "bonk",
   JITOSOL: "jito-staked-sol",
+  LST: "liquid-staking-token",
   JLP: "jupiter-perpetuals-liquidity-provider-token",
   PUMP: "pump-fun",
   USDC: "usd-coin",

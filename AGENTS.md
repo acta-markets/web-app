@@ -69,6 +69,15 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 - Why: `devnet` follows the devnet backend's wire format, which can be ahead of beta. Pointed at `beta-api`, the SDK rejects the handshake and the app shows "This app requires the WS 1.0.0 API".
 - Locally, keep `.env.local` on devnet while working on this branch.
 
+### Editions: a partner's build of the devnet app
+
+A partner edition is the devnet app with its own assets and vault lineup. It is built from its own branch and differs from `devnet` in data only, behind one switch.
+
+- `src/lib/edition.ts` is the only place that reads `NEXT_PUBLIC_EDITION`. `next.config.mjs` sets it from the branch name (`EDITION_BRANCHES`) and holds that branch to devnet by the same override as the `devnet` branch. Locally: `NEXT_PUBLIC_EDITION=p0 npm run dev`.
+- `p0` (the P0 partnership, branch `p0`): Earn offers one vault, on LST (P0's staked SOL), and jitoSOL is left out of Trade. `lineupFor(edition)` in `src/lib/vaults/lineup.ts` is the lineup; `isHiddenAsset` drops an asset in `tradeAssets`. The LST vault is bound by its address in `P0_LINEUP`, like any lineup vault.
+- An edition changes what is offered, never how it works: no edition check in a component, a transaction or the agent core. A new difference goes in `edition.ts` or in a function that takes the edition, with a test for both builds.
+- The branch takes `devnet` by a plain merge. Keep it that way: nothing on an edition's branch may differ from `devnet` outside the switch.
+
 ## Architecture
 
 **Next.js 14 App Router** with two route groups:

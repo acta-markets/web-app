@@ -50,6 +50,36 @@ describe("tradable assets", () => {
   });
 });
 
+describe("the P0 edition's assets", () => {
+  const devnet = [
+    row("JITOSOL", "4Q2yMuF3wBzMu36NFLmJSN2oq9Rzq7PKpqvj6pkoicw7", "covered_call", 0.1),
+    row("JITOSOL", "4Q2yMuF3wBzMu36NFLmJSN2oq9Rzq7PKpqvj6pkoicw7", "cash_secured_put", 0.1),
+    row("LST", "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh", "covered_call", 0.2),
+    row("LST", "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh", "cash_secured_put", 0.3),
+    row("BTC", "DQF6mZd6e8x1K8dVgxTmNbTifyyzV24HTyEaHAfr98XU", "covered_call", 0.4),
+    row("HYPE", "PGQzFYGdDBA8XfjB25vHzPjXzTmCdo8U8kvsssr4VAz", "cash_secured_put", 0.2),
+  ];
+
+  it("leaves jitoSOL out and lists LST, with both sides", () => {
+    const assets = tradeAssets(devnet, "p0");
+    expect(assets.map((a) => a.symbol)).toEqual(["LST", "BTC", "HYPE"]);
+    expect(assets[0]).toEqual({ symbol: "LST", mint: "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh", hasPut: true, hasCall: true, maxApr: 0.3 });
+    // a link that names jitoSOL lands on the default asset, as for any asset not listed
+    expect(pickAsset(assets, "JITOSOL")?.symbol).toBe("BTC");
+  });
+
+  it("changes nothing in the default build: both are listed", () => {
+    expect(tradeAssets(devnet).map((a) => a.symbol)).toEqual(["jitoSOL", "LST", "BTC", "HYPE"]);
+    expect(tradeAssets(devnet, "default")).toEqual(tradeAssets(devnet));
+  });
+
+  it("puts LST where jitoSOL stands in the picker: after BTC and ETH", () => {
+    const asset = (symbol: string): TradeAsset => ({ symbol, mint: symbol, hasPut: true, hasCall: true, maxApr: null });
+    const menu = assetsForMenu(["LST", "HYPE", "ETH", "BTC", "TSLA"].map(asset));
+    expect(menu.map((a) => a.symbol)).toEqual(["BTC", "ETH", "LST", "HYPE", "TSLA"]);
+  });
+});
+
 describe("asset picker order", () => {
   const asset = (symbol: string): TradeAsset => ({ symbol, mint: symbol, hasPut: true, hasCall: true, maxApr: null });
 

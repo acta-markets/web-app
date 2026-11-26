@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LINEUP_TAGLINE, VAULT_LINEUP, lineupEntryFor, resolveLineup, withLineupName, type LineupEntry } from "./lineup";
+import { LINEUP_TAGLINE, VAULT_LINEUP, earnDescription, lineupAssetsText, lineupEntryFor, lineupFor, lineupVaultsText, resolveLineup, withLineupName, type LineupEntry } from "./lineup";
 import { LANDING_VAULTS } from "@/lib/landing-vaults";
 import type { ResolvedVaultMeta } from "./registry";
 
@@ -8,6 +8,42 @@ const LINEUP: LineupEntry[] = [
   { id: "a", asset: "jitoSOL", type: "Majors", pda: { devnet: "pda-jito", mainnet: null }, state: "open" },
   { id: "b", asset: "USDC", type: "Stables", pda: { devnet: null, mainnet: "pda-usdc-main" }, state: "soon" },
 ];
+
+describe("the P0 edition's lineup", () => {
+  const p0 = lineupFor("p0");
+
+  it("is one vault, on LST, open on the landing page's staked SOL rate", () => {
+    expect(p0.map((entry) => [entry.id, entry.asset, entry.type, entry.state])).toEqual([["lst", "LST", "Majors", "open"]]);
+    expect(p0[0].assumedApr).toEqual(LANDING_VAULTS.find((vault) => vault.id === "sol")!.apr);
+    expect(p0[0].pda.mainnet).toBeNull();
+  });
+
+  it("reads as LST alone wherever the lineup is put into words", () => {
+    expect(lineupAssetsText(p0)).toBe("LST");
+    // one vault is said as one vault
+    expect(lineupVaultsText(p0)).toBe("an income vault on LST");
+    expect(earnDescription(p0)).toBe("An income vault on LST. Deposit what you already hold and earn premium from trading desks. No liquidations.");
+    // and the default build's words are unchanged
+    expect(lineupVaultsText()).toBe("income vaults on jitoSOL, USDC and TSLA");
+    expect(earnDescription()).toBe("Income vaults on jitoSOL, USDC and TSLA. Deposit what you already hold and earn premium from trading desks. No liquidations.");
+  });
+
+  it("binds the LST vault by its address, and never a vault on another asset or a test vault on LST", () => {
+    const bound = [{ ...p0[0], pda: { devnet: "pda-lst", mainnet: null } }];
+    const served = [
+      { vault: { vault_pda: "pda-jito" }, meta: { assetSymbol: "jitoSOL" } },
+      { vault: { vault_pda: "test-lst" }, meta: { assetSymbol: "LST" } },
+      { vault: { vault_pda: "pda-lst" }, meta: { assetSymbol: "LST" } },
+    ];
+    expect(resolveLineup(served, { network: "devnet", lineup: bound }).map((slot) => slot.bound?.vault.vault_pda)).toEqual(["pda-lst"]);
+    expect(resolveLineup(served, { network: "devnet", lineup: p0 }).map((slot) => slot.bound)).toEqual([null]);
+  });
+
+  it("is not the default build's lineup, which this build keeps", () => {
+    expect(lineupFor("default")).toBe(VAULT_LINEUP);
+    expect(lineupFor("default").map((entry) => entry.asset)).toEqual(["jitoSOL", "USDC", "TSLA"]);
+  });
+});
 
 describe("vault lineup", () => {
   it("is jitoSOL, USDC and TSLA, each an income vault, in the landing page's order", () => {

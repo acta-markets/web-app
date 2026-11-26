@@ -1,3 +1,4 @@
+import { EDITION, type Edition } from "@/lib/edition";
 import { LANDING_VAULTS, VAULT_ACCESS_URL } from "@/lib/landing-vaults";
 import type { ResolvedVaultMeta } from "./registry";
 import type { Vault } from "./types";
@@ -51,7 +52,7 @@ function landingApr(id: string): { staking: number; premium: number } | undefine
 export const LINEUP_TAGLINE = "Income vault";
 
 /** In the landing page's order: the major, the stable, then the stock. */
-export const VAULT_LINEUP: readonly LineupEntry[] = [
+const DEFAULT_LINEUP: readonly LineupEntry[] = [
   // staking plus premium: the landing page's SOL figures, which are an LST's
   { id: "jitosol", asset: "jitoSOL", type: "Majors", pda: { devnet: null, mainnet: null }, state: "open", assumedApr: landingApr("sol") },
   { id: "usdc", asset: "USDC", type: "Stables", pda: { devnet: null, mainnet: null }, state: "open", assumedApr: landingApr("usdc") },
@@ -59,15 +60,38 @@ export const VAULT_LINEUP: readonly LineupEntry[] = [
   { id: "tsla", asset: "TSLA", type: "Stocks", pda: { devnet: null, mainnet: null }, state: "open", assumedApr: { staking: 0, premium: 25 } },
 ];
 
+/**
+ * The P0 edition: one vault, on LST. Its rate until the vault's own figures replace it is the
+ * landing page's SOL one, staking plus premium, as for any staked SOL.
+ * TODO(tim): the LST vault's devnet address, once it is opened on the backend.
+ */
+const P0_LINEUP: readonly LineupEntry[] = [
+  { id: "lst", asset: "LST", type: "Majors", pda: { devnet: null, mainnet: null }, state: "open", assumedApr: landingApr("sol") },
+];
+
+/** The vaults an edition's Earn page offers. */
+export function lineupFor(edition: Edition): readonly LineupEntry[] {
+  return edition === "p0" ? P0_LINEUP : DEFAULT_LINEUP;
+}
+
+/** This build's lineup. */
+export const VAULT_LINEUP: readonly LineupEntry[] = lineupFor(EDITION);
+
 /** The lineup's assets as running text, "jitoSOL, USDC and TSLA": for a page description or a preview image. */
 export function lineupAssetsText(lineup: readonly LineupEntry[] = VAULT_LINEUP, last = " and "): string {
   const assets = lineup.map((entry) => entry.asset);
   return assets.length < 2 ? assets.join("") : `${assets.slice(0, -1).join(", ")}${last}${assets[assets.length - 1]}`;
 }
 
+/** What Earn offers, mid-sentence: "income vaults on jitoSOL, USDC and TSLA", or "an income vault on LST" for a lineup of one. */
+export function lineupVaultsText(lineup: readonly LineupEntry[] = VAULT_LINEUP): string {
+  return `${lineup.length === 1 ? "an income vault" : "income vaults"} on ${lineupAssetsText(lineup)}`;
+}
+
 /** Earn in one line, for the page's description and its link preview. No rate: the lineup's rates are assumptions. */
 export function earnDescription(lineup: readonly LineupEntry[] = VAULT_LINEUP): string {
-  return `Income vaults on ${lineupAssetsText(lineup)}. Deposit what you already hold and earn premium from trading desks. No liquidations.`;
+  const vaults = lineupVaultsText(lineup);
+  return `${vaults.charAt(0).toUpperCase()}${vaults.slice(1)}. Deposit what you already hold and earn premium from trading desks. No liquidations.`;
 }
 
 export type LineupSlot<T> = { entry: LineupEntry; bound: T | null };

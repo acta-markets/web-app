@@ -1,4 +1,4 @@
-import { lineupAssetsText } from "./vaults/lineup";
+import { VAULT_LINEUP, lineupAssetsText, lineupVaultsText } from "./vaults/lineup";
 
 /**
  * The pictures a link to the site gets in a post or a chat: what each one says. Plain data,
@@ -36,9 +36,9 @@ export const SITE_IMAGES = {
   },
   /** Earn and each vault page. The lineup's own assets, and no rate: its rates are assumptions a picture cannot qualify. */
   earn: {
-    headline: "Income vaults",
+    headline: VAULT_LINEUP.length === 1 ? "Income vault" : "Income vaults",
     line: `On ${lineupAssetsText()}. Deposit what you already hold.`,
-    alt: (siteName) => `Earn on ${siteName}: income vaults on ${lineupAssetsText()}`,
+    alt: (siteName) => `Earn on ${siteName}: ${lineupVaultsText()}`,
   },
   /** Agent: what the page is for, in its own words. No tool count, which would go stale. */
   agent: {
