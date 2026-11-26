@@ -8,6 +8,7 @@ import {
   INLINE_PILL_GLYPH,
   type AppInlineSelectOption,
 } from "@/components/app-ui/app-inline-select";
+import { AppWheel } from "@/components/app-ui/app-wheel";
 import { cn } from "@/lib/cn";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import type { TakerSide } from "@/lib/spreads";
@@ -64,56 +65,9 @@ function Pending() {
   return <span className="text-content-secondary">&hellip;</span>;
 }
 
-/**
- * The expiry is a run of date buttons separated by slashes: no dropdown — every date is a
- * button in the sentence, the selected one underlined and the rest quieter. The slashes
- * stay in secondary ink so they read as punctuation, never as part of a date.
- */
-function ExpirySlash({
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  options: ReadonlyArray<AppInlineSelectOption>;
-  onChange: (value: string) => void;
-  disabled: boolean;
-}) {
-  return (
-    <span className="inline-flex flex-wrap items-center">
-      {options.map((o, i) => {
-        const selected = o.value === value;
-        return (
-          <React.Fragment key={o.value}>
-            {i > 0 ? (
-              <span aria-hidden="true" className="mx-[0.35em] select-none text-content-secondary">
-                /
-              </span>
-            ) : null}
-            <button
-              type="button"
-              aria-pressed={selected}
-              disabled={disabled || o.disabled}
-              onClick={() => onChange(o.value)}
-              className={cn(
-                // on a phone the tap area fills the line's height, not just the word's
-                "relative max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1 max-md:after:content-['']",
-                "underline-offset-[0.2em] decoration-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary disabled:cursor-not-allowed disabled:opacity-60",
-                selected
-                  ? "text-content-primary underline decoration-additional-violet-primary-deep"
-                  // an option, not a caption: a step brighter than the sentence's quiet text
-                  : "text-content-primary no-underline opacity-65 hover:underline hover:opacity-100"
-              )}
-            >
-              {o.label}
-            </button>
-          </React.Fragment>
-        );
-      })}
-    </span>
-  );
-}
+// The expiry is a wheel in the sentence (`AppWheel`), turned like the time wheel of a phone's
+// alarm: the chosen date on the line, the date before and the date after faded above and
+// below it. No dropdown, and one date's width however many the asset lists.
 
 export type SentenceOptions = {
   assets: ReadonlyArray<AppInlineSelectOption>;
@@ -126,8 +80,8 @@ export type SentenceOptions = {
 /**
  * Every value the direction and strike pills can show for this asset, across both
  * directions and all prices, so each pill holds its widest value's width and no choice
- * reflows the sentence. (The asset pill hugs its ticker and the expiry is inline buttons,
- * so neither needs a width reserve.)
+ * reflows the sentence. (The asset pill hugs its ticker and the expiry wheel holds its own
+ * widest date, so neither needs a width reserve here.)
  */
 export type SentenceReserve = {
   strikes: ReadonlyArray<{ key: string; label: string }>;
@@ -364,7 +318,8 @@ export function ThesisSentence({
             break never leaves the preposition stranded at the end of the line. */}
         <span className="whitespace-nowrap">
           {SENTENCE.on}{" "}
-          <ExpirySlash
+          <AppWheel
+            label="Expiry"
             value={expiryValue}
             options={options.expiries}
             onChange={onExpiry}

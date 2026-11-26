@@ -200,7 +200,7 @@ describe("sentence trade", () => {
     expect(select("Asset").value).toBe("SOL");
     expect(direction().textContent).toContain("above");
     expect(select("Strike").value).toBe(String(95e9));
-    expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("option", { name: "Jan 22" }).getAttribute("aria-selected")).toBe("true");
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
     // 1.1 SOL locked at $95, $1 premium per SOL — the premium now reads in the facts block
     // beside the size, not as a risk sentence above the CTA
@@ -268,21 +268,25 @@ describe("sentence trade", () => {
 
   it("falls back to the nearest date when the other side does not list the chosen one", () => {
     render(<SentenceTrade mode="yield" />);
-    fireEvent.click(screen.getByRole("button", { name: "Jan 29" }));
+    fireEvent.click(screen.getByRole("option", { name: "Jan 29" }));
     expect(select("Strike").value).toBe(String(95e9));
     fireEvent.click(direction());
-    expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("option", { name: "Jan 22" }).getAttribute("aria-selected")).toBe("true");
   });
 
-  it("shows the expiry as inline date buttons, the selected one pressed and selectable", () => {
+  it("shows the expiry as a wheel in the sentence, the chosen date marked and the next one a click away", () => {
     render(<SentenceTrade mode="yield" />);
-    // slash is the shipped pattern: no expiry combobox, every date its own button
+    // no expiry dropdown: every date is a row of the wheel
     expect(screen.queryByRole("combobox", { name: "Expiry" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Jan 29" }).getAttribute("aria-pressed")).toBe("false");
+    const wheel = screen.getByRole("listbox", { name: "Expiry" });
+    expect(screen.getByRole("option", { name: "Jan 22" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("option", { name: "Jan 29" }).getAttribute("aria-selected")).toBe("false");
     // picking a later date updates the thesis's expiry
-    fireEvent.click(screen.getByRole("button", { name: "Jan 29" }));
-    expect(screen.getByRole("button", { name: "Jan 29" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("option", { name: "Jan 29" }));
+    expect(screen.getByRole("option", { name: "Jan 29" }).getAttribute("aria-selected")).toBe("true");
+    // and the arrow keys step it back
+    fireEvent.keyDown(wheel, { key: "ArrowUp" });
+    expect(screen.getByRole("option", { name: "Jan 22" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("does not present stale premiums, in the sentence or the summary", () => {
