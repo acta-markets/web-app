@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getToken } from "@/lib/tokens";
+import { lineupFor, resolveLineup } from "./lineup";
 import { depositorPerformance } from "@acta-markets/ts-sdk/http";
 import { finishedCycles } from "./metrics";
 import { resolveVaultMeta } from "./registry";
@@ -40,7 +41,7 @@ describe("sample-data.json", () => {
   });
 
   it("gives every vault a name, cycles and a wallet position", () => {
-    expect(data.vaults).toHaveLength(7);
+    expect(data.vaults).toHaveLength(8);
     for (const vault of data.vaults) {
       expect(data.meta[vault.vault_pda]).toBeDefined();
       expect(data.cycles[vault.vault_pda]).toBeDefined();
@@ -95,6 +96,18 @@ describe("sample-data.json", () => {
     for (const v of data.vaults) {
       expect(["unlimited", "limited"]).toContain(v.capacity.type);
     }
+  });
+
+  it("carries the P0 edition's LST vault at its real address, so that lineup binds it here too", () => {
+    const lst = data.keys.lst;
+    expect(lst).toBe("CSzSZKBvA41sv1Ek2bHLZNaPgvmLnXEGyXos3tLeDZWT");
+    const served = data.vaults.map((v) => ({ vault: v, meta: resolveVaultMeta(v, data.meta) }));
+    expect(resolveLineup(served, { network: "devnet", lineup: lineupFor("p0") })[0].bound?.vault.vault_pda).toBe(lst);
+    // a position with a pending deposit, so the deposit flow has every state to show
+    const position = data.depositors[lst];
+    expect(position.shareBalance).toBeGreaterThan(0n);
+    expect(position.depositRequest?.amount).toBeGreaterThan(0n);
+    expect(data.history[lst].length).toBeGreaterThan(0);
   });
 
   it("adds jitoSOL's 5% staking to its premium APY", () => {
@@ -212,7 +225,7 @@ describe("sample-data.json", () => {
   it("loads on first use and keeps the result", async () => {
     expect(peekSampleData()).toBeNull();
     const loaded = await loadSampleData();
-    expect(loaded.vaults).toHaveLength(7);
+    expect(loaded.vaults).toHaveLength(8);
     expect(peekSampleData()).toBe(loaded);
     expect(await loadSampleData()).toBe(loaded);
   });

@@ -2456,6 +2456,421 @@
         "positions": [],
         "totals": []
       }
+    },
+    {
+      "key": "lst",
+      "meta": {
+        "name": "LST",
+        "curator": "Velar",
+        "category": "Crypto",
+        "assetSymbol": "LST",
+        "stakingAprPct": 7
+      },
+      "vault": {
+        "vault_pda": "CSzSZKBvA41sv1Ek2bHLZNaPgvmLnXEGyXos3tLeDZWT",
+        "vault_id": "abababababababababababababababababababababababababababababababab",
+        "governance": "CLSYf1AL9rXYjGbSjvexMRegriqpLR37kmLkcqvAgBnNN",
+        "fee_recipient": "BWKhmQ5886puiBzFDFCHqqi8NWHvbZ4waNWNUcMTXnto",
+        "primary_delegate": "BWKhmQ5886puiBzFDFCHqqi8NWHvbZ4waNWNUcMTXnto",
+        "main_mint": "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh",
+        "second_mint": "So11111111111111111111111111111111111111112",
+        "share_mint": "bMsK1QyBcKEJnFFPKibjDUzySHLBwQ5D9na22SVBrey",
+        "main_token_program": "legacy_spl",
+        "second_token_program": "legacy_spl",
+        "main_decimals": 9,
+        "second_decimals": 6,
+        "phase": "active",
+        "safety": "normal",
+        "capabilities": 0,
+        "active_expiry_ts": 1792324800,
+        "open_positions": 2,
+        "total_shares": "58600000000",
+        "share_price": "1022944333",
+        "equity": "60000000000",
+        "capital_generation": 0,
+        "accepting_deposits": true,
+        "equity_computed": false,
+        "pending_deposit_count": 1,
+        "pending_withdraw_count": 0,
+        "pending_deposit_amount": "2500000000",
+        "pending_withdraw_shares": "0",
+        "performance_fee_bps": 1000,
+        "management_fee_bps": 200,
+        "manager_stake_min_bps": 100,
+        "share_price_hwm": "1022944333",
+        "last_hwm_update_at": 0,
+        "last_hwm_reset_at": 0,
+        "last_settlement_at": 0,
+        "capacity": {
+          "type": "unlimited"
+        },
+        "capital_fallback_delay_seconds": 43200,
+        "deposit_window_set_at": null,
+        "policy": {
+          "max_open_positions": 4,
+          "max_rebalance_drift_bps": 100,
+          "min_main_liquidity_bps": 1000
+        },
+        "projection": {
+          "version": 1,
+          "slot": 1,
+          "transaction_index": 0,
+          "signature": "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+          "event_index": 0
+        },
+        "created_at": 1784311200,
+        "generation_started_at": 1784484000,
+        "tvl_usd_1e9": 11100000000000,
+        "price_published_at": 1791806380,
+        "premium": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "cycle": {
+              "received": "0",
+              "paid": "0"
+            },
+            "generation": {
+              "received": "8912400000",
+              "paid": "0"
+            }
+          }
+        ],
+        "fees": {
+          "management_fee_assessed": "0",
+          "performance_fee_assessed": "0",
+          "realized_fee_value": "0"
+        },
+        "depositors_in_generation": 17,
+        "performance": {
+          "capital_generation": 0,
+          "computed_at": 1791806400,
+          "covered": true,
+          "returns": {
+            "7d": {
+              "return_pct": 0.3068,
+              "window_start_at": 1791115200,
+              "window_end_at": 1791720000
+            },
+            "30d": {
+              "return_pct": 0.866801,
+              "window_start_at": 1788696000,
+              "window_end_at": 1791720000
+            },
+            "90d": null,
+            "all": {
+              "return_pct": 2.294433,
+              "window_start_at": 1784484000,
+              "window_end_at": 1791720000
+            }
+          },
+          "apy_30d": 11.071765,
+          "apy_90d": null,
+          "max_drawdown_pct": 0.268,
+          "worst_cycle_return_pct": -0.268,
+          "losing_cycles": 2,
+          "cycles_completed": 12
+        },
+        "metadata": null,
+        "balances": {
+          "type": "unobserved"
+        }
+      },
+      "cycles": [
+        {
+          "cycle_number": 11,
+          "capital_generation": 0,
+          "expiry_ts": 1791698400,
+          "started_at": 1791136800,
+          "finished_at": 1791720000,
+          "share_price_start": "1019815539",
+          "share_price_end": "1022944333",
+          "equity_start": "65807479803",
+          "equity_end": "66009377151",
+          "positions_opened": 2,
+          "positions_settled": 2,
+          "return_pct": 0.3068,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 10,
+          "capital_generation": 0,
+          "expiry_ts": 1791093600,
+          "started_at": 1790532000,
+          "finished_at": 1791115200,
+          "share_price_start": "1017714976",
+          "share_price_end": "1019815539",
+          "equity_start": "60110656851",
+          "equity_end": "60234725246",
+          "positions_opened": 4,
+          "positions_settled": 4,
+          "return_pct": 0.2064,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 9,
+          "capital_generation": 0,
+          "expiry_ts": 1790488800,
+          "started_at": 1789927200,
+          "finished_at": 1790510400,
+          "share_price_start": "1015966498",
+          "share_price_end": "1017714976",
+          "equity_start": "55454761411",
+          "equity_end": "55550199055",
+          "positions_opened": 2,
+          "positions_settled": 2,
+          "return_pct": 0.1721,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 8,
+          "capital_generation": 0,
+          "expiry_ts": 1789884000,
+          "started_at": 1789322400,
+          "finished_at": 1789905600,
+          "share_price_start": "1013930526",
+          "share_price_end": "1015966498",
+          "equity_start": "50048991680",
+          "equity_end": "50149490055",
+          "positions_opened": 3,
+          "positions_settled": 3,
+          "return_pct": 0.2008,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 7,
+          "capital_generation": 0,
+          "expiry_ts": 1789279200,
+          "started_at": 1788717600,
+          "finished_at": 1789300800,
+          "share_price_start": "1014153640",
+          "share_price_end": "1013930526",
+          "equity_start": "45428711618",
+          "equity_end": "45418717302",
+          "positions_opened": 4,
+          "positions_settled": 4,
+          "return_pct": -0.022,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 6,
+          "capital_generation": 0,
+          "expiry_ts": 1788674400,
+          "started_at": 1788112800,
+          "finished_at": 1788696000,
+          "share_price_start": "1012154635",
+          "share_price_end": "1014153640",
+          "equity_start": "41291721896",
+          "equity_end": "41373273047",
+          "positions_opened": 2,
+          "positions_settled": 2,
+          "return_pct": 0.1975,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 5,
+          "capital_generation": 0,
+          "expiry_ts": 1788069600,
+          "started_at": 1787508000,
+          "finished_at": 1788091200,
+          "share_price_start": "1014874499",
+          "share_price_end": "1012154635",
+          "equity_start": "39102446205",
+          "equity_end": "38997651649",
+          "positions_opened": 4,
+          "positions_settled": 4,
+          "return_pct": -0.268,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 4,
+          "capital_generation": 0,
+          "expiry_ts": 1787464800,
+          "started_at": 1786903200,
+          "finished_at": 1787486400,
+          "share_price_start": "1012436552",
+          "share_price_end": "1014874499",
+          "equity_start": "35678203422",
+          "equity_end": "35764116536",
+          "positions_opened": 3,
+          "positions_settled": 3,
+          "return_pct": 0.2408,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 3,
+          "capital_generation": 0,
+          "expiry_ts": 1786860000,
+          "started_at": 1786298400,
+          "finished_at": 1786881600,
+          "share_price_start": "1008173993",
+          "share_price_end": "1012436552",
+          "equity_start": "32943243380",
+          "equity_end": "33082527413",
+          "positions_opened": 4,
+          "positions_settled": 4,
+          "return_pct": 0.4228,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 2,
+          "capital_generation": 0,
+          "expiry_ts": 1786255200,
+          "started_at": 1785693600,
+          "finished_at": 1786276800,
+          "share_price_start": "1005887611",
+          "share_price_end": "1008173993",
+          "equity_start": "31095340901",
+          "equity_end": "31166020610",
+          "positions_opened": 4,
+          "positions_settled": 4,
+          "return_pct": 0.2273,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 1,
+          "capital_generation": 0,
+          "expiry_ts": 1785650400,
+          "started_at": 1785088800,
+          "finished_at": 1785672000,
+          "share_price_start": "1003956000",
+          "share_price_end": "1005887611",
+          "equity_start": "27790066131",
+          "equity_end": "27843534218",
+          "positions_opened": 3,
+          "positions_settled": 3,
+          "return_pct": 0.1924,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
+        {
+          "cycle_number": 0,
+          "capital_generation": 0,
+          "expiry_ts": 1785045600,
+          "started_at": 1784484000,
+          "finished_at": 1785067200,
+          "share_price_start": "1000000000",
+          "share_price_end": "1003956000",
+          "equity_start": "26000000000",
+          "equity_end": "26102856000",
+          "positions_opened": 3,
+          "positions_settled": 3,
+          "return_pct": 0.3956,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        }
+      ],
+      "position": {
+        "shareBalance": "12000000000",
+        "mainTokenBalance": "8000000000",
+        "nativeLamports": null,
+        "depositRequest": {
+          "amount": "2500000000",
+          "createdAt": 1791802800
+        },
+        "withdrawRequest": null,
+        "history": [
+          {
+            "vault_pda": "CSzSZKBvA41sv1Ek2bHLZNaPgvmLnXEGyXos3tLeDZWT",
+            "action": "deposit_processed",
+            "amount": "10000000000",
+            "second_amount": "0",
+            "shares": "9786000000",
+            "boundary_price": {
+              "type": "set",
+              "share_price": "1021977620"
+            },
+            "occurred_at": 1783857600,
+            "transaction_signature": "lstdepositone111111111111111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "vault_pda": "CSzSZKBvA41sv1Ek2bHLZNaPgvmLnXEGyXos3tLeDZWT",
+            "action": "deposit_processed",
+            "amount": "2300000000",
+            "second_amount": "0",
+            "shares": "2240000000",
+            "boundary_price": {
+              "type": "set",
+              "share_price": "1026785714"
+            },
+            "occurred_at": 1789128000,
+            "transaction_signature": "lstdeposittwo111111111111111111111111111111111111111111111111111111111111111111111111111"
+          },
+          {
+            "vault_pda": "CSzSZKBvA41sv1Ek2bHLZNaPgvmLnXEGyXos3tLeDZWT",
+            "action": "withdraw_processed",
+            "amount": "26000000",
+            "second_amount": "0",
+            "shares": "25000000",
+            "boundary_price": {
+              "type": "set",
+              "share_price": "1022944333"
+            },
+            "occurred_at": 1791633600,
+            "transaction_signature": "lstwithdrawone11111111111111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ]
+      },
+      "exposure": {
+        "vault_pda": "CSzSZKBvA41sv1Ek2bHLZNaPgvmLnXEGyXos3tLeDZWT",
+        "as_of": 1791806396,
+        "positions": [
+          {
+            "position_pda": "LstCa11Wr1ter01111111111111111111111111111111111",
+            "market_pda": "1111111111111111111111111111ret1rW11aCadvN",
+            "position_type": "covered_call",
+            "role": "writer",
+            "status": "funded",
+            "strike": "220000000000",
+            "quantity": "3000000000",
+            "expiry_ts": 1792324800,
+            "underlying_mint": "So11111111111111111111111111111111111111112",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": "200000000000",
+            "spot_published_at": 1791806396,
+            "distance_pct": 5.323211,
+            "itm": false,
+            "intrinsic": "0"
+          },
+          {
+            "position_pda": "LstCa11Wr1ter11111111111111111111111111111111111",
+            "market_pda": "1111111111111111111111111111ret1rW11aCadvN",
+            "position_type": "covered_call",
+            "role": "writer",
+            "status": "funded",
+            "strike": "180000000000",
+            "quantity": "1500000000",
+            "expiry_ts": 1792324800,
+            "underlying_mint": "So11111111111111111111111111111111111111112",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": "200000000000",
+            "spot_published_at": 1791806396,
+            "distance_pct": 5.323211,
+            "itm": false,
+            "intrinsic": "0"
+          }
+        ],
+        "totals": [
+          {
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "notional_at_strike": "49200000000",
+            "outstanding_intrinsic": "-472200000"
+          }
+        ]
+      }
     }
   ]
 }
