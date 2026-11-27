@@ -33,7 +33,7 @@ describe("Trade page modes", () => {
     // the mode is the one changeable word in the page title
     const title = screen.getByRole("heading", { level: 1 });
     expect(title.textContent).toContain("on your thesis");
-    expect(screen.getByRole("button", { name: "Trading mode: profit. Switch to yield" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Trading mode: profit. Switch to shield" })).toBeTruthy();
     // the line under the title says what this mode is; the other mode's line only holds its space
     expect(screen.getByText("If you are wrong, you lose what you pay now, never more").getAttribute("aria-hidden")).toBe("false");
     expect(screen.getByText("If you are wrong, you buy or sell the asset at your price").getAttribute("aria-hidden")).toBe("true");
@@ -54,7 +54,7 @@ describe("Trade page modes", () => {
     mocks.search = "asset=JLP";
     render(<TradeClient />);
     expect(screen.getByText("Profit for JLP")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Trading mode: profit. Switch to yield" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trading mode: profit. Switch to shield" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP&mode=yield", { scroll: false });
   });
 
@@ -102,7 +102,7 @@ describe("the mode a visitor last used", () => {
   it("is remembered when it is switched", async () => {
     const { tradeDraftStore } = await import("@/lib/trade/draft");
     render(<TradeClient />);
-    fireEvent.click(screen.getByRole("button", { name: "Trading mode: profit. Switch to yield" }));
+    fireEvent.click(screen.getByRole("button", { name: "Trading mode: profit. Switch to shield" }));
     expect(tradeDraftStore().read().mode).toBe("yield");
     expect(screen.getByText("Yield for default")).toBeTruthy();
   });
