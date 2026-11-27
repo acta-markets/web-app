@@ -199,7 +199,8 @@ describe("VaultsClient", () => {
     show();
     const jito = card("jitoSOL");
     expect(jito.queryByText("~18%")).toBeNull();
-    expect(jito.getByText("Accepting deposits")).toBeTruthy();
+    // a card carries no status label: the vault's page and the deposit form say whether it takes deposits
+    expect(jito.queryByText("Accepting deposits")).toBeNull();
     expect(jito.getByText("TVL")).toBeTruthy();
   });
 
@@ -221,7 +222,15 @@ describe("VaultsClient", () => {
     expect(screen.getByTestId("vault-modal").getAttribute("data-name")).toBe("jitoSOL");
     await user.click(card("USDC").getByRole("button", { name: "Manage" }));
     expect(screen.getByTestId("vault-modal").getAttribute("data-tab")).toBe("withdraw");
-    expect(within(jito).getByRole("link", { name: "Details" }).getAttribute("href")).toBe(`/earn/${SAMPLE.keys.jitosol}`);
+    const details = within(jito).getByRole("link", { name: "Details" });
+    expect(details.getAttribute("href")).toBe(`/earn/${SAMPLE.keys.jitosol}`);
+    // Deposit spans the cell as the filled button; Details is a ghost under it, since the whole card already leads there
+    const deposit = within(jito).getByRole("button", { name: "Deposit" });
+    expect(deposit.className).toContain("w-full");
+    expect(deposit.className).toContain("bg-accent-primary");
+    expect(details.className).toContain("w-full");
+    expect(details.className).toContain("bg-transparent");
+    expect(details.compareDocumentPosition(deposit) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   });
 
   it("shows skeletons first and a retry when nothing could load", async () => {
@@ -259,9 +268,9 @@ describe("VaultsClient", () => {
     expect(cell.getByText("staking + premium")).toBeTruthy();
     expect(cell.getByText("Staking ~7.00%")).toBeTruthy();
     expect(cell.getByText("Premium ~11.00%")).toBeTruthy();
-    // it is live: TVL, status and a Deposit button that opens the vault, as for any bound card
+    // it is live: TVL and a Deposit button that opens the vault, as for any bound card; the status label is the page's
     expect(cell.getByText("TVL")).toBeTruthy();
-    expect(cell.getByText("Accepting deposits")).toBeTruthy();
+    expect(cell.queryByText("Accepting deposits")).toBeNull();
     expect(cell.getByRole("button", { name: "Deposit" })).toBeTruthy();
     // the lineup asset's logo alone, not the vault's second leg
     expect(cell.getByLabelText("Deposit LST")).toBeTruthy();

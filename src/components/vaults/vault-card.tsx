@@ -8,7 +8,7 @@ import { LINEUP_ACCESS_URL, LINEUP_TAGLINE, type LineupEntry } from "@/lib/vault
 import { cn } from "@/lib/cn";
 import { formatPercent, formatUsd } from "@/lib/vaults/format";
 import { CuratorLogo } from "./curator-logo";
-import { assumedAprView, formatVaultEquity, primaryVaultAction, vaultApr, vaultStatus, vaultTvlUsd, type AprView, type VaultModalTab } from "@/lib/vaults/presentation";
+import { assumedAprView, formatVaultEquity, primaryVaultAction, vaultApr, vaultTvlUsd, type AprView, type VaultModalTab } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
 import type { Vault } from "@/lib/vaults/types";
 import { AprLabel } from "./vault-apr";
@@ -25,8 +25,8 @@ const EYEBROW = `${TYPE_LABEL} text-content-secondary`;
 const ABOVE_LINK = "relative z-[2]";
 // The landing page's two bar colours (STYLE.md): staking, then premium.
 const BAR_COLOR = { Staking: "#2AA286", Premium: "#80C9B6" } as const;
-// The app's buttons at the landing card's size: hugging their label, not stretched across the cell.
-const CARD_BUTTON = "h-auto px-4 py-2.5 text-sm";
+// The app's buttons at the landing card's size, stretched across the cell they close.
+const CARD_BUTTON = "h-auto w-full px-4 py-2.5 text-sm";
 
 /** "staking + premium": the parts the rate adds up, in the landing card's words. */
 function aprLegs(apr: AprView): string {
@@ -118,9 +118,9 @@ export function VaultCard({
       <Link href={vaultHref(vault.vault_pda)} prefetch={false} aria-hidden="true" tabIndex={-1} className="absolute inset-0 z-[1]" />
 
       <div>
-        <div className="mb-5 flex items-center justify-between gap-3">
+        {/* the category alone: whether the vault takes deposits is said on its page and in the deposit form */}
+        <div className="mb-5">
           <span className={EYEBROW}>{eyebrow ?? meta.category}</span>
-          <VaultStatusLabel status={vaultStatus(vault, nowSecs)} showDetail={false} />
         </div>
 
         <div className="flex items-center gap-3">
@@ -181,12 +181,12 @@ export function VaultCard({
           </div>
         </dl>
 
-        {/* the buttons close the cell: nothing renders after them */}
-        <div className={cn(ABOVE_LINK, "flex w-fit gap-2")}>
+        {/* the buttons close the cell: nothing renders after them. Deposit spans the cell; Details is a ghost under it, the quiet second way into a page the whole card already opens */}
+        <div className={cn(ABOVE_LINK, "flex w-full flex-col gap-2")}>
           <AppButton className={CARD_BUTTON} onClick={() => onOpen(vault.vault_pda, action.tab)}>
             {action.label}
           </AppButton>
-          <AppButtonLink href={vaultHref(vault.vault_pda)} variant="secondary" className={CARD_BUTTON}>
+          <AppButtonLink href={vaultHref(vault.vault_pda)} variant="ghost" className={CARD_BUTTON}>
             Details
           </AppButtonLink>
         </div>
