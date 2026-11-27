@@ -157,7 +157,7 @@ describe("VaultsClient", () => {
     show();
     expect(card("USDC").getByText("New")).toBeTruthy();
     expect(card("USDC").getByText("Projected APY shows after 20 days of history.")).toBeTruthy();
-    // a word where the rate would be sits under the vault's name at the size of a figure, on one line with its label
+    // a word where the rate would be sits under the vault's name at the size of a figure, on one line with its (i)
     const word = card("USDC").getByText("New");
     expect(word.className).toContain("text-2xl");
     expect(word.parentElement!.className).toContain("items-baseline");
@@ -262,8 +262,10 @@ describe("VaultsClient", () => {
     show([{ id: "lst", asset: "LST", type: "Majors", pda: { devnet: lst, mainnet: lst }, state: "open", assumedApr: { staking: 7, premium: 11 } }]);
     const cell = card("LST");
     expect(cell.getByText("~18%")).toBeTruthy();
-    expect(cell.getByText("APY")).toBeTruthy();
+    // no label in either form; the (i) beside the figure still says where an assumption comes from
+    expect(cell.queryByText("APY")).toBeNull();
     expect(cell.queryByText("Projected APY")).toBeNull();
+    expect(cell.getByRole("button", { name: "Where this APY comes from" })).toBeTruthy();
     expect(cell.queryByText("—")).toBeNull();
     expect(cell.getByText("staking + premium")).toBeTruthy();
     expect(cell.getByText("Staking ~7.00%")).toBeTruthy();
@@ -287,7 +289,11 @@ describe("VaultsClient", () => {
     show([{ id: "lst", asset: "LST", type: "Majors", pda: { devnet: lst, mainnet: lst }, state: "open", assumedApr: { staking: 7, premium: 11 } }]);
     const cell = card("LST");
     expect(cell.getByText("19.00%")).toBeTruthy();
-    expect(cell.getByText("Projected APY")).toBeTruthy();
+    // the figure stands without its label; the (i) beside it still breaks it down
+    expect(cell.queryByText("Projected APY")).toBeNull();
+    expect(cell.getByRole("button", { name: "What makes up this Projected APY" })).toBeTruthy();
+    // and no rule separates the facts from the rate above them
+    expect(cell.getByText("TVL").closest("dl")!.className).not.toContain("border-t");
     expect(cell.queryByText("~18%")).toBeNull();
     expect(cell.getByText("Staking 7.00%")).toBeTruthy();
     expect(cell.getByText("Premium 12.00%")).toBeTruthy();

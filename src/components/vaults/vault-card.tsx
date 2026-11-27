@@ -11,7 +11,7 @@ import { CuratorLogo } from "./curator-logo";
 import { assumedAprView, formatVaultEquity, primaryVaultAction, vaultApr, vaultTvlUsd, type AprView, type VaultModalTab } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
 import type { Vault } from "@/lib/vaults/types";
-import { AprLabel } from "./vault-apr";
+import { AprInfo } from "./vault-apr";
 import { VaultAssetLogo } from "./vault-asset-logo";
 import { VaultStatusLabel } from "./vault-status-label";
 
@@ -34,8 +34,8 @@ function aprLegs(apr: AprView): string {
 }
 
 /**
- * The rate as the landing card sets it: the figure set large with its label and (i) beside it,
- * the parts it adds up to in words under it, then those parts as bars. A live vault and a
+ * The rate as the landing card sets it: the figure set large with its (i) beside it and no
+ * label, the parts it adds up to in words under it, then those parts as bars. A live vault and a
  * lineup entry with no vault yet both draw theirs through here, so the two cannot drift.
  */
 function RateBlock({ apr }: { apr: AprView }) {
@@ -58,8 +58,9 @@ function RateBlock({ apr }: { apr: AprView }) {
         >
           {apr.value}
         </span>
-        <span className={cn(EYEBROW, "inline-flex items-center gap-1 whitespace-nowrap")}>
-          <AprLabel apr={apr} className={ABOVE_LINK} />
+        {/* no label beside it: the caption under the figure says what it adds up to, and the (i) breaks it down */}
+        <span className={cn("inline-flex items-center", ABOVE_LINK)}>
+          <AprInfo apr={apr} />
         </span>
       </div>
       {/* under a figure, the parts it is made of; without one, why there is none yet */}
@@ -81,11 +82,11 @@ function RateBlock({ apr }: { apr: AprView }) {
  * One vault as the landing page draws one ("Pick a vault"): a cell of a lined grid, not a box.
  * Read top to bottom it is a small label, the vault's name set large, the rate set larger
  * with the parts it adds up drawn as bars, then the two facts a rate does not carry, and the
- * buttons last, at the bottom left.
+ * buttons last, across the cell.
  *
  * Where it departs from the landing card, it is because this one is live: the name is the
  * vault's and not the asset's, since several vaults share an asset; the rate is the backend's
- * figure, to two decimals, and can be "New" or negative; and the status sits beside the label.
+ * figure, to two decimals, and can be "New" or negative.
  *
  * The whole cell opens the vault page; the buttons and the (i) sit above that link.
  */
@@ -157,7 +158,7 @@ export function VaultCard({
       </div>
 
       <div>
-        <dl className="mb-6 grid grid-cols-2 gap-x-6 border-t border-bg-border pt-4 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
+        <dl className="mb-6 grid grid-cols-2 gap-x-6 font-mono text-sm leading-[1.2] tracking-[-0.28px]">
           <div className="flex min-w-0 flex-col gap-1.5">
             <dt className={EYEBROW}>TVL</dt>
             <dd className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 tabular-nums text-content-primary">

@@ -28,14 +28,21 @@ export function AprBreakdown({ apr }: { apr: AprView }) {
   );
 }
 
-/** "Projected APY" with an (i) that breaks the figure down; a lineup's assumption reads "APY". */
+/** The (i) beside a rate, breaking the figure down into the parts it adds up to. */
+export function AprInfo({ apr, className }: { apr: AprView; className?: string }) {
+  return (
+    <InfoTooltip className={className} label={apr.assumed ? "Where this APY comes from" : "What makes up this Projected APY"}>
+      <AprBreakdown apr={apr} />
+    </InfoTooltip>
+  );
+}
+
+/** "Projected APY" with its (i); a lineup's assumption reads "APY". */
 export function AprLabel({ apr, className }: { apr: AprView; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-1", className)}>
       {apr.assumed ? "APY" : "Projected APY"}
-      <InfoTooltip label={apr.assumed ? "Where this APY comes from" : "What makes up this Projected APY"}>
-        <AprBreakdown apr={apr} />
-      </InfoTooltip>
+      <AprInfo apr={apr} />
     </span>
   );
 }
