@@ -1761,7 +1761,7 @@ export function ThesisChart({
             title="Drag to change the strike"
             data-testid="chart-strike"
             className={cn(HANDLE)}
-            style={{ top: geometry.paneHeight / 2, right: 6, ...grabStyle }}
+            style={{ top: tops.strike, right: 6, ...grabStyle }}
             onPointerDown={onDragPointerDown}
             onPointerMove={onDragPointerMove}
             onPointerUp={onDragPointerEnd}
@@ -1781,16 +1781,20 @@ export function ThesisChart({
             <span className="tabular-nums">{strikeShown}</span>
           </div>
             ) : null}
-            {rightAxis.ticks.map((t, i) => (
-              <div
-                key={i}
-                className="pointer-events-none absolute right-1.5 -translate-y-1/2 text-right font-mono text-[12px] font-semibold tracking-[-0.02em] leading-[1.15] tabular-nums"
-                style={{ top: t.y }}
-              >
-                <div className="text-content-secondary">{t.price}</div>
-                {t.readout ? <div className={readoutTone(t.readout)}>{t.readout}</div> : null}
-              </div>
-            ))}
+            {rightAxis.ticks.map((t, i) => {
+              // the knot above stands in for the tick at the strike, so that one is not drawn
+              if (tops && Math.abs(t.y - tops.strike) < 18) return null;
+              return (
+                <div
+                  key={i}
+                  className="pointer-events-none absolute right-1.5 -translate-y-1/2 text-right font-mono text-[12px] font-semibold tracking-[-0.02em] leading-[1.15] tabular-nums"
+                  style={{ top: t.y }}
+                >
+                  <div className="text-content-secondary">{t.price}</div>
+                  {t.readout ? <div className={readoutTone(t.readout)}>{t.readout}</div> : null}
+                </div>
+              );
+            })}
             {/* what the two numbers at each tick are, in the free strip beside the time axis:
                 set like a tick itself, each word in its own number's colour */}
             <div className="pointer-events-none absolute bottom-1 right-1.5 text-right font-mono text-[12px] font-semibold tracking-[-0.02em] leading-[1.25]">
