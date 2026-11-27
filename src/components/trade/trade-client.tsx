@@ -3,7 +3,6 @@
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { INLINE_PILL, INLINE_PILL_FACE, INLINE_PILL_GLYPH } from "@/components/app-ui/app-inline-select";
 import { AppPageHeader } from "@/components/app-ui/app-page-header";
 import { TYPE_LINK } from "@/components/app-ui/type-styles";
 import { Chevron } from "@/components/app-ui/chevron";
@@ -14,57 +13,6 @@ import { tradeDraftStore, updateTradeDraft } from "@/lib/trade/draft";
 import { SentenceTrade } from "@/components/trade/sentence/sentence-trade";
 
 type Mode = "yield" | "profit";
-
-/** The two ways to trade an option, as genuinely different products: buying optionality for
-    direction (a long call / put) or selling it for yield (a covered call / cash-secured put).
-    `word` completes the page title, "Get ___ on your thesis". */
-const MODES: Array<{ value: Mode; word: string }> = [
-  { value: "profit", word: "profit" },
-  { value: "yield", word: "shield" },
-];
-
-/** The line under the title. The title already names the upside ("Get profit", "Get yield"),
-    so this line says only what being wrong costs, in the same words for both modes. */
-const MODE_LINE: Record<Mode, string> = {
-  // buying: the loss stops at what was paid. "Only the premium" says nothing to someone who
-  // does not know how big a premium is, so the line ties it to the amount shown under Now
-  profit: "If you are wrong, you lose what you pay now, never more",
-  // selling: the premium is kept, and the deposit is exchanged at the strike
-  yield: "If you are wrong, you buy or sell the asset at your price",
-};
-
-/**
- * The mode, set inside the page title. It has two values, so it is a switch, not a menu: one
- * click flips it. It keeps the width of its wider word, so flipping never reflows the title.
- */
-function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => void }) {
-  const other = MODES.find((m) => m.value !== mode)!;
-  return (
-    <button
-      type="button"
-      aria-label={`Trading mode: ${mode}. Switch to ${other.word}`}
-      title={`Switch to ${other.word}`}
-      onClick={() => onChange(other.value)}
-      className={cn(
-        INLINE_PILL,
-        // The pill's padding and border must not make the title's line taller than a plain
-        // title's: pulled in by a hair, the words sit exactly where Earn's and Portfolio's do.
-        "-my-[0.07em]",
-        "cursor-pointer border-accent-primary/60 bg-accent-primary/25 text-content-primary hover:border-accent-primary hover:bg-accent-primary/40",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary"
-      )}
-    >
-      <span className="inline-grid">
-        {MODES.map((m) => (
-          <span key={m.value} aria-hidden={m.value !== mode} className={cn(INLINE_PILL_FACE, "justify-center", m.value !== mode && "invisible")}>
-            {m.word}
-          </span>
-        ))}
-      </span>
-      <Chevron kind="switch" className={INLINE_PILL_GLYPH} />
-    </button>
-  );
-}
 
 /** Where "How it works" leads: the guide to what the mode on screen trades. */
 const GUIDE: Record<Mode, string> = {
@@ -103,24 +51,11 @@ export function TradeClient() {
   return (
     <div>
       {/* the page's title, set like Earn's, with the mode as the one word in it you can change */}
-      <AppPageHeader
-        title={<>Get <ModeToggle mode={mode} onChange={setMode} /> <span className="whitespace-nowrap">on your thesis</span></>}
-        // Both lines sit in one cell and only the mode's own shows, so the block is always as
-        // tall as the longer one: on a narrow phone one wraps and the other does not, and
-        // flipping the mode must not move the page.
-        subtitle={
-          <span className="grid">
-            {MODES.map((m) => (
-              <span key={m.value} aria-hidden={m.value !== mode} className={cn("col-start-1 row-start-1", m.value !== mode && "invisible")}>
-                {MODE_LINE[m.value]}
-              </span>
-            ))}
-          </span>
-        }
-      />
+      <AppPageHeader title="Trade" subtitle="Get profit or yield from your thesis" />
 
       <SentenceTrade
         mode={mode}
+        onMode={setMode}
         initialAsset={params.get("asset")}
         initialDirection={params.get("dir")}
         // out of the title's way, still one click away: a quiet line under the card that

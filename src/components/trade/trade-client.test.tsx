@@ -12,9 +12,21 @@ vi.mock("@/components/rfq/rfq-provider", () => ({
   useRfqContext: () => ({ connectionState: "connected", getEarnSummary: mocks.getEarnSummary }),
 }));
 vi.mock("@/components/trade/sentence/sentence-trade", () => ({
-  SentenceTrade: ({ mode, initialAsset, footer }: { mode: string; initialAsset?: string | null; footer?: ReactNode }) => (
+  SentenceTrade: ({
+    mode,
+    onMode,
+    initialAsset,
+    footer,
+  }: {
+    mode: "profit" | "yield";
+    onMode?: (mode: "profit" | "yield") => void;
+    initialAsset?: string | null;
+    footer?: ReactNode;
+  }) => (
     <div>
       <p>{mode === "profit" ? "Profit" : "Yield"} for {initialAsset ?? "default"}</p>
+      {/* stands in for the "buying" / "selling" word in the line under the sentence */}
+      <button type="button" onClick={() => onMode?.(mode === "profit" ? "yield" : "profit")}>flip mode</button>
       {footer}
     </div>
   ),
@@ -30,13 +42,14 @@ describe("Trade page modes", () => {
   it("opens Profit by default and fetches the earn summary", () => {
     render(<TradeClient />);
     expect(screen.getByText("Profit for default")).toBeTruthy();
-    // the mode is the one changeable word in the page title
+    // the title is the page's name and the line under it says what the page is for; the mode
+    // and its switch live in the sentence, not in the header
     const title = screen.getByRole("heading", { level: 1 });
-    expect(title.textContent).toContain("on your thesis");
-    expect(screen.getByRole("button", { name: "Trading mode: profit. Switch to shield" })).toBeTruthy();
-    // the line under the title says what this mode is; the other mode's line only holds its space
-    expect(screen.getByText("If you are wrong, you lose what you pay now, never more").getAttribute("aria-hidden")).toBe("false");
-    expect(screen.getByText("If you are wrong, you buy or sell the asset at your price").getAttribute("aria-hidden")).toBe("true");
+    expect(title.textContent).toBe("Trade");
+    const header = title.closest("header")!;
+    expect(header.querySelector("p")!.textContent).toBe("Get profit or yield from your thesis");
+    expect(header.querySelector("button")).toBeNull();
+    expect(header.querySelector("[role=tab]")).toBeNull();
     expect(mocks.getEarnSummary).toHaveBeenCalled();
   });
 
@@ -44,9 +57,8 @@ describe("Trade page modes", () => {
     mocks.search = "mode=yield&asset=JLP";
     render(<TradeClient />);
     expect(screen.getByText("Yield for JLP")).toBeTruthy();
-    expect(screen.getByText("If you are wrong, you buy or sell the asset at your price").getAttribute("aria-hidden")).toBe("false");
-    expect(screen.getByText("If you are wrong, you lose what you pay now, never more").getAttribute("aria-hidden")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "Trading mode: yield. Switch to profit" }));
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Trade");
+    fireEvent.click(screen.getByRole("button", { name: "flip mode" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP", { scroll: false });
   });
 
@@ -54,7 +66,7 @@ describe("Trade page modes", () => {
     mocks.search = "asset=JLP";
     render(<TradeClient />);
     expect(screen.getByText("Profit for JLP")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Trading mode: profit. Switch to shield" }));
+    fireEvent.click(screen.getByRole("button", { name: "flip mode" }));
     expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP&mode=yield", { scroll: false });
   });
 
@@ -102,7 +114,7 @@ describe("the mode a visitor last used", () => {
   it("is remembered when it is switched", async () => {
     const { tradeDraftStore } = await import("@/lib/trade/draft");
     render(<TradeClient />);
-    fireEvent.click(screen.getByRole("button", { name: "Trading mode: profit. Switch to shield" }));
+    fireEvent.click(screen.getByRole("button", { name: "flip mode" }));
     expect(tradeDraftStore().read().mode).toBe("yield");
     expect(screen.getByText("Yield for default")).toBeTruthy();
   });
