@@ -18,6 +18,14 @@ describe("the P0 edition's lineup", () => {
     expect(p0[0].pda.mainnet).toBeNull();
   });
 
+  it("binds the LST vault on devnet by its address, and nothing on mainnet yet", () => {
+    const lst = "CSzSZKBvA41sv1Ek2bHLZNaPgvmLnXEGyXos3tLeDZWT";
+    expect(p0[0].pda).toEqual({ devnet: lst, mainnet: null });
+    const served = [{ vault: { vault_pda: lst }, meta: { assetSymbol: "LST" } }];
+    expect(resolveLineup(served, { network: "devnet", lineup: p0 })[0].bound).toBe(served[0]);
+    expect(resolveLineup(served, { network: "mainnet", lineup: p0 })[0].bound).toBeNull();
+  });
+
   it("reads as LST alone wherever the lineup is put into words", () => {
     expect(lineupAssetsText(p0)).toBe("LST");
     // one vault is said as one vault

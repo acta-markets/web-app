@@ -63,10 +63,9 @@ const DEFAULT_LINEUP: readonly LineupEntry[] = [
 /**
  * The P0 edition: one vault, on LST. Its rate until the vault's own figures replace it is the
  * landing page's SOL one, staking plus premium, as for any staked SOL.
- * TODO(tim): the LST vault's devnet address, once it is opened on the backend.
  */
 const P0_LINEUP: readonly LineupEntry[] = [
-  { id: "lst", asset: "LST", type: "Majors", pda: { devnet: null, mainnet: null }, state: "open", assumedApr: landingApr("sol") },
+  { id: "lst", asset: "LST", type: "Majors", pda: { devnet: "CSzSZKBvA41sv1Ek2bHLZNaPgvmLnXEGyXos3tLeDZWT", mainnet: null }, state: "open", assumedApr: landingApr("sol") },
 ];
 
 /** The vaults an edition's Earn page offers. */
