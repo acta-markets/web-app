@@ -1761,7 +1761,7 @@ export function ThesisChart({
             title="Drag to change the strike"
             data-testid="chart-strike"
             className={cn(HANDLE)}
-            style={{ top: tops.strike, right: 6, ...grabStyle }}
+            style={{ top: tops.strike, left: -1, ...grabStyle }}
             onPointerDown={onDragPointerDown}
             onPointerMove={onDragPointerMove}
             onPointerUp={onDragPointerEnd}
