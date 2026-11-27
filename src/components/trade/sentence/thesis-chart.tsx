@@ -1642,6 +1642,22 @@ export function ThesisChart({
           </span>
         ) : null}
 
+        {/* the strike line itself: a grab band across the pane at the strike price, so the
+            line can be dragged as well as the knot in the legend */}
+        {geometry && tops && strikesAsc.length > 1 ? (
+          <div
+            aria-hidden="true"
+            title="Drag to change the strike"
+            className="absolute inset-x-0 z-[15] -translate-y-1/2 cursor-grab touch-none active:cursor-grabbing"
+            style={{ top: tops.strike, height: 14 }}
+            onPointerDown={onDragPointerDown}
+            onPointerMove={onDragPointerMove}
+            onPointerUp={onDragPointerEnd}
+            onPointerCancel={onDragPointerEnd}
+            onLostPointerCapture={onDragPointerEnd}
+          />
+        ) : null}
+
         {/* The buyer's goal: a handle at the far end of its dashed line, where the price is
             headed, dragged through the goals on offer just as the strike handle is dragged
             through the strikes, and drawn exactly as it is. It keeps clear of the expiry tag in
@@ -1741,18 +1757,14 @@ export function ThesisChart({
             onKeyDown={onDragKeyDown}
           >
             <span className="flex items-center gap-1" aria-hidden="true">
-              <Chevron kind="switch" className={HANDLE_ICON} />
               {/* an open hand at rest, a closed one while held */}
               {grabbed ? (
-                <Grab data-testid="strike-hand" data-grabbed="true" className={cn(HANDLE_ICON, "max-md:hidden")} />
+                <Grab data-testid="strike-hand" data-grabbed="true" className={HANDLE_ICON} />
               ) : (
-                <Hand data-testid="strike-hand" data-grabbed="false" className={cn(HANDLE_ICON, "max-md:hidden")} />
+                <Hand data-testid="strike-hand" data-grabbed="false" className={HANDLE_ICON} />
               )}
             </span>
-            <span className="flex items-baseline justify-between gap-3" style={{ minWidth: `${handleMinCh}ch` }}>
-              <span className="max-md:hidden">STRIKE</span>
-              <span className="tabular-nums">{strikeShown}</span>
-            </span>
+            <span className="tabular-nums">{strikeShown}</span>
           </div>
             ) : null}
             {rightAxis.ticks.map((t, i) => (
