@@ -40,8 +40,8 @@ export type LineupEntry = {
 
 /** Where Deposit leads for a vault with no address yet: the landing page's access link. */
 export const LINEUP_ACCESS_URL = VAULT_ACCESS_URL;
-/** Said under the (i) beside an assumed rate, so it is never taken for a live one. */
-export const ASSUMED_APR_NOTE = "An estimate from backtesting. It is not this vault's live result and not a promise.";
+/** Said under the (i) beside an assumed rate; kept here for the cards that import it from the lineup. */
+export { ASSUMED_APR_NOTE } from "@/lib/vaults/presentation";
 
 /** The landing page's own figures for an asset, so the two pages cannot drift apart. */
 function landingApr(id: string): { staking: number; premium: number } | undefined {

@@ -3,6 +3,7 @@ import type { flows } from "@acta-markets/ts-sdk/chain";
 import type { DepositorPerformance } from "@acta-markets/ts-sdk/http";
 import { getTokenMint } from "@/lib/tokens";
 import {
+  ASSUMED_APR_NOTE,
   LAST_SHARES_COPY,
   REQUEST_EXISTS_COPY,
   cancelBlockMessage,
@@ -79,6 +80,20 @@ describe("vaultApr", () => {
     ]);
     // before the premium has history, the staking part is still known
     expect(vaultApr(makePerformance(), 5)).toMatchObject({ value: "New", sources: [{ label: "Staking", pct: 5 }] });
+  });
+
+  it("stands the lineup's assumed rate in, marked as an assumption, while the vault has no figure", () => {
+    const assumed = { staking: 7, premium: 11 };
+    const stood = { value: "~18%", pct: 18, muted: false, assumed: true, note: ASSUMED_APR_NOTE };
+    // nothing served at all, and a young vault with no completed cycle
+    expect(vaultApr(null, 0, assumed)).toEqual({ ...stood, sources: [{ label: "Staking", pct: 7 }, { label: "Premium", pct: 11 }] });
+    expect(vaultApr(makePerformance(), 0, assumed)).toMatchObject({ value: "~18%", assumed: true });
+    // a figure still wins, with the lineup's staking part added
+    expect(vaultApr(makePerformance({ apy_30d: 12 }), 7, assumed)).toMatchObject({ value: "19.00%", pct: 19 });
+    expect(vaultApr(makePerformance({ apy_30d: 12 }), 7, assumed)?.assumed).toBeUndefined();
+    // without an assumption nothing changes
+    expect(vaultApr(null, 0)).toMatchObject({ value: "—", note: "Not available." });
+    expect(vaultApr(makePerformance(), 0)).toMatchObject({ value: "New" });
   });
 });
 
@@ -361,15 +376,18 @@ describe("vaultStatus", () => {
 });
 
 describe("primaryVaultAction", () => {
-  it("offers Deposit only while the vault takes deposits", () => {
+  it("says Deposit while the vault takes them, and keeps saying it between cycles and while settling, where the form says when they open", () => {
+    const deposit = { label: "Deposit", tab: "deposit" };
+    expect(primaryVaultAction(makeVault({ phase: "idle", accepting_deposits: true }), NOW)).toEqual(deposit);
+    expect(primaryVaultAction(makeVault({ phase: "idle", accepting_deposits: false }), NOW)).toEqual(deposit);
+    expect(primaryVaultAction(makeVault({ phase: "settling" }), NOW)).toEqual(deposit);
+  });
+
+  it("says Manage only for a vault that is winding down or paused, where a holder has something to do", () => {
     const manage = { label: "Manage", tab: "withdraw" };
-    expect(primaryVaultAction(makeVault({ safety: "closing" }), NOW)).toEqual(manage);
-    expect(primaryVaultAction(makeVault({ phase: "settling" }), NOW)).toEqual(manage);
-    expect(primaryVaultAction(makeVault({ phase: "idle", accepting_deposits: false }), NOW)).toEqual(manage);
-    expect(primaryVaultAction(makeVault({ phase: "idle", accepting_deposits: true }), NOW)).toEqual({
-      label: "Deposit",
-      tab: "deposit",
-    });
+    for (const safety of ["closing", "withdraw_only", "emergency_unwind", "frozen"] as const) {
+      expect(primaryVaultAction(makeVault({ safety }), NOW)).toEqual(manage);
+    }
   });
 });
 

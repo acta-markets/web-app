@@ -24,6 +24,8 @@ export type AprView = {
   /** the parts the headline adds up, when there are figures to show */
   sources: AprSource[];
   note: string;
+  /** true when the headline is the lineup's assumption, not anything measured: it reads "APY", with a tilde */
+  assumed?: true;
 };
 
 const PREMIUM_NOTE = "Premium is what the vault earns selling options, after fees. Projected APY annualizes the last 30 days; it is not a promise.";
@@ -35,13 +37,26 @@ function projectedApy(returnPct: number, days: number): number {
 }
 const STAKING_NOTE = "Staking is the deposit asset's own yield, which the vault's share price does not include.";
 
+/** Said under the (i) beside an assumed rate, so it is never taken for a live one. */
+export const ASSUMED_APR_NOTE = "An estimate from backtesting. It is not this vault's live result and not a promise.";
+
+/** The lineup's assumed rate as the headline, in its parts, until the vault has a figure of its own. */
+export function assumedAprView(apr: { staking: number; premium: number }): AprView {
+  const sources: AprSource[] = [
+    ...(apr.staking > 0 ? [{ label: "Staking" as const, pct: apr.staking }] : []),
+    ...(apr.premium > 0 ? [{ label: "Premium" as const, pct: apr.premium }] : []),
+  ];
+  return { value: `~${apr.staking + apr.premium}%`, pct: apr.staking + apr.premium, muted: false, sources, note: ASSUMED_APR_NOTE, assumed: true };
+}
+
 /**
  * The one projected APY every surface shows: the backend's 30-day figure plus any
  * staking yield of the deposit asset. Under 30 days it annualizes the history so
- * far, and reads "New" under 20 days. A vault whose history the backend cannot
- * cover reads as empty.
+ * far, and reads "New" under 20 days. Where there is no figure at all, a lineup's
+ * assumed rate stands in, marked as an assumption (`assumedAprView`); a vault with
+ * no assumption and no history the backend can cover reads as empty.
  */
-export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0): AprView {
+export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0, assumed?: { staking: number; premium: number }): AprView {
   const staking: AprSource[] = stakingAprPct > 0 ? [{ label: "Staking", pct: stakingAprPct }] : [];
   const premium = performance?.apy_30d ?? null;
   if (premium !== null) {
@@ -56,9 +71,11 @@ export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0
   const all = performance?.returns.all ?? null;
   const young =
     performance?.covered === true && (all === null || Number(performance.computed_at) - Number(all.window_start_at) < APY_WINDOW_SECS);
-  if (!young) return { value: NONE, pct: null, muted: true, sources: [], note: "Not available." };
+  if (!young) return assumed ? assumedAprView(assumed) : { value: NONE, pct: null, muted: true, sources: [], note: "Not available." };
   const days = all === null ? 0 : (Number(all.window_end_at) - Number(all.window_start_at)) / 86_400;
   if (all === null || days < PROJECTED_MIN_DAYS) {
+    // no completed cycle at all: the assumption stands in; a short but real history still reads New
+    if (all === null && assumed) return assumedAprView(assumed);
     return { value: "New", pct: null, muted: true, sources: staking, note: "Projected APY shows after 20 days of history." };
   }
   const projected = projectedApy(all.return_pct, days);
@@ -426,11 +443,15 @@ export function vaultStatus(vault: Vault, nowSecs: number): VaultStatusView {
 
 export type VaultModalTab = "deposit" | "withdraw";
 
-/** A vault that takes no deposits right now opens straight on Withdraw. */
+/**
+ * The card's button. A vault that takes no deposits right now still says Deposit between
+ * cycles and while settling: the form then says when they open again, and a visitor with
+ * nothing in the vault has nothing to manage. Only a vault that is winding down or paused,
+ * where a holder has something to do, opens on Withdraw.
+ */
 export function primaryVaultAction(vault: Vault, nowSecs: number): { label: "Deposit" | "Manage"; tab: VaultModalTab } {
-  return flows.requestDepositBlock(vault, nowSecs) === null
-    ? { label: "Deposit", tab: "deposit" }
-    : { label: "Manage", tab: "withdraw" };
+  if (flows.requestDepositBlock(vault, nowSecs) === null) return { label: "Deposit", tab: "deposit" };
+  return isWindingDown(vault) || vault.safety === "frozen" ? { label: "Manage", tab: "withdraw" } : { label: "Deposit", tab: "deposit" };
 }
 
 // What a depositor may do and why not: the contract's rules in words. Kept in a module of its own,

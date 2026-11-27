@@ -62,4 +62,17 @@ describe("AprLabel", () => {
     expect(tip.queryByText("Projected APY")).toBeNull();
     expect(tip.getByText("Projected APY shows after 20 days of history.")).toBeTruthy();
   });
+
+  it("says APY, not Projected APY, for an assumed rate, and says where it comes from", async () => {
+    const user = userEvent.setup();
+    const apr = vaultApr(null, 0, { staking: 7, premium: 11 });
+    render(<AprLabel apr={apr} />);
+    expect(screen.getByText("APY")).toBeTruthy();
+    expect(screen.queryByText("Projected APY")).toBeNull();
+    await user.tab();
+    const tip = screen.getByRole("tooltip");
+    expect(tip.textContent).toContain("Staking7.00%");
+    expect(tip.textContent).toContain("An estimate from backtesting");
+    expect(tip.textContent).not.toContain("Projected APY");
+  });
 });

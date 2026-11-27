@@ -15,7 +15,7 @@ export function AprBreakdown({ apr }: { apr: AprView }) {
               <dd className="tabular-nums">{formatPercent(source.pct)}</dd>
             </div>
           ))}
-          {apr.sources.length > 1 && !apr.muted ? (
+          {apr.sources.length > 1 && !apr.muted && !apr.assumed ? (
             <div className="flex justify-between gap-6 border-t border-bg-border pt-1 font-medium">
               <dt>Projected APY</dt>
               <dd className="tabular-nums">{apr.value}</dd>
@@ -28,12 +28,12 @@ export function AprBreakdown({ apr }: { apr: AprView }) {
   );
 }
 
-/** "Projected APY" with an (i) that breaks the figure down. */
+/** "Projected APY" with an (i) that breaks the figure down; a lineup's assumption reads "APY". */
 export function AprLabel({ apr, className }: { apr: AprView; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-1", className)}>
-      Projected APY
-      <InfoTooltip label="What makes up this Projected APY">
+      {apr.assumed ? "APY" : "Projected APY"}
+      <InfoTooltip label={apr.assumed ? "Where this APY comes from" : "What makes up this Projected APY"}>
         <AprBreakdown apr={apr} />
       </InfoTooltip>
     </span>
