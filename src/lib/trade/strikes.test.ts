@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TokenMarketsInfoData } from "@/lib/rfq-client";
 import {
   buildStrikeOptions,
+  defaultExpiryIndex,
   defaultStrikeIndex,
   expiriesForSide,
   indicativesFor,
@@ -170,5 +171,16 @@ describe("QQQ market hours and Friday expiries", () => {
     expect(tradableExpiries(qqq(), true, "cash_secured_put", "sell", 1794150000).map((e) => e.pda)).toEqual([
       "put-friB",
     ]);
+  });
+});
+
+describe("defaultExpiryIndex", () => {
+  it("opens on the middle date, the earlier of two middles", () => {
+    expect(defaultExpiryIndex(0)).toBe(-1);
+    expect(defaultExpiryIndex(1)).toBe(0);
+    expect(defaultExpiryIndex(2)).toBe(0);
+    expect(defaultExpiryIndex(3)).toBe(1);
+    expect(defaultExpiryIndex(4)).toBe(1);
+    expect(defaultExpiryIndex(5)).toBe(2);
   });
 });

@@ -66,6 +66,7 @@ const position = (over: Partial<PositionsTableRow>, devnet = false) =>
     {
       id: "p", symbol: "SOL", sentenceBody: "ends below $150 by Nov 28", sentence: "SOL ends below $150 by Nov 28",
       productLabel: "Covered call", legsText: null, outcome: null, exerciseText: null, strikeText: "$150", markText: "$141.20",
+    markNum: 141.2, strikeNum: 150, farStrikeNum: null, cashSettled: false,
       direction: "below", side: "sell", sizeNum: 10, sizeText: "10 SOL", premiumNum: 31.4, premiumLabel: "collected",
       pnlNum: 31.4, pnlText: "+$31.40", expiryTs: Date.UTC(2026, 10, 28, 8) / 1000, isOpen: true, state: "Open",
       createdTs: 0, buy: null, fund: null, inTheMoney: null,

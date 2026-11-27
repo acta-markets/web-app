@@ -31,7 +31,7 @@ const MENU_MIN_HEIGHT = 140;
 export const INLINE_PILL_FACE = "col-start-1 row-start-1 inline-flex items-center gap-[0.15em]";
 /** The pill itself, shared by every inline control in a sentence so they read as one family. */
 export const INLINE_PILL =
-  "group/pill relative inline-flex items-center gap-[0.15em] whitespace-nowrap border px-[0.25em] py-[0.06em] leading-[1.15] transition-colors";
+  "group/pill relative inline-flex items-center gap-[0.15em] whitespace-nowrap rounded-[var(--radius)] border px-[0.25em] py-[0.06em] leading-[1.15] transition-colors";
 /** The small glyph at a pill's end that says it can be changed: clear at rest, full on hover. */
 export const INLINE_PILL_GLYPH = "h-[0.55em] w-[0.55em] shrink-0 opacity-90 transition-opacity group-hover/pill:opacity-100";
 const FACE = INLINE_PILL_FACE;
@@ -468,7 +468,7 @@ function MenuSelect({
                 display: "grid",
                 gridTemplateColumns: `repeat(${layout.columns}, auto)`,
               }}
-              className="app-type fixed z-[80] max-w-[calc(100vw-12px)] content-start overflow-y-auto border border-bg-border bg-bg-primary py-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
+              className="app-type fixed z-[80] max-w-[calc(100vw-12px)] content-start overflow-y-auto rounded-[var(--radius)] border border-bg-border bg-bg-primary py-1 font-mono text-sm leading-[1.2] tracking-[-0.28px] shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]"
             >
               {runs.map((run, r) => (
                 <React.Fragment key={`${run.group ?? "run"}-${r}`}>

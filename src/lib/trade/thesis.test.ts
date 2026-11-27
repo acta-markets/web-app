@@ -20,10 +20,11 @@ import {
   spreadZoneLabels,
   STRATEGIES,
   strategyInfo,
-  cushionText,
   outcomeCopy,
   scenario,
   strikeDistancePct,
+  tradeLine,
+  tradeLineText,
   thesisText,
   zoneLabels,
   type EasyCtaState,
@@ -97,22 +98,62 @@ describe("scenario", () => {
   });
 });
 
-describe("cushion sentence", () => {
-  it("gives the room left when the thesis holds today", () => {
-    // strike 1.5% under spot, thesis "above": right unless it falls more than 1.5%
-    expect(cushionText("SOL", "above", -1.5, "in 7 days")).toBe("SOL can fall 1.5% in 7 days and you're still right");
-    // strike 3.4% over spot, thesis "below": right unless it rises more than 3.4%
-    expect(cushionText("SOL", "below", 3.44, "in 30 days")).toBe("SOL can rise 3.4% in 30 days and you're still right");
+describe("the sentence's second line", () => {
+  it("says what a sold option earns and what being wrong does to the deposit", () => {
+    // thesis "above" sells a put: wrong, the USDC buys the asset at the strike
+    expect(tradeLineText({ asset: "SOL", direction: "above", side: "sell", strike: "$150", premium: "\u2248$1.10" })).toBe(
+      "You're selling a put option to earn \u2248$1.10, but if you're wrong you buy SOL at $150"
+    );
+    // thesis "below" sells a call: wrong, the asset is sold at the strike
+    expect(tradeLineText({ asset: "SOL", direction: "below", side: "sell", strike: "$170", premium: "\u2248$1.10" })).toBe(
+      "You're selling a call option to earn \u2248$1.10, but if you're wrong you sell your SOL at $170"
+    );
   });
 
-  it("gives the move needed when it does not hold yet", () => {
-    expect(cushionText("SOL", "above", 4.8, "in 4 days")).toBe("SOL has to rise 4.8% in 4 days for you to be right");
-    expect(cushionText("SOL", "below", -2, "in 2 days")).toBe("SOL has to fall 2.0% in 2 days for you to be right");
+  it("keeps a sold option's wrong outcome when it has no price yet", () => {
+    expect(tradeLineText({ asset: "SOL", direction: "above", side: "sell", strike: "$150" })).toBe(
+      "You're selling a put option, but if you're wrong you buy SOL at $150"
+    );
   });
 
-  it("handles a price at spot and a missing spot", () => {
-    expect(cushionText("SOL", "above", 0.03, "in 7 days")).toBe("SOL is right at the strike today");
-    expect(cushionText("SOL", "below", null, "in 7 days")).toBeNull();
+  it("names a bought option's strike, what it makes if right, and that its price is all it risks", () => {
+    expect(
+      tradeLineText({ asset: "BTC", direction: "above", side: "buy", strike: "$61,000", premium: "\u2248$21.73", goalProfit: "+$28.27" })
+    ).toBe("You're buying a $61,000 call option that makes +$28.27 or more if you're right, risking only \u2248$21.73");
+    expect(
+      tradeLineText({ asset: "BTC", direction: "below", side: "buy", strike: "$60,000", premium: "\u2248$21.73", goalProfit: "+$128" })
+    ).toBe("You're buying a $60,000 put option that makes +$128 or more if you're right, risking only \u2248$21.73");
+    // priced, but no goal to measure a profit at
+    expect(tradeLineText({ asset: "BTC", direction: "above", side: "buy", strike: "$61,000", premium: "\u2248$21.73" })).toBe(
+      "You're buying a $61,000 call option, risking only \u2248$21.73"
+    );
+    // unpriced, the same promise in words; a profit with no price to set it against is not shown
+    expect(tradeLineText({ asset: "BTC", direction: "above", side: "buy", strike: "$61,000", goalProfit: "+$28.27" })).toBe(
+      "You're buying a $61,000 call option, risking only what you pay for it"
+    );
+  });
+
+  it("still names the option without a strike, so the line's switch is always there", () => {
+    expect(tradeLineText({ asset: "SOL", direction: "below", side: "sell", strike: null, premium: "\u2248$1.10" })).toBe("You're selling a call option");
+    expect(tradeLineText({ asset: "BTC", direction: "above", side: "buy", strike: null })).toBe(
+      "You're buying a call option, risking only what you pay for it"
+    );
+  });
+
+  it("splits the line around its two controls: the verb, and a buy's strike", () => {
+    expect(
+      tradeLine({ asset: "BTC", direction: "above", side: "buy", strike: "$61,000", premium: "\u2248$21.73", goalProfit: "+$28.27" })
+    ).toEqual({
+      lead: "You're",
+      verb: "buying",
+      before: "a",
+      strike: "$61,000",
+      rest: "call option that makes +$28.27 or more if you're right, risking only \u2248$21.73",
+    });
+    // a sell's strike is the first line's price; here it is plain text inside the rest
+    const sell = tradeLine({ asset: "BTC", direction: "above", side: "sell", strike: "$60,000" });
+    expect(sell.verb).toBe("selling");
+    expect(sell.strike).toBeUndefined();
   });
 });
 

@@ -127,7 +127,7 @@ export function TradeClient() {
         // opens the guide, as the header links on Earn and Portfolio do
         footer={
           <div className="mt-4 flex justify-center">
-            <Link href={GUIDE[mode]} prefetch={false} className={cn(TYPE_LINK, "text-sm leading-[1.2]")}>
+            <Link href={GUIDE[mode]} prefetch={false} className={cn(TYPE_LINK, "text-base leading-[1.2]")}>
               How it works
               <Chevron kind="go" className="h-4 w-4" />
             </Link>

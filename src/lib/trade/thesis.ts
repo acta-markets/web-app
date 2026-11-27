@@ -171,21 +171,77 @@ export const SENTENCE = {
 } as const;
 
 /**
- * Where today's price stands against the thesis, over its horizon. When it already holds,
- * the room before it fails ("SOL can fall 1.5% in 7 days and you're still right"); when it
- * doesn't, the move it needs ("SOL has to rise 4.8% in 7 days for you to be right"). Ties
- * count as right, as at settlement. `distancePct` is (strike − spot) / spot; null without a
- * spot price. `horizon` is the time-to-expiry as a phrase (e.g. "in 7 days"), prepended
- * before the outcome so the cushion always names when the move must happen.
+ * The sentence's second line, in parts, so two of its words can be controls: the verb switches
+ * between buying and selling, and a buy names its strike as a price that can be changed. Read
+ * together: "You're buying a $61,000 call option that makes +$28 or more if you're right, risking only
+ * ≈$21.73".
  */
-export function cushionText(asset: string, direction: Direction, distancePct: number | null, horizon: string | null): string | null {
-  if (distancePct == null) return null;
-  const pct = moveMagnitude(distancePct);
-  if (pct === "0.0") return `${asset} is right at the strike today`;
-  const holdsToday = direction === "above" ? distancePct <= 0 : distancePct >= 0;
-  const time = horizon ? ` ${horizon}` : "";
-  if (holdsToday) return `${asset} can ${direction === "above" ? "fall" : "rise"} ${pct}%${time} and you're still right`;
-  return `${asset} has to ${direction === "above" ? "rise" : "fall"} ${pct}%${time} for you to be right`;
+export type TradeLine = {
+  lead: string;
+  verb: string;
+  /** a buy only: the words between the verb and the strike ("a") */
+  before?: string;
+  /** a buy only: the strike, formatted, where the line has its strike control */
+  strike?: string;
+  rest: string;
+};
+
+/**
+ * What is being traded, for how much, what it can make and what being wrong costs. The first
+ * line of the sentence is the belief itself, so this one is the trade made on it.
+ *
+ * `strike` is the option's strike, formatted ("$150"); without one the line still names the
+ * option, so the switch in it is always there. `premium` is the money that changes hands now,
+ * formatted ("≈$1.10"), absent until the trade is priced and sized.
+ *
+ * Selling, the first line's price is the strike. The premium is earned either way, so the line
+ * never makes it depend on the outcome; being wrong means the deposit is exchanged at the
+ * strike: "…a put option to earn ≈$1.10, but if you're wrong you buy SOL at $150" (a call:
+ * "…you sell your SOL at $170").
+ *
+ * Buying, the first line's price is the buyer's goal, not the strike, so the strike is named
+ * here. `goalProfit` is what the trade makes with the price at that goal ("+$28"); past the
+ * goal it makes more, hence "or more". The premium is the price and the whole risk: "…a $61,000
+ * call option that makes +$28 or more if you're right, risking only ≈$21.73".
+ */
+export function tradeLine({
+  asset,
+  direction,
+  side,
+  strike,
+  premium = null,
+  goalProfit = null,
+}: {
+  asset: string;
+  direction: Direction;
+  side: TakerSide;
+  strike: string | null;
+  premium?: string | null;
+  goalProfit?: string | null;
+}): TradeLine {
+  const lead = "You're";
+  const verb = side === "buy" ? "buying" : "selling";
+  const isPut = directionInfo(direction, side).isPut;
+  const kind = `${isPut ? "put" : "call"} option`;
+  if (side === "buy") {
+    // What it makes if right, then what is at risk. The price is said once, as the risk, and
+    // with a strike the option goes by its short name ("a $61,000 call"): the line has to fit
+    // beside two controls.
+    const risk = premium ? `risking only ${premium}` : "risking only what you pay for it";
+    const makes = premium && goalProfit ? ` that makes ${goalProfit} or more if you're right, ` : ", ";
+    if (!strike) return { lead, verb, rest: `a ${kind}${makes}${risk}` };
+    return { lead, verb, before: "a", strike, rest: `${isPut ? "put" : "call"} option${makes}${risk}` };
+  }
+  if (!strike) return { lead, verb, rest: `a ${kind}` };
+  // a sold put's deposit buys the asset at the strike; a sold call's asset is sold there
+  const wrong = isPut ? `you buy ${asset} at ${strike}` : `you sell your ${asset} at ${strike}`;
+  return { lead, verb, rest: `a ${kind}${premium ? ` to earn ${premium}` : ""}, but if you're wrong ${wrong}` };
+}
+
+/** The same line as one string. */
+export function tradeLineText(input: Parameters<typeof tradeLine>[0]): string {
+  const line = tradeLine(input);
+  return [line.lead, line.verb, line.before, line.strike, line.rest].filter(Boolean).join(" ");
 }
 
 /** The payout line's closing words, e.g. "≈$0.95 (126% APR) now."; the sentence renders exactly this text. */

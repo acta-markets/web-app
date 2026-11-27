@@ -60,13 +60,13 @@ function SkeletonCell({ className, value, note = "h-3 w-28" }: { className?: str
 export function TradeSkeleton({ side, folded = false }: { side: TakerSide; folded?: boolean }) {
   return (
     <AppCard aria-hidden="true" data-testid="trade-skeleton" className="border-0 p-4 max-md:p-3">
-      {/* the sentence and the line under it. The sentence wraps to three lines on a phone, two on
-          a large phone and on a laptop, one elsewhere, so the block takes each of those heights. */}
-      <div className="flex h-[120px] flex-col gap-1 min-[480px]:h-[88px] md:h-[49px] md:gap-2 lg:h-[80px] xl:h-[56px]">
-        <div className={cn(BONE, "min-h-0 w-full max-w-[660px] flex-1")} />
-        <div className="flex h-[19.5px] shrink-0 items-center">
-          <div className={cn(BONE, "h-[13px] w-72 max-w-full")} />
-        </div>
+      {/* the sentence's two lines, set in one type. On a phone the first wraps to three lines and
+          the second to two (a buy) or three (a sell, whose line also says what it earns); on a
+          large phone both take two; from a tablet up each is one line, its type growing with the
+          card up to 26px, so the block takes each of those heights. */}
+      <div className={cn("flex flex-col gap-1.5 min-[480px]:h-[129px] md:h-[52px] lg:h-[66px] xl:h-[77px]", side === "sell" ? "h-[194px]" : "h-[162px]")}>
+        <div className={cn(BONE, "min-h-0 w-full max-w-[660px] flex-[3] min-[480px]:flex-1")} />
+        <div className={cn(BONE, "min-h-0 w-full max-w-[720px] min-[480px]:flex-1", side === "sell" ? "flex-[3]" : "flex-[2]")} />
       </div>
       <ChartSkeleton />
       {/* the strip: two headings, four cells, in the loaded strip's own grid and order */}

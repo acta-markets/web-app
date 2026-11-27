@@ -27,6 +27,7 @@ import { annualizeYield, grossFromIndicative1e9, previewFill } from "@acta-marke
 import { DEFAULT_SIZE_UNITS, assetsForMenu, pickAsset, tradeAssets } from "@/lib/trade/assets";
 import { draftDetails, tradeDraftStore, tradeViewSearch, updateTradeDraft } from "@/lib/trade/draft";
 import { formatAmount, formatExpiryDay, formatTimeAway, formatUsdAmount } from "@/lib/trade/format";
+import { formatProfit, goalOptions, pickGoal } from "@/lib/trade/goal";
 import {
   alignQuantityToRule,
   clampNumber,
@@ -41,6 +42,7 @@ import {
 } from "@/lib/trade/sizing";
 import {
   buildStrikeOptions,
+  defaultExpiryIndex,
   defaultStrikeIndex,
   tradableExpiries,
   indicativesFor,
@@ -50,15 +52,14 @@ import {
 import {
   buyBreakEven,
   buyZoneLabels,
-  cushionText,
   directionInfo,
   directionsFor,
   easyCta,
   movePctText,
   scenario as buildScenario,
   strategyInfo,
-  strikeDistancePct,
   thesisText,
+  tradeLine,
   zoneLabels,
   type Direction,
   type Strategy,
@@ -67,14 +68,14 @@ import { wireAmount, type TakerSide } from "@/lib/spreads";
 import { ProfitOutlook } from "./profit-table";
 import { TICKET_CELL, TICKET_LABEL, TICKET_NOTE, TICKET_VALUE, TICKET_WHEN } from "./ticket-styles";
 import { ChartSkeleton, TradeSkeleton } from "./trade-skeleton";
-import { ThesisSentence } from "./thesis-sentence";
+import { ThesisSentence, ThesisMoveLine, StrikeControl } from "./thesis-sentence";
 import { ThesisChart } from "./thesis-chart";
 
 const PRICE_SCALE = 1_000_000_000;
 // the saved copies are asked for as this file loads, so they are in memory by the first render
 primeTrade();
 // no top padding: the page's title sits right above and brings its own
-const CONTAINER = "mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6 max-md:px-3";
+const CONTAINER = "mx-auto w-full max-w-page px-6 pb-20 max-md:px-3";
 /** The chosen strike if still listed, else the closest one by price. */
 function nearestStrike(options: StrikeOption[], strike1e9: number): StrikeOption | null {
   let best: StrikeOption | null = null;
@@ -106,12 +107,15 @@ export function splitOutcome(title: string): [string, string] | null {
  */
 export function SentenceTrade({
   mode,
+  onMode,
   initialAsset,
   initialDirection,
   footer,
 }: {
   /** "yield" sells the belief, "profit" pays for it */
   mode: "yield" | "profit";
+  /** switches the mode: the "buying" / "selling" word in the line under the sentence calls it */
+  onMode?: (mode: "yield" | "profit") => void;
   initialAsset?: string | null;
   /** The direction the address names (`?dir=`), which wins over the remembered one. */
   initialDirection?: string | null;
@@ -174,6 +178,8 @@ export function SentenceTrade({
   );
   const [expiryChoice, setExpiryChoice] = useState<number | null>(startDetails.expiryTs);
   const [strikeChoice, setStrikeChoice] = useState<number | null>(startDetails.strike);
+  /** Profit only: the price the buyer thinks the asset reaches; null follows the default goal */
+  const [goalChoice, setGoalChoice] = useState<number | null>(null);
   /** the strike being considered in the open strike menu (hovered or arrowed to); the chart previews it */
   const [strikePreview, setStrikePreview] = useState<number | null>(null);
   /** what the user typed; null follows the suggested amount */
@@ -238,7 +244,8 @@ export function SentenceTrade({
       : direction === "above" ? "buy_call" : "buy_put";
   const info = strategyInfo(strategy);
   const expiries = info.isPut ? putExpiries : callExpiries;
-  const expiry = expiries.find((e) => e.expiryTs === expiryChoice) ?? expiries[0] ?? null;
+  // with no date chosen the thesis opens on the middle one, so the wheel has a date on each side
+  const expiry = expiries.find((e) => e.expiryTs === expiryChoice) ?? expiries[defaultExpiryIndex(expiries.length)] ?? null;
 
   const strikeOptions = useMemo(
     () =>
@@ -311,8 +318,7 @@ export function SentenceTrade({
   const outcome = quantity != null && strike && premiumPerUnit != null
     ? buildScenario({ direction, quantity: quantity / 10 ** decimals, strike: strike.strike, premiumPerUnit, spot })
     : null;
-  const distance = strike ? strikeDistancePct(strike.strike, spot) : null;
-  // the time-to-expiry the cushion sentence names, e.g. "in 7 days"; null without an expiry
+  // the time-to-expiry the ticket's second heading names, e.g. "in 7 days"; null without an expiry
   const horizon = expiry ? `in ${formatTimeAway(expiry.expiryTs * 1000, Date.now())}` : null;
 
   const quoteDecimalsForPreview = snapshot ? Number(snapshot.quote_decimals) : 6;
@@ -399,6 +405,7 @@ export function SentenceTrade({
     setAssetChoice(next);
     setExpiryChoice(null);
     setStrikeChoice(null);
+    setGoalChoice(null);
     setAmountInput(null);
     setDenomChoice(null);
   }
@@ -408,6 +415,8 @@ export function SentenceTrade({
     // The strike resets because call and put strikes are different sets.
     setDirectionChoice(next);
     setStrikeChoice(null);
+    // a goal above today's price says nothing about a belief that it ends below
+    setGoalChoice(null);
   }
 
   /** Flip which token the amount is entered in, re-expressing the same quantity in the new unit. */
@@ -484,9 +493,9 @@ export function SentenceTrade({
   // Exact fill economics from the SDK's local preview: the program's own fee formula, so the
   // premium, the lock and the breakeven agree with what the venue will actually settle.
   // The key facts beside the size: a compact label/value table re-expressing what the chart
-  // already shows. The premium is indicative (marked ≈) and only confirmed on quote.
+  // already shows. The premium is indicative and only confirmed on quote.
   const premiumUsd = preview ? Number(preview.premium.netAtoms) / 10 ** quoteDecimalsForPreview : null;
-  const premiumText = premiumUsd != null ? `≈ ${formatUsdAmount(premiumUsd)}` : "—";
+  const premiumText = premiumUsd != null ? formatUsdAmount(premiumUsd) : "—";
   // Breakeven only when the preview has one that differs from the strike, so it earns its row.
   const breakevenText = preview ? formatUsdSmart(Number(preview.breakeven1e9) / 1e9) : null;
   // What the premium is worth as a yearly rate: the trade's own yield (net premium over what is
@@ -530,6 +539,24 @@ export function SentenceTrade({
         : premiumPerUnit != null
           ? buyBreakEven(info.isPut, strike.strike, premiumPerUnit)
           : null;
+  // The money that changes hands now, for the sentence's second line: what a sell earns, what a
+  // buy costs (and so the most it can lose). Indicative until the quote.
+  const lineMoney = side === "sell" ? premiumUsd : payUsd;
+  const linePremium = lineMoney != null ? formatUsdAmount(lineMoney) : null;
+  // A buyer's belief is a goal, the price they think the asset reaches, not the strike: the
+  // strike is only where the option starts to pay. The sentence's first line takes the goal, and
+  // what the trade makes there is the one honest answer to "how much do I make".
+  const goals =
+    side === "buy" && strike && spot != null
+      ? goalOptions({
+          direction,
+          strike: strike.strike,
+          spot,
+          premiumUsd: payUsd,
+          units: quantity != null ? quantity / 10 ** decimals : null,
+        })
+      : [];
+  const goal = side === "buy" ? pickGoal(goals, goalChoice, payUsd) : null;
   /** An outcome's main line. A sell's is set on two fixed lines where the strip is four across; see `splitOutcome`. */
   const outcomeLine = (title: string) => {
     const parts = side === "sell" ? splitOutcome(title) : null;
@@ -548,7 +575,7 @@ export function SentenceTrade({
           note: premiumPerUnit == null ? "No price for this strike right now" : "Enter a size to see what you earn",
         }
       : {
-          value: payUsd != null ? `\u2248 ${formatUsdAmount(payUsd)}` : null,
+          value: payUsd != null ? formatUsdAmount(payUsd) : null,
           note: premiumPerUnit == null ? "No price for this strike right now" : "Enter a size to see what you pay",
         };
   // A sell always speaks the sell outcomes, priced or not: `zoneLabels` has its own copy for a
@@ -619,8 +646,8 @@ export function SentenceTrade({
     : null;
   const conversionHint = otherAmount != null
     ? amountInQuote
-      ? `≈ ${formatAmount(otherAmount, assetDisplayDecimals)} ${asset.symbol}`
-      : `≈ ${formatUsdAmount(otherAmount)}`
+      ? `${formatAmount(otherAmount, assetDisplayDecimals)} ${asset.symbol}`
+      : formatUsdAmount(otherAmount)
     : null;
   const balanceDecimals = amountInQuote ? 2 : 4;
   // the wallet balance for the selected token, "—" until it is known (or while disconnected),
@@ -662,26 +689,24 @@ export function SentenceTrade({
       : o.bestPrice != null && quantity != null
         ? (quantity / 10 ** decimals) * (o.bestPrice / PRICE_SCALE)
         : null;
-    return usd != null ? `\u2248 ${formatUsdAmount(usd)}` : o.bestPrice == null ? "no price" : undefined;
+    return usd != null ? formatUsdAmount(usd) : o.bestPrice == null ? "no price" : undefined;
   };
   // the strike being considered in the menu, unless it is the one already chosen
   const previewedStrike = strikePreview != null && strikePreview !== strike?.strike1e9
     ? (strikeOptions.find((o) => o.strike1e9 === strikePreview)?.strike ?? null)
     : null;
 
-  // The thesis sentence is the chart's header: it lives above the plot, next to the range
-  // control, so editing the belief and reading the chart happen in one glance and update together.
-  const sentence = (
-    <ThesisSentence
-      compact
-      side={side}
-      asset={asset.symbol}
-      direction={direction}
-      strikeValue={strike ? String(strike.strike1e9) : ""}
-      strikeLabel={strikeLabel}
-      move={cushionText(asset.symbol, direction, distance, horizon)}
-      expiryValue={expiry ? String(expiry.expiryTs) : ""}
-      options={{
+  // The quiet line ("You're buying a …") now lives below the chart, not under the belief.
+  const move = tradeLine({
+    asset: asset.symbol,
+    direction,
+    side,
+    strike: strikeLabel,
+    premium: linePremium,
+    goalProfit: goal?.profit != null ? formatProfit(goal.profit).replace(/^\+/, "") : null,
+  });
+  const strikeInSecond = goal != null && move.strike != null;
+  const sentenceOptions = {
         assets: menuAssets.map((a) => ({
           value: a.symbol,
           label: a.symbol,
@@ -690,10 +715,10 @@ export function SentenceTrade({
             <img
               src={getTokenLogoSrc(a.symbol)}
               alt=""
-              className="h-4 w-4 shrink-0 rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
+              className="h-4 w-4 shrink-0 rounded-[var(--radius)] border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
             />
           ) : (
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[rgba(240,240,240,0.1)] bg-action-primary font-mono text-[12px] font-medium leading-none text-content-primary">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[var(--radius)] border border-[rgba(240,240,240,0.1)] bg-action-primary font-mono text-[12px] font-medium leading-none text-content-primary">
               {a.symbol.slice(0, 2)}
             </span>
           ),
@@ -717,7 +742,40 @@ export function SentenceTrade({
           detail: `in ${formatTimeAway(e.expiryTs * 1000, Date.now())}`,
         })),
         unavailable: available,
-      }}
+        };
+
+
+  // The thesis sentence is the chart's header: it lives above the plot, next to the range
+  // control, so editing the belief and reading the chart happen in one glance and update together.
+  const sentence = (
+    <ThesisSentence
+      compact
+      side={side}
+      asset={asset.symbol}
+      direction={direction}
+      strikeValue={strike ? String(strike.strike1e9) : ""}
+      strikeLabel={strikeLabel}
+      goal={
+        side === "buy"
+          ? {
+              value: goal ? String(goal.price) : "",
+              label: goal ? formatStrikePrice(goal.price) : null,
+              // each goal with how far it is from today's price and what the trade makes there
+              options: goals.map((g) => ({
+                value: String(g.price),
+                label: formatStrikePrice(g.price),
+                meta: movePctText(g.price, spot) ?? undefined,
+                detail: g.profit != null ? formatProfit(g.profit) : undefined,
+              })),
+              onChange: (v) => setGoalChoice(Number(v)),
+            }
+          : undefined
+      }
+      move={move}
+      secondLine={false}
+      onSide={onMode ? () => onMode(mode === "profit" ? "yield" : "profit") : undefined}
+      expiryValue={expiry ? String(expiry.expiryTs) : ""}
+      options={sentenceOptions}
       reserve={sentenceReserve}
       ready={!!snapshot}
       disabled={isRequesting}
@@ -745,6 +803,11 @@ export function SentenceTrade({
               spot={spot}
               strike={strike.strike}
               expiryMs={expiry.expiryTs * 1000}
+              expiries={expiries.map((e) => ({
+                value: String(e.expiryTs),
+                label: formatExpiryDay(e.expiryTs * 1000),
+              }))}
+              onExpiry={(v) => setExpiryChoice(Number(v))}
               direction={direction}
               side={side}
               right={labels.right}
@@ -755,6 +818,16 @@ export function SentenceTrade({
               pnl={chartPnl}
               legend={false}
               previewStrike={previewedStrike}
+              goals={goals.map((g) => g.price)}
+              onGoal={setGoalChoice}
+              goal={
+                goal
+                  ? {
+                      price: goal.price,
+                      label: `${formatStrikePrice(goal.price)}${goal.profit != null ? ` ${formatProfit(goal.profit)}` : ""}`,
+                    }
+                  : null
+              }
             />
           ) : !snapshot ? (
             <div>
@@ -766,12 +839,37 @@ export function SentenceTrade({
             <div>
               {sentence}
               <div className="mt-3 flex h-[280px] items-center justify-center bg-action-primary/20">
-                <span className="font-mono text-sm text-content-secondary">
+                <span className="font-mono text-[12px] text-content-secondary">
                   Pick an expiry and strike to see the projection
                 </span>
               </div>
             </div>
           )}
+
+          {/* the quiet line now sits below the chart: what is traded, for how much, and what
+              being wrong costs. A buy's strike stays interactive here, in the same grey pill. */}
+          <div className="mt-2 px-1">
+            <ThesisMoveLine
+              move={move}
+              side={side}
+              onSide={onMode ? () => onMode(mode === "profit" ? "yield" : "profit") : undefined}
+              strikeInSecond={strikeInSecond}
+              strikePill={
+                <StrikeControl
+                  strikeValue={strike ? String(strike.strike1e9) : ""}
+                  strikeLabel={strikeLabel}
+                  options={sentenceOptions}
+                  reserve={sentenceReserve}
+                  onStrike={(v) => setStrikeChoice(Number(v))}
+                  onStrikePreview={(v) => setStrikePreview(v == null ? null : Number(v))}
+                  disabled={isRequesting}
+                  ready={!!snapshot}
+                  inSecondLine={strikeInSecond}
+                />
+              }
+              compact
+            />
+          </div>
 
           {/* The ticket: one strip that reads left to right as the whole trade — what goes in,
               what is paid now, and the two ways it can end — closed by the one button that sends
@@ -819,10 +917,10 @@ export function SentenceTrade({
                 </span>
                 <div
                   className={cn(
-                    "flex w-full cursor-text items-center border px-2 transition-colors",
+                    "flex w-full cursor-text items-center rounded-[var(--radius)] border px-2 transition-colors",
                     sizeViolation || insufficientBalance
-                      ? "border-error bg-accent-primary/15"
-                      : "border-accent-primary/20 bg-accent-primary/15 hover:border-accent-primary focus-within:border-accent-primary"
+                      ? "border-error bg-action-primary"
+                      : "border-bg-border bg-action-primary hover:border-content-secondary focus-within:border-content-secondary"
                   )}
                 >
                 <input
@@ -849,7 +947,7 @@ export function SentenceTrade({
                     value={amountInQuote ? "quote" : "underlying"}
                     disabled={isRequesting}
                     onChange={(e) => chooseToken(e.target.value === "quote")}
-                    className="cursor-pointer appearance-none bg-transparent py-1 pl-5 pr-0 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary outline-none [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="cursor-pointer appearance-none bg-transparent py-1 pl-5 pr-0 font-mono text-base leading-[1.2] tracking-[-0.28px] text-content-secondary outline-none [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {tokenOptions.map((o) => (
                       <option key={o.value} value={o.value} className="bg-bg-primary text-content-primary">
@@ -1061,7 +1159,7 @@ export function SentenceTrade({
         </AppCard>
 
         {failure ? (
-          <p role="alert" className="font-mono text-sm text-error">
+          <p role="alert" className="font-mono text-[12px] text-error">
             {failure.kind === "timeout" ? "No quote came back in 30 seconds. Try again." : failure.message}
           </p>
         ) : null}

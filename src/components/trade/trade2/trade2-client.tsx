@@ -19,7 +19,7 @@ import type { StrikeOption } from "@/lib/trade/strikes";
 import type { StrikeTone } from "./strike-box-chart";
 import { StrikeBoxesChart } from "./strike-box-chart";
 
-const CONTAINER = "mx-auto w-full max-w-[900px] pb-20 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-6";
+const CONTAINER = "mx-auto w-full max-w-page px-6 pb-20 pt-12 max-md:px-3 max-md:pt-6";
 const PRICE_SCALE = 1_000_000_000;
 
 /** a price level: the strike with the market side it trades — puts resolve "above", calls "below" */

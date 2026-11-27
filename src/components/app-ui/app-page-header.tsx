@@ -17,7 +17,7 @@ export function AppPageHeader({
   action,
   className,
 }: {
-  /** The h1. May hold a control, as Trade's mode switch does. */
+  /** The h1: plain words. */
   title: React.ReactNode;
   /** One quiet line under the title. */
   subtitle?: React.ReactNode;

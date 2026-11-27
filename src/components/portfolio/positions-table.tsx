@@ -3,7 +3,8 @@
 import { TYPE_LABEL } from "@/components/app-ui/type-styles";
 import { useViewPref } from "@/lib/state/view-prefs";
 import * as React from "react";
-import { Share2 } from "lucide-react";
+import dynamic from "next/dynamic";
+import { ChartLine, Share2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { AppButtonLink } from "@/components/app-ui/app-button";
 import { InfoTooltip } from "@/components/app-ui/info-tooltip";
@@ -18,6 +19,7 @@ import { formatExpiryDay } from "@/lib/trade/format";
 import {
   DEFAULT_SORT,
   buildDisplayList,
+  canChartRow,
   canFundRow,
   canWithdrawRow,
   formatExpiryCountdown,
@@ -78,6 +80,9 @@ const COLUMNS: Record<PositionsVariant, Column[]> = {
     { id: "outcome", label: "Outcome", width: "18%", align: "left" },
   ],
 };
+
+// The chart library is only fetched when a chart is first opened: the page loads without it.
+const PositionChartModal = dynamic(() => import("./position-chart").then((m) => m.PositionChartModal), { ssr: false });
 
 const LABEL = `${TYPE_LABEL} text-content-tertiary`;
 const FOCUS = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary";
@@ -270,6 +275,43 @@ function SharePnl({ row, onShare, roomy }: { row: PositionsTableRow; onShare: (r
   );
 }
 
+/** The longest Now price that still leaves room for the chart icon in the column under 1280px: "$148". */
+const CHART_ICON_FITS_UNDER = 5;
+
+/**
+ * A position's current price as the button that opens it on the price chart, built like the
+ * uPnL share button beside it: the figure, with the icon to its left so figures stay
+ * right-aligned down the column. Under 1280px the column has no spare width, so beside a long
+ * price the icon is left out there; the price still opens the chart.
+ */
+function ChartNow({ row, onOpen, roomy }: { row: PositionsTableRow; onOpen: (id: string) => void; roomy: boolean }) {
+  const mark = row.markText ?? DASH;
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(row.id)}
+      aria-label={`Show ${row.sentence} on the chart, now ${mark}`}
+      title="Show on the chart"
+      // in the table, exactly the line it sits on: a row with a chart button is as tall as one without
+      className={cn(
+        "group inline-flex items-center gap-1 font-[inherit] tabular-nums transition-colors hover:text-content-primary",
+        FOCUS,
+        // in the stacked layout: a taller press target that does not make its line taller
+        roomy ? "-my-1 h-6" : "h-[21px] align-top leading-[21px]",
+      )}
+    >
+      <ChartLine
+        aria-hidden="true"
+        className={cn(
+          "h-3 w-3 shrink-0 text-content-tertiary transition-colors group-hover:text-content-primary",
+          !roomy && mark.length > CHART_ICON_FITS_UNDER && "max-xl:hidden",
+        )}
+      />
+      {roomy ? `Now ${mark}` : mark}
+    </button>
+  );
+}
+
 function GroupToggle({ symbol, count, open, onToggle }: { symbol: string; count: number; open: boolean; onToggle: () => void }) {
   return (
     <button
@@ -378,9 +420,17 @@ export function PositionsTable({
             url: shareLink(window.location.origin, share.referralCode),
           })
       : null;
-  const shareModal = shared ? (
-    <ShareCardModal open onClose={() => setShared(null)} title="Share your position" card={shared.card} url={shared.url} />
-  ) : null;
+  /** The position on the chart, by id: the row is looked up on each render, so the chart's price and uPnL stay live. */
+  const [chartId, setChartId] = React.useState<string | null>(null);
+  const openChart = variant === "open" ? setChartId : null;
+  // a position that has ended, or lost its price, has no chart: the window closes with it
+  const charted = chartId && openChart ? rows.find((r) => r.id === chartId && canChartRow(r, nowMs)) ?? null : null;
+  const shareModal = (
+    <>
+      {shared ? <ShareCardModal open onClose={() => setShared(null)} title="Share your position" card={shared.card} url={shared.url} /> : null}
+      {charted ? <PositionChartModal row={charted} nowMs={nowMs} onClose={() => setChartId(null)} /> : null}
+    </>
+  );
 
   const toggleGroup = (symbol: string) =>
     setCollapsed((prev) => {
@@ -447,10 +497,12 @@ export function PositionsTable({
               const row = item.row;
               if (hidden(row.symbol)) return null;
               const premium = row.premiumNum == null ? null : `${formatUsdSmart(row.premiumNum)}${row.premiumLabel ? ` ${row.premiumLabel}` : ""}`;
+              const charts = openChart != null && canChartRow(row, nowMs);
               const detail =
                 variant === "history"
                   ? [premium, row.outcome]
-                  : [premium, row.markText ? `Now ${row.markText}` : null];
+                  : // a price that opens the chart is drawn as its own button after the premium
+                    [premium, !charts && row.markText ? `Now ${row.markText}` : null];
               const funded = variant === "open" && isFunded(row, deposit);
               const fundable = variant === "open" && canFund(row, nowMs, deposit);
               const withdrawable = funded && canWithdraw(row, nowMs, deposit);
@@ -481,7 +533,15 @@ export function PositionsTable({
                     <span className="shrink-0 tabular-nums">{whenText(row, nowMs, variant)}</span>
                   </div>
                   <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-content-secondary">
-                    <span className="truncate tabular-nums">{detail.filter(Boolean).join(" · ") || DASH}</span>
+                    <span className="flex min-w-0 items-center gap-1.5 tabular-nums">
+                      <span className="truncate">{detail.filter(Boolean).join(" · ") || (charts ? "" : DASH)}</span>
+                      {charts && openChart ? (
+                        <>
+                          {premium ? <span aria-hidden="true">·</span> : null}
+                          <ChartNow row={row} onOpen={openChart} roomy />
+                        </>
+                      ) : null}
+                    </span>
                     {funded ? <span className="shrink-0 text-content-tertiary">Funded</span> : null}
                   </div>
                   {fundable || withdrawable ? (
@@ -503,7 +563,7 @@ export function PositionsTable({
   const cell = (column: Column, row: PositionsTableRow): React.ReactNode => {
     switch (column.id) {
       case "now":
-        return row.markText ?? DASH;
+        return openChart && canChartRow(row, nowMs) ? <ChartNow row={row} onOpen={openChart} roomy={false} /> : row.markText ?? DASH;
       case "size":
         return row.sizeText;
       case "premium":

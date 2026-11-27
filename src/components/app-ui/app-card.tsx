@@ -8,7 +8,7 @@ export function AppCard({
   return (
     <div
       className={cn(
-        "border border-bg-border bg-bg-primary backdrop-blur-[4px]",
+        "rounded-[var(--radius)] border border-bg-border bg-bg-primary backdrop-blur-[4px]",
         className
       )}
       {...props}

@@ -69,7 +69,7 @@ export function ErrorView({ error, reset }: { error: Error & { digest?: string }
 export function StatusFrame({ children }: { children: ReactNode }) {
   return (
     <div className="app-type flex min-h-screen flex-col bg-bg-primary text-content-primary">
-      <header className="mx-auto w-full max-w-[850px] py-5 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:py-4">
+      <header className="mx-auto w-full max-w-page px-6 py-5 max-md:px-3 max-md:py-4">
         <Link href="/" aria-label="Acta home">
           <ActaLogo className="h-7" />
         </Link>

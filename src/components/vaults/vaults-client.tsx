@@ -83,7 +83,7 @@ export function VaultsClient({ lineup = VAULT_LINEUP }: { lineup?: readonly Line
         action={<AppPageHeaderLink href="/docs/guide/vaults" prefetch={false}>How vaults work</AppPageHeaderLink>}
       />
 
-      <div className="mx-auto w-full max-w-[850px] pb-20 max-xl:px-[71px] max-lg:px-6 max-md:px-3">
+      <div className="mx-auto w-full max-w-page px-6 pb-20 max-md:px-3">
         <section className="flex flex-col gap-4" aria-labelledby="vaults-heading">
           {/* the page title already says what follows; the heading is kept for a screen reader's outline */}
           <h2 id="vaults-heading" className="sr-only">

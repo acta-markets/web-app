@@ -135,7 +135,7 @@ export const ProfitOutlook = memo(function ProfitOutlook({
             }}
             onBlur={() => setOpen(false)}
             // the page's one quiet link, dressed exactly as "How it works"
-            className="inline-flex items-center gap-0.5 font-mono text-[14px] leading-[1.2] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary focus-visible:text-content-primary focus-visible:outline-none"
+            className="inline-flex items-center gap-0.5 font-mono text-[12px] leading-[1.2] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary focus-visible:text-content-primary focus-visible:outline-none"
           >
             More prices
             <Chevron kind="go" className="h-4 w-4" />

@@ -27,7 +27,7 @@ import { AppCard } from "@/components/app-ui/app-card";
  */
 
 const CONTAINER =
-  "mx-auto w-full max-w-[850px] pb-16 pt-12 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-8";
+  "mx-auto w-full max-w-page px-6 pb-16 pt-12 max-md:px-3 max-md:pt-8";
 
 export function SpreadsShell() {
   return (

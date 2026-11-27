@@ -1,6 +1,10 @@
 /**
  * Hero background — uses pre-composited bg_3 exported from Figma API.
  * Single image, no browser compositing artifacts.
+ *
+ * The image is darker than the page, so wherever it stops the page shows beside it as a lighter
+ * block. It is drawn at its own 1440px up to that width and grows with the window past it, so
+ * it always reaches both edges.
  */
 export function HeroBg() {
   return (
@@ -10,7 +14,7 @@ export function HeroBg() {
         className="absolute inset-x-0 top-0 h-[810px] opacity-50"
         style={{
           backgroundImage: "url(/bg-hero.jpg)",
-          backgroundSize: "1440px 810px",
+          backgroundSize: "max(1440px, 100%) auto",
           backgroundRepeat: "no-repeat",
           backgroundPosition: "center top"
         }}

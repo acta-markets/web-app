@@ -43,6 +43,13 @@ export function thesisStrike1e9(p: PositionInfo): number {
   return Number(p.terms.strike);
 }
 
+/** The other leg of a two-strike product: the far one from the price the sentence names. */
+export function farStrike1e9(p: PositionInfo): number | null {
+  if (p.terms.type === "call_spread") return Number(p.terms.upper_strike);
+  if (p.terms.type === "put_spread") return Number(p.terms.lower_strike);
+  return null;
+}
+
 export function thesisExpiryTs(p: PositionInfo): number | null {
   const t = Number(p.expiry_ts);
   return Number.isFinite(t) && t > 0 ? t : null;
@@ -125,6 +132,14 @@ export type PositionsTableRow = {
   strikeText: string;
   /** The underlying mark the uPnL was valued at, when there is one. */
   markText: string | null;
+  /** That mark as a number, for a chart; null without a price. */
+  markNum: number | null;
+  /** The strike the sentence names, as a number (the near leg of a spread). */
+  strikeNum: number;
+  /** The other leg of a spread, where its payoff stops growing; null for a single strike. */
+  farStrikeNum: number | null;
+  /** Settled in the quote token: nothing is bought or sold at the strike, the difference is paid. */
+  cashSettled: boolean;
   direction: DirectionWord;
   side: "buy" | "sell";
   sizeNum: number;
@@ -192,6 +207,7 @@ export function buildPositionRows(
     const physicalBuy = p.side === "buy" && !isCashSettled(p.terms.type);
     const isPut = p.terms.type === "cash_secured_put";
     const strike = thesisStrike1e9(p) / 1e9;
+    const far1e9 = farStrike1e9(p);
     return {
       id: p.pda,
       symbol,
@@ -205,6 +221,10 @@ export function buildPositionRows(
       exerciseText: exerciseTextFor(p),
       strikeText: formatStrikePrice(thesisStrike1e9(p) / 1e9),
       markText,
+      markNum: markPrice,
+      strikeNum: strike,
+      farStrikeNum: far1e9 == null ? null : far1e9 / 1e9,
+      cashSettled: isCashSettled(p.terms.type),
 
       sizeNum: quantity,
       sizeText: `${numberFormat({ maximumFractionDigits: 4 }).format(quantity)} ${symbol}`,
@@ -225,6 +245,14 @@ export function buildPositionRows(
       inTheMoney: physicalBuy && markPrice != null ? (isPut ? markPrice < strike : markPrice > strike) : null,
     };
   });
+}
+
+/**
+ * A position that can be drawn on the price chart: still running, with a current price to put
+ * the NOW mark on and an expiry ahead for the chart to run to.
+ */
+export function canChartRow(row: PositionsTableRow, nowMs: number): boolean {
+  return row.isOpen && row.markNum != null && row.strikeNum > 0 && row.expiryTs != null && row.expiryTs * 1000 > nowMs;
 }
 
 /** Funded on chain, or deposited in this session and not yet reported back as funded. */

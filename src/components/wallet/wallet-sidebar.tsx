@@ -175,7 +175,7 @@ function WalletSidebar() {
           {!isReady ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-accent-primary" aria-hidden="true" />
-              <p role="status" className="mt-4 font-mono text-sm text-content-secondary">Looking for wallets</p>
+              <p role="status" className="mt-4 font-mono text-[12px] text-content-secondary">Looking for wallets</p>
             </div>
           ) : isConnected ? (
             <ConnectedView
@@ -220,8 +220,8 @@ function BalanceRow({ owner, symbol, mint, decimals, fractionDigits }: { owner: 
     <div className="flex items-center gap-3 px-4 py-3">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {logo ? <img src={logo} alt="" className="h-5 w-5 shrink-0 rounded-full" /> : null}
-      <span className="font-mono text-sm text-content-primary">{symbol}</span>
-      <span className="ml-auto font-mono text-sm tabular-nums text-content-primary">
+      <span className="font-mono text-[12px] text-content-primary">{symbol}</span>
+      <span className="ml-auto font-mono text-[12px] tabular-nums text-content-primary">
         {balance == null ? (
           <span className="text-content-tertiary">—</span>
         ) : (
@@ -306,7 +306,7 @@ export function ConnectedView({
               </span>
             </div>
             {/* the short form to read, the whole address to copy or to check against the wallet */}
-            <p className="mt-1 font-mono text-sm tabular-nums text-content-secondary" title={account.address}>
+            <p className="mt-1 font-mono text-[12px] tabular-nums text-content-secondary" title={account.address}>
               {shortAddress(account.address, 6)}
             </p>
           </div>
@@ -315,7 +315,7 @@ export function ConnectedView({
           <button
             type="button"
             onClick={() => void copy()}
-            className={cn(TYPE_LINK, "gap-1.5 text-sm", FOCUS)}
+            className={cn(TYPE_LINK, "gap-1.5 text-[12px]", FOCUS)}
           >
             {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
             <span aria-live="polite">{copied ? "Copied" : "Copy address"}</span>
@@ -324,7 +324,7 @@ export function ConnectedView({
             href={solscanUrl("account", account.address)}
             target="_blank"
             rel="noopener noreferrer"
-            className={cn(TYPE_LINK, "text-sm", FOCUS)}
+            className={cn(TYPE_LINK, "text-[12px]", FOCUS)}
           >
             View on Solscan
             <Chevron kind="go" className="h-4 w-4" />
@@ -402,7 +402,7 @@ export function WalletListView({
   return (
     <div className="space-y-4">
       {error ? (
-        <p role="alert" className="border border-additional-orange-primary p-4 font-mono text-sm text-content-primary">
+        <p role="alert" className="border border-additional-orange-primary p-4 font-mono text-[12px] text-content-primary">
           {error}
         </p>
       ) : null}
@@ -450,7 +450,7 @@ export function WalletListView({
       </div>
 
       <div className="border border-bg-border p-4">
-        <p className="font-mono text-sm text-content-secondary">
+        <p className="font-mono text-[12px] text-content-secondary">
           <span className="font-medium text-content-primary">New to Solana?</span>{" "}
           Install a wallet extension like Phantom or Backpack to get started.
         </p>
@@ -470,7 +470,7 @@ export function EmptyWalletsView() {
     <div className="space-y-6">
       <div className="border border-bg-border p-5">
         <h3 className="font-mono font-semibold text-additional-orange-primary">No wallet detected</h3>
-        <p className="mt-2 font-mono text-sm text-content-secondary">
+        <p className="mt-2 font-mono text-[12px] text-content-secondary">
           Install a Solana wallet extension, then reload this page to connect.
         </p>
       </div>

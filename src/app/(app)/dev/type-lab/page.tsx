@@ -25,7 +25,7 @@ function Sample({ stack, size, weight }: { stack: string; size: number; weight: 
         ≈ $114.46 &nbsp;·&nbsp; +3.4% &nbsp;·&nbsp; $63,570
       </div>
       <div style={{ color: "#8A8A8A" }}>
-        BTC has to rise 1.7% in 5 days for you to be right
+        You&apos;re buying a call option that pays if BTC rises over 1.7% in 5 days
       </div>
     </div>
   );

@@ -32,7 +32,7 @@ import { PositionsTable } from "./positions-table";
 import { LoadingStatus, PerformanceSkeleton, PortfolioEmpty, PortfolioSignIn, PositionsSkeleton } from "./portfolio-states";
 
 // The page header sets the distance from the nav and the gap above the content.
-const SHELL = "mx-auto w-full max-w-[850px] pb-16 max-xl:px-[71px] max-lg:px-6 max-md:px-3";
+const SHELL = "mx-auto w-full max-w-page px-6 pb-16 max-md:px-3";
 const SLOW_TICK_MS = 30_000;
 const FAST_TICK_MS = 1_000;
 /** Inside this window a countdown shows minutes and then seconds, so the clock has to keep up. */

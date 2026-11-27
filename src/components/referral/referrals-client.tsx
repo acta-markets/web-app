@@ -48,7 +48,7 @@ export function ReferralsClient() {
     <div>
       {/* the same title block as Trade, Earn and Portfolio */}
       <AppPageHeader title="Referrals" subtitle="Invite takers to Acta. Share your code to earn slots over time" />
-      <div className="mx-auto w-full max-w-[850px] px-6 pb-20 max-md:px-3">
+      <div className="mx-auto w-full max-w-page px-6 pb-20 max-md:px-3">
 
       {!walletConnected && (
         <AppCard className="p-6">

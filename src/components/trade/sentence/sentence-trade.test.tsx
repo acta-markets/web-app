@@ -81,6 +81,35 @@ function select(name: string) {
   return screen.getByRole("combobox", { name }) as HTMLSelectElement;
 }
 
+/** The sentence's two lines: the belief, then the trade made on it. The quiet line now
+    sits below the chart, so it is found by its own id rather than as the sentence's sibling. */
+function lines() {
+  const first = screen.getByRole("button", { name: /^Direction/ }).closest("div")!.querySelector("p")!;
+  const second = screen.getByTestId("thesis-move");
+  return [first, second] as const;
+}
+
+/**
+ * The second line as it reads. A pill keeps every value it could show (hidden, to hold its
+ * width), so the line's text is taken with those left out.
+ */
+function secondLine() {
+  const copy = lines()[1].cloneNode(true) as HTMLElement;
+  copy.querySelectorAll("[aria-hidden=true], select, .invisible").forEach((el) => el.remove());
+  return copy.textContent!.replace(/\s+/g, " ").trim();
+}
+
+/** The expiry pill; its name carries the chosen date, e.g. "Expiry: Jan 22". */
+function expiryPill() {
+  return screen.getByRole("button", { name: /^Expiry/ });
+}
+
+/** Open the expiry wheel and click a date on it. */
+function pickExpiry(date: string) {
+  fireEvent.click(expiryPill());
+  fireEvent.click(screen.getByRole("option", { name: date }));
+}
+
 /** The direction is a one-click switch; its accessible name starts with the current value. */
 function direction() {
   return screen.getByRole("button", { name: /^Direction: / });
@@ -132,6 +161,73 @@ function render(ui: Parameters<typeof renderClosed>[0]) {
   if (opener) fireEvent.click(opener);
   return view;
 }
+
+describe("the mode switch in the line under the sentence", () => {
+  it("is the line's verb, and one click asks for the other mode", () => {
+    const onMode = vi.fn();
+    const view = renderClosed(<SentenceTrade mode="profit" onMode={onMode} />);
+    const buying = screen.getByRole("button", { name: "You are buying. Switch to selling" });
+    // the word sits inside the sentence it belongs to
+    expect(buying.closest("p")!.textContent).toMatch(/^You're buying a .*(call|put)/);
+    fireEvent.click(buying);
+    expect(onMode).toHaveBeenCalledWith("yield");
+    view.unmount();
+
+    renderClosed(<SentenceTrade mode="yield" onMode={onMode} />);
+    fireEvent.click(screen.getByRole("button", { name: "You are selling. Switch to buying" }));
+    expect(onMode).toHaveBeenLastCalledWith("profit");
+  });
+
+  it("tells a buyer the price is all there is to lose, the same price the ticket shows", () => {
+    connectWallet();
+    render(<SentenceTrade mode="profit" />);
+    const [, price] = secondLine().match(/risking only (\$[\d,.]+)$/)!;
+    expect(screen.getByTestId("trade-headline").textContent!.replace(/\s/g, "")).toBe(price);
+  });
+
+  it("is plain text where nothing can switch the mode", () => {
+    renderClosed(<SentenceTrade mode="profit" />);
+    expect(screen.queryByRole("button", { name: /Switch to selling/ })).toBeNull();
+    expect(secondLine()).toMatch(/^You're buying a .*(call|put)/);
+  });
+});
+
+describe("a buyer's goal", () => {
+  it("is the first line's price in Profit, with the strike named in the second line", () => {
+    connectWallet();
+    render(<SentenceTrade mode="profit" />);
+    const [first, second] = lines();
+    // the belief is about the goal; the strike is part of the option's name
+    expect(first.contains(select("Goal"))).toBe(true);
+    expect(second.contains(select("Strike"))).toBe(true);
+    // a goal is a price past the strike, never the strike itself
+    const strike = Number(select("Strike").value) / 1e9;
+    expect(Number(select("Goal").value)).toBeGreaterThan(strike);
+  });
+
+  it("sets what the trade makes: the second line's profit is the chosen goal's", () => {
+    connectWallet();
+    render(<SentenceTrade mode="profit" />);
+    const profit = () => secondLine().match(/that makes (\$[\d,.]+) or more if you're right/)?.[1];
+    // every goal on offer says what the trade makes there
+    const options = [...select("Goal").options];
+    expect(options.length).toBeGreaterThan(1);
+    const chosen = options.find((o) => o.value === select("Goal").value)!;
+    expect(chosen.textContent).toContain(profit()!);
+    // a further goal makes more
+    const further = options.at(-1)!;
+    fireEvent.change(select("Goal"), { target: { value: further.value } });
+    expect(select("Goal").value).toBe(further.value);
+    expect(further.textContent).toContain(profit()!);
+    expect(profit()).not.toBe(chosen.textContent!.match(/\+\$[\d,.]+/)![0]);
+  });
+
+  it("is not there in Yield: the first line's price is the strike", () => {
+    render(<SentenceTrade mode="yield" />);
+    expect(screen.queryByLabelText("Goal")).toBeNull();
+    expect(lines()[0].contains(select("Strike"))).toBe(true);
+  });
+});
 
 describe("the ticket under the chart", () => {
   const ticket = () => document.getElementById("trade-ticket") as HTMLElement;
@@ -200,23 +296,24 @@ describe("sentence trade", () => {
     expect(select("Asset").value).toBe("SOL");
     expect(direction().textContent).toContain("above");
     expect(select("Strike").value).toBe(String(95e9));
-    expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
+    expect(expiryPill().getAttribute("aria-label")).toBe("Expiry: Jan 22");
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
     // 1.1 SOL locked at $95, $1 premium per SOL — the premium now reads in the facts block
     // beside the size, not as a risk sentence above the CTA
-    expect(screen.getByText(/≈ \$1\.10/)).toBeTruthy();
+    expect(screen.getAllByText(/\$1\.10/).length).toBeGreaterThan(0);
     // the ticket leads with the payout and does not repeat the sentence's strike or the size
     expect(screen.getByText("You earn premium")).toBeTruthy();
     // the outcomes sit under how far off the expiry is
     expect(screen.getByText("Now")).toBeTruthy();
     expect(screen.getByTestId("ticket-when").textContent).toBe("In 7 days");
-    expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.10");
+    expect(screen.getByTestId("trade-headline").textContent).toBe("$1.10");
     expect(screen.queryByText("Strike")).toBeNull();
     expect(screen.queryByText("Size")).toBeNull();
     expect(screen.queryByText("Expiry")).toBeNull();
     expect(screen.getByTestId("trade-headline-note").textContent).toMatch(/^APY [\d,.]+%$|^Confirmed on quote$/);
     expect(screen.getByTestId("ticket-right").textContent).toBe("Keep 104.50 USDC");
-    expect(screen.getByText("SOL can fall 5.0% in 7 days and you're still right")).toBeTruthy();
+    // the sentence's second line: the option, what it earns, and what being wrong does
+    expect(screen.getByText(/^You're selling a put option to earn \$1\.10, but if you're wrong you buy SOL at \$95$/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect wallet to trade" })).toBeTruthy();
     expect(screen.queryByText(/I get paid/)).toBeNull();
     expect(screen.queryByText(/If I deposit/)).toBeNull();
@@ -245,7 +342,7 @@ describe("sentence trade", () => {
     expect(token().value).toBe("underlying");
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("1.1");
     // the put's premium is unchanged when re-expressed in the underlying
-    expect(screen.getByText(/≈ \$1\.10/)).toBeTruthy();
+    expect(screen.getAllByText(/\$1\.10/).length).toBeGreaterThan(0);
     // switch back round-trips to the USDC amount
     fireEvent.change(token(), { target: { value: "quote" } });
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
@@ -268,21 +365,44 @@ describe("sentence trade", () => {
 
   it("falls back to the nearest date when the other side does not list the chosen one", () => {
     render(<SentenceTrade mode="yield" />);
-    fireEvent.click(screen.getByRole("button", { name: "Jan 29" }));
+    pickExpiry("Jan 29");
     expect(select("Strike").value).toBe(String(95e9));
     fireEvent.click(direction());
-    expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
+    expect(expiryPill().getAttribute("aria-label")).toBe("Expiry: Jan 22");
   });
 
-  it("shows the expiry as inline date buttons, the selected one pressed and selectable", () => {
+  it("opens on the middle date, so the wheel starts with a date on each side", () => {
+    const data = snapshot();
+    const late = data.markets[1];
+    (data.markets as unknown[]).push(
+      { ...late, market_pda: "put-later", expiry_ts: now + 21 * day },
+      { ...late, market_pda: "put-latest", expiry_ts: now + 28 * day },
+    );
+    mocks.context.tokenMarketsInfo = { underlyingMint: SOL, data };
     render(<SentenceTrade mode="yield" />);
-    // slash is the shipped pattern: no expiry combobox, every date its own button
+    fireEvent.click(expiryPill());
+    const dates = screen.getAllByRole("option").filter((o) => o.closest("[role=listbox]"));
+    expect(dates.map((o) => o.getAttribute("aria-selected"))).toEqual(["false", "true", "false", "false"]);
+  });
+
+  it("shows the expiry as a pill that opens a wheel, the chosen date marked and the next one a click away", () => {
+    render(<SentenceTrade mode="yield" />);
+    // no expiry dropdown, and the wheel is folded until the pill is clicked
     expect(screen.queryByRole("combobox", { name: "Expiry" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Jan 22" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "Jan 29" }).getAttribute("aria-pressed")).toBe("false");
-    // picking a later date updates the thesis's expiry
-    fireEvent.click(screen.getByRole("button", { name: "Jan 29" }));
-    expect(screen.getByRole("button", { name: "Jan 29" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("listbox", { name: "Expiry" })).toBeNull();
+    expect(expiryPill().getAttribute("aria-label")).toBe("Expiry: Jan 22");
+    fireEvent.click(expiryPill());
+    const wheel = screen.getByRole("listbox", { name: "Expiry" });
+    expect(expiryPill().getAttribute("aria-label")).toBe("Expiry: Jan 22");
+    expect(screen.getByRole("option", { name: "Jan 29" }).getAttribute("aria-selected")).toBe("false");
+    // the arrow keys turn it without folding it
+    fireEvent.keyDown(wheel, { key: "ArrowDown" });
+    expect(screen.getByRole("option", { name: "Jan 29" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(wheel, { key: "ArrowUp" });
+    // a click on a date takes it and folds the wheel
+    fireEvent.click(screen.getByRole("option", { name: "Jan 29" }));
+    expect(screen.queryByRole("listbox", { name: "Expiry" })).toBeNull();
+    expect(expiryPill().getAttribute("aria-label")).toBe("Expiry: Jan 29");
   });
 
   it("does not present stale premiums, in the sentence or the summary", () => {
@@ -349,7 +469,7 @@ describe("sentence trade", () => {
   it("leads Profit's summary with what the trade costs and the buy outcomes", () => {
     render(<SentenceTrade mode="profit" />);
     // the fixture lists an indicative for the buy, so the headline names it
-    expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.00");
+    expect(screen.getByTestId("trade-headline").textContent).toBe("$1.00");
     // the note says the quote has the last word, and names the cell for what it is
     expect(screen.getByText("You pay premium")).toBeTruthy();
     expect(screen.getByTestId("trade-headline-note").textContent).toBe("Final quote might be different");
@@ -385,7 +505,7 @@ describe("sentence trade", () => {
     mocks.context.protocolFeesBySymbol = new Map();
     render(<SentenceTrade mode="profit" />);
     // no SDK preview without fees: the cell falls back to size x indicative instead of a dash
-    expect(screen.getByTestId("trade-headline").textContent).toMatch(/^\u2248 \$\d/);
+    expect(screen.getByTestId("trade-headline").textContent).toMatch(/^\$\d/);
     expect(screen.getByTestId("trade-headline-note").textContent).toBe("Final quote might be different");
   });
 
@@ -415,7 +535,7 @@ describe("sentence trade", () => {
     // a buy trades the call market for above; strikes come from the same listings
     expect(select("Strike").value).toBe(String(105e9));
     // the buy's premium reads in the strip (the strike list carries each strike's cost too)
-    expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.00");
+    expect(screen.getByTestId("trade-headline").textContent).toBe("$1.00");
     fireEvent.click(screen.getByRole("button", { name: "Take trade" }));
     expect(mocks.context.submitRfq).toHaveBeenCalledWith({
       market: "call-soon", side: "buy", terms: { type: "covered_call", strike: "105000000000" }, quantity: 1_000_000_000, timeoutSeconds: 30,
@@ -429,8 +549,8 @@ describe("sentence trade", () => {
     // a call above spot lists how far the price must rise; a put below how far it must fall
     expect(moves()).toEqual(["$105 · +5.0%", "$110 · +10.0%"]);
     // and each row ends with that strike's premium at the current size, or says it has no price
-    expect(rows()[0]).toBe("$105 · +5.0% · ≈ $1.00");
-    expect(rows().every((r) => /· (≈ \$[\d,.]+|no price)$/.test(r))).toBe(true);
+    expect(rows()[0]).toBe("$105 · +5.0% · $1.00");
+    expect(rows().every((r) => /· (\$[\d,.]+|no price)$/.test(r))).toBe(true);
     expect(rows().some((r) => r.includes("APR"))).toBe(false);
     fireEvent.click(direction());
     expect(moves()).toEqual(["$95 · -5.0%", "$90 · -10.0%", "$80 · -20.0%"]);
@@ -492,7 +612,7 @@ describe("coming back to Trade before the socket has answered", () => {
     mocks.context = { ...mocks.context, earnSummary: null, tokenMarketsInfo: null };
     render(<SentenceTrade mode="yield" />);
     expect(select("Strike").value).toBe(String(95e9));
-    expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.10");
+    expect(screen.getByTestId("trade-headline").textContent).toBe("$1.10");
     expect(screen.queryByRole("button", { name: "Take trade" })).toBeNull();
     const button = screen.getByRole("button", { name: "Updating prices..." }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
@@ -507,7 +627,7 @@ describe("coming back to Trade before the socket has answered", () => {
     notLoadedYet();
     mocks.context = { ...mocks.context, protocolFeesBySymbol: new Map() };
     render(<SentenceTrade mode="yield" />);
-    expect(screen.getByTestId("trade-headline").textContent).toBe("≈ $1.10");
+    expect(screen.getByTestId("trade-headline").textContent).toBe("$1.10");
   });
 
   it("shows no premium from market data saved more than ten minutes ago", () => {

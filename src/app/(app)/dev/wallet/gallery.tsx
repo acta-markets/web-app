@@ -29,7 +29,8 @@ function Frame({ title, children }: { title: string; children: ReactNode }) {
 
 /** A panel body at the panel's own width, without the slide-in or the backdrop. */
 function Panel({ children }: { children: ReactNode }) {
-  return <div className="w-full max-w-md border border-bg-border bg-bg-primary p-6">{children}</div>;
+  // the menu's own box: 360 wide, framed, rows edge to edge
+  return <div className="w-full max-w-[360px] border border-bg-border bg-bg-primary">{children}</div>;
 }
 
 export function WalletGallery() {
@@ -48,7 +49,7 @@ export function WalletGallery() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[850px] flex-col gap-10 pb-20 pt-10 max-xl:px-[71px] max-lg:px-6 max-md:px-3">
+    <div className="mx-auto flex w-full max-w-page flex-col gap-10 px-6 pb-20 pt-10 max-md:px-3">
       <p className="font-mono text-[12px] font-medium text-content-tertiary">
         Dev harness · wallet button and panel from fixtures · opened {opened}×
       </p>

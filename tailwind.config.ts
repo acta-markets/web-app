@@ -4,6 +4,12 @@ const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {
+      maxWidth: {
+        // The page column (--page-width in globals.css: 850px on the landing page, wider inside
+        // the app) plus its side gutters. A shell pairs it with `px-6 max-md:px-3`, so the content
+        // is exactly the column on a wide screen and keeps a gutter on a narrow one.
+        page: "calc(var(--page-width) + 3rem)"
+      },
       colors: {
         bg: {
           primary: "var(--bg-primary)",
@@ -63,7 +69,7 @@ const config: Config = {
       },
       fontFamily: {
         space: ["var(--font-space-grotesk)", "system-ui", "sans-serif"],
-        mono: ["var(--font-jetbrains-mono)", "monospace"]
+        mono: ["var(--font-mono-active, var(--font-jetbrains-mono))", "monospace"]
       },
       keyframes: {
         marquee: {

@@ -30,7 +30,7 @@ const VaultDepositForm = dynamic(
 );
 
 const CONTAINER =
-  "mx-auto w-full max-w-[1248px] px-6 pb-20 pt-12 max-md:px-3 max-md:pb-10 max-md:pt-16";
+  "mx-auto w-full max-w-page px-6 pb-20 pt-12 max-md:px-3 max-md:pb-10 max-md:pt-16";
 
 function Breadcrumb() {
   return (

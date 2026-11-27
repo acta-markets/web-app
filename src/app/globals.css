@@ -1,3 +1,6 @@
+:root {
+  --radius: 3px;
+}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -28,6 +31,10 @@
 
     --error: #FF611B;
     --header-scrolled-bg: rgba(18, 18, 18, 0.8);
+
+    /* The page column, without its gutters (`max-w-page` adds them): the landing page's 850px,
+       widened inside the app below. */
+    --page-width: 850px;
 
     --additional-red-primary: #FF3347;
     --additional-red-primary-deep: #E84749;
@@ -399,6 +406,12 @@
   .strike-ring { animation: none; }
 }
 
+/* App pages are a wider column than the landing page. The nav, every page shell and the
+   footer take it from `max-w-page`, so this is the one number to change. */
+.app-type {
+  --page-width: 1200px;
+}
+
 /* App pages: all text carries the handoff's -0.02em tracking unless something says otherwise.
    It is set on each element, so it is -0.02em of that element's own size, and it has no
    specificity, so any tracking utility wins. Text under an element that sets its own tracking
@@ -407,3 +420,35 @@
 :where(.app-type) :where(*):not(:where([class*="tracking-"] *, [style*="letter-spacing"] *)) {
   letter-spacing: -0.02em;
 }
+
+/* ---------------------------------------------------------------- secondary font
+   One switch, three modes, set as data-font on <html> by the font picker:
+     a  JetBrains Mono everywhere (the original)
+     b  Geist Mono everywhere (same job, friendlier letterforms)
+     c  Geist for interface text, Geist Mono for figures, so prose is friendly and
+        columns still line up
+   Geist and Geist Mono are loaded from Google Fonts in the layout. */
+:root {
+  --font-geist: "Geist", system-ui, sans-serif;
+  --font-geist-mono: "Geist Mono", ui-monospace, monospace;
+  --font-mono-active: var(--font-jetbrains-mono);
+}
+html[data-font="a"] { --font-mono-active: var(--font-jetbrains-mono); }
+html[data-font="b"] { --font-mono-active: var(--font-geist-mono); }
+html[data-font="c"] { --font-mono-active: var(--font-geist); }
+/* in the split, anything that has to line up in a column keeps the mono */
+html[data-font="c"] .tabular-nums,
+html[data-font="c"] [data-figures],
+html[data-font="c"] input[inputmode="decimal"],
+html[data-font="c"] input[inputmode="numeric"] {
+  font-family: var(--font-geist-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+/* A sans at twelve pixels is tighter than a mono at the same size; the app's
+   negative tracking was tuned for mono. Mode C therefore loosens text slightly. */
+html[data-font="c"] .font-mono {
+  letter-spacing: 0.03em;
+  word-spacing: normal;
+}
+html[data-font="c"] .uppercase { letter-spacing: 0.08em; }

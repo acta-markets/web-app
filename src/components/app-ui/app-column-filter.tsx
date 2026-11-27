@@ -81,7 +81,7 @@ export function AppColumnFilter<T extends string>({
           role="menu"
           aria-label={`Filter by ${label}`}
           style={{ top: position.top, left: position.left, width: MENU_WIDTH }}
-          className="app-type fixed z-50 border border-bg-border bg-bg-primary py-1 font-mono text-sm"
+          className="app-type fixed z-50 rounded-[var(--radius)] border border-bg-border bg-bg-primary py-1 font-mono text-sm"
         >
           {options.map((option) => (
             <button

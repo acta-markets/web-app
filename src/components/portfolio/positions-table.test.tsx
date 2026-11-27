@@ -19,6 +19,16 @@ vi.mock("@/lib/share/render", () => ({
   SHARE_CARD_SIZE: { width: 1200, height: 675 },
   renderShareCard: async () => new Blob(["png"], { type: "image/png" }),
 }));
+// the chart itself is tested in position-chart.test.tsx: here it is the window a row opens
+vi.mock("./position-chart", () => ({
+  PositionChartModal: ({ row, nowMs, onClose }: { row: { sentence: string; markText: string | null; pnlText: string }; nowMs: number; onClose: () => void }) => (
+    <div role="dialog" aria-label={row.sentence} data-now={nowMs}>
+      <span>chart at {row.markText}</span>
+      <span>uPnL {row.pnlText}</span>
+      <button type="button" onClick={onClose}>Close chart</button>
+    </div>
+  ),
+}));
 URL.createObjectURL = () => "blob:card";
 URL.revokeObjectURL = () => {};
 
@@ -505,6 +515,66 @@ describe("sharing an open position", () => {
       render(<PositionsTable rows={priced()} nowMs={NOW} grouped={false} share={{}} />);
       expect(screen.queryByRole("table")).toBeNull();
       expect(screen.getByRole("button", { name: "Share SOL position, uPnL +$2.00" })).toBeTruthy();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+});
+
+describe("a position on the chart", () => {
+  afterEach(cleanup);
+  const NOW = (NOV28 - 3600) * 1000;
+  // sold a covered call at $150 for $2
+  const at = (price: number, nowMs = NOW) => buildPositionRows([pos()], () => "SOL", nowMs, () => price * 1e9);
+  const opener = () => screen.queryByRole("button", { name: /^Show SOL ends below \$150 by Nov 28 on the chart/ });
+
+  it("opens from the row's Now price, and follows the price while it is open", async () => {
+    const { rerender } = render(<PositionsTable rows={at(140)} nowMs={NOW} grouped={false} />);
+    const now = screen.getByRole("button", { name: "Show SOL ends below $150 by Nov 28 on the chart, now $140" });
+    // the price is the button: the cell still reads as the price
+    expect(now.textContent).toBe("$140");
+    fireEvent.click(now);
+    const dialog = await screen.findByRole("dialog", { name: "SOL ends below $150 by Nov 28" });
+    expect(dialog.textContent).toContain("chart at $140");
+    // a new mark arrives: the open chart is the row as it is now, not as it was when pressed
+    rerender(<PositionsTable rows={at(155)} nowMs={NOW} grouped={false} />);
+    expect(screen.getByRole("dialog").textContent).toContain("chart at $155");
+    expect(screen.getByRole("dialog").textContent).toContain("uPnL -$3.00");
+    fireEvent.click(screen.getByRole("button", { name: "Close chart" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closes when the position has run out, since there is nothing ahead of it to draw", async () => {
+    const { rerender } = render(<PositionsTable rows={at(140)} nowMs={NOW} grouped={false} />);
+    fireEvent.click(opener()!);
+    await screen.findByRole("dialog");
+    const after = (NOV28 + 60) * 1000;
+    rerender(<PositionsTable rows={at(140, after)} nowMs={after} grouped={false} />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(opener()).toBeNull();
+  });
+
+  it("is not offered without a current price or in history: the price is then plain text", () => {
+    const { unmount } = render(<PositionsTable rows={buildPositionRows([pos()], () => "SOL", NOW)} nowMs={NOW} grouped={false} />);
+    expect(opener()).toBeNull();
+    unmount();
+    render(<PositionsTable variant="history" rows={at(140)} nowMs={NOW} grouped={false} />);
+    expect(opener()).toBeNull();
+  });
+
+  it("is on the Now price in the stacked phone layout too, after the premium", async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: query.includes("max-width"), media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    try {
+      render(<PositionsTable rows={at(140)} nowMs={NOW} grouped={false} />);
+      expect(screen.queryByRole("table")).toBeNull();
+      const now = opener()!;
+      expect(now.textContent).toBe("Now $140");
+      // the price is written once on the row, as the button
+      expect(now.closest("li")!.textContent).toContain("$2.00 collected·Now $140");
+      expect(now.closest("li")!.textContent!.match(/Now \$140/g)).toHaveLength(1);
+      fireEvent.click(now);
+      expect(await screen.findByRole("dialog", { name: "SOL ends below $150 by Nov 28" })).toBeTruthy();
     } finally {
       window.matchMedia = original;
     }

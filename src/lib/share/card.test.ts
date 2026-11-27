@@ -115,6 +115,7 @@ describe("positionShareCard", () => {
   const row = (over: Partial<PositionsTableRow> = {}): PositionsTableRow => ({
     id: "p1", symbol: "SOL", sentenceBody: "ends below $150 by Nov 28", sentence: "SOL ends below $150 by Nov 28",
     productLabel: "Covered call", legsText: null, outcome: null, exerciseText: null, strikeText: "$150", markText: "$140.00",
+    markNum: 140.0, strikeNum: 150, farStrikeNum: null, cashSettled: false,
     direction: "below", side: "sell", sizeNum: 1, sizeText: "1 SOL", premiumNum: 2, premiumLabel: "collected",
     pnlNum: 2, pnlText: "+$2.00", expiryTs: Math.floor(Date.UTC(2026, 10, 28, 8) / 1000), isOpen: true, state: "Open",
     createdTs: 0, buy: null, fund: null, inTheMoney: null,

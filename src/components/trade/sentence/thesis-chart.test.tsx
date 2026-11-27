@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart } from "./thesis-chart";
+import { handleTops, optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart, zoneLabelY } from "./thesis-chart";
 
 const setData = vi.hoisted(() => vi.fn());
 /** The price under a pane y; null (the default) is a chart with no scale to read yet. */
@@ -121,6 +121,51 @@ describe("thesis chart", () => {
     rerender(<ThesisChart {...props} direction="above" side="sell" />);
     expect(right()).toBe("YIELD ZONE");
     expect(container.textContent).not.toContain("PROFIT ZONE");
+  });
+
+  it("draws a held position read-only: nothing to flip or drag, no example paths, the expiry in a tag of its own", async () => {
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    const { container } = render(<ThesisChart {...props} direction="above" readOnly />);
+    await waitFor(() => expect(container.querySelectorAll("[data-zone-mark]")).toHaveLength(2));
+    expect(screen.queryByTestId("chart-flip-surface")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Flip direction" })).toBeNull();
+    expect(screen.queryByRole("slider")).toBeNull();
+    expect(container.textContent).not.toMatch(/flip it/i);
+    // the two example paths into the future are the only round-capped strokes on the plot
+    expect(container.querySelectorAll('path[stroke-linecap="round"]')).toHaveLength(0);
+    // the plot takes no pointer: without the flip surface over it the library would pan it from under the tags
+    expect(screen.getByRole("img", { name: /SOL price history/ }).className).toContain("pointer-events-none");
+    expect(screen.getByTestId("chart-expiry-tag").textContent).toMatch(/^[A-Z]{3} \d{1,2}$/);
+    // the strike is a plain tag that says what it is
+    expect(screen.getByText("STRIKE").parentElement!.textContent).toBe("STRIKE $95");
+    // the history window can still be changed
+    expect(screen.getByRole("tab", { name: "3M" })).toBeTruthy();
+  });
+
+  it("names the expiry of a held position even when the price history did not load", async () => {
+    mockHistory([]);
+    render(<ThesisChart {...props} direction="above" readOnly />);
+    // until the series lands the window says it is on its way; Trade's chart never says this
+    expect(screen.getByRole("status").textContent).toBe("Loading price history…");
+    await waitFor(() => expect(screen.getByText("Price history unavailable")).toBeTruthy());
+    expect(screen.getByTestId("chart-expiry-tag")).toBeTruthy();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("keeps Trade's chart as it was: the expiry tag belongs to the read-only one", async () => {
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    render(<ThesisChart {...props} direction="above" />);
+    await waitFor(() => expect(screen.getByTestId("chart-flip-surface")).toBeTruthy());
+    expect(screen.queryByText("Loading price history…")).toBeNull();
+    expect(screen.queryByTestId("chart-expiry-tag")).toBeNull();
+    expect(screen.getByRole("img", { name: /SOL price history/ }).className).not.toContain("pointer-events-none");
+  });
+
+  it("takes the zone words it is given, for an outcome its own would misname", async () => {
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    const { container } = render(<ThesisChart {...props} direction="above" readOnly zoneWords={{ right: "YIELD ZONE", wrong: "YOU PAY OUT" }} />);
+    await waitFor(() => expect(container.querySelector('[data-zone-mark="wrong"]')?.parentElement?.textContent).toBe("YOU PAY OUT"));
+    expect(container.textContent).not.toContain("YOU BUY SOL");
   });
 
   it("flips direction from the (flip) button and a clean chart tap, ignoring drags", async () => {
@@ -471,5 +516,80 @@ describe("projection path containment", () => {
         expect(pts[pts.length - 1][0]).toBeCloseTo(W - PAD, 1);
       }
     }
+  });
+});
+
+describe("the strike and goal tags at the pane's right edge", () => {
+  const pane = { top: 36, bottom: 240 };
+
+  it("leaves each tag on its own line when the lines are a tag apart or more", () => {
+    expect(handleTops({ strikeY: 150, goalY: 100, goalAbove: true, ...pane })).toEqual({ strike: 150, goal: 100, grab: 10 });
+    // with no goal the strike rides its line alone
+    expect(handleTops({ strikeY: 150, goalY: null, goalAbove: true, ...pane })).toEqual({ strike: 150, goal: null, grab: 10 });
+  });
+
+  it("steps the two apart by half the shortfall each when the lines are closer than a tag is tall", () => {
+    const up = handleTops({ strikeY: 150, goalY: 140, goalAbove: true, ...pane });
+    expect(up).toEqual({ strike: 160, goal: 130, grab: 1 });
+    // the other belief: the goal is the lower of the two
+    const down = handleTops({ strikeY: 140, goalY: 150, goalAbove: false, ...pane });
+    expect(down).toEqual({ strike: 130, goal: 160, grab: 1 });
+  });
+
+  it("keeps the goal on its side of the strike when both lines fall on one pixel", () => {
+    expect(handleTops({ strikeY: 150, goalY: 150, goalAbove: true, ...pane })).toMatchObject({ strike: 165, goal: 135 });
+    expect(handleTops({ strikeY: 150, goalY: 150, goalAbove: false, ...pane })).toMatchObject({ strike: 135, goal: 165 });
+  });
+
+  it("moves the pair back inside together at the pane's top and bottom", () => {
+    expect(handleTops({ strikeY: 40, goalY: 10, goalAbove: true, ...pane })).toMatchObject({ goal: 36, strike: 66 });
+    expect(handleTops({ strikeY: 260, goalY: 250, goalAbove: true, ...pane })).toMatchObject({ goal: 210, strike: 240 });
+  });
+
+  it("gives a tag only the grab room that does not reach into its neighbour", () => {
+    expect(handleTops({ strikeY: 150, goalY: 116, goalAbove: true, ...pane }).grab).toBe(3);
+    expect(handleTops({ strikeY: 150, goalY: 90, goalAbove: true, ...pane }).grab).toBe(10);
+  });
+});
+
+describe("a zone label's place in the pane's centre column", () => {
+  // the upper label: home 42, its zone runs from the top of the pane down to the strike line
+  const upper = { home: 42, min: 14, max: 110 };
+
+  it("stays home whatever else moves, while the live price is elsewhere", () => {
+    expect(zoneLabelY({ ...upper, taken: null })).toBe(42);
+    // the NOW tag and the price's dot from 130 to 165: nowhere near
+    expect(zoneLabelY({ ...upper, taken: [130, 165] })).toBe(42);
+    // just clear: the label's edge is 6px above the NOW tag
+    expect(zoneLabelY({ ...upper, taken: [60, 95] })).toBe(42);
+  });
+
+  it("steps to the nearer clear place in its zone when the live price is on its home", () => {
+    // above the price is nearer, and there is room
+    expect(zoneLabelY({ ...upper, taken: [40, 75] })).toBe(22);
+    // too high for a label above it: below, between the dot and the strike line
+    expect(zoneLabelY({ ...upper, taken: [20, 55] })).toBe(73);
+  });
+
+  it("steps up into the tab row, in line with the tabs, where the pane has that row free", () => {
+    expect(zoneLabelY({ ...upper, min: 16, row: 16, taken: [40, 75] })).toBe(16);
+    // the NOW tag reaches into the row: below the price instead
+    expect(zoneLabelY({ ...upper, min: 16, row: 16, taken: [24, 59] })).toBe(77);
+  });
+
+  it("closes up against the live price where the zone has no room for the usual space", () => {
+    // 6px above the NOW tag would put it at 33, over the tabs: 2px above is 37
+    expect(zoneLabelY({ home: 42, min: 36, max: 96, taken: [51, 86] })).toBe(37);
+  });
+
+  it("is not shown when no place in its zone is clear of the live price", () => {
+    expect(zoneLabelY({ home: 42, min: 42, max: 60, taken: [30, 65] })).toBeNull();
+    // the lower label, held above the flip hint: the price sits low in a thin zone
+    expect(zoneLabelY({ home: 210, min: 171, max: 210, taken: [165, 200] })).toBeNull();
+  });
+
+  it("is pulled inside its zone when the strike line leaves its home outside", () => {
+    expect(zoneLabelY({ home: 42, min: 14, max: 30, taken: null })).toBe(30);
+    expect(zoneLabelY({ home: 212, min: 230, max: 240, taken: null })).toBe(230);
   });
 });

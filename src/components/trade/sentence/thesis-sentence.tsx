@@ -8,10 +8,11 @@ import {
   INLINE_PILL_GLYPH,
   type AppInlineSelectOption,
 } from "@/components/app-ui/app-inline-select";
+import { AppWheel } from "@/components/app-ui/app-wheel";
 import { cn } from "@/lib/cn";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import type { TakerSide } from "@/lib/spreads";
-import { DIRECTIONS, SENTENCE, type Direction } from "@/lib/trade/thesis";
+import { DIRECTIONS, SENTENCE, type Direction, type TradeLine } from "@/lib/trade/thesis";
 
 // Pill text stays in the sentence's own ink so the sentence reads as one line of text;
 // the tint (and the direction arrow) carries the meaning. The tint is bright enough, with an
@@ -23,6 +24,10 @@ const PILL = {
   above: "border-[rgba(73,170,25,0.6)] bg-[rgba(73,170,25,0.24)] text-content-primary hover:border-additional-green-primary-deep hover:bg-[rgba(73,170,25,0.36)]",
   below: "border-[rgba(255,51,71,0.55)] bg-[rgba(255,51,71,0.22)] text-content-primary hover:border-additional-red-primary hover:bg-[rgba(255,51,71,0.34)]",
   accent: "border-accent-primary/60 bg-accent-primary/25 text-content-primary hover:border-accent-primary hover:bg-accent-primary/40",
+  // A control that is not part of the belief: a buy's strike, in the second line. Grey like the
+  // words around it, so the goal above it stays the one price that stands out.
+  quiet: "border-[rgba(240,240,240,0.4)] bg-[rgba(240,240,240,0.16)] text-content-primary hover:border-[rgba(240,240,240,0.6)] hover:bg-[rgba(240,240,240,0.24)]",
+  side: "border-[rgba(46,154,255,0.55)] bg-[rgba(46,154,255,0.2)] text-content-primary hover:border-[rgba(46,154,255,0.85)] hover:bg-[rgba(46,154,255,0.3)]",
 } as const;
 
 /** The direction pill is plain text when the UI derives it from a strategy, so it never hints at a hover. */
@@ -64,56 +69,9 @@ function Pending() {
   return <span className="text-content-secondary">&hellip;</span>;
 }
 
-/**
- * The expiry is a run of date buttons separated by slashes: no dropdown — every date is a
- * button in the sentence, the selected one underlined and the rest quieter. The slashes
- * stay in secondary ink so they read as punctuation, never as part of a date.
- */
-function ExpirySlash({
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  options: ReadonlyArray<AppInlineSelectOption>;
-  onChange: (value: string) => void;
-  disabled: boolean;
-}) {
-  return (
-    <span className="inline-flex flex-wrap items-center">
-      {options.map((o, i) => {
-        const selected = o.value === value;
-        return (
-          <React.Fragment key={o.value}>
-            {i > 0 ? (
-              <span aria-hidden="true" className="mx-[0.35em] select-none text-content-secondary">
-                /
-              </span>
-            ) : null}
-            <button
-              type="button"
-              aria-pressed={selected}
-              disabled={disabled || o.disabled}
-              onClick={() => onChange(o.value)}
-              className={cn(
-                // on a phone the tap area fills the line's height, not just the word's
-                "relative max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1 max-md:after:content-['']",
-                "underline-offset-[0.2em] decoration-[0.06em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary disabled:cursor-not-allowed disabled:opacity-60",
-                selected
-                  ? "text-content-primary underline decoration-additional-violet-primary-deep"
-                  // an option, not a caption: a step brighter than the sentence's quiet text
-                  : "text-content-primary no-underline opacity-65 hover:underline hover:opacity-100"
-              )}
-            >
-              {o.label}
-            </button>
-          </React.Fragment>
-        );
-      })}
-    </span>
-  );
-}
+// The expiry is a wheel (`AppWheel`), turned like the time wheel of a phone's alarm. At rest
+// it is a pill like the others, with the switch mark; a click opens it in place, the chosen
+// date where it was and the date before and the date after faded above and below it.
 
 export type SentenceOptions = {
   assets: ReadonlyArray<AppInlineSelectOption>;
@@ -126,11 +84,24 @@ export type SentenceOptions = {
 /**
  * Every value the direction and strike pills can show for this asset, across both
  * directions and all prices, so each pill holds its widest value's width and no choice
- * reflows the sentence. (The asset pill hugs its ticker and the expiry is inline buttons,
- * so neither needs a width reserve.)
+ * reflows the sentence. (The asset pill hugs its ticker and the expiry wheel holds its own
+ * widest date, so neither needs a width reserve here.)
  */
 export type SentenceReserve = {
   strikes: ReadonlyArray<{ key: string; label: string }>;
+};
+
+/**
+ * A buyer's goal, where the page has one (Profit): the price they think the asset reaches. With
+ * it, the first line's price is the goal and the strike moves down into the second line, where
+ * the option is named.
+ */
+export type SentenceGoal = {
+  value: string;
+  /** the chosen goal, formatted; null while there is none to show */
+  label: string | null;
+  options: ReadonlyArray<AppInlineSelectOption>;
+  onChange: (price: string) => void;
 };
 
 function AssetFace({ symbol }: { symbol: string }) {
@@ -215,44 +186,191 @@ function DirectionToggle({
   );
 }
 
+/**
+ * The mode, as the one word of the quiet line that can change: "You're [buying] a call option…".
+ * It has two values, so it is a switch, not a menu: one click flips it, like the direction pill,
+ * and it is drawn as one of the sentence's pills.
+ */
+function SideToggle({ side, verb, disabled, onFlip }: { side: TakerSide; verb: string; disabled: boolean; onFlip: () => void }) {
+  const other = side === "buy" ? "selling" : "buying";
+  return (
+    <button
+      type="button"
+      data-pill="Side"
+      aria-label={`You are ${verb}. Switch to ${other}`}
+      title={`Switch to ${other}`}
+      disabled={disabled}
+      onClick={onFlip}
+      className={cn(
+        INLINE_PILL,
+        PILL.side,
+        // on a phone the tap area fills the line's height, not just the word's
+        "max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1 max-md:after:content-['']",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary",
+        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+      )}
+    >
+      {verb}
+      <Chevron kind="switch" className={INLINE_PILL_GLYPH} />
+    </button>
+  );
+}
+
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
 /**
- * Keeps the belief on one line wherever the layout gives it one (md and up). The type already
- * scales with the card's width; this is the backstop for words wider than that allows for (a
- * long ticker, a long price, a fifth date): the type steps down just enough to fit, through
- * `--fit`, instead of the last phrase dropping to a second line and pushing the chart down.
- * On a phone the sentence wraps by design and is left alone.
+ * Keeps each of the sentence's two lines on one line wherever the layout gives it one (md and
+ * up). The type already scales with the card's width; this is the backstop for words wider than
+ * that allows for (a long ticker, a long price, a fifth date, a long outcome): the type steps
+ * down just enough to fit, through `--fit`, instead of the last phrase dropping to another line
+ * and pushing the chart down. Both lines take the same step, the one the wider of them needs, so
+ * they stay one size. On a phone the sentence wraps by design and is left alone.
  */
-function useFitOneLine(line: React.RefObject<HTMLElement>, contentKey: string) {
+function useFitLines(first: React.RefObject<HTMLElement>, second: React.RefObject<HTMLElement>, contentKey: string) {
   useIsomorphicLayoutEffect(() => {
-    const el = line.current;
-    if (!el) return;
+    const lines = [first.current, second.current].filter((el): el is HTMLElement => el != null);
+    if (lines.length === 0) return;
     const fit = () => {
-      el.style.removeProperty("--fit");
+      for (const el of lines) el.style.removeProperty("--fit");
       if (!window.matchMedia?.("(min-width: 768px)").matches) return;
-      const box = el.clientWidth;
-      const wrap = el.style.whiteSpace;
-      el.style.whiteSpace = "nowrap";
-      const natural = el.scrollWidth;
-      el.style.whiteSpace = wrap;
-      if (box > 0 && natural > box) el.style.setProperty("--fit", (Math.floor((box / natural) * 1000) / 1000).toString());
+      let factor = 1;
+      for (const el of lines) {
+        const box = el.clientWidth;
+        const wrap = el.style.whiteSpace;
+        el.style.whiteSpace = "nowrap";
+        const natural = el.scrollWidth;
+        el.style.whiteSpace = wrap;
+        if (box > 0 && natural > box) factor = Math.min(factor, box / natural);
+      }
+      if (factor < 1) for (const el of lines) el.style.setProperty("--fit", (Math.floor(factor * 1000) / 1000).toString());
     };
     fit();
     // the card's width changes with the window, and the words' width once the web font is in
-    const observer = typeof ResizeObserver === "undefined" || !el.parentElement ? null : new ResizeObserver(fit);
-    if (observer && el.parentElement) observer.observe(el.parentElement);
+    const parent = lines[0].parentElement;
+    const observer = typeof ResizeObserver === "undefined" || !parent ? null : new ResizeObserver(fit);
+    if (observer && parent) observer.observe(parent);
     let live = true;
     void document.fonts?.ready.then(() => live && fit());
+    // `ready` settles once; a weight that is first needed later (the web font swapping in for
+    // the fallback it was measured in) announces itself here, and the lines are measured again
+    const fonts = typeof document.fonts?.addEventListener === "function" ? document.fonts : null;
+    fonts?.addEventListener("loadingdone", fit);
     return () => {
       live = false;
       observer?.disconnect();
+      fonts?.removeEventListener("loadingdone", fit);
     };
-  }, [line, contentKey]);
+  }, [first, second, contentKey]);
 }
+
+/**
+ * The trade page's type for both of the sentence's lines. The sentence is the page, so it is set
+ * as large as one line of it allows: the size follows the card's width, up to 26px, and steps
+ * down to fit. The second line is the longer one, in either mode ("You're selling a call option
+ * to earn ≈$5.48, but if you're wrong you sell your BTC at $62,000"; "You're buying a $61,000
+ * call that makes +$28.05 or more if you're right, risking only ≈$21.95"): about 45 of
+ * its own ems, so 2.2% of the width keeps it inside and Profit and Yield come out the same size.
+ */
+const COMPACT_LINE = "text-[length:calc(clamp(17px,2.2cqw,26px)*var(--fit,1))] leading-[1.5] max-md:text-[17px] max-md:leading-[1.9]";
 
 function StrikeFace({ label }: { label: string | null }) {
   return label ? <span>{label}</span> : <Pending />;
+}
+
+/** The strike's own control. Selling it is the first line's price; buying it is the goal's
+    sibling in the quiet line, inside the option's name. */
+export function StrikeControl({
+  strikeValue,
+  strikeLabel,
+  options,
+  reserve,
+  onStrike,
+  onStrikePreview,
+  disabled,
+  ready,
+  inSecondLine,
+}: {
+  strikeValue: string;
+  strikeLabel: string | null;
+  options: SentenceOptions;
+  reserve: SentenceReserve;
+  onStrike: (strike1e9: string) => void;
+  onStrikePreview?: (strike1e9: string | null) => void;
+  disabled: boolean;
+  ready: boolean;
+  /** a buy's strike sits in the quiet line, grey so the goal stays the one price that stands out */
+  inSecondLine: boolean;
+}) {
+  return (
+    <AppInlineSelect
+      label="Strike"
+      value={strikeValue}
+      options={options.strikes}
+      onChange={onStrike}
+      onPreview={onStrikePreview}
+      disabled={disabled || !ready || options.strikes.length === 0}
+      className={inSecondLine ? PILL.quiet : PILL.accent}
+      reserve={reserve.strikes.map((r) => ({ key: r.key, face: <StrikeFace label={r.label} /> }))}
+    >
+      <StrikeFace label={strikeLabel} />
+    </AppInlineSelect>
+  );
+}
+
+/** The quiet line under the belief: what is traded, for how much, and what being wrong costs.
+    Lifted out of ThesisSentence so the trade page can put it below the chart instead. */
+export function ThesisMoveLine({
+  move,
+  side,
+  onSide,
+  strikeInSecond,
+  strikePill,
+  compact,
+  secondRef,
+}: {
+  move: TradeLine;
+  side: TakerSide;
+  onSide?: () => void;
+  strikeInSecond: boolean;
+  strikePill: React.ReactNode;
+  compact: boolean;
+  secondRef?: React.RefObject<HTMLParagraphElement>;
+}) {
+  // One line, always: the quiet line never wraps, and it shrinks (--fit) to fit its card
+  // rather than breaking. The width is measured against the full nowrap line, so it assumes
+  // the whole number of symbols whatever the prices say.
+  const self = React.useRef<HTMLParagraphElement>(null);
+  const fitRef = secondRef ?? self;
+  const contentKey = [move.strike ?? "", move.rest].join("|");
+  useFitLines(fitRef, { current: null }, contentKey);
+  return (
+    <p
+      ref={fitRef}
+      data-testid="thesis-move"
+      className={cn(
+        "font-space font-semibold tracking-[-0.03em] text-content-primary whitespace-nowrap transition-[font-size] duration-200 ease-out",
+        compact ? COMPACT_LINE : "-mt-1 text-[18px] font-medium leading-[1.3] tracking-[-0.02em] max-md:mt-0 max-md:text-[15px]",
+      )}
+    >
+      {`${move.lead} `}
+      {onSide ? (
+        <span className="text-content-primary">
+          <SideToggle side={side} verb={move.verb} disabled={false} onFlip={onSide} />
+        </span>
+      ) : (
+        move.verb
+      )}
+      {strikeInSecond ? (
+        <>
+          {` ${move.before} `}
+          {strikePill}
+        </>
+      ) : move.strike ? (
+        ` ${move.before} ${move.strike}`
+      ) : null}
+      {` ${move.rest}`}
+    </p>
+  );
 }
 
 /** The one editable belief: "I think [asset] ends [above/below] [strike] by [expiry]". */
@@ -262,6 +380,7 @@ export function ThesisSentence({
   direction,
   strikeValue,
   strikeLabel,
+  goal,
   move,
   expiryValue,
   options,
@@ -270,18 +389,23 @@ export function ThesisSentence({
   disabled,
   onAsset,
   onDirection,
+  onSide,
   onStrike,
   onStrikePreview,
   onExpiry,
   compact = false,
+  /** render the quiet line under the belief; the trade page turns this off and draws it below the chart */
+  secondLine = true,
 }: {
   side: TakerSide;
   asset: string;
   direction: Direction;
   strikeValue: string;
   strikeLabel: string | null;
-  /** where today's price stands against the thesis, from `cushionText`; null without spot */
-  move: string | null;
+  /** Profit only: the first line's price is this goal, and the strike is picked in the second line */
+  goal?: SentenceGoal;
+  /** the second line: what is traded, for how much, and what being wrong costs, from `tradeLine` */
+  move: TradeLine;
   expiryValue: string;
   options: SentenceOptions;
   reserve: SentenceReserve;
@@ -290,18 +414,25 @@ export function ThesisSentence({
   disabled: boolean;
   onAsset: (symbol: string) => void;
   onDirection: (direction: Direction) => void;
+  /** flips buying and selling; with it the line's verb is the switch, without it plain text */
+  onSide?: () => void;
   onStrike: (strike1e9: string) => void;
   /** the strike under the pointer or the keyboard while its menu is open; null once it closes */
   onStrikePreview?: (strike1e9: string | null) => void;
   onExpiry: (expiryTs: string) => void;
   /** caption mode: the belief reads as a compact line under the chart, not a headline */
   compact?: boolean;
+  /** render the quiet second line; the trade page passes false and draws it below the chart */
+  secondLine?: boolean;
 }) {
-  // The belief is one line; the cushion reads quietly under it, a size down. Lines break
-  // only between the nowrap phrases. The direction and strike pills hold their widest
-  // value's width so picking them never reflows the sentence; the asset pill hugs its
-  // ticker, so switching assets lets the sentence settle around it.
+  // Two lines in one type: the belief, then the trade made on it and what being wrong costs. The
+  // second holds controls of its own (the buying / selling switch, and a buy's strike), so on the
+  // trade page it is set exactly as the first, in quieter ink. Lines break only between the
+  // nowrap phrases. The direction and strike pills hold their widest value's width so picking
+  // them never reflows the sentence; the asset pill hugs its ticker, so switching assets lets
+  // the sentence settle around it.
   const line = React.useRef<HTMLParagraphElement>(null);
+  const second = React.useRef<HTMLParagraphElement>(null);
   // everything that sets the line's width: the ticker, the widest price it reserves, the dates
   const contentKey = [
     asset,
@@ -310,16 +441,36 @@ export function ThesisSentence({
     options.expiries.map((o) => o.label).join(","),
     options.unavailable?.join(",") ?? "",
   ].join("|");
-  useFitOneLine(line, compact ? contentKey : "");
+  useFitLines(line, second, compact ? `${contentKey}|${goal?.label ?? ""}|${move.verb}|${move.rest}` : "");
+  // The strike's own control. Selling, it is the first line's price; buying, the first line's
+  // price is the goal and this sits in the second line, inside the option's name.
+  const strikeInSecond = goal != null && move.strike != null;
+  const strikePill = (
+    <StrikeControl
+      strikeValue={strikeValue}
+      strikeLabel={strikeLabel}
+      options={options}
+      reserve={reserve}
+      onStrike={onStrike}
+      onStrikePreview={onStrikePreview}
+      disabled={disabled}
+      ready={ready}
+      inSecondLine={strikeInSecond}
+    />
+  );
   return (
     // a size container, so the belief's type follows the card's width, not the window's: the
     // card is narrower on a mid-size window than on a small one, and window-sized type broke there
-    <div className="flex flex-col gap-2 font-space font-semibold tracking-[-0.03em] text-content-primary [container-type:inline-size] max-md:gap-1">
+    <div className={cn(
+      "flex flex-col font-space font-semibold tracking-[-0.03em] text-content-primary [container-type:inline-size]",
+      compact ? "gap-0" : "gap-2 max-md:gap-1",
+    )}>
       <p
         ref={compact ? line : undefined}
-        className={compact
-          ? "text-[length:calc(clamp(17px,2.62cqw,21.5px)*var(--fit,1))] leading-[1.5] max-md:text-[17px] max-md:leading-[1.9]"
-          : "text-[clamp(26px,2.85vw,40px)] leading-[1.45]"}
+        className={cn(
+          compact ? COMPACT_LINE : "text-[clamp(26px,2.85vw,40px)] leading-[1.45]",
+          "transition-[font-size] duration-200 ease-out"
+        )}
       >
         <span className="whitespace-nowrap">
           {SENTENCE.lead}{" "}
@@ -347,39 +498,50 @@ export function ThesisSentence({
           />
         </span>{" "}
         <span className="whitespace-nowrap">
-          <AppInlineSelect
-            label="Strike"
-            value={strikeValue}
-            options={options.strikes}
-            onChange={onStrike}
-            onPreview={onStrikePreview}
-            disabled={disabled || !ready || options.strikes.length === 0}
-            className={PILL.accent}
-            reserve={reserve.strikes.map((s) => ({ key: s.key, face: <StrikeFace label={s.label} /> }))}
-          >
-            <StrikeFace label={strikeLabel} />
-          </AppInlineSelect>{" "}
+          {goal ? (
+            <AppInlineSelect
+              label="Goal"
+              value={goal.value}
+              options={goal.options}
+              onChange={goal.onChange}
+              disabled={disabled || !ready || goal.options.length === 0}
+              className={PILL.accent}
+              reserve={goal.options.map((o) => ({ key: o.value, face: <StrikeFace label={o.label} /> }))}
+            >
+              <StrikeFace label={goal.label} />
+            </AppInlineSelect>
+          ) : (
+            strikePill
+          )}{" "}
         </span>{" "}
         {/* "by" belongs to the date, not to the strike: kept in one nowrap phrase so a
             break never leaves the preposition stranded at the end of the line. */}
         <span className="whitespace-nowrap">
           {SENTENCE.on}{" "}
-          <ExpirySlash
+          <AppWheel
+            label="Expiry"
             value={expiryValue}
             options={options.expiries}
+            className={PILL.violet}
             onChange={onExpiry}
             disabled={disabled || !ready || options.expiries.length === 0}
           />
         </span>
       </p>
-      {/* a quiet line of its own under the belief, so it never touches how the belief wraps; it keeps its height before prices arrive */}
-      <p className={cn(
-        "-mt-1 tracking-[-0.02em] text-content-secondary max-md:mt-0",
-        // on the trade page it is set as every other quiet note there: mono, 14px, regular
-        compact ? "font-mono text-[14px] font-normal leading-[1.45]" : "text-[18px] font-medium leading-[1.3] max-md:text-[15px]"
-      )}>
-        {move ?? " "}
-      </p>
+      {/* the trade and its downside, on a line of its own, so it never touches how the belief
+          wraps. The trade page can instead put it below the chart with `secondLine={false}`. */}
+      {secondLine ? (
+        <ThesisMoveLine
+          move={move}
+          side={side}
+          onSide={onSide}
+          strikeInSecond={strikeInSecond}
+          strikePill={strikePill}
+          compact={compact}
+          secondRef={compact ? second : undefined}
+        />
+      ) : null}
+
     </div>
   );
 }

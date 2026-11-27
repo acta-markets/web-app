@@ -6,6 +6,11 @@ import { WebMcpProvider } from "@/components/webmcp-provider";
 import { SITE_DESCRIPTION, SITE_LINE, SITE_NAME, describe, previewImage, siteOrigin } from "@/lib/site-metadata";
 import "./globals.css";
 
+// The font experiment loads Geist from Google Fonts directly: this Next version's
+// font list predates Geist, and a <link> needs no build-time registry.
+const FONT_CSS =
+  "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap";
+
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-space-grotesk",
@@ -43,7 +48,12 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" data-font="c" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={FONT_CSS} />
+      </head>
       <body className="font-mono antialiased selection:bg-accent-primary selection:text-bg-primary text-content-primary">
         <Suspense fallback={null}>
           <RefCapture />
