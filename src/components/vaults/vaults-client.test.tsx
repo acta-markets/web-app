@@ -130,6 +130,7 @@ describe("VaultsClient", () => {
     expect(jito.getByText(/^Staking [\d.]+%$/)).toBeTruthy();
     expect(jito.getByText(/^Premium [\d.]+%$/)).toBeTruthy();
     expect(jito.getAllByText(/^[\d.]+%$/)[0].className).not.toContain("text-additional-red-primary");
+    expect(jito.getAllByText(/^[\d.]+%$/)[0].className).toContain("text-[clamp(40px,6vw,54px)]");
     // nothing renders after the buttons
     const article = screen.getByRole("article", { name: "jitoSOL" });
     expect(article.lastElementChild!.lastElementChild!.textContent).toBe("DepositDetails");
@@ -156,6 +157,10 @@ describe("VaultsClient", () => {
     show();
     expect(card("USDC").getByText("New")).toBeTruthy();
     expect(card("USDC").getByText("Projected APY shows after 20 days of history.")).toBeTruthy();
+    // a word where the rate would be sits under the vault's name at the size of a figure, on one line with its label
+    const word = card("USDC").getByText("New");
+    expect(word.className).toContain("text-2xl");
+    expect(word.parentElement!.className).toContain("items-baseline");
   });
 
   it("shows a vault that is not open yet as the landing page does: dimmed, in words, with nothing to press and no invented rate", () => {

@@ -46,13 +46,15 @@ function RateBlock({ apr }: { apr: AprView }) {
   const tilde = apr.assumed ? "~" : "";
   return (
     <div className="mt-6">
-      <div className="flex items-start gap-1.5">
+      <div className={cn("flex gap-1.5", apr.pct != null ? "items-start" : "items-baseline")}>
         <span
           className={cn(
-            "font-space font-medium tabular-nums",
+            "font-space font-medium tabular-nums tracking-[-0.03em]",
+            // a rate in numbers takes the display size, its label raised to its cap height; a word in its place sits under the
+            // vault's name at the size of a figure, on one line with its label
+            apr.pct != null ? "text-[clamp(40px,6vw,54px)] leading-[0.95]" : "text-2xl leading-[1.1]",
             apr.pct != null && apr.pct < 0 ? "text-additional-red-primary" : apr.muted ? "text-content-secondary" : "text-content-primary",
           )}
-          style={{ fontSize: "clamp(40px, 6vw, 54px)", lineHeight: 0.95, letterSpacing: "-0.03em" }}
         >
           {apr.value}
         </span>
