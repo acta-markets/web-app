@@ -96,4 +96,14 @@ describe("vault lineup", () => {
     expect(withLineupName(meta, lineupEntryFor("unlisted", "devnet", LINEUP))).toBe(meta);
     expect(lineupEntryFor("pda-jito", "mainnet", LINEUP)).toBeUndefined();
   });
+
+  it("gives a listed vault the lineup's rate and shows it by its asset alone", () => {
+    const meta = { name: "LST seller", tagline: "Sells options", assetSymbol: "LST", legs: ["LST", "jitoSOL"], stakingAprPct: 0 } as ResolvedVaultMeta;
+    const listed = withLineupName(meta, { ...LINEUP[0], assumedApr: { staking: 7, premium: 11 } });
+    expect(listed).toMatchObject({ name: "jitoSOL", legs: ["jitoSOL"], stakingAprPct: 7, assumedApr: { staking: 7, premium: 11 } });
+    // an entry with no assumed rate leaves the staking yield it was given
+    const plain = withLineupName(meta, { ...LINEUP[0], assumedApr: undefined });
+    expect(plain.stakingAprPct).toBe(0);
+    expect(plain.assumedApr).toBeUndefined();
+  });
 });

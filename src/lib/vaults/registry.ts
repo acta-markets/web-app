@@ -53,6 +53,8 @@ export function getRegisteredVaultMeta(pda: string): VaultMeta | undefined {
 export type ResolvedVaultMeta = {
   /** What the vault is called. Never joined to anything: a card and a page title show it whole. */
   name: string;
+  /** The lineup's assumed rate for a listed vault, until its own figures exist (`vaultApr`). */
+  assumedApr?: { staking: number; premium: number };
   /** One short line on what the vault does, set by its operator next to the name. */
   tagline?: string;
   curator: string;

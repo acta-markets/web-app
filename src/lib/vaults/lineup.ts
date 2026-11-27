@@ -121,9 +121,20 @@ export function lineupEntryFor(pda: string, network: LineupNetwork, lineup: read
 }
 
 /**
- * A listed vault goes by its lineup name everywhere it is shown: the asset as its name and
- * "Income vault" under it, in place of whatever its operator called it.
+ * A listed vault goes by its lineup name everywhere it is shown: the asset as its name,
+ * "Income vault" under it and the asset's logo alone, in place of whatever its operator called
+ * it. It also carries the lineup's rate: the staking part counts toward the headline from the
+ * start, because the share price leaves it out, and the whole assumed rate stands in until the
+ * vault has a figure of its own (`vaultApr`).
  */
 export function withLineupName(meta: ResolvedVaultMeta, entry: LineupEntry | undefined): ResolvedVaultMeta {
-  return entry ? { ...meta, name: entry.asset, tagline: LINEUP_TAGLINE } : meta;
+  if (!entry) return meta;
+  return {
+    ...meta,
+    name: entry.asset,
+    tagline: LINEUP_TAGLINE,
+    legs: [entry.asset],
+    assumedApr: entry.assumedApr,
+    stakingAprPct: entry.assumedApr?.staking ?? meta.stakingAprPct,
+  };
 }
