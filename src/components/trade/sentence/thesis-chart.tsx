@@ -101,6 +101,19 @@ const OFFERED_STRIKES_MARGIN = 0.22;
 /** Price domain covering history, spot and every strike given, padded, with the strikes kept
     off the edges. Given the whole list on offer, the domain does not depend on which strike is
     chosen: choosing another one moves the line and leaves the chart where it is. */
+/** A price range centred on `center` that still covers every context value, so the strike sits
+    at the pane's middle and dragging it scrolls the chart past a knot that stays put. */
+function centredPriceDomain(context: number[], center: number): [number, number] {
+  const values = context.filter(Number.isFinite);
+  const mid = center > 0 ? center : (values.length ? values[0] : 1);
+  const minC = values.length ? Math.min(...values) : mid;
+  const maxC = values.length ? Math.max(...values) : mid;
+  const up = Math.max(maxC - mid, 0);
+  const down = Math.max(mid - minC, 0);
+  const half = Math.max(up, down, Math.abs(mid) * 0.05) * 1.12;
+  return [Math.max(0, mid - half), mid + half];
+}
+
 export function priceDomain(values: number[], strikes: number | readonly number[] | null): [number, number] {
   let lo = Math.min(...values);
   let hi = Math.max(...values);
@@ -1132,7 +1145,7 @@ export function ThesisChart({
   useEffect(() => {
     const series = seriesRef.current;
     if (!series) return;
-    const [lo, hi] = priceDomain([...points.map((p) => p.v), spot, ...(goalPrice != null ? [goalPrice] : [])], [lowestStrike, highestStrike]);
+    const [lo, hi] = centredPriceDomain([...points.map((p) => p.v), spot, ...(goalPrice != null ? [goalPrice] : [])], strike);
     if (pointsRef.current === points && lo === domainRef.current[0] && hi === domainRef.current[1]) {
       // same scale: only the line moved, so place the handle on it at once
     } else {
@@ -1732,7 +1745,7 @@ export function ThesisChart({
         {rightAxis.ticks.length > 0 || strikesAsc.length > 1 ? (
           <div
             data-testid="chart-price-rail"
-            className="relative w-[120px] shrink-0 border-l border-bg-border max-md:hidden"
+            className="relative w-[172px] shrink-0 border-l border-bg-border max-md:hidden"
           >
             {/* the strike as a fixed knot: dragging steps the strike while the knot stays put and the line scrolls to it */}
             {geometry && tops && strikesAsc.length > 1 ? (
@@ -1764,6 +1777,7 @@ export function ThesisChart({
                 <Hand data-testid="strike-hand" data-grabbed="false" className={HANDLE_ICON} />
               )}
             </span>
+            <span className="tracking-[0.08em]">STRIKE</span>
             <span className="tabular-nums">{strikeShown}</span>
           </div>
             ) : null}
