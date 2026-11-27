@@ -28,7 +28,7 @@ export type AprView = {
   assumed?: true;
 };
 
-const PREMIUM_NOTE = "Premium is what the vault earns selling options, after fees. Projected APY annualizes the last 30 days; it is not a promise.";
+const PREMIUM_NOTE = "Premium is what the vault earns selling options, after fees. APY is based on past performance; it is not a promise.";
 const PROJECTED_MIN_DAYS = 20;
 
 /** The backend's APY compounding, over the history the vault has so far. */
@@ -74,7 +74,7 @@ export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0
   if (!young) return assumed ? assumedAprView(assumed) : { value: NONE, pct: null, muted: true, sources: [], note: "Not available." };
   const days = all === null ? 0 : (Number(all.window_end_at) - Number(all.window_start_at)) / 86_400;
   if (all === null || days < PROJECTED_MIN_DAYS) {
-    return { value: "New", pct: null, muted: true, sources: staking, note: "Projected APY shows after 20 days of history." };
+    return { value: "New", pct: null, muted: true, sources: staking, note: "APY shows after 20 days of history." };
   }
   const projected = projectedApy(all.return_pct, days);
   return {
@@ -145,7 +145,7 @@ export function compareVaultsByTvl(a: VaultSortEntry, b: VaultSortEntry): number
 type VaultCompare = (a: VaultSortEntry, b: VaultSortEntry) => number;
 
 export const VAULT_SORTS: readonly { value: VaultSort; label: string; compare: VaultCompare }[] = [
-  { value: "apy", label: "Projected APY", compare: compareVaultsByYield },
+  { value: "apy", label: "APY", compare: compareVaultsByYield },
   { value: "tvl", label: "TVL", compare: compareVaultsByTvl },
   { value: "name", label: "Name", compare: byName },
 ];

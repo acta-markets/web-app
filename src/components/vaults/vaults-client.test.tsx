@@ -156,7 +156,7 @@ describe("VaultsClient", () => {
     state.vaults = { ...state.vaults, data: SAMPLE.vaults.map((v) => (v.vault_pda === SAMPLE.keys.usdc ? { ...v, performance: makePerformance() } : v)) };
     show();
     expect(card("USDC").getByText("New")).toBeTruthy();
-    expect(card("USDC").getByText("Projected APY shows after 20 days of history.")).toBeTruthy();
+    expect(card("USDC").getByText("APY shows after 20 days of history.")).toBeTruthy();
     // a word where the rate would be sits under the vault's name at the size of a figure, on one line with its (i)
     const word = card("USDC").getByText("New");
     expect(word.className).toContain("text-2xl");
@@ -291,7 +291,7 @@ describe("VaultsClient", () => {
     expect(cell.getByText("19.00%")).toBeTruthy();
     // the figure stands without its label; the (i) beside it still breaks it down
     expect(cell.queryByText("Projected APY")).toBeNull();
-    expect(cell.getByRole("button", { name: "What makes up this Projected APY" })).toBeTruthy();
+    expect(cell.getByRole("button", { name: "What makes up this APY" })).toBeTruthy();
     // and no rule separates the facts from the rate above them
     expect(cell.getByText("TVL").closest("dl")!.className).not.toContain("border-t");
     expect(cell.queryByText("~18%")).toBeNull();

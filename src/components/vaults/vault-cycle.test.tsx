@@ -15,79 +15,25 @@ afterEach(() => {
 });
 
 describe("VaultCurrentCycle", () => {
-  it("counts down to expiry and shows premium for the cycle and the generation", () => {
-    const vault = makeVault({
-      phase: "active",
-      active_expiry_ts: NOW + 2 * 86_400 + 3_600,
-      second_mint: USDC,
-      second_decimals: 6,
-      generation_started_at: 1790000000,
-      premium: [
-        { quote_mint: USDC, cycle: { received: "2842000000", paid: null }, generation: { received: "30115600000", paid: "2984100000" } },
-      ],
-    });
-    render(<VaultCurrentCycle vault={vault} nowSecs={NOW} />);
-    expect(screen.getByRole("listitem", { current: "step" }).textContent).toContain("Trading");
-    expect(screen.getByText(/2d 1h/)).toBeTruthy();
-    expect(screen.getByText("2,842 USDC")).toBeTruthy();
-    expect(screen.getByText(/^Premium since/)).toBeTruthy();
-    expect(screen.getByText("30,115.6 USDC · paid 2,984.1")).toBeTruthy();
-  });
-
-  it("matches the active expiry and never substitutes a vault-wide settlement for cycle completion", () => {
-    const vault = makeVault({ phase: "active", active_expiry_ts: NOW + 3600, last_settlement_at: NOW - 60 });
+  it("names the cycle, its phase and the countdown to expiry", () => {
+    const vault = makeVault({ phase: "active", active_expiry_ts: NOW + 2 * 86_400 + 3_600 });
     const record: VaultCycle = {
       cycle_number: 1, capital_generation: vault.capital_generation, expiry_ts: vault.active_expiry_ts,
       started_at: NOW - 3600, finished_at: null, share_price_start: "1000000000",
       share_price_end: "1000000001", equity_start: "100", equity_end: "101", positions_opened: 1,
       positions_settled: 0, return_pct: 0.01, performance_fee_assessed: "0", management_fee_assessed: "0",
     };
-    const { rerender } = render(<VaultCurrentCycle vault={vault} nowSecs={NOW} cycles={[
-      { ...record, expiry_ts: NOW - 7200, finished_at: NOW - 3600 }, record,
-    ]} />);
+    render(<VaultCurrentCycle vault={vault} nowSecs={NOW} cycles={[record]} />);
     expect(screen.getByRole("heading", { name: "Current cycle · 2" })).toBeTruthy();
-    const settlement = screen.getByText("Settlement").parentElement!;
-    expect(within(settlement).getByText("Pending")).toBeTruthy();
-    rerender(<VaultCurrentCycle vault={{ ...vault, phase: "settling" }} nowSecs={NOW + 7200} cycles={[record]} />);
-    expect(screen.queryByText(/left$/)).toBeNull();
-    expect(screen.getByText("0 / 1 settled")).toBeTruthy();
-    expect(screen.getByText("Settlement").closest("li")?.getAttribute("aria-current")).toBe("step");
-    rerender(<VaultCurrentCycle vault={vault} nowSecs={NOW} cycles={[{ ...record, finished_at: NOW }]} />);
-    expect(screen.queryByText("Pending")).toBeNull();
-    // A missing generation tag does not erase a recorded cycle boundary.
-    rerender(<VaultCurrentCycle vault={vault} nowSecs={NOW} cycles={[{ ...record, capital_generation: null, finished_at: NOW }]} />);
-    expect(screen.getByRole("heading", { name: "Current cycle · 2" })).toBeTruthy();
-    expect(screen.queryByText("Not recorded")).toBeNull();
-    // Settlement can retain the expiry across a capital-generation transition.
-    rerender(<VaultCurrentCycle vault={{ ...vault, capital_generation: 99, phase: "processing_capital" }} nowSecs={NOW} cycles={[{ ...record, finished_at: NOW }]} />);
-    expect(screen.queryByText("Not recorded")).toBeNull();
+    expect(screen.getByText("Trading")).toBeTruthy();
+    expect(screen.getByText(/2d 1h/)).toBeTruthy();
   });
 
-  it("shows an open staging slot between cycles", () => {
-    const vault = makeVault({
-      phase: "idle",
-      staging: { type: "staged", mint: USDC, from_leg: "second", amount: "1250000000", staged_at: NOW, generation: 3 },
-    });
-    render(<VaultCurrentCycle vault={vault} nowSecs={NOW} />);
-    expect(screen.getByText("Swap in progress")).toBeTruthy();
-    expect(screen.getByText("1,250 USDC from SOL")).toBeTruthy();
-  });
-
-  it("keeps the idle status visible and drops empty premium", () => {
-    const empty = { received: "0", paid: null };
-    const idle = makeVault({ phase: "idle", second_mint: USDC, second_decimals: 6, premium: [{ quote_mint: USDC, cycle: empty, generation: empty }] });
-    const { unmount } = render(<VaultCurrentCycle vault={idle} nowSecs={NOW} />);
-    expect(screen.getByRole("listitem", { current: "step" }).textContent).toContain("Idle");
-    expect(screen.getByText("Not started")).toBeTruthy();
-    expect(screen.queryByText("Premium this cycle")).toBeNull();
-    unmount();
-
-    const earned = { ...idle, premium: [{ quote_mint: USDC, cycle: empty, generation: { received: "5000000", paid: "0" } }] };
-    render(<VaultCurrentCycle vault={earned} nowSecs={NOW} />);
+  it("says only the phase when between cycles, with no countdown", () => {
+    render(<VaultCurrentCycle vault={makeVault({ phase: "idle" })} nowSecs={NOW} />);
+    expect(screen.getByRole("heading", { name: "Current cycle" })).toBeTruthy();
     expect(screen.getByText("Between cycles")).toBeTruthy();
-    expect(screen.queryByText("Ends")).toBeNull();
-    expect(screen.queryByText("Premium this cycle")).toBeNull();
-    expect(screen.getByText("5 USDC")).toBeTruthy();
+    expect(screen.queryByText(/left$/)).toBeNull();
   });
 });
 

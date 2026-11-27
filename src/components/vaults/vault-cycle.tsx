@@ -6,19 +6,16 @@ import { useMemo, useState } from "react";
 import { AppColumnFilter } from "@/components/app-ui/app-column-filter";
 import { useIsNarrow } from "@/components/app-ui/use-is-narrow";
 import { cn } from "@/lib/cn";
-import { formatCountdown, formatDate } from "@/lib/vaults/format";
+import { formatCountdown } from "@/lib/vaults/format";
 import {
   cyclePhaseLabel,
   EXPOSURE_TYPE,
   exposurePnlTotals,
   exposureRows,
   exposureSpots,
-  formatPremium,
-  mintUnits,
-  stagingText,
   type ExposureRow,
 } from "@/lib/vaults/presentation";
-import type { Vault, VaultCycle, VaultExposure, VaultPosition, VaultPremium, VaultPremiumFlow } from "@/lib/vaults/types";
+import type { Vault, VaultCycle, VaultExposure, VaultPosition } from "@/lib/vaults/types";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -29,37 +26,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function premiumText(vault: Vault, premium: readonly VaultPremium[], pick: (p: VaultPremium) => VaultPremiumFlow): string | null {
-  const parts = premium.flatMap((p) => {
-    const flow = pick(p);
-    const units = mintUnits(vault, p.quote_mint);
-    const empty = BigInt(flow.received) === 0n && (flow.paid === null || BigInt(flow.paid) === 0n);
-    return units && !empty ? [formatPremium(flow, units)] : [];
-  });
-  return parts.length ? parts.join(", ") : null;
-}
-
-type CycleStep = { label: string; detail: string };
-
-/** Where the cycle stands, as an index into the steps. After Requests the vault returns to Idle. */
-function cycleStage(vault: Vault, nowSecs: number) {
-  const expiry = Number(vault.active_expiry_ts);
-  if (vault.phase === "processing_capital") return 4;
-  if (vault.phase === "settling") return 3;
-  if (vault.phase === "idle" || expiry === 0) return 0;
-  return expiry > nowSecs ? 1 : 2;
-}
-
-function requestsText(vault: Vault) {
-  const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
-  const [deposits, withdrawals] = [Number(vault.pending_deposit_count), Number(vault.pending_withdraw_count)];
-  if (deposits + withdrawals === 0) return "None queued";
-  return [deposits ? count(deposits, "deposit") : null, withdrawals ? count(withdrawals, "withdrawal") : null]
-    .filter(Boolean)
-    .join(", ");
-}
-
-/** Recorded cycle boundaries, with a countdown only to the vault's active expiry. */
+/** A vault's cycle, said simply: its number, phase and the countdown to expiry. */
 export function VaultCurrentCycle({ vault, cycles = [], nowSecs }: { vault: Vault; cycles?: readonly VaultCycle[]; nowSecs: number }) {
   const expiry = Number(vault.active_expiry_ts);
   const running = vault.phase === "active" && expiry > 0;
@@ -69,28 +36,6 @@ export function VaultCurrentCycle({ vault, cycles = [], nowSecs }: { vault: Vaul
       Number(b.capital_generation === vault.capital_generation) - Number(a.capital_generation === vault.capital_generation)
       || Number(b.started_at) - Number(a.started_at),
     )[0];
-  const startedAt = current ? Number(current.started_at) : null;
-  const settledAt = current?.finished_at != null ? Number(current.finished_at) : null;
-  const previousEnd = Math.max(0, ...cycles.filter((c) => c !== current).map((c) => Number(c.finished_at ?? 0))) || null;
-  const premium = vault.premium ?? [];
-  const cycle = premiumText(vault, premium, (p) => p.cycle);
-  const total = premiumText(vault, premium, (p) => p.generation);
-  const since = vault.generation_started_at;
-  const staged = stagingText(vault);
-  const stage = cycleStage(vault, nowSecs);
-  const settling = stage >= 3 && current ? `${current.positions_settled} / ${current.positions_opened} settled` : "Pending";
-  const steps: CycleStep[] = [
-    { label: "Idle", detail: stage === 0 ? `Deposits ${vault.accepting_deposits ? "open" : "closed"}` : previousEnd !== null ? formatDate(previousEnd, { time: true }) : "First cycle" },
-    {
-      label: "Trading",
-      detail: [startedAt !== null ? formatDate(startedAt, { time: true }) : stage === 0 ? "Not started" : "Not recorded", stage === 1 ? `${vault.open_positions} open` : null]
-        .filter(Boolean)
-        .join(" · "),
-    },
-    { label: "Expiry", detail: expiry > 0 ? formatDate(expiry, { time: true }) : "Not set" },
-    { label: "Settlement", detail: settledAt !== null ? formatDate(settledAt, { time: true }) : settling },
-    { label: "Requests", detail: requestsText(vault) },
-  ];
 
   return (
     <section aria-label="Current cycle" className="border border-t-0 border-bg-border bg-bg-primary p-5 max-md:p-4">
@@ -107,31 +52,6 @@ export function VaultCurrentCycle({ vault, cycles = [], nowSecs }: { vault: Vaul
           ) : null}
         </div>
       </div>
-      <ol aria-label="Cycle stages" className="mt-4 grid grid-cols-1 sm:grid-cols-5">
-        {steps.map((step, index) => (
-          <li
-            key={step.label}
-            aria-current={index === stage ? "step" : undefined}
-            className="relative border-l border-bg-border pb-4 pl-4 last:pb-0 sm:border-l-0 sm:border-t sm:pb-0 sm:pl-0 sm:pr-4 sm:pt-3"
-          >
-            <span aria-hidden="true" className={cn(
-              "absolute -left-1 top-1 h-2 w-2 border sm:-top-1 sm:left-0",
-              index === stage && "border-accent-primary bg-accent-primary",
-              index < stage && "border-accent-primary/40 bg-accent-primary/40",
-              index > stage && "border-bg-border bg-bg-primary",
-            )} />
-            <div className={cn("font-mono text-sm", index === stage ? "text-content-primary" : "text-content-secondary")}>{step.label}</div>
-            <div className="mt-1 font-mono text-[14px] leading-[1.45] tabular-nums text-content-secondary">{step.detail}</div>
-          </li>
-        ))}
-      </ol>
-      {cycle || total || staged ? (
-        <dl className="mt-3 grid gap-x-6 font-mono text-sm leading-[1.3] tracking-[-0.28px] md:grid-cols-2">
-          {cycle ? <Row label="Premium this cycle">{cycle}</Row> : null}
-          {total ? <Row label={since ? `Premium since ${formatDate(Number(since))}` : "Premium"}>{total}</Row> : null}
-          {staged ? <Row label="Swap in progress">{staged}</Row> : null}
-        </dl>
-      ) : null}
     </section>
   );
 }

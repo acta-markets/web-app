@@ -30,7 +30,7 @@ export function VaultMetrics({ vault, symbol, stakingAprPct, assumedApr }: { vau
         {metrics.map((metric, i) => (
           <div key={i} className="min-w-0">
             {/* the landing card's pairing: a small label over a figure in the heading face.
-                On a phone "Projected APY" takes two lines; every label keeps that height so the three figures share a line. */}
+                On a phone the APY label can take two lines; every label keeps that height so the three figures share a line. */}
             <dt className="font-mono text-[14px] font-medium leading-[1.3] text-content-secondary max-md:min-h-[2.6em]">{metric.label}</dt>
             <dd
               className={cn("mt-2 break-words font-space font-medium tabular-nums max-md:text-2xl", metric.tone ?? "text-content-primary")}
