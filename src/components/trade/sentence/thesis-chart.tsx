@@ -921,7 +921,7 @@ export function ThesisChart({
         pointerId: e.pointerId,
         anchorY: e.clientY,
         index,
-        grabY: paneTop != null && lineY != null ? e.clientY - paneTop - lineY : null,
+        grabY: 0,
       };
       setGrabbed(true);
     },
@@ -1685,42 +1685,7 @@ export function ThesisChart({
         ) : null}
 
         {/* "your price": a draggable handle at the right end of the strike line, where the goal's is */}
-        {geometry && tops && strikesAsc.length > 1 ? (
-          <div
-            role="slider"
-            aria-label="Strike"
-            aria-orientation="vertical"
-            aria-valuemin={strikesAsc[0].strike}
-            aria-valuemax={strikesAsc[strikesAsc.length - 1].strike}
-            aria-valuenow={strike}
-            aria-valuetext={formatStrikePrice(strike)}
-            tabIndex={0}
-            title="Drag to change the strike"
-            data-testid="chart-strike"
-            className={cn(HANDLE, "-translate-x-full")}
-            style={{ left: geometry.paneWidth - 6, top: tops.strike, ...grabStyle }}
-            onPointerDown={onDragPointerDown}
-            onPointerMove={onDragPointerMove}
-            onPointerUp={onDragPointerEnd}
-            onPointerCancel={onDragPointerEnd}
-            onLostPointerCapture={onDragPointerEnd}
-            onKeyDown={onDragKeyDown}
-          >
-            <span className="flex items-center gap-1" aria-hidden="true">
-              <Chevron kind="switch" className={HANDLE_ICON} />
-              {/* an open hand at rest, a closed one while held */}
-              {grabbed ? (
-                <Grab data-testid="strike-hand" data-grabbed="true" className={cn(HANDLE_ICON, "max-md:hidden")} />
-              ) : (
-                <Hand data-testid="strike-hand" data-grabbed="false" className={cn(HANDLE_ICON, "max-md:hidden")} />
-              )}
-            </span>
-            <span className="flex items-baseline justify-between gap-3" style={{ minWidth: `${handleMinCh}ch` }}>
-              <span className="max-md:hidden">STRIKE</span>
-              <span className="tabular-nums">{strikeShown}</span>
-            </span>
-          </div>
-        ) : geometry ? (
+        {geometry && tops && strikesAsc.length <= 1 ? (
           <span
             className={cn(
               "pointer-events-none absolute z-[16] -translate-y-1/2 whitespace-nowrap border border-accent-primary/30 bg-accent-primary/20 px-3 py-2 font-mono text-[12px] tracking-[-0.02em] font-semibold leading-[1.2] text-content-primary shadow-[0_2px_12px_rgba(0,0,0,0.7)] backdrop-blur-[4px]",
@@ -1748,12 +1713,48 @@ export function ThesisChart({
         {/* right axis: price + PnL at each tick, sharing the price's own line. Not on a phone:
             there the plot takes the full width, the strike handle and the NOW tag carry the two
             prices that matter, and the outcomes are spelled out in the strip under the chart. */}
-        {rightAxis.ticks.length > 0 ? (
+        {rightAxis.ticks.length > 0 || strikesAsc.length > 1 ? (
           <div
             data-testid="chart-price-rail"
-            className="relative w-16 shrink-0 border-l border-bg-border max-md:hidden"
-            aria-hidden="true"
+            className="relative w-[120px] shrink-0 border-l border-bg-border max-md:hidden"
           >
+            {/* the strike as a fixed knot: dragging steps the strike while the knot stays put and the line scrolls to it */}
+            {geometry && tops && strikesAsc.length > 1 ? (
+          <div
+            role="slider"
+            aria-label="Strike"
+            aria-orientation="vertical"
+            aria-valuemin={strikesAsc[0].strike}
+            aria-valuemax={strikesAsc[strikesAsc.length - 1].strike}
+            aria-valuenow={strike}
+            aria-valuetext={formatStrikePrice(strike)}
+            tabIndex={0}
+            title="Drag to change the strike"
+            data-testid="chart-strike"
+            className={cn(HANDLE)}
+            style={{ top: geometry.paneHeight / 2, right: 6, ...grabStyle }}
+            onPointerDown={onDragPointerDown}
+            onPointerMove={onDragPointerMove}
+            onPointerUp={onDragPointerEnd}
+            onPointerCancel={onDragPointerEnd}
+            onLostPointerCapture={onDragPointerEnd}
+            onKeyDown={onDragKeyDown}
+          >
+            <span className="flex items-center gap-1" aria-hidden="true">
+              <Chevron kind="switch" className={HANDLE_ICON} />
+              {/* an open hand at rest, a closed one while held */}
+              {grabbed ? (
+                <Grab data-testid="strike-hand" data-grabbed="true" className={cn(HANDLE_ICON, "max-md:hidden")} />
+              ) : (
+                <Hand data-testid="strike-hand" data-grabbed="false" className={cn(HANDLE_ICON, "max-md:hidden")} />
+              )}
+            </span>
+            <span className="flex items-baseline justify-between gap-3" style={{ minWidth: `${handleMinCh}ch` }}>
+              <span className="max-md:hidden">STRIKE</span>
+              <span className="tabular-nums">{strikeShown}</span>
+            </span>
+          </div>
+            ) : null}
             {rightAxis.ticks.map((t, i) => (
               <div
                 key={i}
