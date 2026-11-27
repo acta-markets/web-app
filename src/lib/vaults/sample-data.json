@@ -2483,16 +2483,16 @@
         "safety": "normal",
         "capabilities": 0,
         "active_expiry_ts": 1792324800,
-        "open_positions": 2,
-        "total_shares": "58600000000",
+        "open_positions": 6,
+        "total_shares": "96865681546",
         "share_price": "1022944333",
-        "equity": "60000000000",
+        "equity": "99088200000",
         "capital_generation": 0,
         "accepting_deposits": true,
         "equity_computed": false,
-        "pending_deposit_count": 1,
+        "pending_deposit_count": 0,
         "pending_withdraw_count": 0,
-        "pending_deposit_amount": "2500000000",
+        "pending_deposit_amount": "0",
         "pending_withdraw_shares": "0",
         "performance_fee_bps": 1000,
         "management_fee_bps": 200,
@@ -2507,7 +2507,7 @@
         "capital_fallback_delay_seconds": 43200,
         "deposit_window_set_at": null,
         "policy": {
-          "max_open_positions": 4,
+          "max_open_positions": 12,
           "max_rebalance_drift_bps": 100,
           "min_main_liquidity_bps": 1000
         },
@@ -2520,17 +2520,17 @@
         },
         "created_at": 1784311200,
         "generation_started_at": 1784484000,
-        "tvl_usd_1e9": 11100000000000,
+        "tvl_usd_1e9": 11160303966000,
         "price_published_at": 1791806380,
         "premium": [
           {
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "cycle": {
-              "received": "0",
+              "received": "11260000",
               "paid": "0"
             },
             "generation": {
-              "received": "8912400000",
+              "received": "136260000",
               "paid": "0"
             }
           }
@@ -2576,6 +2576,22 @@
         }
       },
       "cycles": [
+        {
+          "cycle_number": 12,
+          "capital_generation": 0,
+          "expiry_ts": 1792324800,
+          "started_at": 1791799200,
+          "finished_at": null,
+          "share_price_start": "1022944333",
+          "share_price_end": "1022944333",
+          "equity_start": "99088200000",
+          "equity_end": "99088200000",
+          "positions_opened": 6,
+          "positions_settled": 0,
+          "return_pct": 0.0,
+          "performance_fee_assessed": "0",
+          "management_fee_assessed": "0"
+        },
         {
           "cycle_number": 11,
           "capital_generation": 0,
@@ -2773,10 +2789,7 @@
         "shareBalance": "12000000000",
         "mainTokenBalance": "8000000000",
         "nativeLamports": null,
-        "depositRequest": {
-          "amount": "2500000000",
-          "createdAt": 1791802800
-        },
+        "depositRequest": null,
         "withdrawRequest": null,
         "history": [
           {
@@ -2825,40 +2838,116 @@
         "as_of": 1791806396,
         "positions": [
           {
-            "position_pda": "LstCa11Wr1ter01111111111111111111111111111111111",
+            "position_pda": "LstCa11WriterA111111111111111111111111111111",
             "market_pda": "1111111111111111111111111111ret1rW11aCadvN",
             "position_type": "covered_call",
             "role": "writer",
             "status": "funded",
-            "strike": "220000000000",
-            "quantity": "3000000000",
+            "strike": "113000000000",
+            "quantity": "1000000000",
             "expiry_ts": 1792324800,
-            "underlying_mint": "So11111111111111111111111111111111111111112",
+            "underlying_mint": "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh",
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "underlying_decimals": 9,
             "quote_decimals": 6,
-            "spot": "200000000000",
+            "spot": "112630000000",
             "spot_published_at": 1791806396,
-            "distance_pct": 5.323211,
+            "distance_pct": 0.3285,
             "itm": false,
             "intrinsic": "0"
           },
           {
-            "position_pda": "LstCa11Wr1ter11111111111111111111111111111111111",
+            "position_pda": "LstCa11WriterB111111111111111111111111111111",
             "market_pda": "1111111111111111111111111111ret1rW11aCadvN",
             "position_type": "covered_call",
             "role": "writer",
             "status": "funded",
-            "strike": "180000000000",
-            "quantity": "1500000000",
+            "strike": "118000000000",
+            "quantity": "1000000000",
             "expiry_ts": 1792324800,
-            "underlying_mint": "So11111111111111111111111111111111111111112",
+            "underlying_mint": "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh",
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
             "underlying_decimals": 9,
             "quote_decimals": 6,
-            "spot": "200000000000",
+            "spot": "112630000000",
             "spot_published_at": 1791806396,
-            "distance_pct": 5.323211,
+            "distance_pct": 4.7678,
+            "itm": false,
+            "intrinsic": "0"
+          },
+          {
+            "position_pda": "LstPutWriterA1111111111111111111111111111111",
+            "market_pda": "1111111111111111111111111111ret1rW11aCadvN",
+            "position_type": "cash_secured_put",
+            "role": "writer",
+            "status": "funded",
+            "strike": "113000000000",
+            "quantity": "990000000",
+            "expiry_ts": 1792324800,
+            "underlying_mint": "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": "112630000000",
+            "spot_published_at": 1791806396,
+            "distance_pct": 0.3285,
+            "itm": true,
+            "intrinsic": "-366300"
+          },
+          {
+            "position_pda": "LstPutWriterB1111111111111111111111111111111",
+            "market_pda": "1111111111111111111111111111ret1rW11aCadvN",
+            "position_type": "cash_secured_put",
+            "role": "writer",
+            "status": "funded",
+            "strike": "112000000000",
+            "quantity": "990000000",
+            "expiry_ts": 1792324800,
+            "underlying_mint": "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": "112630000000",
+            "spot_published_at": 1791806396,
+            "distance_pct": 0.5594,
+            "itm": false,
+            "intrinsic": "0"
+          },
+          {
+            "position_pda": "LstPutWriterC1111111111111111111111111111111",
+            "market_pda": "1111111111111111111111111111ret1rW11aCadvN",
+            "position_type": "cash_put",
+            "role": "writer",
+            "status": "funded",
+            "strike": "112000000000",
+            "quantity": "870000000",
+            "expiry_ts": 1792324800,
+            "underlying_mint": "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": "112630000000",
+            "spot_published_at": 1791806396,
+            "distance_pct": 0.5594,
+            "itm": false,
+            "intrinsic": "0"
+          },
+          {
+            "position_pda": "LstPutWriterD1111111111111111111111111111111",
+            "market_pda": "1111111111111111111111111111ret1rW11aCadvN",
+            "position_type": "cash_put",
+            "role": "writer",
+            "status": "funded",
+            "strike": "106000000000",
+            "quantity": "870000000",
+            "expiry_ts": 1792324800,
+            "underlying_mint": "Ce29Bbogz6ZkpMoyokvz75Up9Y2xZquKPtp2NQhf2wPh",
+            "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+            "underlying_decimals": 9,
+            "quote_decimals": 6,
+            "spot": "112630000000",
+            "spot_published_at": 1791806396,
+            "distance_pct": 5.8865,
             "itm": false,
             "intrinsic": "0"
           }
@@ -2866,8 +2955,8 @@
         "totals": [
           {
             "quote_mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-            "notional_at_strike": "49200000000",
-            "outstanding_intrinsic": "-472200000"
+            "notional_at_strike": "643410000",
+            "outstanding_intrinsic": "-366300"
           }
         ]
       }

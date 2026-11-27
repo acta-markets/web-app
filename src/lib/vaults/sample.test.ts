@@ -103,11 +103,27 @@ describe("sample-data.json", () => {
     expect(lst).toBe("CSzSZKBvA41sv1Ek2bHLZNaPgvmLnXEGyXos3tLeDZWT");
     const served = data.vaults.map((v) => ({ vault: v, meta: resolveVaultMeta(v, data.meta) }));
     expect(resolveLineup(served, { network: "devnet", lineup: lineupFor("p0") })[0].bound?.vault.vault_pda).toBe(lst);
-    // a position with a pending deposit, so the deposit flow has every state to show
+    // a position with shares and history and nothing pending, so the deposit form is open to type into
     const position = data.depositors[lst];
     expect(position.shareBalance).toBeGreaterThan(0n);
-    expect(position.depositRequest?.amount).toBeGreaterThan(0n);
+    expect(position.depositRequest).toBeNull();
     expect(data.history[lst].length).toBeGreaterThan(0);
+  });
+
+  it("strikes the LST fixture's positions against its own spot and prices its TVL with the same number", () => {
+    const lst = data.keys.lst;
+    const vault = data.vaults.find((v) => v.vault_pda === lst)!;
+    const legs = data.exposure[lst].positions;
+    const spot = Number(legs[0].spot) / 1e9;
+    for (const leg of legs) {
+      const strike = Number(leg.strike) / 1e9;
+      expect(leg.underlying_mint).toBe(vault.main_mint);
+      expect(leg.distance_pct).toBeCloseTo((Math.abs(strike - spot) / spot) * 100, 2);
+      expect(leg.itm).toBe((leg.position_type === "covered_call") === (spot > strike));
+    }
+    expect(Number(vault.tvl_usd_1e9) / Number(vault.equity)).toBeCloseTo(spot, 2);
+    expect(vault.open_positions).toBe(legs.length);
+    expect(data.cycles[lst].filter((c) => c.finished_at == null)).toHaveLength(1);
   });
 
   it("adds jitoSOL's 5% staking to its premium APY", () => {
