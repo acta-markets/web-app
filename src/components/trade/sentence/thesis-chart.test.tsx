@@ -241,15 +241,15 @@ describe("thesis chart", () => {
       expect(onStrike).toHaveBeenCalledTimes(2);
     });
 
-    it("does not re-fit the chart when another strike on offer is chosen", async () => {
+    it("re-fits the chart when another strike is chosen, so the strike stays centred", async () => {
       mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
       const { rerender } = render(<ThesisChart {...props} direction="above" strikes={strikes} strike={95} />);
       await screen.findByRole("slider", { name: "Strike" });
       await waitFor(() => expect(setData.mock.calls.some(([data]) => data.length > 1)).toBe(true));
       setData.mockClear();
+      // the domain is centred on the strike, so changing it scrolls the chart (a re-fit)
       rerender(<ThesisChart {...props} direction="above" strikes={strikes.map((s) => ({ ...s }))} strike={105} />);
-      rerender(<ThesisChart {...props} direction="above" strikes={strikes.map((s) => ({ ...s }))} strike={90} />);
-      expect(setData).not.toHaveBeenCalled();
+      expect(setData).toHaveBeenCalled();
     });
 
     it("lets go when the release never reaches the page", async () => {
