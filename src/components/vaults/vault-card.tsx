@@ -4,12 +4,11 @@ import Link from "next/link";
 import { AppButton, AppButtonLink } from "@/components/app-ui/app-button";
 import { LandingBar, LandingButton } from "@/components/landing/landing-primitives";
 import { LANDING_VAULTS } from "@/lib/landing-vaults";
-import { InfoTooltip } from "@/components/app-ui/info-tooltip";
-import { ASSUMED_APR_NOTE, LINEUP_ACCESS_URL, LINEUP_TAGLINE, type LineupEntry } from "@/lib/vaults/lineup";
+import { LINEUP_ACCESS_URL, LINEUP_TAGLINE, type LineupEntry } from "@/lib/vaults/lineup";
 import { cn } from "@/lib/cn";
 import { formatPercent, formatUsd } from "@/lib/vaults/format";
 import { CuratorLogo } from "./curator-logo";
-import { formatVaultEquity, primaryVaultAction, vaultApr, vaultStatus, vaultTvlUsd, type AprView, type VaultModalTab } from "@/lib/vaults/presentation";
+import { assumedAprView, formatVaultEquity, primaryVaultAction, vaultApr, vaultStatus, vaultTvlUsd, type AprView, type VaultModalTab } from "@/lib/vaults/presentation";
 import type { ResolvedVaultMeta } from "@/lib/vaults/registry";
 import type { Vault } from "@/lib/vaults/types";
 import { AprLabel } from "./vault-apr";
@@ -32,6 +31,48 @@ const CARD_BUTTON = "h-auto px-4 py-2.5 text-sm";
 /** "staking + premium": the parts the rate adds up, in the landing card's words. */
 function aprLegs(apr: AprView): string {
   return apr.sources.map((source) => source.label.toLowerCase()).join(" + ");
+}
+
+/**
+ * The rate as the landing card sets it: the figure set large with its label and (i) beside it,
+ * the parts it adds up to in words under it, then those parts as bars. A live vault and a
+ * lineup entry with no vault yet both draw theirs through here, so the two cannot drift.
+ */
+function RateBlock({ apr }: { apr: AprView }) {
+  // bars only for a rate that adds up to something: a figure, above zero
+  const total = apr.pct != null && apr.pct > 0 ? apr.pct : null;
+  const bars = total === null ? [] : apr.sources.filter((source) => source.pct > 0);
+  // an assumed rate carries its tilde into the bar captions, so no part reads as measured
+  const tilde = apr.assumed ? "~" : "";
+  return (
+    <div className="mt-6">
+      <div className="flex items-start gap-1.5">
+        <span
+          className={cn(
+            "font-space font-medium tabular-nums",
+            apr.pct != null && apr.pct < 0 ? "text-additional-red-primary" : apr.muted ? "text-content-secondary" : "text-content-primary",
+          )}
+          style={{ fontSize: "clamp(40px, 6vw, 54px)", lineHeight: 0.95, letterSpacing: "-0.03em" }}
+        >
+          {apr.value}
+        </span>
+        <span className={cn(EYEBROW, "inline-flex items-center gap-1 whitespace-nowrap")}>
+          <AprLabel apr={apr} className={ABOVE_LINK} />
+        </span>
+      </div>
+      {/* under a figure, the parts it is made of; without one, why there is none yet */}
+      <p className="mt-2.5 font-mono text-[14px] leading-[1.35] tracking-[-0.02em] text-content-secondary">
+        {apr.pct != null && apr.sources.length > 0 ? aprLegs(apr) : apr.note}
+      </p>
+      {bars.length > 0 && total !== null ? (
+        <div className="mt-5 flex flex-col gap-4">
+          {bars.map((source) => (
+            <LandingBar key={source.label} value={source.pct} max={total} color={BAR_COLOR[source.label]} caption={`${source.label} ${tilde}${formatPercent(source.pct)}`} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /**
@@ -60,14 +101,11 @@ export function VaultCard({
   nowSecs: number;
   onOpen: (pda: string, tab: VaultModalTab) => void;
 }) {
-  const apr = vaultApr(vault.performance, meta.stakingAprPct);
+  const apr = vaultApr(vault.performance, meta.stakingAprPct, meta.assumedApr);
   const action = primaryVaultAction(vault, nowSecs);
   const pair = meta.legs.join(" / ");
   const usd = vaultTvlUsd(vault);
   const equity = `${formatVaultEquity(vault)} ${meta.assetSymbol}`;
-  // bars only for a rate that adds up to something: a figure, above zero
-  const total = apr.pct != null && apr.pct > 0 ? apr.pct : null;
-  const bars = total === null ? [] : apr.sources.filter((source) => source.pct > 0);
 
   return (
     <article
@@ -113,33 +151,7 @@ export function VaultCard({
           {meta.tagline ?? `Deposit ${meta.assetSymbol}`}
         </p>
 
-        <div className="mt-6">
-          <div className="flex items-start gap-1.5">
-            <span
-              className={cn(
-                "font-space font-medium tabular-nums",
-                apr.pct != null && apr.pct < 0 ? "text-additional-red-primary" : apr.muted ? "text-content-secondary" : "text-content-primary",
-              )}
-              style={{ fontSize: "clamp(40px, 6vw, 54px)", lineHeight: 0.95, letterSpacing: "-0.03em" }}
-            >
-              {apr.value}
-            </span>
-            <span className={cn(EYEBROW, "whitespace-nowrap")}>
-              <AprLabel apr={apr} className={ABOVE_LINK} />
-            </span>
-          </div>
-          {/* under a figure, the parts it is made of; without one, why there is none yet */}
-          <p className="mt-2.5 font-mono text-[14px] leading-[1.35] tracking-[-0.02em] text-content-secondary">
-            {apr.pct != null && apr.sources.length > 0 ? aprLegs(apr) : apr.note}
-          </p>
-          {bars.length > 0 && total !== null ? (
-            <div className="mt-5 flex flex-col gap-4">
-              {bars.map((source) => (
-                <LandingBar key={source.label} value={source.pct} max={total} color={BAR_COLOR[source.label]} caption={`${source.label} ${formatPercent(source.pct)}`} />
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <RateBlock apr={apr} />
       </div>
 
       <div>
@@ -191,9 +203,6 @@ export function VaultCard({
  * there is no TVL, no curator and no status, because there is no vault to read them from.
  */
 export function VaultLineupCard({ entry }: { entry: LineupEntry }) {
-  const apr = entry.assumedApr;
-  const total = apr ? apr.staking + apr.premium : null;
-  const legs = apr ? [apr.staking > 0 ? "staking" : null, apr.premium > 0 ? "premium" : null].filter(Boolean).join(" + ") : "";
   const open = entry.state === "open";
   return (
     <article aria-label={entry.asset} className={cn("flex h-full flex-col justify-between gap-8 p-7 max-md:p-5", !open && "opacity-[0.55]")}>
@@ -210,24 +219,7 @@ export function VaultLineupCard({ entry }: { entry: LineupEntry }) {
         </div>
         <p className="mt-2.5 min-h-[2.7em] font-mono text-[14px] leading-[1.35] tracking-[-0.02em] text-content-secondary">{LINEUP_TAGLINE}</p>
 
-        {apr && total ? (
-          <div className="mt-6">
-            <div className="flex items-start gap-1.5">
-              <span className="font-space font-medium tabular-nums text-content-primary" style={{ fontSize: "clamp(40px, 6vw, 54px)", lineHeight: 0.95, letterSpacing: "-0.03em" }}>
-                ~{total}%
-              </span>
-              <span className={cn(EYEBROW, "inline-flex items-center gap-1 whitespace-nowrap")}>
-                APY
-                <InfoTooltip label="Where this APY comes from">{ASSUMED_APR_NOTE}</InfoTooltip>
-              </span>
-            </div>
-            <p className="mt-2.5 font-mono text-[14px] leading-[1.35] tracking-[-0.02em] text-content-secondary">{legs}</p>
-            <div className="mt-5 flex flex-col gap-4">
-              {apr.staking > 0 ? <LandingBar value={apr.staking} max={total} color={BAR_COLOR.Staking} caption={`Staking rewards ~${apr.staking}%`} /> : null}
-              {apr.premium > 0 ? <LandingBar value={apr.premium} max={total} color={BAR_COLOR.Premium} caption={`Premium ~${apr.premium}%`} /> : null}
-            </div>
-          </div>
-        ) : null}
+        {entry.assumedApr ? <RateBlock apr={assumedAprView(entry.assumedApr)} /> : null}
       </div>
       {open ? (
         <div>

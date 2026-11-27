@@ -82,13 +82,14 @@ describe("vaultApr", () => {
     expect(vaultApr(makePerformance(), 5)).toMatchObject({ value: "New", sources: [{ label: "Staking", pct: 5 }] });
   });
 
-  it("stands the lineup's assumed rate in, marked as an assumption, while the vault has no figure", () => {
+  it("stands the lineup's assumed rate in, marked as an assumption, while the backend serves no performance", () => {
     const assumed = { staking: 7, premium: 11 };
     const stood = { value: "~18%", pct: 18, muted: false, assumed: true, note: ASSUMED_APR_NOTE };
-    // nothing served at all, and a young vault with no completed cycle
+    // nothing served at all, or a vault the backend cannot cover
     expect(vaultApr(null, 0, assumed)).toEqual({ ...stood, sources: [{ label: "Staking", pct: 7 }, { label: "Premium", pct: 11 }] });
-    expect(vaultApr(makePerformance(), 0, assumed)).toMatchObject({ value: "~18%", assumed: true });
-    // a figure still wins, with the lineup's staking part added
+    expect(vaultApr(makePerformance({ covered: false }), 0, assumed)).toMatchObject({ value: "~18%", assumed: true });
+    // a vault the backend covers keeps its own word for its age, and a figure still wins with the lineup's staking part added
+    expect(vaultApr(makePerformance(), 0, assumed)).toMatchObject({ value: "New" });
     expect(vaultApr(makePerformance({ apy_30d: 12 }), 7, assumed)).toMatchObject({ value: "19.00%", pct: 19 });
     expect(vaultApr(makePerformance({ apy_30d: 12 }), 7, assumed)?.assumed).toBeUndefined();
     // without an assumption nothing changes

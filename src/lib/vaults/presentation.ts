@@ -52,8 +52,8 @@ export function assumedAprView(apr: { staking: number; premium: number }): AprVi
 /**
  * The one projected APY every surface shows: the backend's 30-day figure plus any
  * staking yield of the deposit asset. Under 30 days it annualizes the history so
- * far, and reads "New" under 20 days. Where there is no figure at all, a lineup's
- * assumed rate stands in, marked as an assumption (`assumedAprView`); a vault with
+ * far, and reads "New" under 20 days. Where the backend serves no performance at all, a
+ * lineup's assumed rate stands in, marked as an assumption (`assumedAprView`); a vault with
  * no assumption and no history the backend can cover reads as empty.
  */
 export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0, assumed?: { staking: number; premium: number }): AprView {
@@ -74,8 +74,6 @@ export function vaultApr(performance: VaultPerformance | null, stakingAprPct = 0
   if (!young) return assumed ? assumedAprView(assumed) : { value: NONE, pct: null, muted: true, sources: [], note: "Not available." };
   const days = all === null ? 0 : (Number(all.window_end_at) - Number(all.window_start_at)) / 86_400;
   if (all === null || days < PROJECTED_MIN_DAYS) {
-    // no completed cycle at all: the assumption stands in; a short but real history still reads New
-    if (all === null && assumed) return assumedAprView(assumed);
     return { value: "New", pct: null, muted: true, sources: staking, note: "Projected APY shows after 20 days of history." };
   }
   const projected = projectedApy(all.return_pct, days);

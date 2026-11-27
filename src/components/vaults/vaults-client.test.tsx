@@ -92,14 +92,14 @@ describe("VaultsClient", () => {
     const jito = card("jitoSOL");
     expect(jito.getByText("~18%")).toBeTruthy();
     expect(jito.getByText("staking + premium")).toBeTruthy();
-    expect(jito.getByText("Staking rewards ~7%")).toBeTruthy();
-    expect(jito.getByText("Premium ~11%")).toBeTruthy();
+    expect(jito.getByText("Staking ~7.00%")).toBeTruthy();
+    expect(jito.getByText("Premium ~11.00%")).toBeTruthy();
     expect(card("USDC").getByText("~20%")).toBeTruthy();
     expect(card("TSLA").getByText("~25%")).toBeTruthy();
-    expect(card("TSLA").getByText("Premium ~25%")).toBeTruthy();
+    expect(card("TSLA").getByText("Premium ~25.00%")).toBeTruthy();
     // an assumed rate is never passed off as a live one
     await user.click(card("TSLA").getByRole("button", { name: "Where this APY comes from" }));
-    expect(screen.getByRole("tooltip").textContent).toBe("An estimate from backtesting. It is not this vault's live result and not a promise.");
+    expect(screen.getByRole("tooltip").textContent).toContain("An estimate from backtesting. It is not this vault's live result and not a promise.");
     // no vault behind it: no TVL, no curator, no status, and Deposit leads where the landing page's does
     expect(card("TSLA").queryByText("TVL")).toBeNull();
     expect(card("TSLA").queryByText("Accepting deposits")).toBeNull();
@@ -176,7 +176,7 @@ describe("VaultsClient", () => {
     const tsla = card("TSLA");
     expect(tsla.getByText("~70%")).toBeTruthy();
     expect(tsla.getByText("premium")).toBeTruthy();
-    expect(tsla.getByText("Premium ~70%")).toBeTruthy();
+    expect(tsla.getByText("Premium ~70.00%")).toBeTruthy();
     // still not open: the rate does not bring a button with it
     expect(tsla.queryByRole("link", { name: "Deposit" })).toBeNull();
   });
@@ -237,5 +237,56 @@ describe("VaultsClient", () => {
     show();
     expect(screen.getByRole("status").textContent).toContain("Couldn't refresh");
     expect(cardNames()).toEqual(["jitoSOL", "USDC", "TSLA", "Your vaults"]);
+  });
+
+  it("a bound vault with no performance yet shows the lineup's assumed rate, marked as an assumption, and one logo", () => {
+    const lst = "LSTvault1111111111111111111111111111111111";
+    state.vaults = {
+      ...state.vaults,
+      data: [makeVault({ vault_pda: lst, main_mint: getTokenMint("LST")!, second_mint: getTokenMint("JITOSOL")!, phase: "active", active_expiry_ts: NOW + 86_400, accepting_deposits: true, performance: null })],
+    };
+    show([{ id: "lst", asset: "LST", type: "Majors", pda: { devnet: lst, mainnet: lst }, state: "open", assumedApr: { staking: 7, premium: 11 } }]);
+    const cell = card("LST");
+    expect(cell.getByText("~18%")).toBeTruthy();
+    expect(cell.getByText("APY")).toBeTruthy();
+    expect(cell.queryByText("Projected APY")).toBeNull();
+    expect(cell.queryByText("—")).toBeNull();
+    expect(cell.getByText("staking + premium")).toBeTruthy();
+    expect(cell.getByText("Staking ~7.00%")).toBeTruthy();
+    expect(cell.getByText("Premium ~11.00%")).toBeTruthy();
+    // it is live: TVL, status and a Deposit button that opens the vault, as for any bound card
+    expect(cell.getByText("TVL")).toBeTruthy();
+    expect(cell.getByText("Accepting deposits")).toBeTruthy();
+    expect(cell.getByRole("button", { name: "Deposit" })).toBeTruthy();
+    // the lineup asset's logo alone, not the vault's second leg
+    expect(cell.getByLabelText("Deposit LST")).toBeTruthy();
+    expect(cell.queryByLabelText("jitoSOL")).toBeNull();
+    expect(cell.getByRole("link", { name: "Details" }).getAttribute("href")).toBe(`/earn/${lst}`);
+  });
+
+  it("once the backend serves a figure, the card shows it with the lineup's staking part, and no tilde", () => {
+    const lst = "LSTvault1111111111111111111111111111111111";
+    state.vaults = {
+      ...state.vaults,
+      data: [makeVault({ vault_pda: lst, main_mint: getTokenMint("LST")!, phase: "active", active_expiry_ts: NOW + 86_400, accepting_deposits: true, performance: makePerformance({ apy_30d: 12 }) })],
+    };
+    show([{ id: "lst", asset: "LST", type: "Majors", pda: { devnet: lst, mainnet: lst }, state: "open", assumedApr: { staking: 7, premium: 11 } }]);
+    const cell = card("LST");
+    expect(cell.getByText("19.00%")).toBeTruthy();
+    expect(cell.getByText("Projected APY")).toBeTruthy();
+    expect(cell.queryByText("~18%")).toBeNull();
+    expect(cell.getByText("Staking 7.00%")).toBeTruthy();
+    expect(cell.getByText("Premium 12.00%")).toBeTruthy();
+  });
+
+  it("keeps saying Deposit for a bound vault between cycles, where the form says when deposits open", async () => {
+    const user = userEvent.setup();
+    state.vaults = {
+      ...state.vaults,
+      data: SAMPLE.vaults.map((v) => (v.vault_pda === SAMPLE.keys.usdc ? { ...v, phase: "idle" as const, accepting_deposits: false } : v)),
+    };
+    show();
+    await user.click(card("USDC").getByRole("button", { name: "Deposit" }));
+    expect(screen.getByTestId("vault-modal").getAttribute("data-tab")).toBe("deposit");
   });
 });

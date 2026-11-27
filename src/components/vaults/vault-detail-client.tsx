@@ -177,7 +177,7 @@ export function VaultDetailClient({ pda }: { pda: string }) {
           </header>
 
           <div className="my-4">
-            <VaultMetrics vault={vault} symbol={meta.assetSymbol} stakingAprPct={meta.stakingAprPct} />
+            <VaultMetrics vault={vault} symbol={meta.assetSymbol} stakingAprPct={meta.stakingAprPct} assumedApr={meta.assumedApr} />
           </div>
           <VaultDepositForm
             key={vault.vault_pda}

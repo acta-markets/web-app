@@ -144,7 +144,7 @@ function VaultDepositFlow({
   const decimals = vault.main_decimals;
   const sharePrice = BigInt(vault.share_price);
   const native = isNativeVault(vault);
-  const apr = vaultApr(vault.performance, meta.stakingAprPct);
+  const apr = vaultApr(vault.performance, meta.stakingAprPct, meta.assumedApr);
   const status = vaultStatus(vault, nowSecs);
   const pending = tx.kind === "pending";
 

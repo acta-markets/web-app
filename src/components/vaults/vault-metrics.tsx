@@ -4,8 +4,8 @@ import type { Vault } from "@/lib/vaults/types";
 import { cn } from "@/lib/cn";
 import { AprLabel } from "./vault-apr";
 
-export function VaultMetrics({ vault, symbol, stakingAprPct }: { vault: Vault; symbol: string; stakingAprPct: number }) {
-  const apr = vaultApr(vault.performance, stakingAprPct);
+export function VaultMetrics({ vault, symbol, stakingAprPct, assumedApr }: { vault: Vault; symbol: string; stakingAprPct: number; assumedApr?: { staking: number; premium: number } }) {
+  const apr = vaultApr(vault.performance, stakingAprPct, assumedApr);
   const ret = vaultReturn(vault.performance);
   const pendingDeposits = BigInt(vault.pending_deposit_amount);
   const usd = vaultTvlUsd(vault);
