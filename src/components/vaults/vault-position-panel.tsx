@@ -1,5 +1,7 @@
 import { flows } from "@acta-markets/ts-sdk/chain";
 import { AppButton } from "@/components/app-ui/app-button";
+import { TYPE_LABEL } from "@/components/app-ui/type-styles";
+import { cn } from "@/lib/cn";
 import type { VaultDepositorState } from "@/lib/vaults/depositor";
 import { formatCountdown, formatDate, formatPercent, formatTokenAmount } from "@/lib/vaults/format";
 import { sharesToMain } from "@/lib/vaults/math";
@@ -187,7 +189,7 @@ export function VaultPositionPanel({
 
   return (
     <section aria-label="Your position">
-      <div className="font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">Your position</div>
+      <div className={cn(TYPE_LABEL, "text-content-secondary")}>Your position</div>
       {body}
     </section>
   );

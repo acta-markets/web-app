@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { VaultDepositorState } from "@/lib/vaults/depositor";
 import { LAST_SHARES_COPY, REQUEST_EXISTS_COPY } from "@/lib/vaults/presentation";
@@ -211,5 +211,52 @@ function renderModal(vault = solVault(), initialTab: "deposit" | "withdraw" = "d
 
     expect(await screen.findByText("Request declined in your wallet. Nothing was sent.")).toBeTruthy();
     expect(env.show).not.toHaveBeenCalled();
+  });
+
+  it("names its tabs for what they switch, and the modal by the vault's name in the heading face", () => {
+    renderModal();
+    const tabs = screen.getByRole("tablist", { name: "Deposit or withdraw" });
+    expect(within(tabs).getByRole("tab", { name: "Deposit" })).toBeTruthy();
+    expect(within(tabs).getByRole("tab", { name: "Withdraw" })).toBeTruthy();
+    if (presentation === "modal") {
+      expect(within(screen.getByRole("dialog", { name: "SOL test vault" })).getByText("SOL test vault").className).toContain("font-space");
+    }
+  });
+
+  it("says when deposits open again for a vault between cycles, and keeps the form up for when they do", () => {
+    renderModal(solVault({ accepting_deposits: false }));
+    expect(screen.getByText("Deposits are closed until the next cycle starts.")).toBeTruthy();
+    expect(cta("Request deposit").disabled).toBe(true);
+    expect(screen.getByRole("tab", { name: "Withdraw" })).toBeTruthy();
+  });
+
+  it("requests a withdrawal and reports it", async () => {
+    const user = userEvent.setup();
+    env.depositor.data = position({ shareBalance: 10n * SOL });
+    const { onTransaction } = renderModal(solVault(), "withdraw");
+    await user.type(screen.getByLabelText("Withdraw shares"), "2.5");
+    await user.click(cta("Request withdrawal"));
+
+    await waitFor(() => expect(env.depositor.actions!.requestWithdraw).toHaveBeenCalledWith(2_500_000_000n));
+    expect(env.show).toHaveBeenCalledWith("Withdrawal requested", "success");
+    expect(onTransaction).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("link", { name: /View on Solscan/ }).getAttribute("href")).toContain("/tx/sig-withdraw");
+    // the form gives way to the receipt, with the way back
+    expect(screen.getByText("Withdrawal requested")).toBeTruthy();
+    expect(screen.getByText("Pending until it can be processed. Final redemptions can pay out both vault assets.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Done" })).toBeTruthy();
+  });
+
+  it("says a failed request as an error and says that nothing was sent", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    env.depositor.actions!.requestDeposit = vi.fn().mockRejectedValue(new Error("simulation failed: custom program error: 0x1"));
+    renderModal();
+    await user.type(screen.getByLabelText("Deposit"), "1");
+    await user.click(cta("Request deposit"));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("The transaction failed in simulation. Nothing was sent.");
+    expect(env.show).toHaveBeenCalledWith("The transaction failed in simulation. Nothing was sent.", "error");
+    expect(screen.queryByRole("link", { name: /View on Solscan/ })).toBeNull();
   });
 });

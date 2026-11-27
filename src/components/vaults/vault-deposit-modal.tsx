@@ -293,7 +293,7 @@ function VaultDepositFlow({
         </div>
       ) : (
         <>
-          <AppTabs value={tab} onChange={changeTab} options={TABS} ariaLabel="Allocation" />
+          <AppTabs value={tab} onChange={changeTab} options={TABS} ariaLabel="Deposit or withdraw" />
 
           {tab === "deposit" ? (
             <AppAmountInput
@@ -421,6 +421,7 @@ function VaultDepositFlow({
       open
       onClose={surface.onClose}
       title={meta.name}
+      titleFace="heading"
       showHowItWorks={false}
       dismissible={!pending}
       className="max-h-[calc(100dvh-2rem)] max-w-[480px] overflow-y-auto max-md:p-4"

@@ -7,6 +7,7 @@ export function AppModal({
   open,
   onClose,
   title,
+  titleFace = "mono",
   showHowItWorks = true,
   dismissible = true,
   className,
@@ -15,6 +16,8 @@ export function AppModal({
   open: boolean;
   onClose: () => void;
   title: string;
+  /** the title in the mono face by default; "heading" sets a name in the heading face, as the card and the page do */
+  titleFace?: "mono" | "heading";
   showHowItWorks?: boolean;
   /** false while something must finish first, e.g. a wallet signature: Esc, backdrop and Close do nothing */
   dismissible?: boolean;
@@ -50,7 +53,7 @@ export function AppModal({
     >
       <button
         type="button"
-        className="absolute inset-0 cursor-default bg-[rgba(18,18,18,0.8)] backdrop-blur-sm"
+        className="absolute inset-0 cursor-default bg-[rgba(18,18,18,0.8)]"
         aria-label="Close modal"
         disabled={!dismissible}
         onClick={onClose}
@@ -59,7 +62,8 @@ export function AppModal({
       <div
         className={cn(
           // never taller than the screen: a long modal scrolls inside itself instead of being cut off top and bottom
-          "relative max-h-full w-full max-w-2xl overflow-y-auto overscroll-contain rounded-[var(--radius)] border border-bg-border bg-bg-primary p-6 shadow-2xl",
+          // the handoff's one shadow for a floating element: 0 1px 2px at 6%; no blur behind it
+          "relative max-h-full w-full max-w-2xl overflow-y-auto overscroll-contain rounded-[var(--radius)] border border-bg-border bg-bg-primary p-6 shadow-[0_1px_2px_rgba(16,24,40,0.06)]",
           "text-content-primary",
           className
         )}
@@ -69,7 +73,7 @@ export function AppModal({
             {showHowItWorks ? (
               <div className="text-xs font-medium text-content-tertiary">How it works</div>
             ) : null}
-            <div className="mt-1 font-mono text-xl font-medium">{title}</div>
+            <div className={cn("mt-1", titleFace === "heading" ? "font-space text-xl font-semibold tracking-[-0.02em]" : "font-mono text-xl font-medium")}>{title}</div>
           </div>
           <button
             type="button"

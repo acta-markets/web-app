@@ -93,7 +93,7 @@ export function VaultCurrentCycle({ vault, cycles = [], nowSecs }: { vault: Vaul
   ];
 
   return (
-    <section aria-label="Current cycle" className="border border-t-0 border-bg-border bg-bg-primary p-5 backdrop-blur-[4px] max-md:p-4">
+    <section aria-label="Current cycle" className="border border-t-0 border-bg-border bg-bg-primary p-5 max-md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-space text-xl font-semibold leading-[1.2] tracking-[-0.02em] text-content-primary">
           Current cycle{current ? ` · ${Number(current.cycle_number) + 1}` : ""}

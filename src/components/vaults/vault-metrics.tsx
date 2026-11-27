@@ -87,7 +87,7 @@ export function VaultCapacity({ vault, symbol }: { vault: Vault; symbol: string 
         aria-valuemax={100}
         aria-valuenow={pct}
         aria-valuetext={`${amount(remaining)} ${symbol} remaining`}
-        className="h-2 bg-action-tertiary"
+        className="h-1.5 border border-accent-primary bg-accent-primary/20"
       >
         <div className="h-full bg-accent-primary" style={{ width: `${pct}%` }} />
       </div>

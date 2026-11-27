@@ -53,7 +53,7 @@ function Capacity({ vault, symbol }: { vault: Vault; symbol: string }) {
       <span className="tabular-nums">
         {formatTokenAmount(used, decimals, { compact: true })} of {formatTokenAmount(cap, decimals, { compact: true })} {symbol}
       </span>
-      <div className="flex h-2.5 w-[120px] bg-accent-primary/20" aria-hidden="true">
+      <div className="flex h-1.5 w-[120px] border border-accent-primary bg-accent-primary/20" aria-hidden="true">
         <div className="h-full bg-accent-primary" style={{ width: `${usedPct}%` }} />
       </div>
       <span className="text-[14px] tabular-nums text-content-secondary">
