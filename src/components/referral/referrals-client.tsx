@@ -8,7 +8,7 @@ import { AppButton } from "@/components/app-ui/app-button";
 import { AppPill } from "@/components/app-ui/app-pill";
 import { useRfqContext } from "@/components/rfq/rfq-provider";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
-import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
+import { ConnectWalletAction } from "@/components/wallet/connect-wallet-action";
 import { RedeemInviteForm } from "@/components/referral/redeem-invite-form";
 import { normalizeReferralCode } from "@/lib/rfq-client";
 
@@ -54,7 +54,7 @@ export function ReferralsClient() {
         <AppCard className="p-6">
           <div className="space-y-4">
             <p className="text-sm text-content-secondary">Connect your wallet to view your referral code.</p>
-            <SolanaConnectButton />
+            <ConnectWalletAction />
           </div>
         </AppCard>
       )}

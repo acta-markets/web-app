@@ -79,8 +79,8 @@ export function WalletButton({ state, fullWidth = false, onOpen }: { state: Wall
   );
 }
 
-/** The header's wallet control, and the Connect button anywhere a page asks for a wallet. */
-export function SolanaConnectButton({ fullWidth = false }: { fullWidth?: boolean }) {
+/** The header's wallet control. A page that asks for a wallet uses `ConnectWalletAction`, not this. */
+export function SolanaConnectButton() {
   const { selectedAccount, selectedWallet, isConnected, isConnecting, isReady, expectedAccount } = useSolana();
   const { openSidebar } = useWalletSidebar();
 
@@ -95,5 +95,5 @@ export function SolanaConnectButton({ fullWidth = false }: { fullWidth?: boolean
             ? { type: "connecting" }
             : { type: "disconnected" };
 
-  return <WalletButton state={state} fullWidth={fullWidth} onOpen={openSidebar} />;
+  return <WalletButton state={state} onOpen={openSidebar} />;
 }

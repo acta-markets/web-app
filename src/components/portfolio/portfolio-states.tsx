@@ -1,5 +1,6 @@
 import { AppCard } from "@/components/app-ui/app-card";
 import { AppButtonLink } from "@/components/app-ui/app-button";
+import { ConnectWalletAction } from "@/components/wallet/connect-wallet-action";
 import { cn } from "@/lib/cn";
 
 /** One block of a loading skeleton, the same block the trade page uses. */
@@ -61,6 +62,19 @@ export function PortfolioEmpty() {
       <AppButtonLink href="/trade" className="mt-6">
         Make your first trade
       </AppButtonLink>
+    </AppCard>
+  );
+}
+
+/** No wallet: the page says what it will show and asks for one the way Trade does, with one main action. */
+export function PortfolioConnect() {
+  return (
+    <AppCard className="flex flex-col items-center px-6 py-12 text-center">
+      <p className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">Your positions show here</p>
+      <p className="mt-2 max-w-md font-mono text-sm leading-[1.5] tracking-[-0.02em] text-content-secondary">
+        Connect a wallet to see its positions, income and P&L.
+      </p>
+      <ConnectWalletAction className="mt-6" />
     </AppCard>
   );
 }

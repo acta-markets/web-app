@@ -12,7 +12,7 @@ import { PortfolioClient } from "./portfolio-client";
 const mocks = vi.hoisted(() => ({ markets: [] as unknown[], buildDeposit: vi.fn(), buildWithdraw: vi.fn(), sendTx: vi.fn(), sendAll: vi.fn(), client: {}, getClient: vi.fn(), page: vi.fn(), summary: vi.fn(), wallet: "wallet-a", live: [] as PositionInfo[], fetchPositions: vi.fn(), authenticated: true, connected: true, expected: null as { address: string } | null }));
 vi.mock("@/lib/portfolio-api", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/portfolio-api")>(), fetchWalletPositions: mocks.page, fetchWalletPositionSummary: mocks.summary }));
 vi.mock("@/components/solana/solana-wallet-provider", () => ({ useSolana: () => ({ isConnected: mocks.connected, selectedAccount: mocks.connected ? { address: mocks.wallet } : null, expectedAccount: mocks.expected }) }));
-vi.mock("@/components/solana/solana-connect-button", () => ({ SolanaConnectButton: () => null }));
+vi.mock("@/components/wallet/connect-wallet-action", () => ({ ConnectWalletAction: () => <button type="button">Connect wallet</button> }));
 vi.mock("@/components/rfq/rfq-provider", () => ({ useRfqContext: () => ({ positions: mocks.live, markets: mocks.markets, marketDescriptors: [], isAuthenticated: mocks.authenticated, fetchPositions: mocks.fetchPositions, positionsFailed: false, getClient: mocks.getClient }) }));
 vi.mock("./portfolio-earnings-chart", () => ({ PortfolioEarningsChart: ({ points }: { points: unknown[] }) => <div data-testid="income-chart">{JSON.stringify(points)}</div> }));
 

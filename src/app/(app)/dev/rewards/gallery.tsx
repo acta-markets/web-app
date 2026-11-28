@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Season, SeasonBoard } from "@acta-markets/ts-sdk/http";
 import { AppButton } from "@/components/app-ui/app-button";
+import { Chevron } from "@/components/app-ui/chevron";
 import { AppPageHeader } from "@/components/app-ui/app-page-header";
 import { AppPill } from "@/components/app-ui/app-pill";
 import { AppSegmented } from "@/components/app-ui/app-segmented";
@@ -127,7 +128,7 @@ export function RewardsGallery() {
             awardsFailed={false}
             ui={ui}
             board={board}
-            connect={<AppButton>Connect</AppButton>}
+            connect={<AppButton>Connect wallet<Chevron kind="go" className="h-5 w-5" /></AppButton>}
           />
         )}
       </div>

@@ -18,7 +18,6 @@ import { walletKey } from "@/lib/state/keys";
 import { useRemembered } from "@/lib/state/remembered";
 import { useViewPref } from "@/lib/state/view-prefs";
 import { readSessionId } from "@/lib/state/session-store";
-import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
 import { openWrittenApr, summarizePnl, tradingStats } from "@/lib/portfolio-pnl";
 import { buildPositionRows, canFundRow, fundingSummary, isWorthExercising, markWithdrawn } from "@/lib/portfolio-positions";
 import { useBuyDeposit } from "./use-buy-deposit";
@@ -29,7 +28,7 @@ import { FundingStrip } from "./funding-strip";
 import { IncomeCard } from "./income-card";
 import { PerformanceStrip } from "./performance-strip";
 import { PositionsTable } from "./positions-table";
-import { LoadingStatus, PerformanceSkeleton, PortfolioEmpty, PortfolioSignIn, PositionsSkeleton } from "./portfolio-states";
+import { LoadingStatus, PerformanceSkeleton, PortfolioConnect, PortfolioEmpty, PortfolioSignIn, PositionsSkeleton } from "./portfolio-states";
 
 // The page header sets the distance from the nav and the gap above the content.
 const SHELL = "mx-auto w-full max-w-page px-6 pb-16 max-md:px-3";
@@ -255,15 +254,7 @@ export function PortfolioClient() {
       <div>
         <PageHeader />
         <div className={SHELL}>
-        <AppCard className="mx-auto w-full max-w-md p-6">
-          <h2 className="font-space text-2xl font-semibold text-content-primary">Connect wallet</h2>
-          <p className="mt-2 font-mono text-sm leading-[1.5] tracking-[-0.02em] text-content-secondary">
-            Connect your wallet to see your positions, income and P&L.
-          </p>
-          <div className="mt-5">
-            <SolanaConnectButton fullWidth />
-          </div>
-        </AppCard>
+          <PortfolioConnect />
         </div>
       </div>
     );
