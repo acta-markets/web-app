@@ -99,15 +99,21 @@ function secondLine() {
   return copy.textContent!.replace(/\s+/g, " ").trim();
 }
 
-/** The expiry pill; its name carries the chosen date, e.g. "Expiry: Jan 22". */
-function expiryPill() {
-  return screen.getByRole("button", { name: /^Expiry/ });
+/** The expiry pill's menu: the same control as the asset's and the strike's. */
+function expiryMenu() {
+  return screen.getByRole("combobox", { name: "Expiry" }) as HTMLSelectElement;
 }
 
-/** Open the expiry wheel and click a date on it. */
+/** The date the expiry pill is set to. In the menu a date is followed by how far off it is ("Jan 22 · in 7 days"). */
+function expiryDate() {
+  return expiryMenu().selectedOptions[0]?.textContent?.split(" · ")[0] ?? null;
+}
+
+/** Choose a date in the expiry menu. */
 function pickExpiry(date: string) {
-  fireEvent.click(expiryPill());
-  fireEvent.click(screen.getByRole("option", { name: date }));
+  const option = [...expiryMenu().options].find((o) => o.textContent?.split(" · ")[0] === date);
+  if (!option) throw new Error(`no expiry ${date}`);
+  fireEvent.change(expiryMenu(), { target: { value: option.value } });
 }
 
 /** The direction is a one-click switch; its accessible name starts with the current value. */
@@ -296,7 +302,7 @@ describe("sentence trade", () => {
     expect(select("Asset").value).toBe("SOL");
     expect(direction().textContent).toContain("above");
     expect(select("Strike").value).toBe(String(95e9));
-    expect(expiryPill().getAttribute("aria-label")).toBe("Expiry: Jan 22");
+    expect(expiryDate()).toBe("Jan 22");
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("104.5");
     // 1.1 SOL locked at $95, $1 premium per SOL — the premium now reads in the facts block
     // beside the size, not as a risk sentence above the CTA
@@ -368,10 +374,10 @@ describe("sentence trade", () => {
     pickExpiry("Jan 29");
     expect(select("Strike").value).toBe(String(95e9));
     fireEvent.click(direction());
-    expect(expiryPill().getAttribute("aria-label")).toBe("Expiry: Jan 22");
+    expect(expiryDate()).toBe("Jan 22");
   });
 
-  it("opens on the middle date, so the wheel starts with a date on each side", () => {
+  it("opens on the middle date, with a date on each side of it in the menu", () => {
     const data = snapshot();
     const late = data.markets[1];
     (data.markets as unknown[]).push(
@@ -380,29 +386,18 @@ describe("sentence trade", () => {
     );
     mocks.context.tokenMarketsInfo = { underlyingMint: SOL, data };
     render(<SentenceTrade mode="yield" />);
-    fireEvent.click(expiryPill());
-    const dates = screen.getAllByRole("option").filter((o) => o.closest("[role=listbox]"));
-    expect(dates.map((o) => o.getAttribute("aria-selected"))).toEqual(["false", "true", "false", "false"]);
+    expect([...expiryMenu().options].map((o) => o.selected)).toEqual([false, true, false, false]);
   });
 
-  it("shows the expiry as a pill that opens a wheel, the chosen date marked and the next one a click away", () => {
+  it("shows the expiry as a pill with a menu of every date, like the asset's and the strike's, not a wheel", () => {
     render(<SentenceTrade mode="yield" />);
-    // no expiry dropdown, and the wheel is folded until the pill is clicked
-    expect(screen.queryByRole("combobox", { name: "Expiry" })).toBeNull();
     expect(screen.queryByRole("listbox", { name: "Expiry" })).toBeNull();
-    expect(expiryPill().getAttribute("aria-label")).toBe("Expiry: Jan 22");
-    fireEvent.click(expiryPill());
-    const wheel = screen.getByRole("listbox", { name: "Expiry" });
-    expect(expiryPill().getAttribute("aria-label")).toBe("Expiry: Jan 22");
-    expect(screen.getByRole("option", { name: "Jan 29" }).getAttribute("aria-selected")).toBe("false");
-    // the arrow keys turn it without folding it
-    fireEvent.keyDown(wheel, { key: "ArrowDown" });
-    expect(screen.getByRole("option", { name: "Jan 29" }).getAttribute("aria-selected")).toBe("true");
-    fireEvent.keyDown(wheel, { key: "ArrowUp" });
-    // a click on a date takes it and folds the wheel
-    fireEvent.click(screen.getByRole("option", { name: "Jan 29" }));
-    expect(screen.queryByRole("listbox", { name: "Expiry" })).toBeNull();
-    expect(expiryPill().getAttribute("aria-label")).toBe("Expiry: Jan 29");
+    // every date on offer, each with how far off it is
+    expect([...expiryMenu().options].map((o) => o.textContent)).toEqual(["Jan 22 · in 7 days", "Jan 29 · in 14 days"]);
+    expect(expiryDate()).toBe("Jan 22");
+    // choosing a date takes it
+    pickExpiry("Jan 29");
+    expect(expiryDate()).toBe("Jan 29");
   });
 
   it("does not present stale premiums, in the sentence or the summary", () => {
@@ -475,28 +470,26 @@ describe("sentence trade", () => {
     expect(screen.getByTestId("trade-headline-note").textContent).toBe("Final quote might be different");
     expect(screen.getByTestId("ticket-wrong").textContent).toBe("You lose premium");
     expect(screen.getByText("The most you can lose is $1.00")).toBeTruthy();
-    // the winning cell lists the breakeven and what the trade makes at three moves past it
+    // the winning cell holds no table of its own: one link, "Breakdown", stands under "You profit"
     expect(screen.getByTestId("ticket-right").textContent).toBe("You profit");
-    // the breakeven is the table's first line, written like the rest, then three profit points
-    const rows = screen.getByTestId("ticket-profit-points").querySelectorAll("dd");
-    expect(rows).toHaveLength(4);
-    expect(rows[0].textContent).toBe("breakeven");
-    expect(screen.getByTestId("ticket-profit-points").textContent).toMatch(/^\+\d+\.\d%at \$/);
+    expect(screen.queryByTestId("ticket-profit-points")).toBeNull();
+    expect(screen.getByRole("button", { name: "Breakdown" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "More prices" })).toBeNull();
   });
 
-  it("opens the longer profit ladder from More prices without touching the cell's own table", () => {
+  it("opens the profit ladder from Breakdown: the breakeven first, then what the trade makes further out", () => {
     render(<SentenceTrade mode="profit" />);
-    const more = screen.getByRole("button", { name: "More prices" });
+    const more = screen.getByRole("button", { name: "Breakdown" });
     expect(more.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.getByTestId("ticket-more-prices").className).toContain("hidden");
+    expect(screen.getByTestId("ticket-breakdown").className).toContain("hidden");
     fireEvent.click(more);
     expect(more.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByTestId("ticket-more-prices").className).not.toContain("hidden");
-    // the same ladder, further out: breakeven first, then more steps than the cell shows
+    expect(screen.getByTestId("ticket-breakdown").className).not.toContain("hidden");
+    // the whole ladder is in the panel: breakeven first, written like the rest, then every step
     const ladder = screen.getByTestId("ticket-profit-ladder").querySelectorAll("dd");
     expect(ladder[0].textContent).toBe("breakeven");
     expect(ladder.length).toBeGreaterThan(4);
-    expect(screen.getByTestId("ticket-profit-points").querySelectorAll("dd")).toHaveLength(4);
+    expect(screen.getByTestId("ticket-profit-ladder").textContent).toMatch(/^\+\d+\.\d%at \$/);
     fireEvent.click(more);
     expect(more.getAttribute("aria-expanded")).toBe("false");
   });

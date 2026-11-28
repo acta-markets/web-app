@@ -244,7 +244,7 @@ export function SentenceTrade({
       : direction === "above" ? "buy_call" : "buy_put";
   const info = strategyInfo(strategy);
   const expiries = info.isPut ? putExpiries : callExpiries;
-  // with no date chosen the thesis opens on the middle one, so the wheel has a date on each side
+  // with no date chosen the thesis opens on the middle one, a date on each side of it in the menu
   const expiry = expiries.find((e) => e.expiryTs === expiryChoice) ?? expiries[defaultExpiryIndex(expiries.length)] ?? null;
 
   const strikeOptions = useMemo(
@@ -604,8 +604,8 @@ export function SentenceTrade({
           },
         }
       : {
-          // A buy profits past its breakeven, not at the strike: the table under "You profit"
-          // opens with the breakeven as its zero line, then lists what the trade makes further out.
+          // A buy profits past its breakeven, not at the strike: the "Breakdown" under "You
+          // profit" opens with the breakeven as its zero line, then lists what the trade makes further out.
           right: {
             when: `${direction} ${strikeLabel}`,
             what: "You profit",
@@ -838,7 +838,7 @@ export function SentenceTrade({
             // loaded, but no complete trade selected yet: never collapse to nothing
             <div>
               {sentence}
-              <div className="mt-3 flex h-[280px] items-center justify-center bg-action-primary/20">
+              <div className="mt-3 flex h-[262px] items-center justify-center bg-action-primary/20">
                 <span className="font-mono text-[12px] text-content-secondary">
                   Pick an expiry and strike to see the projection
                 </span>
@@ -894,7 +894,7 @@ export function SentenceTrade({
               )}
             >
               <p className={cn(TICKET_WHEN, "xl:order-1")}>Now</p>
-              {/* folds the ticket away again: as quiet as the page's links ("More prices", "How it
+              {/* folds the ticket away again: as quiet as the page's links ("Breakdown", "How it
                   works"), in the headings' row where the right end is empty. It answers the
                   opener's pair of chevrons with the same pair, pointing up. */}
               <button
@@ -1079,9 +1079,9 @@ export function SentenceTrade({
                 <span data-testid="ticket-right" className={cn(TICKET_VALUE, "whitespace-nowrap py-0.5 text-content-primary", side === "sell" && "xl:min-h-[54px]")}>
                   {outcomeLine(ticketOutcomes.right.what)}
                 </span>
-                {/* In Profit this block is always as tall as the table and its link, so prices
-                    arriving or dropping out never move the button. */}
-                <div className={cn("flex flex-col gap-2", side === "buy" && "min-h-[91px]")}>
+                {/* In Profit this is the note or, once priced and sized, the "Breakdown" link in a
+                    slot of the note's height, so one replacing the other never moves the button. */}
+                <div className="flex flex-col gap-2">
                 {side === "buy" && buyBreakeven != null && strike && spot != null ? (
                   <ProfitOutlook
                     asset={asset.symbol}
@@ -1112,18 +1112,13 @@ export function SentenceTrade({
                 <span data-testid="ticket-wrong" className={cn(TICKET_VALUE, "whitespace-nowrap py-0.5 text-content-primary", side === "sell" && "xl:min-h-[54px]")}>
                   {outcomeLine(ticketOutcomes.wrong.what)}
                 </span>
-                {/* the priced line breaks at one fixed point; a plain note wraps inside its two reserved lines */}
-                <span className={cn(TICKET_NOTE, side === "buy" && payUsd != null && "whitespace-nowrap")}>
-                  {side === "buy" && payUsd != null ? (
-                    // The words come first and the amount last, so a longer amount never pushes
-                    // the words sideways; and it breaks at one fixed point where the cell is narrow.
-                    <>
-                      The most you can <br className="max-xl:hidden" />
-                      lose is {formatUsdAmount(payUsd)}
-                    </>
-                  ) : (
-                    ticketOutcomes.wrong.note
-                  )}
+                {/* one line wherever the cell has room for it (Tim, 28 Nov 2026), which is every
+                    width measured; a note that ever does not fit wraps inside its two reserved lines */}
+                <span data-testid="ticket-wrong-note" className={TICKET_NOTE}>
+                  {side === "buy" && payUsd != null
+                    ? // the words come first and the amount last, so a longer amount never pushes the words sideways
+                      `The most you can lose is ${formatUsdAmount(payUsd)}`
+                    : ticketOutcomes.wrong.note}
                 </span>
               </div>
             </div>

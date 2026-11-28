@@ -7,8 +7,6 @@ import { buildProfitLadder, type ProfitRow } from "@/lib/trade/profit-ladder";
 import type { Direction } from "@/lib/trade/thesis";
 import { TICKET_LABEL, TICKET_NOTE } from "./ticket-styles";
 
-/** How many steps the cell itself shows; the rest are behind "More prices". */
-const SHOWN_STEPS = 3;
 /** How far the panel's bottom-left corner sits from the pointer: this much right of it and this much above. */
 const POINTER_GAP = 10;
 /** The panel never comes closer than this to the window's edge. */
@@ -50,14 +48,16 @@ function Row({ row, profit = false }: { row: ProfitRow; profit?: boolean }) {
 }
 
 /**
- * A bought option's outlook, under "You profit": the breakeven and the first three profit points,
- * with the rest of the ladder in a panel that opens on hover or on a click (a tap pins it open).
- * The panel floats instead of growing the cell, so nothing below it moves. It appears beside
- * the pointer, up and to the right of it, and stays there while the link is hovered.
+ * A bought option's outlook, under "You profit": one link, "Breakdown", and behind it the whole
+ * ladder (the breakeven, then what the trade makes further out) in a panel that opens on hover
+ * or on a click (a tap pins it open). The cell itself holds no table (Tim, 28 Nov 2026). The
+ * panel floats, so nothing below it moves. It appears beside the pointer, up and to the right
+ * of it, and stays there while the link is hovered.
  *
  * It takes plain numbers and owns its own open state, so typing a size or opening the panel
- * re-renders this table and nothing else. Until the trade is priced and sized there is no table,
- * and `emptyNote` stands in its place.
+ * re-renders this link and nothing else. Until the trade is priced and sized there is no
+ * ladder, and `emptyNote` stands in the link's place. The link's slot is as tall as that note
+ * (two lines), so one replacing the other never moves the button.
  */
 export const ProfitOutlook = memo(function ProfitOutlook({
   asset,
@@ -109,55 +109,52 @@ export const ProfitOutlook = memo(function ProfitOutlook({
   if (ladder.steps.length === 0) return <span className={TICKET_NOTE}>{emptyNote}</span>;
 
   return (
-    <>
-      <ProfitRows breakeven={ladder.breakeven} steps={ladder.steps.slice(0, SHOWN_STEPS)} testId="ticket-profit-points" />
-      {ladder.steps.length > SHOWN_STEPS ? (
-        <div
-          ref={link}
-          className="relative flex w-fit"
-          onMouseEnter={(e) => {
-            setPointer({ x: e.clientX, y: e.clientY });
-            setHovered(true);
+    <div className={cn(TICKET_NOTE, "flex items-start")}>
+      <div
+        ref={link}
+        className="relative flex w-fit"
+        onMouseEnter={(e) => {
+          setPointer({ x: e.clientX, y: e.clientY });
+          setHovered(true);
+        }}
+        onMouseLeave={() => {
+          setHovered(false);
+          setOpen(false);
+        }}
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={(e) => {
+            // already showing under the pointer: a click only pins it where it is. A keyboard
+            // click (detail 0) has no pointer to open beside.
+            if (!hovered) setPointer(e.detail === 0 ? null : { x: e.clientX, y: e.clientY });
+            setOpen((was) => !was);
           }}
-          onMouseLeave={() => {
-            setHovered(false);
-            setOpen(false);
-          }}
+          onBlur={() => setOpen(false)}
+          // the page's one quiet link, dressed exactly as "How it works"
+          className="inline-flex items-center gap-0.5 font-mono text-[12px] leading-[1.2] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary focus-visible:text-content-primary focus-visible:outline-none"
         >
-          <button
-            type="button"
-            aria-expanded={open}
-            onClick={(e) => {
-              // already showing under the pointer: a click only pins it where it is. A keyboard
-              // click (detail 0) has no pointer to open beside.
-              if (!hovered) setPointer(e.detail === 0 ? null : { x: e.clientX, y: e.clientY });
-              setOpen((was) => !was);
-            }}
-            onBlur={() => setOpen(false)}
-            // the page's one quiet link, dressed exactly as "How it works"
-            className="inline-flex items-center gap-0.5 font-mono text-[12px] leading-[1.2] tracking-[-0.02em] text-content-secondary transition-colors hover:text-content-primary focus-visible:text-content-primary focus-visible:outline-none"
-          >
-            More prices
-            <Chevron kind="go" className="h-4 w-4" />
-          </button>
-          <div
-            ref={panel}
-            data-testid="ticket-more-prices"
-            className={cn(
-              // the app's floating surface, as the info tooltip and the sentence's menus. The one
-              // panel that opens upward, because the trade button sits right under its link; where
-              // exactly is set from the pointer, above
-              "absolute left-0 top-0 z-30 w-max min-w-[220px] border border-bg-border bg-bg-primary p-3 shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]",
-              shown ? "block" : "hidden",
-            )}
-          >
-            <p className={cn(TICKET_LABEL, "mb-2 whitespace-nowrap")}>
-              If <span className="normal-case">{asset}</span> ends {direction}
-            </p>
-            <ProfitRows breakeven={ladder.breakeven} steps={ladder.steps} testId="ticket-profit-ladder" />
-          </div>
+          Breakdown
+          <Chevron kind="go" className="h-4 w-4" />
+        </button>
+        <div
+          ref={panel}
+          data-testid="ticket-breakdown"
+          className={cn(
+            // the app's floating surface, as the info tooltip and the sentence's menus. The one
+            // panel that opens upward, because the trade button sits right under its link; where
+            // exactly is set from the pointer, above
+            "absolute left-0 top-0 z-30 w-max min-w-[220px] border border-bg-border bg-bg-primary p-3 shadow-[0_16px_16px_4px_rgba(18,18,18,0.32)]",
+            shown ? "block" : "hidden",
+          )}
+        >
+          <p className={cn(TICKET_LABEL, "mb-2 whitespace-nowrap")}>
+            If <span className="normal-case">{asset}</span> ends {direction}
+          </p>
+          <ProfitRows breakeven={ladder.breakeven} steps={ladder.steps} testId="ticket-profit-ladder" />
         </div>
-      ) : null}
-    </>
+      </div>
+    </div>
   );
 });

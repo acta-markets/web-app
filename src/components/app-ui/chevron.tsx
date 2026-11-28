@@ -6,7 +6,7 @@ import * as React from "react";
  *
  * - `menu`   one, pointing down: opens a list to choose from
  * - `next`   one, pointing right: opens the row it sits in
- * - `switch` two, pointing apart: flips between two values, or turns a wheel of them up and down
+ * - `switch` two, pointing apart: flips between two values, or steps a value up and down
  * - `go`     two, pointing right: moves forward (a main action, a link out, the way to expiry)
  * - `unfold` two, pointing down: opens what is folded away beneath the control
  * - `fold`   two, pointing up: folds it away again
