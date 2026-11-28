@@ -66,7 +66,7 @@ import {
 } from "@/lib/trade/thesis";
 import { wireAmount, type TakerSide } from "@/lib/spreads";
 import { ProfitOutlook } from "./profit-table";
-import { TICKET_CELL, TICKET_LABEL, TICKET_NOTE, TICKET_VALUE, TICKET_WHEN } from "./ticket-styles";
+import { TICKET_CELL, TICKET_COLUMNS, TICKET_LABEL, TICKET_NOTE, TICKET_VALUE, TICKET_WHEN } from "./ticket-styles";
 import { ChartSkeleton, TradeSkeleton } from "./trade-skeleton";
 import { ThesisSentence, ThesisMoveLine, StrikeControl } from "./thesis-sentence";
 import { ThesisChart } from "./thesis-chart";
@@ -887,10 +887,8 @@ export function SentenceTrade({
               className={cn(
                 "relative grid grid-cols-2 gap-x-6 gap-y-2",
                 ticketFolded && "hidden",
-                // Yield needs room for the deposit; Profit's "You lose premium" needs it in the last column
-                side === "sell"
-                  ? "xl:grid-cols-[minmax(0,0.97fr)_minmax(0,0.8fr)_minmax(0,1.19fr)_minmax(0,1.04fr)]"
-                  : "xl:grid-cols-[minmax(0,0.8fr)_minmax(0,0.78fr)_minmax(0,1.19fr)_minmax(0,1.22fr)]",
+                // "Now" on the left of the chart's "now" line, the expiry's outcomes on its right
+                TICKET_COLUMNS,
               )}
             >
               <p className={cn(TICKET_WHEN, "xl:order-1")}>Now</p>
@@ -912,9 +910,29 @@ export function SentenceTrade({
               </button>
               {/* 1. what goes in */}
               <div className={cn(TICKET_CELL, "xl:order-3")}>
-                <span aria-hidden="true" className={TICKET_LABEL}>
-                  {side === "sell" ? "You deposit" : "Size"}
-                </span>
+                {/* The cell is kept short (Tim, 28 Nov 2026): HALF and MAX stand beside the label,
+                    the slider right under the input, and the wallet's balance shares the note's
+                    line. The label's row is one line with or without the two buttons, so the
+                    four cells' values stay on one line across the ticket. */}
+                <div className="flex items-baseline justify-between gap-2">
+                  <span aria-hidden="true" className={TICKET_LABEL}>
+                    {side === "sell" ? "You deposit" : "Size"}
+                  </span>
+                  {onHalf || onMax ? (
+                    <span className="flex shrink-0 items-center gap-2">
+                      {onHalf ? (
+                        <button type="button" onClick={onHalf} disabled={isRequesting} className="font-mono text-xs font-medium leading-[1.2] tracking-[-0.28px] text-accent-secondary transition-colors hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40">
+                          HALF
+                        </button>
+                      ) : null}
+                      {onMax ? (
+                        <button type="button" onClick={onMax} disabled={isRequesting} className="font-mono text-xs font-medium leading-[1.2] tracking-[-0.28px] text-accent-secondary transition-colors hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40">
+                          MAX
+                        </button>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </div>
                 <div
                   className={cn(
                     "flex w-full cursor-text items-center rounded-[var(--radius)] border px-2 transition-colors",
@@ -965,81 +983,62 @@ export function SentenceTrade({
                   </svg>
                 </div>
                 </div>
-                {/* one slot: the size feedback takes the conversion's place instead of adding a line */}
-                <span className={cn(TICKET_NOTE, "whitespace-nowrap tabular-nums", amountHint?.error && "text-error")}>
-                  {amountHint
-                    ? // "Locks 997.5 USDC (size steps of 9.5)" always breaks before the bracket, so the
-                      // number's length never decides where it wraps
-                      amountHint.text.includes(" (")
-                      ? (
-                        <>
-                          {amountHint.text.slice(0, amountHint.text.indexOf(" ("))} <br />
-                          {amountHint.text.slice(amountHint.text.indexOf(" (") + 1)}
-                        </>
-                      )
-                      : amountHint.text
-                    : (conversionHint ?? "\u2014")}
-                </span>
-              {depositRule && sliderMax > 0 ? (
-                <div className="px-1">
-                  <input
-                    type="range"
-                    aria-label="Size slider"
-                    min={sliderMin}
-                    max={sliderMax}
-                    step={sliderStep}
-                    value={sliderValue}
-                    disabled={isRequesting}
-                    onChange={(e) => setAmountInput(formatInputValue(Number(e.target.value), inputDecimals))}
-                    className="h-4 w-full cursor-pointer accent-[#2AA286] disabled:cursor-not-allowed disabled:opacity-40"
-                  />
-                  <div aria-hidden="true" className="mt-1 flex items-center justify-between px-[3px]">
-                    {[0, 1, 2, 3, 4].map((i) => (
-                      <span key={i} className="h-[3px] w-[3px] bg-bg-border" />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-                {/* the balance belongs to a wallet: the row appears once one is connected */}
-                {walletAddress ? (
-                  <div className={cn(TICKET_NOTE, "flex items-center justify-between gap-2")}>
-                    <span className="flex min-w-0 items-center gap-1 tabular-nums">
-                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="shrink-0 text-content-secondary" aria-hidden="true">
-                      <path
-                        d="M6.75 10h6.5M15 5H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2z"
-                        stroke="currentColor"
-                        strokeWidth="1.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <circle cx="14" cy="10" r="0.75" fill="currentColor" />
-                    </svg>
-                      <span className="truncate">{balanceText}</span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-2">
-                  {onHalf ? (
-                    <button
-                      type="button"
-                      onClick={onHalf}
+                {/* the slider is the input's own: right under it, before the note */}
+                {depositRule && sliderMax > 0 ? (
+                  <div className="-mt-1 px-1">
+                    <input
+                      type="range"
+                      aria-label="Size slider"
+                      min={sliderMin}
+                      max={sliderMax}
+                      step={sliderStep}
+                      value={sliderValue}
                       disabled={isRequesting}
-                      className="font-mono text-xs font-medium leading-[1.2] tracking-[-0.28px] text-accent-secondary transition-colors hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      HALF
-                    </button>
-                  ) : null}
-                  {onMax ? (
-                    <button
-                      type="button"
-                      onClick={onMax}
-                      disabled={isRequesting}
-                      className="font-mono text-xs font-medium leading-[1.2] tracking-[-0.28px] text-accent-secondary transition-colors hover:text-accent-primary disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      MAX
-                    </button>
-                  ) : null}
-                    </span>
+                      onChange={(e) => setAmountInput(formatInputValue(Number(e.target.value), inputDecimals))}
+                      className="block h-4 w-full cursor-pointer accent-[#2AA286] disabled:cursor-not-allowed disabled:opacity-40"
+                    />
+                    <div aria-hidden="true" className="flex items-center justify-between px-[3px]">
+                      {[0, 1, 2, 3, 4].map((i) => (
+                        <span key={i} className="h-[3px] w-[3px] bg-bg-border" />
+                      ))}
+                    </div>
                   </div>
                 ) : null}
+                {/* One line under it: the size feedback takes the conversion's place instead of
+                    adding a line, and a connected wallet's balance stands at its right end (it
+                    drops under the note only where the two do not fit side by side). */}
+                <div className={cn(TICKET_NOTE, "flex flex-wrap items-start justify-between gap-x-3")}>
+                  <span data-testid="size-note" className={cn("whitespace-nowrap tabular-nums", amountHint?.error && "text-error")}>
+                    {amountHint
+                      ? // "Locks 997.5 USDC (size steps of 9.5)" always breaks before the bracket, so the
+                        // number's length never decides where it wraps
+                        amountHint.text.includes(" (")
+                        ? (
+                          <>
+                            {amountHint.text.slice(0, amountHint.text.indexOf(" ("))} <br />
+                            {amountHint.text.slice(amountHint.text.indexOf(" (") + 1)}
+                          </>
+                        )
+                        : amountHint.text
+                      : (conversionHint ?? "\u2014")}
+                  </span>
+                  {/* the balance belongs to a wallet: it appears once one is connected */}
+                  {walletAddress ? (
+                    <span data-testid="size-balance" className="flex min-w-0 items-center gap-1 tabular-nums">
+                      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="shrink-0 text-content-secondary" aria-hidden="true">
+                        <path
+                          d="M6.75 10h6.5M15 5H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2z"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <circle cx="14" cy="10" r="0.75" fill="currentColor" />
+                      </svg>
+                      <span className="truncate">{balanceText}</span>
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
               {/* 2. what is paid now */}

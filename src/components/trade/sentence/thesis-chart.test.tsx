@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { handleTops, optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart, nowTagY, zoneLabelY } from "./thesis-chart";
+import { handleTops, optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart, nowSplitFor, nowTagY, zoneLabelY } from "./thesis-chart";
 
 const setData = vi.hoisted(() => vi.fn());
 /** The price under a pane y; null (the default) is a chart with no scale to read yet. */
@@ -711,6 +711,22 @@ describe("the strike and goal tags", () => {
   it("gives a tag only the grab room that does not reach into its neighbour", () => {
     expect(handleTops({ strikeY: 150, goalY: 116, goalAbove: true, ...pane }).grab).toBe(3);
     expect(handleTops({ strikeY: 150, goalY: 90, goalAbove: true, ...pane }).grab).toBe(10);
+  });
+});
+
+describe("where the chart's centre line stands", () => {
+  it("is the middle of the plot and the price rail together, so it is the page's middle", () => {
+    // a 1,018 px plot beside a 150 px rail: the middle of 1,168 is 584, which is 0.574 of the plot
+    expect(nowSplitFor(1168, 1018)).toBe(0.574);
+    expect(1018 * nowSplitFor(1168, 1018)).toBeCloseTo(584, 0);
+  });
+
+  it("is the plot's own middle with no rail, and stays inside the plot whatever the rail", () => {
+    expect(nowSplitFor(342, 342)).toBe(0.5);
+    // a rail wider than the plot cannot push the line off it
+    expect(nowSplitFor(900, 300)).toBe(0.8);
+    // nothing measured yet
+    expect(nowSplitFor(0, 0)).toBe(0.5);
   });
 });
 

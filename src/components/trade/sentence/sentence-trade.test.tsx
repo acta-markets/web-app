@@ -369,6 +369,28 @@ describe("sentence trade", () => {
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("19");
   });
 
+  it("keeps the size cell short: HALF and MAX beside the label, the slider right under the input, the balance on the note's line", () => {
+    connectWallet();
+    mocks.balance = 50; // 50 USDC in the wallet: enough for the slider and the two buttons
+    render(<SentenceTrade mode="yield" />);
+    const input = screen.getByLabelText("Deposit");
+    const slider = screen.getByRole("slider", { name: "Size slider" });
+    const note = screen.getByTestId("size-note");
+    const follows = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    // the two buttons share the label's row, before the input
+    const labelRow = screen.getByRole("button", { name: "HALF" }).parentElement!.parentElement!;
+    expect(labelRow.textContent).toBe("You depositHALFMAX");
+    expect(labelRow.contains(screen.getByRole("button", { name: "MAX" }))).toBe(true);
+    expect(follows(labelRow, input)).toBe(true);
+    // input, then the slider, then the note
+    expect(follows(input, slider)).toBe(true);
+    expect(follows(slider, note)).toBe(true);
+    // the wallet's balance stands in the note's own line, after it
+    const balance = screen.getByTestId("size-balance");
+    expect(balance.parentElement).toBe(note.parentElement);
+    expect(follows(note, balance)).toBe(true);
+  });
+
   it("falls back to the nearest date when the other side does not list the chosen one", () => {
     render(<SentenceTrade mode="yield" />);
     pickExpiry("Jan 29");

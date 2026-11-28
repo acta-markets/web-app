@@ -1,7 +1,7 @@
 import { AppCard } from "@/components/app-ui/app-card";
 import { cn } from "@/lib/cn";
 import type { TakerSide } from "@/lib/spreads";
-import { BONE, TICKET_CELL } from "./ticket-styles";
+import { BONE, TICKET_CELL, TICKET_COLUMNS } from "./ticket-styles";
 
 /** Where the price rail's five ticks sit, top to bottom, as on the loaded chart. */
 const RAIL_TICKS = ["7%", "27%", "48%", "68%", "88%"];
@@ -23,8 +23,9 @@ export function ChartSkeleton() {
         {/* the strike line, and the handle that rides it */}
         <div className="absolute inset-x-0 top-[45%] h-0.5 -translate-y-1/2 bg-[rgba(240,240,240,0.35)]" />
         <div className="absolute left-1/4 top-[45%] h-8 w-28 -translate-x-1/2 -translate-y-1/2 bg-action-primary max-md:w-16" />
-        {/* the "now" boundary: history to its left, the projection to its right */}
-        <div className="absolute bottom-[28px] left-1/2 top-0 border-l border-dashed border-[rgba(240,240,240,0.35)]" />
+        {/* the "now" boundary: history to its left, the projection to its right. Beside the rail
+            it is the middle of the plot and the rail together (half the 150px rail further right) */}
+        <div className="absolute bottom-[28px] left-1/2 top-0 border-l border-dashed border-[rgba(240,240,240,0.35)] md:left-[calc(50%+75px)]" />
         {/* the range tabs and the time axis */}
         <div className="absolute left-1.5 top-[11px] h-[22px] w-[122px] bg-action-primary" />
         <div className="absolute inset-x-0 bottom-[28px] border-t border-bg-border" />
@@ -72,7 +73,7 @@ export function TradeSkeleton({ side, folded = false }: { side: TakerSide; folde
       <ChartSkeleton />
       {/* the strip: two headings, four cells, in the loaded strip's own grid and order */}
       <div className="mt-4">
-        <div className={cn("grid grid-cols-2 gap-x-6 gap-y-1 xl:grid-cols-[1.05fr_0.9fr_1.1fr_1.05fr]", folded && "hidden")}>
+        <div className={cn("grid grid-cols-2 gap-x-6 gap-y-1", TICKET_COLUMNS, folded && "hidden")}>
           <div className="col-span-2 pt-1 xl:order-1">
             <div className={cn(BONE, "h-[19px] w-10")} />
           </div>
