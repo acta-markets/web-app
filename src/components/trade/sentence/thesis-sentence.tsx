@@ -8,7 +8,6 @@ import {
   INLINE_PILL_GLYPH,
   type AppInlineSelectOption,
 } from "@/components/app-ui/app-inline-select";
-import { AppWheel } from "@/components/app-ui/app-wheel";
 import { cn } from "@/lib/cn";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import type { TakerSide } from "@/lib/spreads";
@@ -24,10 +23,9 @@ const PILL = {
   above: "border-[rgba(73,170,25,0.6)] bg-[rgba(73,170,25,0.24)] text-content-primary hover:border-additional-green-primary-deep hover:bg-[rgba(73,170,25,0.36)]",
   below: "border-[rgba(255,51,71,0.55)] bg-[rgba(255,51,71,0.22)] text-content-primary hover:border-additional-red-primary hover:bg-[rgba(255,51,71,0.34)]",
   accent: "border-accent-primary/60 bg-accent-primary/25 text-content-primary hover:border-accent-primary hover:bg-accent-primary/40",
-  // A control that is not part of the belief: a buy's strike, in the second line. Grey like the
-  // words around it, so the goal above it stays the one price that stands out.
+  // A control that is not part of the belief: the buying / selling switch and a buy's strike,
+  // in the second line. Grey like the words around them, so the belief's pills stand out.
   quiet: "border-[rgba(240,240,240,0.4)] bg-[rgba(240,240,240,0.16)] text-content-primary hover:border-[rgba(240,240,240,0.6)] hover:bg-[rgba(240,240,240,0.24)]",
-  side: "border-[rgba(46,154,255,0.55)] bg-[rgba(46,154,255,0.2)] text-content-primary hover:border-[rgba(46,154,255,0.85)] hover:bg-[rgba(46,154,255,0.3)]",
 } as const;
 
 /** The direction pill is plain text when the UI derives it from a strategy, so it never hints at a hover. */
@@ -69,9 +67,9 @@ function Pending() {
   return <span className="text-content-secondary">&hellip;</span>;
 }
 
-// The expiry is a wheel (`AppWheel`), turned like the time wheel of a phone's alarm. At rest
-// it is a pill like the others, with the switch mark; a click opens it in place, the chosen
-// date where it was and the date before and the date after faded above and below it.
+// The expiry is a menu like the asset's, the goal's and the strike's (Tim, 28 Nov 2026: "make
+// it a normal menu"): every date on offer, listed under the pill. It was a wheel that opened in
+// place, over the line above it and the chart's top.
 
 export type SentenceOptions = {
   assets: ReadonlyArray<AppInlineSelectOption>;
@@ -84,8 +82,8 @@ export type SentenceOptions = {
 /**
  * Every value the direction and strike pills can show for this asset, across both
  * directions and all prices, so each pill holds its widest value's width and no choice
- * reflows the sentence. (The asset pill hugs its ticker and the expiry wheel holds its own
- * widest date, so neither needs a width reserve here.)
+ * reflows the sentence. (The asset pill hugs its ticker and the expiry pill reserves its own
+ * widest date where it is drawn, so neither needs a width reserve here.)
  */
 export type SentenceReserve = {
   strikes: ReadonlyArray<{ key: string; label: string }>;
@@ -203,7 +201,9 @@ function SideToggle({ side, verb, disabled, onFlip }: { side: TakerSide; verb: s
       onClick={onFlip}
       className={cn(
         INLINE_PILL,
-        PILL.side,
+        // grey like the strike beside it (Tim, 28 Nov 2026): the quiet line's controls are not
+        // part of the belief, so neither takes a colour of its own
+        PILL.quiet,
         // on a phone the tap area fills the line's height, not just the word's
         "max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1 max-md:after:content-['']",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary",
@@ -225,14 +225,27 @@ const useIsomorphicLayoutEffect = typeof window === "undefined" ? React.useEffec
  * down just enough to fit, through `--fit`, instead of the last phrase dropping to another line
  * and pushing the chart down. Both lines take the same step, the one the wider of them needs, so
  * they stay one size. On a phone the sentence wraps by design and is left alone.
+ *
+ * The text should not move more than it has to (Tim, 28 Nov 2026), so the step is held still:
+ * - it is taken in whole percents, and
+ * - while the words stay the same and only the figures in them change (`steadyKey`: a strike
+ *   dragged, a goal picked, a size typed) and the card keeps its width, the step only ever goes
+ *   down. A longer figure may take the type down a percent; a shorter one never brings it back
+ *   up, so the line does not breathe as the figures change.
+ * The size is set at once, with no transition: a size in the middle of a transition was what
+ * the next measurement read, which left the line a little too wide every time.
  */
-function useFitLines(first: React.RefObject<HTMLElement>, second: React.RefObject<HTMLElement>, contentKey: string) {
+function useFitLines(first: React.RefObject<HTMLElement>, second: React.RefObject<HTMLElement>, contentKey: string, steadyKey: string = contentKey) {
+  const held = React.useRef<{ key: string; boxes: string; factor: number } | null>(null);
   useIsomorphicLayoutEffect(() => {
     const lines = [first.current, second.current].filter((el): el is HTMLElement => el != null);
     if (lines.length === 0) return;
     const fit = () => {
       for (const el of lines) el.style.removeProperty("--fit");
-      if (!window.matchMedia?.("(min-width: 768px)").matches) return;
+      if (!window.matchMedia?.("(min-width: 768px)").matches) {
+        held.current = null;
+        return;
+      }
       let factor = 1;
       for (const el of lines) {
         const box = el.clientWidth;
@@ -242,7 +255,13 @@ function useFitLines(first: React.RefObject<HTMLElement>, second: React.RefObjec
         el.style.whiteSpace = wrap;
         if (box > 0 && natural > box) factor = Math.min(factor, box / natural);
       }
-      if (factor < 1) for (const el of lines) el.style.setProperty("--fit", (Math.floor(factor * 1000) / 1000).toString());
+      factor = Math.floor(factor * 100) / 100;
+      // the same words in the same card: never larger than it has already been
+      const boxes = lines.map((el) => el.clientWidth).join(",");
+      const before = held.current;
+      if (before && before.key === steadyKey && before.boxes === boxes) factor = Math.min(factor, before.factor);
+      held.current = { key: steadyKey, boxes, factor };
+      if (factor < 1) for (const el of lines) el.style.setProperty("--fit", factor.toString());
     };
     fit();
     // the card's width changes with the window, and the words' width once the web font is in
@@ -260,7 +279,13 @@ function useFitLines(first: React.RefObject<HTMLElement>, second: React.RefObjec
       observer?.disconnect();
       fonts?.removeEventListener("loadingdone", fit);
     };
-  }, [first, second, contentKey]);
+  }, [first, second, contentKey, steadyKey]);
+}
+
+/** A line's words with every figure in them taken out: what stays the same while a strike is
+    dragged or a size is typed. */
+function withoutFigures(text: string): string {
+  return text.replace(/[\d.,]+/g, "#");
 }
 
 /**
@@ -336,19 +361,22 @@ export function ThesisMoveLine({
   compact: boolean;
   secondRef?: React.RefObject<HTMLParagraphElement>;
 }) {
-  // One line, always: the quiet line never wraps, and it shrinks (--fit) to fit its card
-  // rather than breaking. The width is measured against the full nowrap line, so it assumes
-  // the whole number of symbols whatever the prices say.
+  // One line from a tablet up: there the quiet line never wraps, and it shrinks (--fit) to fit
+  // its card rather than breaking. The width is measured against the full nowrap line, so it
+  // assumes the whole number of symbols whatever the prices say. On a phone the type is a fixed
+  // 17px and the line is twice the screen's width, so there it wraps like any sentence: held
+  // to one line it made the whole page scroll sideways.
   const self = React.useRef<HTMLParagraphElement>(null);
   const fitRef = secondRef ?? self;
   const contentKey = [move.strike ?? "", move.rest].join("|");
-  useFitLines(fitRef, { current: null }, contentKey);
+  useFitLines(fitRef, { current: null }, contentKey, withoutFigures([move.lead, move.verb, move.before, move.rest].join("|")));
   return (
     <p
       ref={fitRef}
       data-testid="thesis-move"
       className={cn(
-        "font-space font-semibold tracking-[-0.03em] text-content-primary whitespace-nowrap transition-[font-size] duration-200 ease-out",
+        // no transition on the size: text is not animated (Tim, 28 Nov 2026)
+        "font-space font-semibold tracking-[-0.03em] text-content-primary whitespace-nowrap max-md:whitespace-normal",
         compact ? COMPACT_LINE : "-mt-1 text-[18px] font-medium leading-[1.3] tracking-[-0.02em] max-md:mt-0 max-md:text-[15px]",
       )}
     >
@@ -441,10 +469,17 @@ export function ThesisSentence({
     options.expiries.map((o) => o.label).join(","),
     options.unavailable?.join(",") ?? "",
   ].join("|");
-  useFitLines(line, second, compact ? `${contentKey}|${goal?.label ?? ""}|${move.verb}|${move.rest}` : "");
+  useFitLines(
+    line,
+    second,
+    compact ? `${contentKey}|${goal?.label ?? ""}|${move.verb}|${move.rest}` : "",
+    // the same asset, direction and wording: a new strike, goal or amount does not let the type grow back
+    compact ? withoutFigures([asset, direction, move.verb, move.rest].join("|")) : "",
+  );
   // The strike's own control. Selling, it is the first line's price; buying, the first line's
   // price is the goal and this sits in the second line, inside the option's name.
   const strikeInSecond = goal != null && move.strike != null;
+  const expiryLabel = options.expiries.find((o) => o.value === expiryValue)?.label ?? null;
   const strikePill = (
     <StrikeControl
       strikeValue={strikeValue}
@@ -467,10 +502,7 @@ export function ThesisSentence({
     )}>
       <p
         ref={compact ? line : undefined}
-        className={cn(
-          compact ? COMPACT_LINE : "text-[clamp(26px,2.85vw,40px)] leading-[1.45]",
-          "transition-[font-size] duration-200 ease-out"
-        )}
+        className={compact ? COMPACT_LINE : "text-[clamp(26px,2.85vw,40px)] leading-[1.45]"}
       >
         <span className="whitespace-nowrap">
           {SENTENCE.lead}{" "}
@@ -518,14 +550,18 @@ export function ThesisSentence({
             break never leaves the preposition stranded at the end of the line. */}
         <span className="whitespace-nowrap">
           {SENTENCE.on}{" "}
-          <AppWheel
+          <AppInlineSelect
             label="Expiry"
             value={expiryValue}
             options={options.expiries}
-            className={PILL.violet}
             onChange={onExpiry}
             disabled={disabled || !ready || options.expiries.length === 0}
-          />
+            className={PILL.violet}
+            // the pill keeps the width of its longest date, so choosing one never reflows the line
+            reserve={options.expiries.map((o) => ({ key: o.value, face: <span>{o.label}</span> }))}
+          >
+            {expiryLabel ? <span>{expiryLabel}</span> : <Pending />}
+          </AppInlineSelect>
         </span>
       </p>
       {/* the trade and its downside, on a line of its own, so it never touches how the belief

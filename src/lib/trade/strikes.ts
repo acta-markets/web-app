@@ -121,7 +121,7 @@ export function buildStrikeOptions(
 
 /**
  * The date a thesis opens on when none is chosen: the middle one, the earlier of two middles.
- * The expiry wheel then starts with a date on each side of it. -1 when empty.
+ * The expiry menu then opens with a date on each side of it. -1 when empty.
  */
 export function defaultExpiryIndex(count: number): number {
   return count > 0 ? Math.floor((count - 1) / 2) : -1;

@@ -39,7 +39,7 @@ const MIN_LIST_HEIGHT = 48;
 /**
  * Every asset behind the one dollar figure. The link says how many there are, never which, so
  * it reads the same for two assets or a hundred. Hover opens the panel; a click or a tap pins
- * it open, as "More prices" does on the trade page. The list scrolls inside the panel, so the
+ * it open, as "Breakdown" does on the trade page. The list scrolls inside the panel, so the
  * panel stays open while the pointer is in it.
  *
  * The panel is drawn on <body>, like the info tooltip: inside the card it would sit under the
@@ -145,7 +145,7 @@ function FundBreakdown({ totals, totalUsd, count }: { totals: FundingSummary["to
         onBlur={(e) => {
           if (e.relatedTarget && !panelRef.current?.contains(e.relatedTarget)) close();
         }}
-        // clickable text, as "More prices": grey, the note's own size, the forward chevron
+        // clickable text, as "Breakdown": grey, the note's own size, the forward chevron
         className={cn(TYPE_LINK, "text-[14px] leading-[1.45]")}
       >
         {totals.length} assets

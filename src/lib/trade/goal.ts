@@ -57,15 +57,21 @@ export function goalOptions({
     .filter((goal) => goal.profit == null || goal.profit > 0);
 }
 
+/** How many times what was paid the opening goal makes, and how far out it opens before the
+    option is priced (the eleventh goal, about 12% of today's price past the first). */
+const OPENING_MULTIPLE = 5;
+const OPENING_UNPRICED = 10;
+
 /**
- * The goal the page opens on: the nearest one where the trade at least doubles what was paid,
- * so the default scales with what the option costs (a dearer, longer-dated option needs a
- * bigger move). With no goal that far, the furthest; unpriced, a few steps out.
+ * The goal the page opens on: a far one (Tim, 28 Nov 2026), the nearest where the trade makes
+ * at least five times what was paid, so the default scales with what the option costs (a
+ * dearer, longer-dated option needs a bigger move) and the page opens on a move worth making.
+ * With no goal that far, the furthest; unpriced, well out along the list.
  */
 export function defaultGoal(goals: ReadonlyArray<Goal>, premiumUsd: number | null): Goal | null {
   if (goals.length === 0) return null;
-  if (premiumUsd == null) return goals[Math.min(2, goals.length - 1)];
-  return goals.find((g) => g.profit != null && g.profit >= premiumUsd) ?? goals[goals.length - 1];
+  if (premiumUsd == null) return goals[Math.min(OPENING_UNPRICED, goals.length - 1)];
+  return goals.find((g) => g.profit != null && g.profit >= OPENING_MULTIPLE * premiumUsd) ?? goals[goals.length - 1];
 }
 
 /** The chosen goal if it is still on offer, else the nearest one to it, else the default. */
