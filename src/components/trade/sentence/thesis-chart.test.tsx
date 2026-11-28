@@ -278,7 +278,7 @@ describe("thesis chart", () => {
         expect(screen.getByRole("slider", { name: "Goal" }).style.top).toBe("113px");
         expect(knot.textContent).toBe("STRIKE$95");
         // from the plot's edge to the rail's: its price ends where the ticks' prices end
-        expect(knot.style.left).toBe("-1px");
+        expect(knot.style.left).toBe("-2px");
         expect(knot.style.right).toBe("0px");
       });
 

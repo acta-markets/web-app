@@ -31,7 +31,7 @@ export function ChartSkeleton() {
         <div className="absolute inset-x-0 bottom-[28px] border-t border-bg-border" />
       </div>
       {/* the price rail */}
-      <div className="relative h-[234px] w-[150px] shrink-0 border-l border-bg-border max-md:hidden">
+      <div className="relative h-[234px] w-[150px] shrink-0 max-md:hidden">
         {RAIL_TICKS.map((top) => (
           <div key={top} className={cn(BONE, "absolute right-[11px] h-2.5 w-9")} style={{ top }} />
         ))}

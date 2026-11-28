@@ -1731,7 +1731,7 @@ export function ThesisChart({
             />
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 rounded-bl-[var(--radius)] transition-colors duration-200"
+              className="pointer-events-none absolute inset-x-0 transition-colors duration-200"
               style={{ top: Math.max(0, strikeY), bottom: axisHeight, background: direction === "below" ? "rgba(34,197,94,0.07)" : "rgba(239,68,68,0.06)" }}
             />
             {/* zone labels: kept out of the click targets and lifted above the frosted future pane */}
@@ -2003,9 +2003,17 @@ export function ThesisChart({
             // as wide as the knot (the sizer below), never narrower than a tick's two numbers
             // with their two words in front, and as tall as the pane: it ends at the time
             // axis line, where the zones' tint ends
-            className="relative min-w-[132px] shrink-0 self-start border-l border-bg-border max-md:hidden"
+            // No rule down its left side: the plot's tint ends there and that is edge enough. A
+            // rule stayed a seam between the plot and a step section's wash (Tim, 28 Nov 2026).
+            className="relative min-w-[132px] shrink-0 self-start max-md:hidden"
             style={{ height: CHART_HEIGHT - axisHeight }}
           >
+            {/* Under the rail, the same 1 px line the plot has for its foot: the plot's is the
+                top line of the library's time axis, drawn in the canvas, so the rail draws its
+                own and the chart's box has one bottom edge. Without it the plot ended a pixel
+                lower than the rail beside it. It starts a pixel inside the plot, where the
+                canvas stops its own line short. */}
+            <div aria-hidden="true" className="pointer-events-none absolute -left-px right-0 top-full h-px" style={{ background: BORDER }} />
             {/* One step up, one step down. The whole of the rail over the knot is one button and
                 the whole of it under the knot another (Tim, 28 Nov 2026): a click anywhere in a
                 section moves the strike one strike that way, as an arrow key does. Each carries
@@ -2033,16 +2041,24 @@ export function ThesisChart({
                       aria-label={step > 0 ? "Higher strike" : "Lower strike"}
                       data-testid={step > 0 ? "strike-up" : "strike-down"}
                       onClick={() => stepStrike(to)}
-                      // the app's corner, as the knot between them and every other button has
-                      className="group absolute inset-x-0 rounded-[var(--radius)] transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-[rgba(128,201,182,0.08)] enabled:active:bg-[rgba(128,201,182,0.16)] disabled:cursor-default"
+                      // Its wash meets the plot with no gap (Tim, 28 Nov 2026): the rail has no rule
+                      // between them, and it is square where it meets the plot and the knot. The
+                      // app's corner is on the box's two top corners, the plot's and this rail's;
+                      // the box's foot is the time axis's straight line.
+                      className={cn(
+                        "group absolute inset-x-0 transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-[rgba(128,201,182,0.08)] enabled:active:bg-[rgba(128,201,182,0.16)] disabled:cursor-default",
+                        // the upper one has the box's top right corner; the lower one ends on the
+                        // box's straight bottom line, square
+                        step > 0 && "rounded-tr-[var(--radius)]",
+                      )}
                       style={step > 0 ? { top: 0, height: Math.max(0, tops.strike - edge) } : { top: tops.strike + edge, bottom: 0 }}
                     >
                       <Chevron
                         kind="menu"
                         className={cn(
-                          // its drawn corner starts 4 px inside its box: at 6 the arrow's left edge is on
+                          // its drawn corner starts 4 px inside its box: at 7 the arrow's left edge is on
                           // the rail's left text edge, with the knot's hand and the "Price" / "Profit" words
-                          "absolute left-[6px] h-4 w-4 text-accent-secondary transition-colors group-enabled:group-hover:text-content-primary group-disabled:opacity-25",
+                          "absolute left-[7px] h-4 w-4 text-accent-secondary transition-colors group-enabled:group-hover:text-content-primary group-disabled:opacity-25",
                           step > 0 && "rotate-180",
                         )}
                         style={{ top: arrowTop }}
@@ -2074,10 +2090,11 @@ export function ThesisChart({
                 {...strikeSlider}
                 data-place="rail"
                 className={HANDLE}
-                // From the plot's edge (over the rail's own border, so the line runs into it) to
-                // the rail's right edge, which is its own width away: its price then ends where
-                // every tick's price ends.
-                style={{ top: tops.strike, left: -1, right: 0, "--grab": `${STEP_ARROW_GAP - 2}px` } as React.CSSProperties}
+                // From 2 px inside the plot's edge to the rail's right edge. The plot draws its
+                // lines to a pixel short of its edge, so the knot reaches in for the strike line
+                // to run into it; its left padding is 2 px more, which keeps its hand and words
+                // on the rail's text edge. Its price ends where every tick's price ends.
+                style={{ top: tops.strike, left: -2, right: 0, paddingLeft: 12, "--grab": `${STEP_ARROW_GAP - 2}px` } as React.CSSProperties}
               >
                 <span className="flex items-center gap-1" aria-hidden="true">
                   {/* an open hand at rest, a closed one while held */}
@@ -2111,7 +2128,7 @@ export function ThesisChart({
                     key={t.y}
                     data-testid={key ? "chart-rail-key" : undefined}
                     className="pointer-events-none absolute -translate-y-1/2 whitespace-nowrap text-right font-mono text-[12px] font-semibold tracking-[-0.02em] leading-[1.15] tabular-nums"
-                    style={{ top: t.y, right: RAIL_TEXT_INSET, left: key ? RAIL_TEXT_INSET - 1 : undefined }}
+                    style={{ top: t.y, right: RAIL_TEXT_INSET, left: key ? RAIL_TEXT_INSET : undefined }}
                   >
                     <div className={cn("text-content-secondary", row)}>
                       {key ? <span>Price</span> : null}
