@@ -3,7 +3,7 @@
 import { AppPageHeader } from "@/components/app-ui/app-page-header";
 import { AppPill } from "@/components/app-ui/app-pill";
 import { TYPE_NOTE } from "@/components/app-ui/type-styles";
-import { SolanaConnectButton } from "@/components/solana/solana-connect-button";
+import { ConnectWalletAction } from "@/components/wallet/connect-wallet-action";
 import { useSolana } from "@/components/solana/solana-wallet-provider";
 import { useNowSecs } from "@/components/vaults/use-vaults";
 import { cn } from "@/lib/cn";
@@ -74,7 +74,7 @@ export function RewardsClient() {
               awardsFailed={awards.error !== null}
               ui={ui}
               board={board}
-              connect={<SolanaConnectButton />}
+              connect={<ConnectWalletAction />}
             />
           </>
         )}
