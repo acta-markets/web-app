@@ -718,14 +718,17 @@ export function SentenceTrade({
           value: a.symbol,
           label: a.symbol,
           group: a.group,
+          // a round mark, as on the pill that opens this menu (Tim, 28 Nov 2026)
           icon: getTokenLogoSrc(a.symbol) ? (
             <img
               src={getTokenLogoSrc(a.symbol)}
               alt=""
-              className="h-4 w-4 shrink-0 rounded-[var(--radius)] border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
+              className="h-4 w-4 shrink-0 rounded-full border border-[rgba(240,240,240,0.1)] bg-content-primary object-cover"
             />
           ) : (
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[var(--radius)] border border-[rgba(240,240,240,0.1)] bg-action-primary font-mono text-[12px] font-medium leading-none text-content-primary">
+            // two letters at half the mark's size, as the pill's stand-in has them: at the
+            // text's 12px they do not fit inside a circle
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[rgba(240,240,240,0.1)] bg-action-primary font-mono text-[8px] font-medium leading-none text-content-primary">
               {a.symbol.slice(0, 2)}
             </span>
           ),
