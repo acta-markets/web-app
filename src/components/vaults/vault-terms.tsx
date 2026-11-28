@@ -17,8 +17,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function ScopeList({ title, items }: { title: string; items: string[] }) {
   return (
     <div>
-      <h3 className="font-mono text-sm text-content-secondary">{title}</h3>
-      <ul className="mt-2 list-disc space-y-2 pl-5 font-mono text-sm leading-[1.5] text-content-primary marker:text-accent-secondary">
+      <h3 className="font-mono text-base text-content-secondary">{title}</h3>
+      <ul className="mt-2 list-disc space-y-2 pl-5 font-mono text-base leading-[1.5] text-content-primary marker:text-accent-secondary">
         {items.map((item) => <li key={item}>{item}</li>)}
       </ul>
     </div>
@@ -56,7 +56,7 @@ function Capacity({ vault, symbol }: { vault: Vault; symbol: string }) {
       <div className="flex h-1.5 w-[120px] border border-accent-primary bg-accent-primary/20" aria-hidden="true">
         <div className="h-full bg-accent-primary" style={{ width: `${usedPct}%` }} />
       </div>
-      <span className="text-[14px] tabular-nums text-content-secondary">
+      <span className="text-[12px] tabular-nums text-content-secondary">
         {formatTokenAmount(remaining, decimals, { compact: true })} {symbol} left
       </span>
     </div>
@@ -66,7 +66,7 @@ function Capacity({ vault, symbol }: { vault: Vault; symbol: string }) {
 export function VaultTerms({ vault, symbol }: { vault: Vault; symbol: string }) {
   const secondSymbol = tokenDisplayName(vault.second_mint);
   return (
-    <dl className="divide-y divide-bg-border font-mono text-sm leading-[1.3] tracking-[-0.28px]">
+    <dl className="divide-y divide-bg-border font-mono text-[12px] leading-[1.3] tracking-[-0.28px]">
       <Row label="Management fee">
         {vault.management_fee_bps > 0 ? formatBps(vault.management_fee_bps) : "None"}
       </Row>
@@ -117,7 +117,7 @@ export function VaultRisks() {
           ]}
         />
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 pt-5 font-mono text-sm">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 pt-5 font-mono text-[12px]">
         <Link prefetch={false} href="/docs/guide/deposits-and-withdrawals" className="text-accent-secondary hover:text-accent-primary">
           Deposits and withdrawals
         </Link>

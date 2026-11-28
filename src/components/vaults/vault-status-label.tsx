@@ -22,7 +22,7 @@ export function VaultStatusLabel({
   return (
     <span
       className={cn(
-        "inline-flex min-w-0 gap-1.5 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary",
+        "inline-flex min-w-0 gap-1.5 font-mono text-[12px] leading-[1.2] tracking-[-0.28px] text-content-secondary",
         wrap ? "items-baseline" : "items-center",
         className,
       )}

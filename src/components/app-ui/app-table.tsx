@@ -12,7 +12,7 @@ export function AppTable({
         className
       )}
     >
-      <table className="min-w-full text-sm" {...props} />
+      <table className="min-w-full text-[12px]" {...props} />
     </div>
   );
 }
@@ -24,7 +24,7 @@ export function AppTh({
   return (
     <th
       className={cn(
-        "whitespace-nowrap px-5 py-3 text-left text-sm font-medium tracking-[-0.02em] text-content-secondary",
+        "whitespace-nowrap px-5 py-3 text-left text-[12px] font-medium tracking-[-0.02em] text-content-secondary",
         className
       )}
       {...props}
@@ -39,7 +39,7 @@ export function AppTd({
   return (
     <td
       className={cn(
-        "whitespace-nowrap px-5 py-5 text-sm font-medium text-content-primary",
+        "whitespace-nowrap px-5 py-5 text-[12px] font-medium text-content-primary",
         className
       )}
       {...props}

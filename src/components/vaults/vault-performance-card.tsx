@@ -56,14 +56,14 @@ export function VaultPerformanceCard({ vault, symbol, cycles, finished, nowSecs,
   return (
     <section aria-label="Vault performance" className="flex min-w-0 flex-col gap-4 p-5 max-md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-space text-2xl font-semibold leading-[1.2] tracking-[-0.48px] text-content-primary">
+        <h2 className="font-space text-base font-semibold leading-[1.2] tracking-[-0.02em] text-content-primary">
           {selectedSeries === "return" ? "Cumulative return" : "TVL"}
         </h2>
         {ranges.length > 1 ? (
           <div role="group" aria-label="Range" className="flex items-center gap-3">
             {ranges.map((r) => (
               <button key={r.value} type="button" aria-pressed={selectedRange.value === r.value} onClick={() => setRange(r.value)}
-                className={cn("font-mono text-sm font-medium transition-colors", selectedRange.value === r.value ? "text-accent-secondary" : "text-content-secondary hover:text-content-primary")}>
+                className={cn("font-mono text-[12px] font-medium transition-colors", selectedRange.value === r.value ? "text-accent-secondary" : "text-content-secondary hover:text-content-primary")}>
                 {r.label}
               </button>
             ))}
@@ -77,19 +77,19 @@ export function VaultPerformanceCard({ vault, symbol, cycles, finished, nowSecs,
       ) : null}
       <div className="min-w-0">
         {loading ? <div className="h-[280px] animate-pulse bg-action-tertiary" /> : points.length < 2 ? (
-          <div className="flex h-[280px] items-center justify-center border-y border-bg-border px-6 text-center font-mono text-sm text-content-secondary">{empty}</div>
+          <div className="flex h-[280px] items-center justify-center border-y border-bg-border px-6 text-center font-mono text-[12px] text-content-secondary">{empty}</div>
         ) : (
           <VaultPerformanceChart key={selectedSeries} points={points} kind={selectedSeries === "return" ? "percent" : "amount"} rangeStart={since} />
         )}
       </div>
-      {!loading && !(unavailable && points.length === 0) ? <p className="font-mono text-[14px] leading-[1.45] text-content-secondary">
+      {!loading && !(unavailable && points.length === 0) ? <p className="font-mono text-[12px] leading-[1.45] text-content-secondary">
         {selectedSeries === "return"
           ? `${finished.length} completed ${finished.length === 1 ? "cycle" : "cycles"}. Compounded return in ${symbol}${since === null ? " for the current capital generation" : " over the selected range"}.`
           : `Booked equity in ${symbol} at cycle boundaries, including deposits and withdrawals.`}
       </p> : null}
-      {unavailable && points.length >= 2 ? <p role="status" className="font-mono text-[14px] leading-[1.45] text-content-secondary">Couldn&apos;t refresh history. Showing the last loaded cycles.</p> : null}
-      {truncated ? <p className="font-mono text-[14px] leading-[1.45] text-content-secondary">Showing the latest 200 cycles.</p> : null}
-      <dl className="mt-auto grid grid-cols-2 gap-4 border-t border-bg-border pt-4 font-mono text-sm">
+      {unavailable && points.length >= 2 ? <p role="status" className="font-mono text-[12px] leading-[1.45] text-content-secondary">Couldn&apos;t refresh history. Showing the last loaded cycles.</p> : null}
+      {truncated ? <p className="font-mono text-[12px] leading-[1.45] text-content-secondary">Showing the latest 200 cycles.</p> : null}
+      <dl className="mt-auto grid grid-cols-2 gap-4 border-t border-bg-border pt-4 font-mono text-[12px]">
         <div>
           <dt className="text-content-secondary">Max drawdown</dt>
           <dd className="mt-1 tabular-nums text-content-primary">{formatPercent(vault.performance?.max_drawdown_pct)}</dd>

@@ -239,7 +239,7 @@ function VaultDepositFlow({
           <div className="flex min-w-0 items-center gap-3">
             <VaultAssetLogo symbol={symbol} size={32} />
             <div className="min-w-0">
-              <AprLabel apr={apr} className="font-mono text-sm leading-[1.2] text-content-secondary" />
+              <AprLabel apr={apr} className="font-mono text-[12px] leading-[1.2] text-content-secondary" />
               <div
                 className={`font-mono text-base font-medium leading-[1.3] tabular-nums ${apr.muted ? "text-content-secondary" : "text-content-primary"}`}
               >
@@ -272,7 +272,7 @@ function VaultDepositFlow({
         <div className="flex flex-col gap-4">
           <div>
             <div className="font-mono text-base font-medium text-content-primary">{successCopy(requested.action, vault)}</div>
-            <p className="mt-2 font-mono text-sm leading-[1.5] text-content-secondary">
+            <p className="mt-2 font-mono text-[12px] leading-[1.5] text-content-secondary">
               {requested.action === "deposit"
                 ? "Pending until the cycle ends. It earns nothing until then and converts to shares at that cycle's price."
                 : "Pending until it can be processed. Final redemptions can pay out both vault assets."}
@@ -281,7 +281,7 @@ function VaultDepositFlow({
               href={solscanUrl("tx", requested.signature)}
               target="_blank"
               rel="noreferrer noopener"
-              className={cn(TYPE_LINK, "mt-3 text-sm")}
+              className={cn(TYPE_LINK, "mt-3 text-[12px]")}
             >
               View on Solscan
               <Chevron kind="go" className="h-4 w-4" />
@@ -335,7 +335,7 @@ function VaultDepositFlow({
             />
           )}
 
-          <dl className="space-y-1.5 font-mono text-sm leading-[1.3] tracking-[-0.28px]">
+          <dl className="space-y-1.5 font-mono text-[12px] leading-[1.3] tracking-[-0.28px]">
             <div className="flex justify-between gap-3">
               <dt className="text-content-secondary">Last share price</dt>
               <dd className="tabular-nums text-content-primary">
@@ -359,7 +359,7 @@ function VaultDepositFlow({
           </dl>
 
           {cta.notice ? (
-            <p className="font-mono text-sm leading-[1.45] text-content-primary">
+            <p className="font-mono text-base leading-[1.45] text-content-primary">
               {cta.notice}
             </p>
           ) : null}
@@ -367,7 +367,7 @@ function VaultDepositFlow({
           {tx.kind === "failed" ? (
             <p
               role={tx.tone === "error" ? "alert" : "status"}
-              className={`font-mono text-sm leading-[1.45] ${tx.tone === "error" ? "text-error" : "text-content-secondary"}`}
+              className={`font-mono text-base leading-[1.45] ${tx.tone === "error" ? "text-error" : "text-content-secondary"}`}
             >
               {tx.message}
               {tx.signature ? (
@@ -387,12 +387,12 @@ function VaultDepositFlow({
           ) : null}
 
           {tx.kind === "success" ? (
-            <p role="status" className="font-mono text-sm leading-[1.45] text-accent-secondary">
+            <p role="status" className="font-mono text-base leading-[1.45] text-accent-secondary">
               {successCopy(tx.action, vault)}.
             </p>
           ) : null}
 
-          <p className="font-mono text-[14px] leading-[1.45] text-content-secondary">
+          <p className="font-mono text-[12px] leading-[1.45] text-content-secondary">
             Requests complete at the end of the cycle, at the share price calculated then. The manager can make bad trades
             and you carry the losses.{" "}
             <Link prefetch={false} href="/docs/guide/returns-and-risks" className="text-accent-secondary hover:text-accent-primary">
@@ -401,7 +401,7 @@ function VaultDepositFlow({
           </p>
 
           {pending ? (
-            <p className="font-mono text-[14px] leading-[1.45] text-content-secondary">Approve the request in your wallet.</p>
+            <p className="font-mono text-[12px] leading-[1.45] text-content-secondary">Approve the request in your wallet.</p>
           ) : null}
 
           <AppButton size="lg" className="w-full" disabled={cta.disabled} onClick={cta.onClick}>

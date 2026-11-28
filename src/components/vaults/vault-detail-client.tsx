@@ -96,8 +96,8 @@ export function VaultDetailClient({ pda }: { pda: string }) {
     } else {
       body = (
         <AppCard className="mt-6 flex flex-col items-center gap-4 px-6 py-12 text-center">
-          <h1 className="font-space text-3xl font-semibold text-content-primary">Vault not found</h1>
-          <p className="max-w-[420px] font-mono text-sm leading-[1.5] text-content-secondary">
+          <h1 className="font-space text-2xl font-semibold text-content-primary">Vault not found</h1>
+          <p className="max-w-[420px] font-mono text-base leading-[1.5] text-content-secondary">
             It may have closed. Closed vaults leave the list, though their history stays on chain.
           </p>
           <AppButtonLink href="/earn" variant="secondary">
@@ -136,19 +136,19 @@ export function VaultDetailClient({ pda }: { pda: string }) {
             <div className="flex min-w-0 items-center gap-4">
               <VaultAssetLogo symbol={meta.assetSymbol} size={40} />
               <div className="flex min-w-0 flex-col gap-1">
-                <h1 className="min-w-0 break-words font-space text-[32px] font-semibold leading-[1.1] tracking-[-0.64px] text-content-primary max-md:text-2xl">
+                <h1 className="min-w-0 break-words font-space text-2xl font-semibold leading-[1.1] tracking-[-0.02em] text-content-primary">
                   {meta.name}
                 </h1>
                 {/* what the vault does, in its operator's words: under the name, not run into it */}
                 {meta.tagline ? (
-                  <p className="font-mono text-sm leading-[1.4] tracking-[-0.02em] text-content-secondary [overflow-wrap:anywhere]">{meta.tagline}</p>
+                  <p className="font-mono text-[12px] leading-[1.4] tracking-[-0.02em] text-content-secondary [overflow-wrap:anywhere]">{meta.tagline}</p>
                 ) : null}
               </div>
             </div>
             {meta.strategy ? (
               <p className="font-mono text-base leading-[1.4] tracking-[-0.02em] text-content-primary [overflow-wrap:anywhere]">{meta.strategy}</p>
             ) : null}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm leading-[1.2] tracking-[-0.28px] text-content-secondary">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[12px] leading-[1.2] tracking-[-0.28px] text-content-secondary">
               <span>
                 Deposit <span className="text-content-primary">{meta.assetSymbol}</span>
               </span>
@@ -170,7 +170,7 @@ export function VaultDetailClient({ pda }: { pda: string }) {
               ) : null}
             </div>
             {meta.description ? (
-              <p className="max-w-[560px] font-mono text-sm leading-[1.5] tracking-[-0.02em] text-content-secondary [overflow-wrap:anywhere]">
+              <p className="max-w-[560px] font-mono text-base leading-[1.5] tracking-[-0.02em] text-content-secondary [overflow-wrap:anywhere]">
                 {meta.description}
               </p>
             ) : null}
@@ -203,7 +203,7 @@ export function VaultDetailClient({ pda }: { pda: string }) {
       <VaultCurrentCycle vault={vault} cycles={cycles} nowSecs={nowSecs} />
 
       {vaultState.error ? (
-        <p role="status" className="mt-6 font-mono text-sm text-content-secondary">
+        <p role="status" className="mt-6 font-mono text-[12px] text-content-secondary">
           Couldn&apos;t refresh. Showing the last loaded figures.
         </p>
       ) : null}

@@ -15,7 +15,7 @@ export function AppTextTabs<T extends string>({
   className?: string;
 }) {
   return (
-    <div role="tablist" aria-label={ariaLabel} className={cn("flex gap-6 overflow-x-auto", className)}>
+    <div role="tablist" aria-label={ariaLabel} className={cn("flex gap-6 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden", className)}>
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -26,7 +26,7 @@ export function AppTextTabs<T extends string>({
             aria-selected={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "-mb-px shrink-0 border-b-2 py-3 font-mono text-sm leading-[1.2] tracking-[-0.28px] transition-colors",
+              "-mb-px shrink-0 border-b-2 py-3 font-mono text-[12px] leading-[1.2] tracking-[-0.28px] transition-colors",
               active
                 ? "border-accent-primary text-content-primary"
                 : "border-transparent text-content-secondary hover:text-content-primary",

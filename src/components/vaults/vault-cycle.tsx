@@ -40,10 +40,10 @@ export function VaultCurrentCycle({ vault, cycles = [], nowSecs }: { vault: Vaul
   return (
     <section aria-label="Current cycle" className="border border-t-0 border-bg-border bg-bg-primary p-5 max-md:p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-space text-xl font-semibold leading-[1.2] tracking-[-0.02em] text-content-primary">
+        <h2 className="font-space text-base font-semibold leading-[1.2] tracking-[-0.02em] text-content-primary">
           Current cycle{current ? ` · ${Number(current.cycle_number) + 1}` : ""}
         </h2>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-sm">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[12px]">
           <span className="text-content-primary">{cyclePhaseLabel(vault)}</span>
           {running ? (
             <span className="tabular-nums text-content-secondary">
@@ -101,7 +101,7 @@ function SortHeader({ column, sort, onSort, align, children }: {
 /** Current price from the same response as the position rows. */
 export function VaultSpot({ exposure }: { exposure: VaultExposure }) {
   return (
-    <p className="font-mono text-sm tabular-nums text-content-secondary">
+    <p className="font-mono text-[12px] tabular-nums text-content-secondary">
       {exposureSpots(exposure).map((spot) => (
         <span key={spot.symbol}>{spot.symbol} <span className="text-content-primary">{spot.price}</span></span>
       ))}
@@ -147,14 +147,14 @@ export function VaultExposureCard({ exposure, positions = [] }: { exposure: Vaul
   return (
     <div>
       {narrow ? (
-        <div className="font-mono text-sm leading-[1.3] tracking-[-0.28px]">
+        <div className="font-mono text-[12px] leading-[1.3] tracking-[-0.28px]">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-bg-border pb-3 text-content-secondary">
             <span>Type{typeFilter}</span>
             <span>Side{sideFilter}</span>
             <span>ITM / OTM{moneynessFilter}</span>
           </div>
           <div role="group" aria-label="Sort positions" className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-bg-border py-3 text-content-secondary">
-            <span className="text-[14px] font-medium text-content-tertiary">Sort</span>
+            <span className="text-[12px] font-medium text-content-tertiary">Sort</span>
             {COLUMNS.map((column) => {
               const active = sort.key === column.key;
               return (
@@ -180,7 +180,7 @@ export function VaultExposureCard({ exposure, positions = [] }: { exposure: Vaul
           </ul>
         </div>
       ) : (
-        <table className="w-full font-mono text-sm leading-[1.3] tracking-[-0.28px]">
+        <table className="w-full font-mono text-[12px] leading-[1.3] tracking-[-0.28px]">
           <thead className="text-left text-content-secondary">
             <tr>
               <th className="pb-2 font-normal">Type{typeFilter}</th>
@@ -205,20 +205,20 @@ export function VaultExposureCard({ exposure, positions = [] }: { exposure: Vaul
           </tbody>
         </table>
       )}
-      {visible.length === 0 ? <p className="py-3 font-mono text-sm text-content-secondary">No positions match.</p> : null}
+      {visible.length === 0 ? <p className="py-3 font-mono text-[12px] text-content-secondary">No positions match.</p> : null}
       {visible.length > FIRST_ROWS ? (
         <button
           type="button"
           aria-expanded={showAll}
           onClick={() => setShowAll((was) => !was)}
-          className={cn(TYPE_LINK, "mt-3 text-sm")}
+          className={cn(TYPE_LINK, "mt-3 text-[12px]")}
         >
           {showAll ? "Show fewer" : `Show all ${visible.length} positions`}
           <Chevron kind="go" className="h-4 w-4" />
         </button>
       ) : null}
       {totals.length ? (
-        <dl className="mt-3 border-t border-bg-border font-mono text-sm leading-[1.3] tracking-[-0.28px]">
+        <dl className="mt-3 border-t border-bg-border font-mono text-[12px] leading-[1.3] tracking-[-0.28px]">
           <Row label="Net P&L at spot">
             {totals.map((t) => (
               <div key={t.quoteMint}>{t.value}</div>
@@ -226,7 +226,7 @@ export function VaultExposureCard({ exposure, positions = [] }: { exposure: Vaul
           </Row>
         </dl>
       ) : null}
-      <p className="mt-1 font-mono text-[14px] leading-[1.45] text-content-secondary">
+      <p className="mt-1 font-mono text-[12px] leading-[1.45] text-content-secondary">
         If every position expired at the current price: premium plus payoff. Bought positions exclude the protocol fee.
       </p>
     </div>

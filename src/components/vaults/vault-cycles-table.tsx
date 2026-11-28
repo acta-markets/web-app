@@ -66,7 +66,7 @@ export function VaultCyclesTable({
         </tbody>
       </AppTable>
       {rows.length > limit ? (
-        <button type="button" className={cn(TYPE_LINK, "self-start text-sm")} onClick={() => setLimit((n) => n + PAGE)}>
+        <button type="button" className={cn(TYPE_LINK, "self-start text-[12px]")} onClick={() => setLimit((n) => n + PAGE)}>
           Show more
           <Chevron kind="go" className="h-4 w-4" />
         </button>
