@@ -8,7 +8,6 @@ import {
   INLINE_PILL_GLYPH,
   type AppInlineSelectOption,
 } from "@/components/app-ui/app-inline-select";
-import { AppWheel } from "@/components/app-ui/app-wheel";
 import { cn } from "@/lib/cn";
 import { getTokenLogoSrc } from "@/lib/token-assets";
 import type { TakerSide } from "@/lib/spreads";
@@ -24,10 +23,9 @@ const PILL = {
   above: "border-[rgba(73,170,25,0.6)] bg-[rgba(73,170,25,0.24)] text-content-primary hover:border-additional-green-primary-deep hover:bg-[rgba(73,170,25,0.36)]",
   below: "border-[rgba(255,51,71,0.55)] bg-[rgba(255,51,71,0.22)] text-content-primary hover:border-additional-red-primary hover:bg-[rgba(255,51,71,0.34)]",
   accent: "border-accent-primary/60 bg-accent-primary/25 text-content-primary hover:border-accent-primary hover:bg-accent-primary/40",
-  // A control that is not part of the belief: a buy's strike, in the second line. Grey like the
-  // words around it, so the goal above it stays the one price that stands out.
+  // A control that is not part of the belief: the buying / selling switch and a buy's strike,
+  // in the second line. Grey like the words around them, so the belief's pills stand out.
   quiet: "border-[rgba(240,240,240,0.4)] bg-[rgba(240,240,240,0.16)] text-content-primary hover:border-[rgba(240,240,240,0.6)] hover:bg-[rgba(240,240,240,0.24)]",
-  side: "border-[rgba(46,154,255,0.55)] bg-[rgba(46,154,255,0.2)] text-content-primary hover:border-[rgba(46,154,255,0.85)] hover:bg-[rgba(46,154,255,0.3)]",
 } as const;
 
 /** The direction pill is plain text when the UI derives it from a strategy, so it never hints at a hover. */
@@ -69,9 +67,9 @@ function Pending() {
   return <span className="text-content-secondary">&hellip;</span>;
 }
 
-// The expiry is a wheel (`AppWheel`), turned like the time wheel of a phone's alarm. At rest
-// it is a pill like the others, with the switch mark; a click opens it in place, the chosen
-// date where it was and the date before and the date after faded above and below it.
+// The expiry is a menu like the asset's, the goal's and the strike's (Tim, 28 Nov 2026: "make
+// it a normal menu"): every date on offer, listed under the pill. It was a wheel that opened in
+// place, over the line above it and the chart's top.
 
 export type SentenceOptions = {
   assets: ReadonlyArray<AppInlineSelectOption>;
@@ -84,8 +82,8 @@ export type SentenceOptions = {
 /**
  * Every value the direction and strike pills can show for this asset, across both
  * directions and all prices, so each pill holds its widest value's width and no choice
- * reflows the sentence. (The asset pill hugs its ticker and the expiry wheel holds its own
- * widest date, so neither needs a width reserve here.)
+ * reflows the sentence. (The asset pill hugs its ticker and the expiry pill reserves its own
+ * widest date where it is drawn, so neither needs a width reserve here.)
  */
 export type SentenceReserve = {
   strikes: ReadonlyArray<{ key: string; label: string }>;
@@ -203,7 +201,9 @@ function SideToggle({ side, verb, disabled, onFlip }: { side: TakerSide; verb: s
       onClick={onFlip}
       className={cn(
         INLINE_PILL,
-        PILL.side,
+        // grey like the strike beside it (Tim, 28 Nov 2026): the quiet line's controls are not
+        // part of the belief, so neither takes a colour of its own
+        PILL.quiet,
         // on a phone the tap area fills the line's height, not just the word's
         "max-md:after:absolute max-md:after:inset-x-0 max-md:after:-inset-y-1 max-md:after:content-['']",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-primary",
@@ -336,9 +336,11 @@ export function ThesisMoveLine({
   compact: boolean;
   secondRef?: React.RefObject<HTMLParagraphElement>;
 }) {
-  // One line, always: the quiet line never wraps, and it shrinks (--fit) to fit its card
-  // rather than breaking. The width is measured against the full nowrap line, so it assumes
-  // the whole number of symbols whatever the prices say.
+  // One line from a tablet up: there the quiet line never wraps, and it shrinks (--fit) to fit
+  // its card rather than breaking. The width is measured against the full nowrap line, so it
+  // assumes the whole number of symbols whatever the prices say. On a phone the type is a fixed
+  // 17px and the line is twice the screen's width, so there it wraps like any sentence: held
+  // to one line it made the whole page scroll sideways.
   const self = React.useRef<HTMLParagraphElement>(null);
   const fitRef = secondRef ?? self;
   const contentKey = [move.strike ?? "", move.rest].join("|");
@@ -348,7 +350,7 @@ export function ThesisMoveLine({
       ref={fitRef}
       data-testid="thesis-move"
       className={cn(
-        "font-space font-semibold tracking-[-0.03em] text-content-primary whitespace-nowrap transition-[font-size] duration-200 ease-out",
+        "font-space font-semibold tracking-[-0.03em] text-content-primary whitespace-nowrap max-md:whitespace-normal transition-[font-size] duration-200 ease-out",
         compact ? COMPACT_LINE : "-mt-1 text-[18px] font-medium leading-[1.3] tracking-[-0.02em] max-md:mt-0 max-md:text-[15px]",
       )}
     >
@@ -445,6 +447,7 @@ export function ThesisSentence({
   // The strike's own control. Selling, it is the first line's price; buying, the first line's
   // price is the goal and this sits in the second line, inside the option's name.
   const strikeInSecond = goal != null && move.strike != null;
+  const expiryLabel = options.expiries.find((o) => o.value === expiryValue)?.label ?? null;
   const strikePill = (
     <StrikeControl
       strikeValue={strikeValue}
@@ -518,14 +521,18 @@ export function ThesisSentence({
             break never leaves the preposition stranded at the end of the line. */}
         <span className="whitespace-nowrap">
           {SENTENCE.on}{" "}
-          <AppWheel
+          <AppInlineSelect
             label="Expiry"
             value={expiryValue}
             options={options.expiries}
-            className={PILL.violet}
             onChange={onExpiry}
             disabled={disabled || !ready || options.expiries.length === 0}
-          />
+            className={PILL.violet}
+            // the pill keeps the width of its longest date, so choosing one never reflows the line
+            reserve={options.expiries.map((o) => ({ key: o.value, face: <span>{o.label}</span> }))}
+          >
+            {expiryLabel ? <span>{expiryLabel}</span> : <Pending />}
+          </AppInlineSelect>
         </span>
       </p>
       {/* the trade and its downside, on a line of its own, so it never touches how the belief

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { handleTops, optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart, zoneLabelY } from "./thesis-chart";
+import { handleTops, optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart, nowTagY, zoneLabelY } from "./thesis-chart";
 
 const setData = vi.hoisted(() => vi.fn());
 /** The price under a pane y; null (the default) is a chart with no scale to read yet. */
@@ -250,6 +250,157 @@ describe("thesis chart", () => {
       // the domain is centred on the strike, so changing it scrolls the chart (a re-fit)
       rerender(<ThesisChart {...props} direction="above" strikes={strikes.map((s) => ({ ...s }))} strike={105} />);
       expect(setData).toHaveBeenCalled();
+    });
+
+    describe("where the tag is", () => {
+      // a pane where $95 is y 130 and a dollar is 2 px: a $100 goal's line is 10 px above the strike's
+      const goal = { goal: { price: 100, label: "$100 +$5" }, goals: [100, 105], onGoal: () => {} };
+      const noRail = () =>
+        vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }));
+      beforeEach(() => priceToCoordinate.mockImplementation((price) => 130 - (price - 95) * 2));
+      afterEach(() => vi.unstubAllGlobals());
+
+      it("is the knot in the price rail, on its own line however close the goal's line is, and as wide as the rail", async () => {
+        mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+        render(<ThesisChart {...props} direction="above" strikes={strikes} {...goal} />);
+        const knot = await screen.findByRole("slider", { name: "Strike" });
+        expect(screen.getByTestId("chart-price-rail").contains(knot)).toBe(true);
+        await waitFor(() => expect(knot.style.top).toBe("130px"));
+        // the goal's tag is in the plot, a column away: it only keeps off the strike line (half
+        // a tag and 3 px), so the line is seen running into the knot
+        expect(screen.getByRole("slider", { name: "Goal" }).style.top).toBe("113px");
+        expect(knot.textContent).toBe("STRIKE$95");
+        // from the plot's edge to the rail's: its price ends where the ticks' prices end
+        expect(knot.style.left).toBe("-1px");
+        expect(knot.style.right).toBe("0px");
+      });
+
+      it("has a section of the rail over it and one under it: a click anywhere in one is one strike that way, and the last strike's section is off", async () => {
+        const onStrike = vi.fn();
+        mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+        const { rerender } = render(<ThesisChart {...props} direction="above" strikes={strikes} onStrike={onStrike} />);
+        const knot = await screen.findByRole("slider", { name: "Strike" });
+        await waitFor(() => expect(knot.style.top).toBe("130px"));
+        const up = screen.getByRole("button", { name: "Higher strike" });
+        const down = screen.getByRole("button", { name: "Lower strike" });
+        // in the rail: everything over the knot (28 px tall, on the line at 130), and everything under it
+        expect(screen.getByTestId("chart-price-rail").contains(up)).toBe(true);
+        expect([up.style.top, up.style.height]).toEqual(["0px", "116px"]);
+        expect([down.style.top, down.style.bottom]).toEqual(["144px", "0px"]);
+        // each carries its arrow, beside the knot
+        expect(up.querySelector("[data-chevron]")).toBeTruthy();
+        expect(down.querySelector("[data-chevron]")).toBeTruthy();
+        fireEvent.click(up);
+        expect(onStrike).toHaveBeenLastCalledWith(100 * 1e9);
+        fireEvent.click(down);
+        expect(onStrike).toHaveBeenLastCalledWith(90 * 1e9);
+        // at the highest strike on offer there is nowhere further up: that section is off, and says why
+        rerender(<ThesisChart {...props} direction="above" strikes={strikes} strike={105} onStrike={onStrike} />);
+        const top = screen.getByRole("button", { name: "Higher strike" }) as HTMLButtonElement;
+        expect(top.disabled).toBe(true);
+        expect(top.title).toBe("This is the highest strike");
+        expect((screen.getByRole("button", { name: "Lower strike" }) as HTMLButtonElement).disabled).toBe(false);
+      });
+
+      it("says what a tick's numbers are once, at the outermost tick on the side where the user is right", async () => {
+        // a dollar is 20 px here, so the ticks stand well clear of the knot and are drawn
+        priceToCoordinate.mockImplementation((price) => 130 - (price - 95) * 20);
+        mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+        const { rerender } = render(<ThesisChart {...props} direction="above" strikes={strikes} />);
+        await screen.findByRole("slider", { name: "Strike" });
+        const tops = () => [...screen.getByTestId("chart-price-rail").querySelectorAll<HTMLElement>("div.tabular-nums")].map((t) => parseFloat(t.style.top));
+        // the ticks are drawn again when the history arrives, so each look asks afresh
+        await waitFor(() => {
+          const keys = screen.getAllByTestId("chart-rail-key");
+          expect(keys).toHaveLength(1);
+          // the word stands before the tick's own price; unsized, a tick is its price alone
+          expect(keys[0].textContent).toMatch(/^Price\$/);
+          expect(tops().length).toBeGreaterThan(1);
+          // above: right is up, so it is the highest tick drawn (the smallest y)
+          expect(parseFloat(keys[0].style.top)).toBe(Math.min(...tops()));
+        });
+        // below: right is down, and the words go to the lowest tick
+        rerender(<ThesisChart {...props} direction="below" strikes={strikes} />);
+        await waitFor(() => {
+          const keys = screen.getAllByTestId("chart-rail-key");
+          expect(keys).toHaveLength(1);
+          expect(parseFloat(keys[0].style.top)).toBe(Math.max(...tops()));
+        });
+      });
+
+      it("sets each step arrow on the line of the tick next to the knot, and beside the knot when there is no tick that side", async () => {
+        // a dollar is 20 px here, so there are ticks clear of the knot on both sides
+        priceToCoordinate.mockImplementation((price) => 130 - (price - 95) * 20);
+        mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+        const { unmount } = render(<ThesisChart {...props} direction="above" strikes={strikes} />);
+        await screen.findByRole("slider", { name: "Strike" });
+        const arrowMiddle = (name: string) => {
+          const section = screen.getByRole("button", { name });
+          const arrow = section.querySelector<SVGElement>("[data-chevron]")!;
+          // the arrow's box is 16 px, placed from its section's top
+          return parseFloat(section.style.top) + parseFloat(arrow.style.top) + 8;
+        };
+        await waitFor(() => {
+          const ticks = [...screen.getByTestId("chart-price-rail").querySelectorAll<HTMLElement>("div.tabular-nums")].map((t) => parseFloat(t.style.top));
+          const over = ticks.filter((y) => y < 130);
+          const under = ticks.filter((y) => y > 130);
+          expect(over.length).toBeGreaterThan(0);
+          expect(under.length).toBeGreaterThan(0);
+          // unsized, a tick is one line, its price: the arrow is on it
+          expect(arrowMiddle("Higher strike")).toBeCloseTo(Math.max(...over));
+          expect(arrowMiddle("Lower strike")).toBeCloseTo(Math.min(...under));
+        });
+        unmount();
+        // a dollar is 2 px: every tick is under the knot's own, none is drawn, and the arrows keep to the knot
+        priceToCoordinate.mockImplementation((price) => 130 - (price - 95) * 2);
+        render(<ThesisChart {...props} direction="above" strikes={strikes} />);
+        const knot = await screen.findByRole("slider", { name: "Strike" });
+        await waitFor(() => expect(knot.style.top).toBe("130px"));
+        // half the knot (14), 5 px of air, half the arrow (8)
+        expect(arrowMiddle("Higher strike")).toBe(103);
+        expect(arrowMiddle("Lower strike")).toBe(157);
+      });
+
+      it("makes the rail as wide as the knot at the widest strike on offer", async () => {
+        mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+        render(<ThesisChart {...props} direction="above" strikes={[...strikes, { strike: 1250.5, strike1e9: 1250.5 * 1e9 }]} />);
+        await screen.findByRole("slider", { name: "Strike" });
+        // an unseen copy of the knot's words sets the rail's width; it says the longest price
+        expect(screen.getByTestId("chart-rail-sizer").textContent).toBe("STRIKE$1,250.5");
+        expect(screen.getByTestId("chart-rail-sizer").getAttribute("aria-hidden")).toBe("true");
+      });
+
+      it("is at the plot's right edge where there is no rail (a phone), stepped clear of the goal's", async () => {
+        noRail();
+        const onStrike = vi.fn();
+        mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+        render(<ThesisChart {...props} direction="above" strikes={strikes} onStrike={onStrike} {...goal} />);
+        const tag = await screen.findByRole("slider", { name: "Strike" });
+        expect(screen.getAllByRole("slider", { name: "Strike" })).toHaveLength(1);
+        expect(screen.getByTestId("chart-price-rail").contains(tag)).toBe(false);
+        // the lines are 10 px apart and a tag needs 30: each steps 10 px off its line
+        await waitFor(() => expect(tag.style.top).toBe("140px"));
+        expect(screen.getByRole("slider", { name: "Goal" }).style.top).toBe("110px");
+        // the price alone, as the goal's tag is on a phone
+        expect(tag.textContent).toBe("$95");
+        // no rail, so no step arrows either
+        expect(screen.queryByRole("button", { name: "Higher strike" })).toBeNull();
+        // and it is the same control: held and moved, it changes the strike
+        coordinateToPrice.mockImplementation((y) => 95 + (130 - y) / 2);
+        fireEvent.pointerDown(tag, { pointerId: 1, clientY: 130, button: 0, buttons: 1 });
+        fireEvent.pointerMove(tag, { pointerId: 1, clientY: 120, buttons: 1 });
+        expect(onStrike).toHaveBeenLastCalledWith(100 * 1e9);
+      });
+
+      it("keeps the line's own grab band on the line where the tag has stepped off it", async () => {
+        noRail();
+        mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+        const { container } = render(<ThesisChart {...props} direction="above" strikes={strikes} {...goal} />);
+        const tag = await screen.findByRole("slider", { name: "Strike" });
+        await waitFor(() => expect(tag.style.top).toBe("140px"));
+        const band = container.querySelector<HTMLElement>('[aria-hidden="true"][title="Drag to change the strike"]');
+        expect(band?.style.top).toBe("130px");
+      });
     });
 
     it("lets go when the release never reaches the page", async () => {
@@ -519,7 +670,7 @@ describe("projection path containment", () => {
   });
 });
 
-describe("the strike and goal tags at the pane's right edge", () => {
+describe("the strike and goal tags", () => {
   const pane = { top: 36, bottom: 240 };
 
   it("leaves each tag on its own line when the lines are a tag apart or more", () => {
@@ -546,6 +697,17 @@ describe("the strike and goal tags at the pane's right edge", () => {
     expect(handleTops({ strikeY: 260, goalY: 250, goalAbove: true, ...pane })).toMatchObject({ goal: 210, strike: 240 });
   });
 
+  it("never moves the strike's tag when it is in the price rail: the goal's only keeps off the strike line", () => {
+    // far enough apart: both on their lines
+    expect(handleTops({ strikeY: 150, goalY: 120, goalAbove: true, sameColumn: false, ...pane })).toEqual({ strike: 150, goal: 120, grab: 10 });
+    // closer than half a tag and 3 px: the goal's tag steps to that distance, on its own side
+    expect(handleTops({ strikeY: 150, goalY: 140, goalAbove: true, sameColumn: false, ...pane })).toEqual({ strike: 150, goal: 133, grab: 10 });
+    expect(handleTops({ strikeY: 150, goalY: 155, goalAbove: false, sameColumn: false, ...pane })).toEqual({ strike: 150, goal: 167, grab: 10 });
+    expect(handleTops({ strikeY: 150, goalY: 150, goalAbove: false, sameColumn: false, ...pane })).toEqual({ strike: 150, goal: 167, grab: 10 });
+    // each still stays inside the pane
+    expect(handleTops({ strikeY: 150, goalY: 10, goalAbove: true, sameColumn: false, ...pane })).toMatchObject({ strike: 150, goal: 36 });
+  });
+
   it("gives a tag only the grab room that does not reach into its neighbour", () => {
     expect(handleTops({ strikeY: 150, goalY: 116, goalAbove: true, ...pane }).grab).toBe(3);
     expect(handleTops({ strikeY: 150, goalY: 90, goalAbove: true, ...pane }).grab).toBe(10);
@@ -553,43 +715,55 @@ describe("the strike and goal tags at the pane's right edge", () => {
 });
 
 describe("a zone label's place in the pane's centre column", () => {
-  // the upper label: home 42, its zone runs from the top of the pane down to the strike line
-  const upper = { home: 42, min: 14, max: 110 };
-
-  it("stays home whatever else moves, while the live price is elsewhere", () => {
-    expect(zoneLabelY({ ...upper, taken: null })).toBe(42);
-    // the NOW tag and the price's dot from 130 to 165: nowhere near
-    expect(zoneLabelY({ ...upper, taken: [130, 165] })).toBe(42);
-    // just clear: the label's edge is 6px above the NOW tag
-    expect(zoneLabelY({ ...upper, taken: [60, 95] })).toBe(42);
+  it("is its home, always: nothing but its own zone holds it", () => {
+    // the upper label under the range tabs, the lower one above the flip hint
+    expect(zoneLabelY({ home: 42, min: 42, max: 114 })).toBe(42);
+    expect(zoneLabelY({ home: 212, min: 142, max: 212 })).toBe(212);
   });
 
-  it("steps to the nearer clear place in its zone when the live price is on its home", () => {
-    // above the price is nearer, and there is room
-    expect(zoneLabelY({ ...upper, taken: [40, 75] })).toBe(22);
-    // too high for a label above it: below, between the dot and the strike line
-    expect(zoneLabelY({ ...upper, taken: [20, 55] })).toBe(73);
+  it("stays on its own side of the strike line, in the rare pane where the line is at its home", () => {
+    expect(zoneLabelY({ home: 42, min: 42, max: 30 })).toBe(42);
+    expect(zoneLabelY({ home: 212, min: 230, max: 212 })).toBe(230);
+  });
+});
+
+describe("the NOW tag's place beside the zone labels, which do not move", () => {
+  // a 254 px pane: the labels at 42 and 212, each 24 px tall; the flip hint's row below 212
+  const pane = { top: 15, bottom: 212, taken: [[30, 54], [200, 224]] as const };
+
+  it("sits just above the live price's dot wherever that is clear", () => {
+    expect(nowTagY({ spotY: 130, ...pane })).toBe(112);
+    // 6 px under the upper label is still clear
+    expect(nowTagY({ spotY: 90, ...pane })).toBe(72);
   });
 
-  it("steps up into the tab row, in line with the tabs, where the pane has that row free", () => {
-    expect(zoneLabelY({ ...upper, min: 16, row: 16, taken: [40, 75] })).toBe(16);
-    // the NOW tag reaches into the row: below the price instead
-    expect(zoneLabelY({ ...upper, min: 16, row: 16, taken: [24, 59] })).toBe(77);
+  it("goes below the dot where above it is the upper label", () => {
+    // above would be at 62, touching the label that ends at 54
+    expect(nowTagY({ spotY: 80, ...pane })).toBe(98);
+    expect(nowTagY({ spotY: 60, ...pane })).toBe(78);
   });
 
-  it("closes up against the live price where the zone has no room for the usual space", () => {
-    // 6px above the NOW tag would put it at 33, over the tabs: 2px above is 37
-    expect(zoneLabelY({ home: 42, min: 36, max: 96, taken: [51, 86] })).toBe(37);
+  it("stands beside the label when the dot itself is at it", () => {
+    // the dot is on the upper label: just under it is the nearest clear place
+    expect(nowTagY({ spotY: 42, ...pane })).toBe(72);
+    // and on the lower one: just above it, never down in the flip hint's row
+    expect(nowTagY({ spotY: 212, ...pane })).toBe(182);
+    expect(nowTagY({ spotY: 240, ...pane })).toBe(182);
   });
 
-  it("is not shown when no place in its zone is clear of the live price", () => {
-    expect(zoneLabelY({ home: 42, min: 42, max: 60, taken: [30, 65] })).toBeNull();
-    // the lower label, held above the flip hint: the price sits low in a thin zone
-    expect(zoneLabelY({ home: 210, min: 171, max: 210, taken: [165, 200] })).toBeNull();
+  it("uses the row above the upper label when the price is at the very top of the pane", () => {
+    // no room for the usual 6 px there: 2 px from the label's top, inside the pane's edge
+    expect(nowTagY({ spotY: 8, ...pane })).toBe(15);
   });
 
-  it("is pulled inside its zone when the strike line leaves its home outside", () => {
-    expect(zoneLabelY({ home: 42, min: 14, max: 30, taken: null })).toBe(30);
-    expect(zoneLabelY({ home: 212, min: 230, max: 240, taken: null })).toBe(230);
+  it("takes the foot of the pane when no hint lies there", () => {
+    expect(nowTagY({ spotY: 205, ...pane, bottom: 240 })).toBe(182);
+    // under the lower label, close up to it: nearer the dot than the place above the label
+    expect(nowTagY({ spotY: 235, ...pane, bottom: 240 })).toBe(238);
+  });
+
+  it("with no labels to mind is above the dot, inside the pane", () => {
+    expect(nowTagY({ spotY: 130, top: 15, bottom: 240, taken: [] })).toBe(112);
+    expect(nowTagY({ spotY: 20, top: 15, bottom: 240, taken: [] })).toBe(38);
   });
 });
