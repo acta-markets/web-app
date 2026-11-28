@@ -377,6 +377,11 @@ export function ThesisMoveLine({
       className={cn(
         // no transition on the size: text is not animated (Tim, 28 Nov 2026)
         "font-space font-semibold tracking-[-0.03em] text-content-primary whitespace-nowrap max-md:whitespace-normal",
+        // Figures of one width, so an amount that changes value and keeps its number of digits
+        // ("$836" to "$911") moves nothing after it: in this face a 1 is 10px wide and a 0 is
+        // 15px at this size. Set as a property, not with `tabular-nums`: that class is how the
+        // app's font split picks its mono face, and this line stays in its own.
+        "[font-variant-numeric:tabular-nums]",
         compact ? COMPACT_LINE : "-mt-1 text-[18px] font-medium leading-[1.3] tracking-[-0.02em] max-md:mt-0 max-md:text-[15px]",
       )}
     >

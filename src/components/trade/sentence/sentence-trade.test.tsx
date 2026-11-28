@@ -369,6 +369,20 @@ describe("sentence trade", () => {
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("19");
   });
 
+  it("keeps the ticket open when the side is switched: what was unfolded stays unfolded", () => {
+    const { rerender } = renderClosed(<SentenceTrade mode="profit" />);
+    const ticket = () => document.getElementById("trade-ticket")!;
+    // closed until its button is pressed
+    expect(ticket().hidden).toBe(true);
+    fireEvent.click(screen.getByTestId("open-ticket"));
+    expect(ticket().hidden).toBe(false);
+    // buying to selling and back: the same page, the ticket as it was left
+    rerender(<SentenceTrade mode="yield" />);
+    expect(ticket().hidden).toBe(false);
+    rerender(<SentenceTrade mode="profit" />);
+    expect(ticket().hidden).toBe(false);
+  });
+
   it("keeps the size cell short: HALF and MAX beside the label, the slider right under the input, the balance on the note's line", () => {
     connectWallet();
     mocks.balance = 50; // 50 USDC in the wallet: enough for the slider and the two buttons
@@ -529,7 +543,9 @@ describe("sentence trade", () => {
     render(<SentenceTrade mode="yield" />);
     fireEvent.change(screen.getByLabelText("Deposit"), { target: { value: "1000" } });
     // 1000 USDC at $95 is 10.526 SOL; the 0.1 SOL step floors it to 10.5 SOL, 997.50 USDC
-    expect(screen.getByText("Locks 997.5 USDC (size steps of 9.5)")).toBeTruthy();
+    // the note says what is locked on one line; why is its tooltip
+    expect(screen.getByTestId("size-note").textContent).toBe("Locks 997.5 USDC");
+    expect(screen.getByTestId("size-note").getAttribute("title")).toBe("Sizes go in steps of 9.5 USDC");
     fireEvent.click(screen.getByRole("button", { name: "Take trade" }));
     expect(mocks.context.submitRfq).toHaveBeenCalledWith({
       market: "put-soon", side: "sell", terms: { type: "cash_secured_put", strike: "95000000000" }, quantity: 10_500_000_000, timeoutSeconds: 30,
