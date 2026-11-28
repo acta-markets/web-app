@@ -17,10 +17,11 @@ const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : us
  * One profit table. Each row reads as an outcome, "+5% at $70,441 ... +$2.06", and never wraps.
  * The move is its own column of a fixed six characters, the longest a move gets ("\u221213.1%",
  * "+100%"), so the "at $..." column stays where it is when the moves go from one digit to two.
+ * The buyer's own goal is one of the rows, at its own price, in a quiet green.
  */
 function ProfitRows({ breakeven, steps, testId }: { breakeven: ProfitRow | null; steps: ProfitRow[]; testId: string }) {
   return (
-    <dl data-testid={testId} className={cn(TICKET_NOTE, "grid w-full grid-cols-[5ch_1fr_auto] items-baseline gap-x-2.5 whitespace-nowrap tabular-nums")}>
+    <dl data-testid={testId} className={cn(TICKET_NOTE, "grid w-full grid-cols-[6ch_1fr_auto] items-baseline gap-x-2.5 whitespace-nowrap tabular-nums")}>
       {/* breakeven leads, because it is the line where the trade stops losing */}
       {breakeven ? (
         <>
@@ -29,7 +30,7 @@ function ProfitRows({ breakeven, steps, testId }: { breakeven: ProfitRow | null;
         </>
       ) : null}
       {steps.map((row) => (
-        <Row key={row.move} row={row} profit />
+        <Row key={`${row.move} ${row.price}`} row={row} profit />
       ))}
     </dl>
   );
@@ -37,7 +38,10 @@ function ProfitRows({ breakeven, steps, testId }: { breakeven: ProfitRow | null;
 
 function Row({ row, profit = false }: { row: ProfitRow; profit?: boolean }) {
   return (
-    <div className="contents">
+    // The buyer's goal is one of the lines, told apart by a quiet green on its move and price
+    // (Tim, 28 Nov 2026: no label, no bright ink, a subtle green): the goal line's own green on
+    // the chart, softer than the profit figures beside it.
+    <div className={cn("contents", row.goal && "text-accent-secondary")} data-goal={row.goal ? "true" : undefined}>
       <dt>{row.move}</dt>
       <dt>
         <span className="text-content-tertiary">at</span> {row.price}
@@ -67,6 +71,7 @@ export const ProfitOutlook = memo(function ProfitOutlook({
   breakeven,
   premiumUsd,
   units,
+  goalPrice = null,
   emptyNote,
 }: {
   asset: string;
@@ -76,6 +81,8 @@ export const ProfitOutlook = memo(function ProfitOutlook({
   breakeven: number;
   premiumUsd: number | null;
   units: number | null;
+  /** the buyer's goal: its row in the ladder is marked */
+  goalPrice?: number | null;
   emptyNote: string;
 }) {
   /** Pinned by a click, a tap or the keyboard. */
@@ -103,8 +110,8 @@ export const ProfitOutlook = memo(function ProfitOutlook({
     el.style.top = `${top - box.top}px`;
   }, [shown, pointer]);
   const ladder = useMemo(
-    () => buildProfitLadder({ direction, strike, spot, breakeven, premiumUsd, units }),
-    [direction, strike, spot, breakeven, premiumUsd, units],
+    () => buildProfitLadder({ direction, strike, spot, breakeven, premiumUsd, units, goalPrice }),
+    [direction, strike, spot, breakeven, premiumUsd, units, goalPrice],
   );
   if (ladder.steps.length === 0) return <span className={TICKET_NOTE}>{emptyNote}</span>;
 

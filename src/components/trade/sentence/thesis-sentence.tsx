@@ -185,7 +185,7 @@ function DirectionToggle({
 }
 
 /**
- * The mode, as the one word of the quiet line that can change: "You're [buying] a call option…".
+ * The mode, as the one word of the quiet line that can change: "You're [buying] a call…".
  * It has two values, so it is a switch, not a menu: one click flips it, like the direction pill,
  * and it is drawn as one of the sentence's pills.
  */
@@ -291,10 +291,10 @@ function withoutFigures(text: string): string {
 /**
  * The trade page's type for both of the sentence's lines. The sentence is the page, so it is set
  * as large as one line of it allows: the size follows the card's width, up to 26px, and steps
- * down to fit. The second line is the longer one, in either mode ("You're selling a call option
- * to earn ≈$5.48, but if you're wrong you sell your BTC at $62,000"; "You're buying a $61,000
- * call that makes +$28.05 or more if you're right, risking only ≈$21.95"): about 45 of
- * its own ems, so 2.2% of the width keeps it inside and Profit and Yield come out the same size.
+ * down to fit. The second line is the longer one, in either mode ("You're selling a call to
+ * earn ≈$5.48, and sell your BTC at $62,000 if wrong"; "You're buying a $61,000 call to make
+ * +$28.05 or more, risking ≈$21.95"). It was a third longer, about 45 of its own ems, which is
+ * where the 2.2% of the width comes from; the shorter wording fits at that size with room over.
  */
 const COMPACT_LINE = "text-[length:calc(clamp(17px,2.2cqw,26px)*var(--fit,1))] leading-[1.5] max-md:text-[17px] max-md:leading-[1.9]";
 

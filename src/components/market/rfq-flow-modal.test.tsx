@@ -364,6 +364,50 @@ describe("Buy", () => {
       expect(screen.getByRole("link", { name: "Fund in Portfolio" })).toBeTruthy();
     });
 
+    describe("the buyer's goal", () => {
+      it("says what the trade makes at the goal, by the quote, right after its size", async () => {
+        // a $150 call on 2 SOL at $5 a unit: at $200 it pays (200 - 150 - 5) x 2
+        setup({ ...buyPreview, goalPrice: 200 }, buyQuote);
+        await screen.findByRole("button", { name: "Confirm trade" });
+        expect(row("If SOL reaches $200")?.textContent).toBe("+$90.00");
+        // it follows the size and comes before the quote's other facts
+        const labels = [...document.querySelectorAll("dt")].map((d) => d.textContent);
+        expect(labels.indexOf("If SOL reaches $200")).toBe(labels.indexOf("Size") + 1);
+        expect(labels.indexOf("If SOL reaches $200")).toBeLessThan(labels.indexOf("Break-even"));
+      });
+
+      it("shows a goal the quote leaves short of the breakeven as the loss it is", async () => {
+        // at $154 the call is worth $4 a unit and cost $5
+        setup({ ...buyPreview, goalPrice: 154 }, buyQuote);
+        await screen.findByRole("button", { name: "Confirm trade" });
+        expect(row("If SOL reaches $154")?.textContent).toBe("-$2.00");
+      });
+
+      it("counts a put downwards and caps a spread at its width", async () => {
+        const put = { type: "cash_secured_put" as const, strike: "150000000000" };
+        const view = setup({ ...buyPreview, terms: put, goalPrice: 100 }, { ...buyQuote, terms: put });
+        await screen.findByRole("button", { name: "Confirm trade" });
+        expect(row("If SOL reaches $100")?.textContent).toBe("+$90.00");
+        view.unmount?.();
+        cleanup();
+        // a 150/160 call spread is worth $10 a unit at most, however far the price goes
+        const spread = { type: "call_spread" as const, lower_strike: "150000000000", upper_strike: "160000000000" };
+        setup({ ...buyPreview, terms: spread, goalPrice: 200 }, { ...buyQuote, terms: spread });
+        await screen.findByRole("button", { name: "Confirm trade" });
+        expect(row("If SOL reaches $200")?.textContent).toBe("+$10.00");
+      });
+
+      it("is left out when there is no goal, and for a sold option", async () => {
+        setup(buyPreview, buyQuote);
+        await screen.findByRole("button", { name: "Confirm trade" });
+        expect(screen.queryByText(/^If SOL reaches/)).toBeNull();
+        cleanup();
+        setup({ goalPrice: 200 });
+        await screen.findByRole("button", { name: "Confirm trade" });
+        expect(screen.queryByText(/^If SOL reaches/)).toBeNull();
+      });
+    });
+
     it("mirrors break-even and the exercise deposit for a put", async () => {
       const terms = { type: "cash_secured_put" as const, strike: "150000000000" };
       setup({ ...buyPreview, terms }, { ...buyQuote, terms });

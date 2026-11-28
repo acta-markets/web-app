@@ -17,7 +17,7 @@ export type Goal = {
 const REACH = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 14, 19, 24, 29, 39, 49];
 
 /** The largest of 1, 2 or 5 times a power of ten that is not above `x`: a round step for prices. */
-function roundStep(x: number): number {
+export function roundStep(x: number): number {
   if (!(x > 0)) return 1;
   const power = 10 ** Math.floor(Math.log10(x));
   const lead = x / power;

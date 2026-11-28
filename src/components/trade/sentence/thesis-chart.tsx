@@ -11,6 +11,8 @@ import { formatStrikePrice, formatUsdSmart } from "@/lib/markets";
 import { formatExpiryDay } from "@/lib/trade/format";
 import { publicKey } from "@/lib/state/keys";
 import { useResource } from "@/lib/state/use-resource";
+import { numberFormat } from "@/lib/number-format";
+import { roundStep } from "@/lib/trade/goal";
 import { loadPriceHistory } from "@/lib/trade/price-history";
 import type { Direction, ZoneLabel } from "@/lib/trade/thesis";
 
@@ -122,16 +124,26 @@ const OFFERED_STRIKES_MARGIN = 0.22;
 /** Price domain covering history, spot and every strike given, padded, with the strikes kept
     off the edges. Given the whole list on offer, the domain does not depend on which strike is
     chosen: choosing another one moves the line and leaves the chart where it is. */
-/** A price range centred on `center` that still covers every context value, so the strike sits
-    at the pane's middle and dragging it scrolls the chart past a knot that stays put. */
-function centredPriceDomain(context: number[], center: number): [number, number] {
+/**
+ * A price range centred on `center` that still covers every context value, so the strike sits
+ * at the pane's middle and dragging it scrolls the chart past a knot that stays put.
+ *
+ * The rail's four ticks stand a half and a whole of this range's half-width from the strike, so
+ * the half-width is taken up to a round one: twice a round step (1, 2 or 5 times a power of
+ * ten, about an eighth of it). The ticks are then the strike plus or minus round amounts
+ * ($49,500 and $73,500 beside a $61,500 strike, where they were $49,910 and $72,090) and stay
+ * exactly where they were on the rail.
+ */
+export function centredPriceDomain(context: number[], center: number): [number, number] {
   const values = context.filter(Number.isFinite);
   const mid = center > 0 ? center : (values.length ? values[0] : 1);
   const minC = values.length ? Math.min(...values) : mid;
   const maxC = values.length ? Math.max(...values) : mid;
   const up = Math.max(maxC - mid, 0);
   const down = Math.max(mid - minC, 0);
-  const half = Math.max(up, down, Math.abs(mid) * 0.05) * 1.12;
+  const needed = Math.max(up, down, Math.abs(mid) * 0.05) * 1.12;
+  const unit = roundStep(needed / 8);
+  const half = Math.ceil(needed / (2 * unit) - 1e-9) * 2 * unit;
   return [Math.max(0, mid - half), mid + half];
 }
 
@@ -507,6 +519,8 @@ type Geometry = {
   spotY: number | null;
   /** where the buyer's goal sits, when there is one and it is inside the pane */
   goalY: number | null;
+  /** where a buy stops losing, when the chart is told */
+  breakevenY: number | null;
   nowX: number | null;
 };
 
@@ -603,6 +617,28 @@ export function handleTops({
   }
   const grab = Math.min(HANDLE_GRAB, Math.max(0, (lower - upper - HANDLE_HEIGHT) / 2));
   return { strike: above ? lower : upper, goal: above ? upper : lower, grab };
+}
+
+/** The least room between the strike line and the breakeven's line for the breakeven to be
+    drawn: half its caption and a little air, so the caption never sits on the strike line. */
+const BREAKEVEN_CLEAR = 14;
+/** What the plot's left edge already holds, where the breakeven's caption goes: the range tabs'
+    row at the top and the chart library's mark at the foot. The caption's middle keeps out of both. */
+const BREAKEVEN_TOP = 48;
+const BREAKEVEN_FOOT = 42;
+
+/**
+ * Where the breakeven's dotted line and caption are drawn, or null where they are not. A buy
+ * stops losing a little past its strike, usually only a few pixels from the strike line at the
+ * chart's scale: drawn there it would sit on the strike line and say nothing. So it is drawn
+ * only where it has room (Tim, 28 Nov 2026): at least `BREAKEVEN_CLEAR` from the strike line,
+ * and clear of the range tabs and of the mark at the plot's foot.
+ */
+export function breakevenMarkY({ breakevenY, strikeY, paneHeight }: { breakevenY: number | null; strikeY: number; paneHeight: number }): number | null {
+  if (breakevenY == null || !Number.isFinite(breakevenY)) return null;
+  if (Math.abs(breakevenY - strikeY) < BREAKEVEN_CLEAR) return null;
+  if (breakevenY < BREAKEVEN_TOP || breakevenY > paneHeight - BREAKEVEN_FOOT) return null;
+  return breakevenY;
 }
 
 /**
@@ -887,6 +923,7 @@ export function ThesisChart({
   frameless = false,
   legend = true,
   previewStrike = null,
+  breakeven = null,
   goal = null,
   goals,
   goalProfits,
@@ -919,6 +956,9 @@ export function ThesisChart({
   legend?: boolean;
   /** A strike being considered but not chosen (hovered in the strike menu): drawn as a ghost line. */
   previewStrike?: number | null;
+  /** Where a bought option stops losing: a dotted line with a small caption, drawn only where
+      it has room (see `breakevenMarkY`). */
+  breakeven?: number | null;
   /** A buyer's goal, the price they think the asset reaches: a dashed line of its own with a
       "GOAL" tag carrying `label` (e.g. "$61,500 +$28.05"), and always inside the price range. */
   goal?: { price: number; label: string } | null;
@@ -1026,9 +1066,10 @@ export function ThesisChart({
       strikeY: series.priceToCoordinate(strike) ?? FALLBACK_STRIKE_Y,
       spotY: series.priceToCoordinate(spot) ?? null,
       goalY: goalPrice != null ? (series.priceToCoordinate(goalPrice) ?? null) : null,
+      breakevenY: breakeven != null && breakeven > 0 ? (series.priceToCoordinate(breakeven) ?? null) : null,
       nowX: liveT != null ? chart.timeScale().timeToCoordinate(liveT as UTCTimestamp) : null,
     });
-  }, [liveT, strike, spot, goalPrice]);
+  }, [liveT, strike, spot, goalPrice, breakeven]);
   const measureRef = useRef(measure);
   measureRef.current = measure;
 
@@ -1524,13 +1565,19 @@ export function ThesisChart({
     const priced = sized && !(sized.side === "buy" && sized.premium == null);
     const premium = sized?.premium ?? 0;
     const ticks: Array<{ y: number; price: string; readout: string | null }> = [];
+    // One way of writing a price for the whole rail: with the range a round width, the ticks
+    // are usually whole dollars, and then none of them carries cents ("$65", not "$65.00"
+    // over "$140").
+    const prices = Array.from({ length: TICK_COUNT }, (_, i) => lo + ((hi - lo) * i) / (TICK_COUNT - 1));
+    const whole = prices.every((p) => p >= 1 && Math.abs(p - Math.round(p)) < 1e-6);
+    const tickPrice = (p: number) => (whole ? `$${numberFormat({ maximumFractionDigits: 0 }).format(Math.round(p))}` : formatUsdSmart(p));
     for (let i = 0; i < TICK_COUNT; i++) {
-      const p = lo + ((hi - lo) * i) / (TICK_COUNT - 1);
+      const p = prices[i];
       const y = seriesRef.current.priceToCoordinate(p);
       if (y == null || !Number.isFinite(y)) continue;
       ticks.push({
         y,
-        price: formatUsdSmart(p),
+        price: tickPrice(p),
         readout: sized
           ? priced
             ? formatSignedUsd(pnlAtPrice(sized.side, direction, strike, sized.quantity, premium, p))
@@ -1584,6 +1631,8 @@ export function ThesisChart({
     min: strikeY == null ? paneBottom - ZONE_LABEL_INSET : strikeY + TAG_HALF + 2,
     max: paneBottom - ZONE_LABEL_INSET,
   });
+  const breakevenShownY =
+    geometry && !readOnly ? breakevenMarkY({ breakevenY: geometry.breakevenY, strikeY: geometry.strikeY, paneHeight: geometry.paneHeight }) : null;
   // The NOW tag sits just off the live-price dot instead of on it, so the end of the line and
   // the start of the projection stay visible: above the dot, always, stacked under a label that
   // is just over the dot and past one that is on it.
@@ -1643,7 +1692,8 @@ export function ThesisChart({
                 aria-selected={active}
                 onClick={() => setManual({ expiryMs, range: o.value })}
                 className={cn(
-                  "px-1.5 py-0.5 text-[12px] font-semibold leading-none tracking-[-0.28px] transition-colors",
+                  // a 2 px corner inside the tabs' 3 px one, so the chosen tab is not the one square thing here
+                  "rounded-[2px] px-1.5 py-0.5 text-[12px] font-semibold leading-none tracking-[-0.28px] transition-colors",
                   active ? "bg-accent-primary/20 text-content-primary" : "text-content-secondary hover:text-content-primary"
                 )}
               >
@@ -1771,6 +1821,20 @@ export function ThesisChart({
               preserveAspectRatio="none"
               aria-hidden="true"
             >
+              {/* where a buy stops losing: a dotted line, quieter than the strike's and the goal's */}
+              {breakevenShownY != null ? (
+                <line
+                  data-testid="chart-breakeven-line"
+                  x1={0}
+                  y1={breakevenShownY}
+                  x2={geometry.paneWidth}
+                  y2={breakevenShownY}
+                  stroke={NOW_LINE}
+                  strokeWidth={1}
+                  strokeDasharray="1 4"
+                  strokeLinecap="round"
+                />
+              ) : null}
               {/* the present moment */}
               <line x1={nowX} y1={0} x2={nowX} y2={geometry.paneHeight} stroke={NOW_LINE} strokeWidth={1} strokeDasharray="4 4" />
               {/* the live "now" price line, tracking spot without re-fitting the view */}
@@ -1868,6 +1932,19 @@ export function ThesisChart({
             </>
           );
         })()}
+
+        {/* the breakeven's caption, at the plot's left edge on its line: a quiet tag, nothing to hold */}
+        {geometry && breakevenShownY != null && breakeven != null ? (
+          <span
+            data-testid="chart-breakeven"
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1.5 z-[16] -translate-y-1/2 whitespace-nowrap rounded-[var(--radius)] border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-0.5 font-mono text-[12px] font-semibold leading-[1.2] tracking-[-0.02em] text-content-secondary backdrop-blur-[4px]"
+            style={{ top: breakevenShownY }}
+          >
+            {/* written as the ticket writes it: a breakeven is not a round price as a strike is */}
+            <span className="tracking-[0.08em]">BREAKEVEN</span> {formatUsdSmart(breakeven)}
+          </span>
+        ) : null}
 
         {/* "now" (spot) reference tag — pinned to the now boundary, just off the live-price
             dot, so it names the price without covering the end of the line. */}

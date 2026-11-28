@@ -13,6 +13,8 @@ const BUY: QuoteFlowOrder = {
   premiumNote: "This is the most you can lose.",
   facts: [
     ["Size", "0.1 BTC"],
+    // the buyer's goal, as the review says it: (74,000 - 71,000) x 0.1 - 52.10
+    ["If BTC reaches $74,000", "+$248"],
     ["Break-even", "$71,521"],
     ["Fund to exercise", "7,100.00 USDC"],
     ["Expires", "Nov 20, 08:00 UTC"],
@@ -24,7 +26,7 @@ const BUY: QuoteFlowOrder = {
 const BUY_WAITING: QuoteFlowOrder = {
   ...BUY,
   premium: null,
-  facts: BUY.facts.map(([k, v]) => [k, k === "Break-even" ? "—" : v] as const),
+  facts: BUY.facts.map(([k, v]) => [k, k === "Break-even" || k.startsWith("If BTC reaches") ? "—" : v] as const),
 };
 const SELL: QuoteFlowOrder = {
   thesis: "BTC will be above $64,500 on Nov 20",
