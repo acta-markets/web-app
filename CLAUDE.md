@@ -52,7 +52,6 @@ Create `.env.local` with:
 ```bash
 MONGODB_URI="<connection_string>"
 MONGODB_DB="acta"
-NEXT_PUBLIC_PRIVY_APP_ID="<privy_app_id>"
 NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
 NEXT_PUBLIC_RFQ_WS_URL="wss://beta-api.acta.markets"  # Optional override; defaults to devnet-api on devnet, beta-api on mainnet
 NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "devnet" (default), "mainnet" or "mainnet-beta"; controls mints, RPC, wallet, explorer and backend defaults
@@ -80,7 +79,8 @@ Every build of the `devnet` branch talks to the devnet backend (`wss://devnet-ap
 
 **Wallet**: Solana Wallet Standard via `@wallet-standard/react`:
 - `src/components/solana/solana-wallet-provider.tsx` - Wallet context provider
-- `src/components/solana/solana-connect-button.tsx` - Connect button component
+- `src/components/solana/solana-connect-button.tsx` - The header's wallet control, and only the header's
+- `src/components/wallet/connect-wallet-action.tsx` - `ConnectWalletAction`: how a page asks for a wallet, the way Trade's main button does. One main action that opens the wallet panel (`useWalletSidebar().openSidebar`). A page never repeats the header's control and never opens its own picker
 - Supports Phantom, Solflare, and other Wallet Standard wallets
 - The last connected wallet is remembered in this browser (`src/lib/wallet-memory.ts`, localStorage `acta_last_wallet`: the wallet's name and public address only) and reconnected on load with a silent connect, which a wallet answers only if it already trusts the site. Disconnecting forgets it. The wallet panel lists it first, marked "Last used".
 
