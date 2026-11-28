@@ -223,22 +223,29 @@ describe("thesis chart", () => {
       expect(onStrike).toHaveBeenCalledTimes(1);
     });
 
-    it("puts the line where the pointer is: the price under it picks the nearest strike", async () => {
-      // a pane where y 130 is $95 and every pixel up is 10 cents
+    it("counts the pointer's travel, not the price under it: the chart scrolls past a strike that stays put", async () => {
+      // a pane with a price scale to read: y 130 is $95 and every pixel up is 10 cents, so the
+      // price under a pointer 60 px up is $101. The drag does not read it.
       coordinateToPrice.mockImplementation((y) => 95 + (130 - y) / 10);
       priceToCoordinate.mockImplementation((price) => 130 - (price - 95) * 10);
       const { handle, onStrike } = await renderHandle();
       fireEvent.pointerDown(handle, { pointerId: 1, clientY: 130, button: 0, buttons: 1 });
-      // 20 px up is $97: still nearest to 95, nothing moves
-      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 110, buttons: 1 });
+      // 10 px up is not a step yet
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 120, buttons: 1 });
       expect(onStrike).not.toHaveBeenCalled();
-      // 60 px up is $101: the 100 strike
-      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 70, buttons: 1 });
+      // 20 px up is one strike (18 px a step): 95 -> 100
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 110, buttons: 1 });
       expect(onStrike).toHaveBeenLastCalledWith(100 * 1e9);
-      // far below the lowest strike: the lowest, not past it
+      // holding still there steps no further, whatever price is now under the pointer
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 110, buttons: 1 });
+      expect(onStrike).toHaveBeenCalledTimes(1);
+      // far below: the lowest strike, not past it
       fireEvent.pointerMove(handle, { pointerId: 1, clientY: 900, buttons: 1 });
       expect(onStrike).toHaveBeenLastCalledWith(90 * 1e9);
       expect(onStrike).toHaveBeenCalledTimes(2);
+      // turning back from there is one strike after one step's travel, not after the whole way back
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 880, buttons: 1 });
+      expect(onStrike).toHaveBeenLastCalledWith(95 * 1e9);
     });
 
     it("re-fits the chart when another strike is chosen, so the strike stays centred", async () => {
@@ -298,7 +305,8 @@ describe("thesis chart", () => {
         rerender(<ThesisChart {...props} direction="above" strikes={strikes} strike={105} onStrike={onStrike} />);
         const top = screen.getByRole("button", { name: "Higher strike" }) as HTMLButtonElement;
         expect(top.disabled).toBe(true);
-        expect(top.title).toBe("This is the highest strike");
+        // no tooltip of the browser's own over the legend
+        expect(top.title).toBe("");
         expect((screen.getByRole("button", { name: "Lower strike" }) as HTMLButtonElement).disabled).toBe(false);
       });
 
@@ -385,10 +393,9 @@ describe("thesis chart", () => {
         expect(tag.textContent).toBe("$95");
         // no rail, so no step arrows either
         expect(screen.queryByRole("button", { name: "Higher strike" })).toBeNull();
-        // and it is the same control: held and moved, it changes the strike
-        coordinateToPrice.mockImplementation((y) => 95 + (130 - y) / 2);
+        // and it is the same control: held and moved 18 px or more, it changes the strike
         fireEvent.pointerDown(tag, { pointerId: 1, clientY: 130, button: 0, buttons: 1 });
-        fireEvent.pointerMove(tag, { pointerId: 1, clientY: 120, buttons: 1 });
+        fireEvent.pointerMove(tag, { pointerId: 1, clientY: 110, buttons: 1 });
         expect(onStrike).toHaveBeenLastCalledWith(100 * 1e9);
       });
 
@@ -743,43 +750,53 @@ describe("a zone label's place in the pane's centre column", () => {
   });
 });
 
-describe("the NOW tag's place beside the zone labels, which do not move", () => {
-  // a 254 px pane: the labels at 42 and 212, each 24 px tall; the flip hint's row below 212
-  const pane = { top: 15, bottom: 212, taken: [[30, 54], [200, 224]] as const };
+describe("the NOW tag's place: above the price's dot, always, among labels that do not move", () => {
+  // a 234 px pane: the labels at 52 and 182, each 24 px tall
+  const pane = { top: 15, bottom: 220, taken: [[40, 64], [170, 194]] as const };
 
-  it("sits just above the live price's dot wherever that is clear", () => {
+  it("is just over the dot, 18 px up, wherever nothing is there", () => {
     expect(nowTagY({ spotY: 130, ...pane })).toBe(112);
-    // 6 px under the upper label is still clear
+    expect(nowTagY({ spotY: 100, ...pane })).toBe(82);
+    // under the lower label too: over the dot is the label's own band, and past it is clear
+    expect(nowTagY({ spotY: 160, ...pane })).toBe(142);
+  });
+
+  it("stacks close up under a label that is just over the dot, rather than leaving the dot for the far side of the label", () => {
+    // the tag is 24 px tall and sits 6 px over the dot: with the label ending at 64 it fits
+    // exactly from a dot at 94 down
+    expect(nowTagY({ spotY: 94, ...pane })).toBe(76);
+    // a pixel short (Tim's crop: 29 px between the label and the dot): it stays by the dot,
+    // a pixel over the label's edge
+    expect(nowTagY({ spotY: 93, ...pane })).toBe(75);
+    // up to 4 px over the edge, which is the label's border and padding
     expect(nowTagY({ spotY: 90, ...pane })).toBe(72);
   });
 
-  it("goes below the dot where above it is the upper label", () => {
-    // above would be at 62, touching the label that ends at 54
-    expect(nowTagY({ spotY: 80, ...pane })).toBe(98);
-    expect(nowTagY({ spotY: 60, ...pane })).toBe(78);
+  it("is pressed between the label and the dot when the dot is nearer still: 4 px over the label's edge, ending over the dot", () => {
+    // the dot at 89: by the dot the tag would be 5 px over the label, so it moves down a pixel
+    expect(nowTagY({ spotY: 89, ...pane })).toBe(72);
+    // down to a dot at 85: the tag (60..84) ends a pixel over it
+    expect(nowTagY({ spotY: 85, ...pane })).toBe(72);
   });
 
-  it("stands beside the label when the dot itself is at it", () => {
-    // the dot is on the upper label: just under it is the nearest clear place
-    expect(nowTagY({ spotY: 42, ...pane })).toBe(72);
-    // and on the lower one: just above it, never down in the flip hint's row
-    expect(nowTagY({ spotY: 212, ...pane })).toBe(182);
-    expect(nowTagY({ spotY: 240, ...pane })).toBe(182);
+  it("goes past the label, to the row over it, only where it cannot fit between the label and the dot", () => {
+    // a dot at 84: the tag would end on the dot
+    expect(nowTagY({ spotY: 84, ...pane })).toBe(22);
+    // the dot at the label: the row over the label
+    expect(nowTagY({ spotY: 52, ...pane })).toBe(22);
+    // the dot at the very top of the pane: as near over it as the pane's top allows
+    expect(nowTagY({ spotY: 20, ...pane })).toBe(15);
   });
 
-  it("uses the row above the upper label when the price is at the very top of the pane", () => {
-    // no room for the usual 6 px there: 2 px from the label's top, inside the pane's edge
-    expect(nowTagY({ spotY: 8, ...pane })).toBe(15);
+  it("does the same at the lower label", () => {
+    // just under the lower label, down in the flip hint's row: stacked under the label, over the dot
+    expect(nowTagY({ spotY: 224, ...pane })).toBe(206);
+    // the dot at the lower label: over that label
+    expect(nowTagY({ spotY: 182, ...pane })).toBe(152);
   });
 
-  it("takes the foot of the pane when no hint lies there", () => {
-    expect(nowTagY({ spotY: 205, ...pane, bottom: 240 })).toBe(182);
-    // under the lower label, close up to it: nearer the dot than the place above the label
-    expect(nowTagY({ spotY: 235, ...pane, bottom: 240 })).toBe(238);
-  });
-
-  it("with no labels to mind is above the dot, inside the pane", () => {
-    expect(nowTagY({ spotY: 130, top: 15, bottom: 240, taken: [] })).toBe(112);
-    expect(nowTagY({ spotY: 20, top: 15, bottom: 240, taken: [] })).toBe(38);
+  it("with no labels to mind is over the dot, inside the pane", () => {
+    expect(nowTagY({ spotY: 130, top: 15, bottom: 220, taken: [] })).toBe(112);
+    expect(nowTagY({ spotY: 20, top: 15, bottom: 220, taken: [] })).toBe(15);
   });
 });

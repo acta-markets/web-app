@@ -635,10 +635,17 @@ export function SentenceTrade({
         ? `APY ${apyText}`
         : "Confirmed on quote"
     : headline.note;
-  const amountHint = sizeViolation
+  // A typed amount that is not on the size step locks the nearest step under it. The note says
+  // what is locked, in a few words on one line (Tim, 28 Nov 2026: three lines of small print
+  // under the slider were too much); why it differs is the note's tooltip, not more text.
+  const amountHint: { text: string; error: boolean; why?: string } | null = sizeViolation
     ? { text: sizeViolation, error: true }
     : lockedText != null && amountInput != null && lockedText !== amountText
-      ? { text: `Locks ${lockedText} ${symbol} (size steps of ${formatInputValue(depositRule?.step ?? 0, inputDecimals)})`, error: false }
+      ? {
+          text: `Locks ${lockedText} ${symbol}`,
+          error: false,
+          why: `Sizes go in steps of ${formatInputValue(depositRule?.step ?? 0, inputDecimals)} ${symbol}`,
+        }
       : null;
   // the amount's value in the OTHER token, so the switch's effect is visible at a glance
   const otherAmount = quantity != null && strike
@@ -819,6 +826,8 @@ export function SentenceTrade({
               legend={false}
               previewStrike={previewedStrike}
               goals={goals.map((g) => g.price)}
+              // what the trade makes at each of them, so the goal's tag keeps room for the longest
+              goalProfits={goals.map((g) => (g.profit != null ? formatProfit(g.profit) : ""))}
               onGoal={setGoalChoice}
               goal={
                 goal
@@ -1006,21 +1015,15 @@ export function SentenceTrade({
                 ) : null}
                 {/* One line under it: the size feedback takes the conversion's place instead of
                     adding a line, and a connected wallet's balance stands at its right end (it
-                    drops under the note only where the two do not fit side by side). */}
+                    drops under the note only where the two do not fit side by side, which a long
+                    error can cause and "Locks 29.45 USDC" does not). */}
                 <div className={cn(TICKET_NOTE, "flex flex-wrap items-start justify-between gap-x-3")}>
-                  <span data-testid="size-note" className={cn("whitespace-nowrap tabular-nums", amountHint?.error && "text-error")}>
-                    {amountHint
-                      ? // "Locks 997.5 USDC (size steps of 9.5)" always breaks before the bracket, so the
-                        // number's length never decides where it wraps
-                        amountHint.text.includes(" (")
-                        ? (
-                          <>
-                            {amountHint.text.slice(0, amountHint.text.indexOf(" ("))} <br />
-                            {amountHint.text.slice(amountHint.text.indexOf(" (") + 1)}
-                          </>
-                        )
-                        : amountHint.text
-                      : (conversionHint ?? "\u2014")}
+                  <span
+                    data-testid="size-note"
+                    title={amountHint?.why}
+                    className={cn("whitespace-nowrap tabular-nums", amountHint?.error && "text-error")}
+                  >
+                    {amountHint ? amountHint.text : (conversionHint ?? "\u2014")}
                   </span>
                   {/* the balance belongs to a wallet: it appears once one is connected */}
                   {walletAddress ? (

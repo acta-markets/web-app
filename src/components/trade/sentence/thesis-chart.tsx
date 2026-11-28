@@ -326,15 +326,33 @@ const LOSS = "rgba(194,104,104,0.60)";
     would reach the NOW tag. From the second, beside the rail, it has its word and hand too. */
 const NARROW_RIGHT_PART = 240;
 const ROOMY_RIGHT_PART = 300;
-/** The room a goal's tag keeps for its profit, in characters: a space and "+$999,999". The tag
-    is this wide whatever the profit is (Tim, 28 Nov 2026: its size must not change as the goal
-    is dragged; assume a lot, for markets like BTC). */
-const PROFIT_RESERVE_CH = 10;
 /** A goal tag's width, for keeping it off the NOW tag: its box, glyphs and gaps, then its
-    reserved characters at the width of a mono 12px "0". An estimate, on the generous side. */
+    characters at the width of one in the tags' mono face. An estimate, on the generous side. */
 const GOAL_TAG_CHROME = 44;
 const GOAL_TAG_WORD = 60;
-const TAG_CH = 8.2;
+const TAG_CH = 7.6;
+
+/**
+ * A piece of a tag's text in a slot as wide as the widest text that slot ever holds, so the tag
+ * keeps one width while what it says changes. The widest text is set unseen in the same cell
+ * of a one-cell grid: the slot is exactly that wide in the tag's own face, whatever the face
+ * (a width in `ch` came out a tenth too wide). In a mono face any text of the same length will
+ * do for `widest`.
+ */
+function Sized({ text, widest, align = "left" }: { text: string; widest: string; align?: "left" | "right" }) {
+  return (
+    <span className="inline-grid tabular-nums">
+      {/* drawn from an attribute, so the widest text is never read out or found as text */}
+      <span
+        aria-hidden="true"
+        data-sizer={widest.length > text.length ? widest : text}
+        className="invisible col-start-1 row-start-1 whitespace-pre before:content-[attr(data-sizer)]"
+      />
+      <span className={cn("col-start-1 row-start-1", align === "right" ? "justify-self-end" : "justify-self-start")}>{text}</span>
+    </span>
+  );
+}
+
 /** How far the NOW tag's middle is from the live price's dot, above it or below, px. */
 const NOW_TAG_OFFSET = 18;
 /** The highest the NOW tag's middle goes: inside the pane's top edge, px. */
@@ -361,13 +379,20 @@ export function zoneLabelY({ home, min, max }: { home: number; min: number; max:
   return Math.min(Math.max(home, min), Math.max(min, max));
 }
 
+/** How far the NOW tag may lie over the edge of a zone label before it gives the label up and
+    goes past it, px: the label's border and padding, never its words. */
+const NOW_TAG_OVERLAP = 4;
+
 /**
  * Where the NOW tag sits in the pane's centre column, which it shares with the two zone labels.
- * The labels do not move, so the tag does. It wants to be just above the live price's dot, so
- * the end of the line and the start of the projection stay visible. Where that would touch a
- * label or leave the pane it goes just below the dot. Where the dot itself is at a label or at
- * an end of the pane, the tag stands in the nearest clear place, even over the dot. `taken` is
- * each label's top and bottom; `top` and `bottom` are the highest and lowest its middle may go.
+ * It is always above the live price's dot (Tim, 28 Nov 2026, after trying both sides), right by
+ * it, so the end of the line and the start of the projection stay visible. The labels do not
+ * move, and the tag stacks with them: with a label just over the dot the tag stays by the dot,
+ * close up under the label, over the label's edge by a few pixels and nearer the dot if it has
+ * to be. Only where it cannot fit between the two without covering the label's words or the
+ * dot does it go past the label, to the first clear place over it; at the pane's top it stops
+ * inside the pane. `taken` is each label's top and bottom; `top`
+ * and `bottom` are the highest and lowest its middle may go.
  */
 export function nowTagY({
   spotY,
@@ -380,25 +405,27 @@ export function nowTagY({
   bottom: number;
   taken: ReadonlyArray<readonly [number, number]>;
 }): number {
-  const clear = (y: number, gap: number) =>
-    y >= top && y <= bottom && taken.every(([from, to]) => y + TAG_HALF + gap <= from || y - TAG_HALF - gap >= to);
-  const gaps = [TAG_GAP, TAG_TIGHT];
-  for (const gap of gaps) {
-    if (clear(spotY - NOW_TAG_OFFSET, gap)) return spotY - NOW_TAG_OFFSET;
-    if (clear(spotY + NOW_TAG_OFFSET, gap)) return spotY + NOW_TAG_OFFSET;
+  const inside = (y: number) => y >= top && y <= bottom;
+  /** how far a tag centred at `y` lies over the nearest thing in the column, px; negative is the room between them */
+  const over = (y: number) => Math.max(...taken.map(([from, to]) => Math.min(y + TAG_HALF - from, to - (y - TAG_HALF))), -Infinity);
+  const beside = spotY - NOW_TAG_OFFSET;
+  if (inside(beside) && over(beside) <= NOW_TAG_OVERLAP) return beside;
+  // A label a little nearer over the dot: the tag is pressed between the two, as far up over the
+  // label's edge as it may go, so long as it still ends over the dot and not on it.
+  const pressed = taken
+    .filter(([, to]) => to <= spotY)
+    .map(([, to]) => to - NOW_TAG_OVERLAP + TAG_HALF)
+    .filter((y) => y > beside && y + TAG_HALF <= spotY - 1 && inside(y) && over(y) <= NOW_TAG_OVERLAP);
+  if (pressed.length > 0) return Math.max(...pressed);
+  // past the label in its way: the nearest clear place over it, with the usual room or with little
+  for (const gap of [TAG_GAP, TAG_TIGHT]) {
+    const past = taken
+      .map(([from]) => from - gap - TAG_HALF)
+      .filter((y) => y <= beside && inside(y) && over(y) <= -gap)
+      .sort((p, q) => q - p);
+    if (past.length > 0) return past[0];
   }
-  // Beside a label, or at an end of the pane: the clear place nearest the dot, so the tag is
-  // never left on the far side of a label from its price. The closer fit counts as that much
-  // further away, so the roomier place wins unless the close one is really nearer.
-  const places = gaps
-    .flatMap((gap) =>
-      [top, bottom, ...taken.flatMap(([from, to]) => [from - gap - TAG_HALF, to + gap + TAG_HALF])]
-        .filter((y) => clear(y, gap))
-        .map((y) => ({ y, cost: Math.abs(y - spotY) + (TAG_GAP - gap) })),
-    )
-    .sort((p, q) => p.cost - q.cost);
-  if (places.length > 0) return places[0].y;
-  return Math.min(Math.max(spotY - NOW_TAG_OFFSET, top), Math.max(top, bottom));
+  return Math.min(Math.max(beside, top), Math.max(top, bottom));
 }
 
 /** The projection fan re-randomizes on this cadence so the future keeps re-drawing. */
@@ -862,6 +889,7 @@ export function ThesisChart({
   previewStrike = null,
   goal = null,
   goals,
+  goalProfits,
   onGoal,
   title,
   expiries,
@@ -896,6 +924,9 @@ export function ThesisChart({
   goal?: { price: number; label: string } | null;
   /** The goals on offer: with `onGoal`, the goal's tag is a handle that drags through them. */
   goals?: ReadonlyArray<number>;
+  /** What the trade makes at each goal on offer, as the tag writes it ("+$28.05"): the tag
+      keeps room for the longest, so it is one width while the goal is dragged. */
+  goalProfits?: ReadonlyArray<string>;
   onGoal?: (price: number) => void;
   /** The expiries on offer, for a date that can be changed from the chart's tag. */
   expiries?: ReadonlyArray<{ value: string; label: string; detail?: string }>;
@@ -1010,8 +1041,8 @@ export function ThesisChart({
   );
   /** the price rail is on screen (not a phone): the strike's tag is the knot in it */
   const railShown = useRailShown();
-  /** `grabY` is where on the handle it was picked up, measured from the strike line. */
-  const dragRef = useRef<{ pointerId: number; anchorY: number; index: number; grabY: number | null } | null>(null);
+  /** A held strike handle: where the pointer was at the last step, and the strike it is on. */
+  const dragRef = useRef<{ pointerId: number; anchorY: number; index: number } | null>(null);
   /** The handle is held: its icon closes from an open hand to a grabbing one, as the cursor does. */
   const [grabbed, setGrabbed] = useState(false);
   const onStrikeRef = useRef(onStrike);
@@ -1049,14 +1080,7 @@ export function ThesisChart({
       const index = nearestStrikeIndex(strike);
       if (index < 0) return;
       e.currentTarget.setPointerCapture?.(e.pointerId);
-      const paneTop = containerRef.current?.getBoundingClientRect().top;
-      const lineY = seriesRef.current?.priceToCoordinate(strike);
-      dragRef.current = {
-        pointerId: e.pointerId,
-        anchorY: e.clientY,
-        index,
-        grabY: 0,
-      };
+      dragRef.current = { pointerId: e.pointerId, anchorY: e.clientY, index };
       setGrabbed(true);
     },
     [nearestStrikeIndex, strike]
@@ -1081,43 +1105,38 @@ export function ThesisChart({
         endDrag(e.currentTarget, e.pointerId);
         return;
       }
-      // The line follows the pointer: the price under it picks the nearest strike. The price
-      // range does not change with the strike, so the line lands where the pointer is.
-      const paneTop = containerRef.current?.getBoundingClientRect().top;
-      const price =
-        drag.grabY != null && paneTop != null ? seriesRef.current?.coordinateToPrice(e.clientY - paneTop - drag.grabY) : null;
-      if (price != null && Number.isFinite(price)) {
-        const at = nearestStrikeIndex(price);
-        if (at >= 0 && at !== drag.index) {
-          drag.index = at;
-          stepStrike(at);
-        }
-        return;
-      }
-      // no price scale to read yet: one strike per 18 px of travel
-      const STEP = 18;
+      // One strike for every `DRAG_STEP` px the pointer travels, up for a higher strike. It
+      // counts travel, not the price under the pointer: the strike stays at the pane's middle
+      // and the chart scrolls past it, so the price under a still pointer changes with every
+      // step, and reading it made a 30 px drag run through thirteen strikes.
+      const STEP = DRAG_STEP;
       let { anchorY, index } = drag;
+      const last = strikesAsc.length - 1;
       let dy = anchorY - e.clientY; // > 0 when the pointer moved up
       let stepped = false;
-      while (dy >= STEP) {
-        index = Math.min(index + 1, strikesAsc.length - 1);
+      while (dy >= STEP && index < last) {
+        index += 1;
         anchorY -= STEP;
         dy -= STEP;
         stepped = true;
       }
-      while (dy <= -STEP) {
-        index = Math.max(index - 1, 0);
+      while (dy <= -STEP && index > 0) {
+        index -= 1;
         anchorY += STEP;
         dy += STEP;
         stepped = true;
       }
+      // Past the last strike either way there is nothing to count: the travel starts again
+      // from where the pointer is, so turning back is one strike after one step's travel, not
+      // after undoing the whole overshoot.
+      if ((index === last && dy >= STEP) || (index === 0 && dy <= -STEP)) anchorY = e.clientY;
+      drag.anchorY = anchorY;
       if (stepped) {
-        drag.anchorY = anchorY;
         drag.index = index;
         stepStrike(index);
       }
     },
-    [strikesAsc.length, stepStrike, endDrag, nearestStrikeIndex]
+    [strikesAsc.length, stepStrike, endDrag]
   );
 
   const onDragPointerEnd = useCallback(
@@ -1385,26 +1404,33 @@ export function ThesisChart({
   /** the part of the plot the price has yet to cross: from the "now" line to its right edge */
   const rightPart = geometry ? geometry.paneWidth - centreX : 0;
   const narrowPane = geometry != null && rightPart < NARROW_RIGHT_PART;
-  const goalShown = goalLabel == null ? null : narrowPane ? goalLabel.split(" ")[0] : goalLabel;
   const strikeShown = formatStrikePrice(strike);
   // A tag in the plot says only what the pane has room for: its word and hand on a roomy pane
   // beside the rail, the profit unless the pane is narrow, on a phone the price alone.
   const wordShown = railShown && geometry != null && rightPart >= ROOMY_RIGHT_PART;
-  const widestStrike = strikesAsc.reduce((w, s) => (formatStrikePrice(s.strike).length > w.length ? formatStrikePrice(s.strike) : w), strikeShown);
-  const widestGoal = goalsAsc.reduce((m, g) => Math.max(m, formatStrikePrice(g).length), 0);
-  // The goal's tag is one width whatever it says: the widest goal on offer plus the room kept
-  // for a profit, so dragging it never changes its size. With no rail the strike's tag shares
-  // the plot's right edge with it, one over the other, and takes the same width.
-  const goalCh = widestGoal + (narrowPane ? 0 : PROFIT_RESERVE_CH);
-  const tagMinCh = railShown ? goalCh : Math.max(widestStrike.length, goalCh);
-  const tagMin = { minWidth: `${tagMinCh}ch` };
+  const longest = (texts: ReadonlyArray<string>, start = "") => texts.reduce((w, t) => (t.length > w.length ? t : w), start);
+  const widestStrike = longest(strikesAsc.map((s) => formatStrikePrice(s.strike)), strikeShown);
+  // The goal's tag is its price, then what the trade makes there. The price stands right after
+  // the word, the profit at the tag's right end, each in a slot as wide as the longest among
+  // the goals on offer: the tag is one width while the goal is dragged, the spaces beside the
+  // word and at the right end are the same in every state (Tim, 28 Nov 2026), and what room is
+  // left over lies between the two numbers.
+  const [goalPriceText = "", goalProfitText = ""] = goalLabel == null ? [] : goalLabel.split(" ");
+  const profitShown = goalProfitText !== "" && !narrowPane;
+  const widestGoalPrice = longest(goalsAsc.map((g) => formatStrikePrice(g)), goalPriceText);
+  const widestGoalProfit = longest(goalProfits ?? [], goalProfitText);
+  // With no rail the strike's tag shares the plot's right edge with the goal's, one over the
+  // other, and the two are one width: each keeps room for what the other says.
+  const goalTagText = profitShown ? `${widestGoalPrice} ${widestGoalProfit}` : widestGoalPrice;
+  const stackedPrice = railShown ? widestGoalPrice : longest([widestStrike], widestGoalPrice);
+  const stackedStrike = railShown ? strikeShown : longest([widestStrike], goalTagText);
   // Beside the rail the goal's tag stands in the middle of the chart's right half, the part
   // the price has yet to cross, clear of the NOW tag at the half's left edge; with no rail it
   // stays at the plot's right edge.
   const goalX = (() => {
     if (!geometry || !railShown) return null;
     const from = centreX;
-    const half = (GOAL_TAG_CHROME + (wordShown ? GOAL_TAG_WORD : 0) + tagMinCh * TAG_CH) / 2;
+    const half = (GOAL_TAG_CHROME + (wordShown ? GOAL_TAG_WORD : 0) + goalTagText.length * TAG_CH) / 2;
     const nowHalf = (`NOW ${formatUsdSmart(spot)}`.length * 7.9 + 18) / 2;
     const middle = (from + geometry.paneWidth) / 2;
     return Math.min(Math.max(middle, from + nowHalf + TAG_GAP + half), Math.max(geometry.paneWidth - 6 - half, middle));
@@ -1559,15 +1585,17 @@ export function ThesisChart({
     max: paneBottom - ZONE_LABEL_INSET,
   });
   // The NOW tag sits just off the live-price dot instead of on it, so the end of the line and
-  // the start of the projection stay visible: above the dot where it can, and around the two
-  // labels where it cannot. The hint's row at the pane's foot is not its to take either.
+  // the start of the projection stay visible: above the dot, always, stacked under a label that
+  // is just over the dot and past one that is on it.
   const nowTagTop =
     spotY == null
       ? null
       : nowTagY({
           spotY,
           top: NOW_TAG_TOP,
-          bottom: hintShown ? paneBottom - ZONE_LABEL_INSET : paneBottom - TAG_HALF - 2,
+          bottom: paneBottom - TAG_HALF - 2,
+          // the two labels. Not the flip hint under the lower one: with the price down at the
+          // pane's foot the tag stays over its dot and lies over the hint, which matters less
           taken: strikeY == null ? [] : [topLabelY, bottomLabelY].map((y) => [y - TAG_HALF, y + TAG_HALF] as const),
         });
 
@@ -1697,12 +1725,13 @@ export function ThesisChart({
           <>
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 transition-colors duration-200"
+              // the chart's box has the app's corner, as every tag and button on it does
+              className="pointer-events-none absolute inset-x-0 top-0 rounded-tl-[var(--radius)] transition-colors duration-200"
               style={{ height: Math.max(0, strikeY), background: direction === "above" ? "rgba(34,197,94,0.07)" : "rgba(239,68,68,0.06)" }}
             />
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 transition-colors duration-200"
+              className="pointer-events-none absolute inset-x-0 rounded-bl-[var(--radius)] transition-colors duration-200"
               style={{ top: Math.max(0, strikeY), bottom: axisHeight, background: direction === "below" ? "rgba(34,197,94,0.07)" : "rgba(239,68,68,0.06)" }}
             />
             {/* zone labels: kept out of the click targets and lifted above the frosted future pane */}
@@ -1753,10 +1782,12 @@ export function ThesisChart({
                   y2={spotY}
                   stroke={SPOT}
                   strokeWidth={1}
-                  style={{ transition: "y1 180ms ease-out, y2 180ms ease-out" }}
                 />
               ) : null}
-              {/* the live price itself: the dot where the history line ends and the projection starts */}
+              {/* the live price itself: the dot where the history line ends and the projection
+                  starts. It, the price's line and the NOW tag move with the chart, at once: the
+                  canvas redraws in one frame, and a dot that slid after it for 180 ms hung off
+                  the end of its line every time the strike or the price changed. */}
               {spotY != null ? (
                 <circle
                   cx={nowX}
@@ -1765,7 +1796,6 @@ export function ThesisChart({
                   fill={LINE}
                   stroke="rgba(18,18,18,0.9)"
                   strokeWidth={1.5}
-                  style={{ transition: "cy 180ms ease-out" }}
                 />
               ) : null}
               {/* projection fan: several plausible price paths from the now price toward expiry,
@@ -1846,7 +1876,7 @@ export function ThesisChart({
             // drawn over everything else on the pane: no line, chip or handle covers the live price
             className="pointer-events-none absolute z-[19] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-[var(--radius)] border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] tracking-[-0.02em] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
             data-testid="chart-now"
-            style={{ left: nowX, top: nowTagTop ?? spotY, transition: "top 180ms ease-out, left 180ms ease-out" }}
+            style={{ left: nowX, top: nowTagTop ?? spotY }}
             aria-hidden="true"
           >
             {/* every caps word on the chart wears the same tracking; numbers never do */}
@@ -1896,22 +1926,22 @@ export function ThesisChart({
                 <Chevron kind="switch" className={HANDLE_ICON} />
                 {wordShown ? goalHandle.grabbed ? <Grab className={HANDLE_ICON} /> : <Hand className={HANDLE_ICON} /> : null}
               </span>
-              {/* the word, then the value, which keeps the right end */}
+              {/* the word, the price right after it, and the profit at the right end */}
               <span className="flex items-baseline gap-2">
                 {/* every caps word on the chart wears the same tracking; numbers never do */}
                 {wordShown ? <span className="tracking-[0.08em]">GOAL</span> : null}
-                {/* the value's own room is what is reserved, so the word never eats into it */}
-                <span className="text-right tabular-nums" style={tagMin}>{goalShown}</span>
+                <Sized text={goalPriceText} widest={profitShown ? widestGoalPrice : stackedPrice} />
+                {profitShown ? <Sized text={goalProfitText} widest={widestGoalProfit} align="right" /> : null}
               </span>
             </div>
           ) : (
             <span
               className="pointer-events-none absolute z-[17] -translate-x-full -translate-y-1/2 whitespace-nowrap rounded-[var(--radius)] border border-[rgba(128,201,182,0.35)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] tracking-[-0.02em] font-semibold leading-[1.2] text-accent-secondary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
-              style={{ left: geometry.paneWidth - 6, top: tops.goal, transition: "top 180ms ease-out" }}
+              style={{ left: geometry.paneWidth - 6, top: tops.goal }}
               data-testid="chart-goal"
               aria-hidden="true"
             >
-              <span className="tracking-[0.08em]">GOAL</span> {goalShown}
+              <span className="tracking-[0.08em]">GOAL</span> {profitShown ? goalLabel : goalPriceText}
             </span>
           )
         ) : null}
@@ -1922,15 +1952,18 @@ export function ThesisChart({
           <div
             {...strikeSlider}
             data-place="plot"
-            className={cn(HANDLE, "-translate-x-full")}
+            // On a phone the two tags are a price each, one over the other. Each wears its own
+            // line's colour so they can be told apart: this one the strike line's white (edge
+            // and mark), the goal's the goal line's green.
+            className={cn(HANDLE, "-translate-x-full border-[rgba(240,240,240,0.55)] hover:border-content-primary")}
             style={{ left: geometry.paneWidth - 6, top: tops.strike, ...grabStyle }}
           >
             {/* built as the goal's tag is, part for part, so the two come out one width */}
             <span className="flex items-center gap-1" aria-hidden="true">
-              <Chevron kind="switch" className={HANDLE_ICON} />
+              <Chevron kind="switch" className="h-3.5 w-3.5 shrink-0 text-content-primary" />
             </span>
             <span className="flex items-baseline gap-2">
-              <span className="text-right tabular-nums" style={tagMin}>{strikeShown}</span>
+              <Sized text={strikeShown} widest={stackedStrike} align="right" />
             </span>
           </div>
         ) : null}
@@ -1995,11 +2028,13 @@ export function ThesisChart({
                       type="button"
                       tabIndex={-1}
                       disabled={off}
+                      // named for assistive tech only: a `title` here put the browser's tooltip
+                      // over the legend's numbers whenever the pointer rested on it
                       aria-label={step > 0 ? "Higher strike" : "Lower strike"}
-                      title={off ? (step > 0 ? "This is the highest strike" : "This is the lowest strike") : step > 0 ? "Higher strike" : "Lower strike"}
                       data-testid={step > 0 ? "strike-up" : "strike-down"}
                       onClick={() => stepStrike(to)}
-                      className="group absolute inset-x-0 transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-[rgba(128,201,182,0.08)] enabled:active:bg-[rgba(128,201,182,0.16)] disabled:cursor-default"
+                      // the app's corner, as the knot between them and every other button has
+                      className="group absolute inset-x-0 rounded-[var(--radius)] transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-[rgba(128,201,182,0.08)] enabled:active:bg-[rgba(128,201,182,0.16)] disabled:cursor-default"
                       style={step > 0 ? { top: 0, height: Math.max(0, tops.strike - edge) } : { top: tops.strike + edge, bottom: 0 }}
                     >
                       <Chevron
