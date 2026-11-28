@@ -87,6 +87,64 @@ describe("wallet panel", () => {
   });
 });
 
+describe("wallet menu placement", () => {
+  const boxOf = (el: HTMLElement, box: Partial<DOMRect>) => {
+    el.getBoundingClientRect = () => ({ top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}), ...box }) as DOMRect;
+  };
+
+  it("drops down from the button that opened it, right edges together, and covers nothing else", () => {
+    show();
+    const opener = screen.getByRole("button", { name: "open" });
+    boxOf(opener, { top: 40, bottom: 80, left: 800, right: 900 });
+    fireEvent.pointerDown(opener);
+    open();
+    // 8px under the button, and 360 wide ending at the button's right edge
+    expect(panel().style.top).toBe("88px");
+    expect(panel().style.left).toBe("540px");
+    expect(panel().style.width).toBe("360px");
+    // a menu, not a takeover: no backdrop, nothing modal, the page still scrolls
+    expect(panel().getAttribute("aria-modal")).toBeNull();
+    expect(document.body.style.overflow).toBe("");
+    expect(document.querySelector(".backdrop-blur-sm")).toBeNull();
+  });
+
+  it("stays inside the window when its button is at the bottom, and never opens upward", () => {
+    show();
+    const opener = screen.getByRole("button", { name: "open" });
+    boxOf(opener, { top: 700, bottom: 752, left: 100, right: 900 });
+    Object.defineProperty(panel(), "offsetHeight", { configurable: true, value: 200 });
+    fireEvent.pointerDown(opener);
+    open();
+    // jsdom's window is 768 tall: held 12px from its bottom edge
+    expect(panel().style.top).toBe(`${window.innerHeight - 200 - 12}px`);
+  });
+
+  it("is put away by a press outside it, and by its own button", () => {
+    render(
+      <WalletSidebarProvider>
+        <Opener />
+        <p>elsewhere</p>
+      </WalletSidebarProvider>,
+    );
+    const opener = screen.getByRole("button", { name: "open" });
+    fireEvent.pointerDown(opener);
+    open();
+    expect(panel().inert).toBe(false);
+    // a press inside keeps it
+    fireEvent.pointerDown(within(panel()).getByRole("button", { name: /Phantom/ }));
+    expect(panel().inert).toBe(false);
+    fireEvent.pointerDown(screen.getByText("elsewhere"));
+    expect(panel().inert).toBe(true);
+    // its own button opens it and closes it
+    fireEvent.pointerDown(opener);
+    open();
+    expect(panel().inert).toBe(false);
+    fireEvent.pointerDown(opener);
+    open();
+    expect(panel().inert).toBe(true);
+  });
+});
+
 describe("connected wallet", () => {
   beforeEach(connected);
 
@@ -97,7 +155,8 @@ describe("connected wallet", () => {
     open();
     const p = within(panel());
     expect(panel().getAttribute("aria-label")).toBe("Wallet");
-    expect(p.getByText("Connected with Phantom")).toBeTruthy();
+    expect(p.getByText("Phantom")).toBeTruthy();
+    expect(p.getByText("Connected")).toBeTruthy();
     expect(p.getAllByText(/7xKXtg/)).toHaveLength(1);
     expect(p.getByText("7xKXtg…osgAsU").getAttribute("title")).toBe(ADDRESS);
     await act(async () => { fireEvent.click(p.getByRole("button", { name: "Copy address" })); });
