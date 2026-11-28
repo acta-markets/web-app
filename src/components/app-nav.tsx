@@ -31,7 +31,10 @@ export function AppNav() {
   const active = activeAppTab(usePathname());
 
   return (
-    <nav className="relative z-50 mx-auto flex w-full max-w-[850px] flex-wrap items-center justify-between gap-y-3 pt-10 max-xl:px-[71px] max-lg:px-6 max-md:px-3 max-md:pt-4">
+    // The page's own column, as every page shell and the footer are (`max-w-page`, 1200px in
+    // the app): the logo and the connect button stand over the content's two edges. It was the
+    // landing page's 850px, which left them 175px inside the content on Trade and Earn.
+    <nav className="relative z-50 mx-auto flex w-full max-w-page flex-wrap items-center justify-between gap-y-3 px-6 pt-10 max-md:px-3 max-md:pt-4">
       <div className="h-9 w-[129px]">
         {/* the logo goes home, and the app's home is Trade */}
         <Link href="/trade">
@@ -51,7 +54,8 @@ export function AppNav() {
               aria-current={isActive ? "page" : undefined}
               aria-label={t.soon ? `${t.label} (coming soon)` : undefined}
               className={[
-                "flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-1 py-1.5 text-sm font-normal leading-[1.2] tracking-[-0.28px] backdrop-blur-[4px] transition-colors md:h-10 md:px-4 md:py-2.5 md:text-base md:tracking-[-0.32px]",
+                // the app's corner, as every button and tag has
+                "flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius)] px-1 py-1.5 text-sm font-normal leading-[1.2] tracking-[-0.28px] backdrop-blur-[4px] transition-colors md:h-10 md:px-4 md:py-2.5 md:text-base md:tracking-[-0.32px]",
                 isActive
                   ? "bg-[rgba(42,162,134,0.2)] text-content-primary"
                   : t.soon
