@@ -58,16 +58,24 @@ describe("Trade page modes", () => {
     render(<TradeClient />);
     expect(screen.getByText("Yield for JLP")).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Trade");
+    const address = vi.spyOn(window.history, "replaceState");
     fireEvent.click(screen.getByRole("button", { name: "flip mode" }));
-    expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP", { scroll: false });
+    // the address is rewritten in place: the page is never asked for again, so a switch
+    // cannot reload it and lose what is open on it
+    expect(address).toHaveBeenCalledWith(null, "", "/trade?asset=JLP");
+    expect(mocks.replace).not.toHaveBeenCalled();
+    address.mockRestore();
   });
 
   it("keeps the other params when switching to Yield", () => {
     mocks.search = "asset=JLP";
     render(<TradeClient />);
     expect(screen.getByText("Profit for JLP")).toBeTruthy();
+    const address = vi.spyOn(window.history, "replaceState");
     fireEvent.click(screen.getByRole("button", { name: "flip mode" }));
-    expect(mocks.replace).toHaveBeenCalledWith("/trade?asset=JLP&mode=yield", { scroll: false });
+    expect(address).toHaveBeenCalledWith(null, "", "/trade?asset=JLP&mode=yield");
+    expect(mocks.replace).not.toHaveBeenCalled();
+    address.mockRestore();
   });
 
   it("sends legacy and old Profit links to the default", () => {

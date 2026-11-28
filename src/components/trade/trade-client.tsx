@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AppPageHeader } from "@/components/app-ui/app-page-header";
 import { TYPE_LINK } from "@/components/app-ui/type-styles";
@@ -21,7 +21,6 @@ const GUIDE: Record<Mode, string> = {
 };
 
 export function TradeClient() {
-  const router = useRouter();
   const params = useSearchParams();
   // Profit is where the page lands; Yield is ?mode=yield. Anything else, the old ?mode=profit,
   // ?mode=pro and ?mode=easy links included, falls through to the default.
@@ -45,7 +44,12 @@ export function TradeClient() {
     if (next === "yield") query.set("mode", "yield");
     else query.delete("mode");
     const qs = query.toString();
-    router.replace(qs ? `/trade?${qs}` : "/trade", { scroll: false });
+    // replaceState, not the router: the address changes and the page is not asked for again,
+    // as when the asset or the direction changes. The router fetched the page from the server
+    // on every switch, and when that request failed (a dropped connection, a tab opened on a
+    // build that has since been replaced) Next loaded the whole page afresh: the switch then
+    // threw away everything on the page that is not remembered, the open ticket first of all.
+    window.history.replaceState(null, "", qs ? `/trade?${qs}` : "/trade");
   }
 
   return (
