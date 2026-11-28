@@ -54,7 +54,7 @@ describe("sample-data.json", () => {
   it("fills every section, with one vault the backend cannot cover", () => {
     const metas = data.vaults.map((v) => resolveVaultMeta(v, data.meta));
     expect(new Set(metas.map((m) => m.category))).toEqual(new Set(["Crypto", "Stocks", "Stables"]));
-    expect(metas.every((m) => m.registered && m.curator === "Velar")).toBe(true);
+    expect(metas.every((m) => m.registered && m.curator === "Acta")).toBe(true);
     expect(data.vaults.every((v) => v.safety === "normal")).toBe(true);
     const uncovered = data.vaults.filter((v) => v.performance?.covered === false);
     expect(uncovered.map((v) => v.vault_pda)).toEqual([data.keys.zec]);
