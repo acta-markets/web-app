@@ -51,7 +51,6 @@ Create `.env.local` with:
 ```bash
 MONGODB_URI="<connection_string>"
 MONGODB_DB="acta"
-NEXT_PUBLIC_PRIVY_APP_ID="<privy_app_id>"
 NEXT_PUBLIC_APP_ENABLED="true"  # Set "false" to enable landing-only mode
 NEXT_PUBLIC_RFQ_WS_URL="wss://beta-api.acta.markets"  # Optional override; defaults to devnet-api on devnet, beta-api on mainnet
 NEXT_PUBLIC_SOLANA_NETWORK="mainnet"  # "devnet" (default), "mainnet" or "mainnet-beta"; controls mints, RPC, wallet, explorer and backend defaults
@@ -88,7 +87,8 @@ A partner edition is the devnet app with its own assets and vault lineup. It is 
 
 **Wallet**: Solana Wallet Standard via `@wallet-standard/react`:
 - `src/components/solana/solana-wallet-provider.tsx` - Wallet context provider
-- `src/components/solana/solana-connect-button.tsx` - Connect button component
+- `src/components/solana/solana-connect-button.tsx` - The header's wallet control, and only the header's
+- `src/components/wallet/connect-wallet-action.tsx` - `ConnectWalletAction`: how a page asks for a wallet, the way Trade's main button does. One main action that opens the wallet panel (`useWalletSidebar().openSidebar`). A page never repeats the header's control and never opens its own picker
 - Supports Phantom, Solflare, and other Wallet Standard wallets
 
 **Market prices and APR**: The trade page uses the configured RFQ backend’s `GetTokenMarketsInfo.reference_price` and indicative premiums, refreshed together every 30 seconds. APR uses the existing SDK formula and is unavailable for stale indicatives; indicatives price the sell side only — buys say "the quoted premium" until an RFQ returns. The backend owns oracle access; the frontend has no direct Hermes integration.
