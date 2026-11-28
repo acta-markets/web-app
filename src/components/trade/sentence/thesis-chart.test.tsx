@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { handleTops, optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart, nowSplitFor, nowTagY, zoneLabelY } from "./thesis-chart";
+import { breakevenMarkY, centredPriceDomain, handleTops, optionPayout, pnlAtPrice, priceDomain, profitAtPrice, projectionPath, projectionWiggle, rangeForExpiry, returnPctAtPrice, scenarioEndpoints, ThesisChart, nowSplitFor, nowTagY, zoneLabelY } from "./thesis-chart";
 
 const setData = vi.hoisted(() => vi.fn());
 /** The price under a pane y; null (the default) is a chart with no scale to read yet. */
@@ -718,6 +718,84 @@ describe("the strike and goal tags", () => {
   it("gives a tag only the grab room that does not reach into its neighbour", () => {
     expect(handleTops({ strikeY: 150, goalY: 116, goalAbove: true, ...pane }).grab).toBe(3);
     expect(handleTops({ strikeY: 150, goalY: 90, goalAbove: true, ...pane }).grab).toBe(10);
+  });
+});
+
+describe("the chart's price range, centred on the strike", () => {
+  /** the four prices the rail's ticks show: a half and a whole of the half-width each side of the strike */
+  const ticks = ([lo, hi]: [number, number]) => [lo, (lo + (lo + hi) / 2) / 2, ((lo + hi) / 2 + hi) / 2, hi];
+
+  it("covers what it is given, with the strike in the middle", () => {
+    const [lo, hi] = centredPriceDomain([56_229, 80_803, 59_300, 72_000], 61_500);
+    expect((lo + hi) / 2).toBe(61_500);
+    expect(lo).toBeLessThanOrEqual(56_229);
+    expect(hi).toBeGreaterThanOrEqual(80_803);
+  });
+
+  it("is a round distance wide, so the rail's ticks are the strike plus or minus round amounts", () => {
+    // the furthest value is $19,303 over the strike: with 12% of air that is $21,619, taken up to $24,000
+    const range = centredPriceDomain([56_229, 80_803, 59_300, 72_000], 61_500);
+    expect(ticks(range)).toEqual([37_500, 49_500, 73_500, 85_500]);
+    // a $127 asset: whole dollars
+    expect(ticks(centredPriceDomain([118, 131, 127.4, 140], 127))).toEqual([111, 119, 135, 143]);
+    // a sub-dollar one keeps its own scale: steps of 0.0018 from a 0.02 strike
+    const small = ticks(centredPriceDomain([0.0185, 0.0231], 0.02));
+    expect(small.map((p) => Number(p.toFixed(4)))).toEqual([0.0164, 0.0182, 0.0218, 0.0236]);
+  });
+
+  it("never goes below zero, and has a width even with nothing to cover", () => {
+    expect(centredPriceDomain([400], 100)[0]).toBe(0);
+    const [lo, hi] = centredPriceDomain([], 100);
+    expect(hi - lo).toBeGreaterThan(0);
+    expect((lo + hi) / 2).toBe(100);
+  });
+});
+
+describe("the breakeven's mark", () => {
+  const pane = { strikeY: 117, paneHeight: 234 };
+
+  it("is drawn on its own level where it has room", () => {
+    expect(breakevenMarkY({ breakevenY: 90, ...pane })).toBe(90);
+    expect(breakevenMarkY({ breakevenY: 150, ...pane })).toBe(150);
+  });
+
+  it("is not drawn close to the strike line, where it would sit on it", () => {
+    // 7 px over the strike, as BTC's is at a month's scale
+    expect(breakevenMarkY({ breakevenY: 110, ...pane })).toBeNull();
+    expect(breakevenMarkY({ breakevenY: 104, ...pane })).toBeNull();
+    // 14 px is room enough
+    expect(breakevenMarkY({ breakevenY: 103, ...pane })).toBe(103);
+  });
+
+  it("keeps out of the range tabs' row and off the mark at the plot's foot, and needs a level to be on", () => {
+    expect(breakevenMarkY({ breakevenY: 40, ...pane })).toBeNull();
+    expect(breakevenMarkY({ breakevenY: 200, ...pane })).toBeNull();
+    expect(breakevenMarkY({ breakevenY: null, ...pane })).toBeNull();
+  });
+});
+
+describe("the breakeven on the chart", () => {
+  const strikes = [90, 95, 100, 105].map((strike) => ({ strike, strike1e9: strike * 1e9 }));
+  // a pane where $95 is y 130 and a dollar is 2 px
+  beforeEach(() => priceToCoordinate.mockImplementation((price) => 130 - (price - 95) * 2));
+
+  it("is a dotted line with a caption at the plot's left edge when it is far enough from the strike", async () => {
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    render(<ThesisChart {...props} side="buy" direction="above" strikes={strikes} breakeven={105} />);
+    // $105 is 20 px over the $95 strike
+    const caption = await screen.findByTestId("chart-breakeven");
+    expect(caption.textContent).toBe("BREAKEVEN $105");
+    expect(caption.style.top).toBe("110px");
+  });
+
+  it("is left out when it is a few pixels from the strike line, and on a position already held", async () => {
+    mockHistory(Array.from({ length: 50 }, (_, i) => [(now - 7 * 86400 + i * 12000) * 1000, 98 + (i % 5)]));
+    const { rerender } = render(<ThesisChart {...props} side="buy" direction="above" strikes={strikes} breakeven={98} />);
+    await screen.findByRole("slider", { name: "Strike" });
+    // $98 is 6 px over the strike
+    expect(screen.queryByTestId("chart-breakeven")).toBeNull();
+    rerender(<ThesisChart {...props} side="buy" direction="above" strikes={strikes} breakeven={105} readOnly />);
+    expect(screen.queryByTestId("chart-breakeven")).toBeNull();
   });
 });
 

@@ -1,7 +1,7 @@
 import { AppCard } from "@/components/app-ui/app-card";
 import { cn } from "@/lib/cn";
 import type { TakerSide } from "@/lib/spreads";
-import { BONE, TICKET_CELL, TICKET_COLUMNS } from "./ticket-styles";
+import { BONE, TICKET_CELL, TICKET_COLUMNS, TICKET_NOW_CELL, TICKET_PHONE_COLUMNS } from "./ticket-styles";
 
 /** Where the price rail's five ticks sit, top to bottom, as on the loaded chart. */
 const RAIL_TICKS = ["7%", "27%", "48%", "68%", "88%"];
@@ -73,16 +73,16 @@ export function TradeSkeleton({ side, folded = false }: { side: TakerSide; folde
       <ChartSkeleton />
       {/* the strip: two headings, four cells, in the loaded strip's own grid and order */}
       <div className="mt-4">
-        <div className={cn("grid grid-cols-2 gap-x-6 gap-y-1", TICKET_COLUMNS, folded && "hidden")}>
+        <div className={cn("grid grid-cols-2 gap-x-6 gap-y-1", TICKET_PHONE_COLUMNS, TICKET_COLUMNS, folded && "hidden")}>
           <div className="col-span-2 pt-1 xl:order-1">
             <div className={cn(BONE, "h-[19px] w-10")} />
           </div>
-          <SkeletonCell className="xl:order-3" value="h-[31px] w-full" />
-          <SkeletonCell className="xl:order-4" value="w-24" />
+          <SkeletonCell className={cn(TICKET_NOW_CELL, "xl:order-3")} value="h-[31px] w-full" />
+          <SkeletonCell className={cn(TICKET_NOW_CELL, "xl:order-4")} value="w-24" />
           <div className="col-span-2 pt-1 max-xl:mt-2 xl:order-2">
             <div className={cn(BONE, "h-[19px] w-24")} />
           </div>
-          <SkeletonCell className="xl:order-5" value={side === "sell" ? "w-32 xl:h-[54px]" : "w-32"} note={side === "buy" ? "h-[91px] w-full" : "h-3 w-28"} />
+          <SkeletonCell className="xl:order-5" value={side === "sell" ? "w-32 xl:h-[54px]" : "w-32"} />
           <SkeletonCell className="xl:order-6" value={side === "sell" ? "w-36 xl:h-[54px]" : "w-36"} />
         </div>
         <div className={cn(BONE, "h-[52px] w-full max-md:h-12", !folded && "mt-3")} />

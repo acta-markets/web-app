@@ -14,6 +14,8 @@ import { BUY_PRODUCT_NAME, isCashSettled, lowerStrike, productLabel, quoteMatche
 import { shareLink } from "@/lib/share/actions";
 import { tradeShareCard, type ShareCard, type TradeShareInput } from "@/lib/share/card";
 import { formatExpiryDay, formatExpiryUtc, formatPrice, formatUsdc } from "@/lib/trade/format";
+import { formatProfit } from "@/lib/trade/goal";
+import { formatStrikePrice } from "@/lib/markets";
 import { BUY_FUND_REMINDER, SPREAD_SETTLEMENT_NOTE, buyBreakEven, exerciseDepositText, spreadBounds, spreadBreakEven, spreadMaxGain } from "@/lib/trade/thesis";
 
 export type RfqOrderPreview = {
@@ -31,6 +33,9 @@ export type RfqOrderPreview = {
   expiryTs?: number;
   lockedAprPct?: number | null;
   lockedPremiumUsd?: number | null;
+  /** A buyer's goal, the price they think the asset reaches: the review says what the trade
+      makes there, by the quote. Display only; it is not part of the order. */
+  goalPrice?: number | null;
 };
 
 type FlowStep = QuoteFlowStep;
@@ -78,6 +83,33 @@ function buyQuoteFacts(preview: RfqOrderPreview, quantity: number, grossPerUnit:
     ["Break-even", priced ? formatPrice(buyBreakEven(isPut, strike, grossPerUnit)) : PENDING],
     ["Fund to exercise", exerciseDepositText(isPut, quantity, strike, preview.asset)],
   ];
+}
+
+/**
+ * What a bought position makes with the price exactly at the buyer's goal, by the quoted price:
+ * the page's own headline ("makes $836 or more if you're right"), said again where the trade is
+ * confirmed, now from the quote instead of the indicative. A dash until the quote is in. A
+ * spread pays the distance from its near leg and no more than its width. A goal the quote
+ * leaves short of the breakeven shows as the loss it is.
+ */
+function goalFact(preview: RfqOrderPreview, quantity: number, grossPerUnit: number | null): [string, string] | null {
+  const goal = preview.goalPrice;
+  if (goal == null || !(goal > 0)) return null;
+  const label = `If ${preview.asset} reaches ${formatStrikePrice(goal)}`;
+  if (grossPerUnit == null) return [label, PENDING];
+  const bounds = spreadBounds(preview.terms);
+  let payoutPerUnit: number;
+  if (bounds) {
+    const lower = bounds.lower / 1e9;
+    const upper = bounds.upper / 1e9;
+    payoutPerUnit = Math.min(Math.max(preview.terms.type === "call_spread" ? goal - lower : upper - goal, 0), upper - lower);
+  } else {
+    const strike = Number(lowerStrike(preview.terms)) / 1_000_000_000;
+    payoutPerUnit = Math.max(preview.terms.type === "cash_secured_put" ? strike - goal : goal - strike, 0);
+  }
+  const profit = (payoutPerUnit - grossPerUnit) * quantity;
+  // written as the page writes a profit ("+$836"); a loss the same way with its sign
+  return [label, profit >= 0 ? formatProfit(profit) : formatProfit(-profit).replace("+", "-")];
 }
 
 export function RfqFlowModal({
@@ -283,6 +315,7 @@ export function RfqFlowModal({
   const displayedAprPct = preview?.lockedAprPct ?? null;
 
   const buyFacts = preview && isBuy ? buyQuoteFacts(preview, quoteQuantity, quoteUnitPremium) : [];
+  const goalRow = preview && isBuy ? goalFact(preview, quoteQuantity, quoteUnitPremium) : null;
 
   const handleShare = () => {
     if (!preview) return;
@@ -314,6 +347,8 @@ export function RfqFlowModal({
     premiumNote: isBuy ? "This is the most you can lose." : null,
     facts: [
       [isBuy ? "Size" : "You deposit", preview.quantityDisplay],
+      // what it makes at the buyer's goal, right after what it is
+      ...(goalRow ? [goalRow] : []),
       // the thesis already names the strike; without one the row carries it
       ...(preview.thesis ? [] : [["Strike", preview.strikeDisplay] as [string, string]]),
       ...buyFacts,

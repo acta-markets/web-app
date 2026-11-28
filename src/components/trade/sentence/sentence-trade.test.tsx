@@ -187,7 +187,7 @@ describe("the mode switch in the line under the sentence", () => {
   it("tells a buyer the price is all there is to lose, the same price the ticket shows", () => {
     connectWallet();
     render(<SentenceTrade mode="profit" />);
-    const [, price] = secondLine().match(/risking only (\$[\d,.]+)$/)!;
+    const [, price] = secondLine().match(/risking (\$[\d,.]+)$/)!;
     expect(screen.getByTestId("trade-headline").textContent!.replace(/\s/g, "")).toBe(price);
   });
 
@@ -214,7 +214,7 @@ describe("a buyer's goal", () => {
   it("sets what the trade makes: the second line's profit is the chosen goal's", () => {
     connectWallet();
     render(<SentenceTrade mode="profit" />);
-    const profit = () => secondLine().match(/that makes (\$[\d,.]+) or more if you're right/)?.[1];
+    const profit = () => secondLine().match(/to make (\$[\d,.]+) or more/)?.[1];
     // every goal on offer says what the trade makes there
     const options = [...select("Goal").options];
     expect(options.length).toBeGreaterThan(1);
@@ -319,7 +319,7 @@ describe("sentence trade", () => {
     expect(screen.getByTestId("trade-headline-note").textContent).toMatch(/^APY [\d,.]+%$|^Confirmed on quote$/);
     expect(screen.getByTestId("ticket-right").textContent).toBe("Keep 104.50 USDC");
     // the sentence's second line: the option, what it earns, and what being wrong does
-    expect(screen.getByText(/^You're selling a put option to earn \$1\.10, but if you're wrong you buy SOL at \$95$/)).toBeTruthy();
+    expect(screen.getByText(/^You're selling a put to earn \$1\.10, and buy SOL at \$95 if wrong$/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Connect wallet to trade" })).toBeTruthy();
     expect(screen.queryByText(/I get paid/)).toBeNull();
     expect(screen.queryByText(/If I deposit/)).toBeNull();
@@ -367,6 +367,23 @@ describe("sentence trade", () => {
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("47.5");
     fireEvent.click(screen.getByRole("button", { name: "HALF" }));
     expect((screen.getByLabelText("Deposit") as HTMLInputElement).value).toBe("19");
+  });
+
+  it("snaps a typed amount onto its size step when the field is left", () => {
+    connectWallet();
+    render(<SentenceTrade mode="yield" />);
+    const field = screen.getByLabelText("Deposit") as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "1000" } });
+    // while typing, the field keeps what was typed and the note says what it locks
+    expect(field.value).toBe("1000");
+    expect(screen.getByTestId("size-note").textContent).toBe("Locks 997.5 USDC");
+    fireEvent.blur(field);
+    // 1000 USDC at $95 with a 0.1 SOL step is 997.5 USDC: the field now says so, and the note goes back to the conversion
+    expect(field.value).toBe("997.5");
+    expect(screen.getByTestId("size-note").textContent).not.toContain("Locks");
+    // an amount already on the step is left as it is
+    fireEvent.blur(field);
+    expect(field.value).toBe("997.5");
   });
 
   it("keeps the ticket open when the side is switched: what was unfolded stays unfolded", () => {
@@ -526,6 +543,11 @@ describe("sentence trade", () => {
     expect(ladder[0].textContent).toBe("breakeven");
     expect(ladder.length).toBeGreaterThan(4);
     expect(screen.getByTestId("ticket-profit-ladder").textContent).toMatch(/^\+\d+\.\d%at \$/);
+    // the page's own goal is one of its lines: no words of its own, told apart by a quiet green
+    const goalRows = screen.getByTestId("ticket-profit-ladder").querySelectorAll('[data-goal="true"]');
+    expect(goalRows).toHaveLength(1);
+    expect(goalRows[0].textContent).not.toContain("goal");
+    expect(goalRows[0].className).toBe("contents text-accent-secondary");
     fireEvent.click(more);
     expect(more.getAttribute("aria-expanded")).toBe("false");
   });

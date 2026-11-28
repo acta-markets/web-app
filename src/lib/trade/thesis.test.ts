@@ -102,41 +102,41 @@ describe("the sentence's second line", () => {
   it("says what a sold option earns and what being wrong does to the deposit", () => {
     // thesis "above" sells a put: wrong, the USDC buys the asset at the strike
     expect(tradeLineText({ asset: "SOL", direction: "above", side: "sell", strike: "$150", premium: "\u2248$1.10" })).toBe(
-      "You're selling a put option to earn \u2248$1.10, but if you're wrong you buy SOL at $150"
+      "You're selling a put to earn \u2248$1.10, and buy SOL at $150 if wrong"
     );
     // thesis "below" sells a call: wrong, the asset is sold at the strike
     expect(tradeLineText({ asset: "SOL", direction: "below", side: "sell", strike: "$170", premium: "\u2248$1.10" })).toBe(
-      "You're selling a call option to earn \u2248$1.10, but if you're wrong you sell your SOL at $170"
+      "You're selling a call to earn \u2248$1.10, and sell your SOL at $170 if wrong"
     );
   });
 
   it("keeps a sold option's wrong outcome when it has no price yet", () => {
     expect(tradeLineText({ asset: "SOL", direction: "above", side: "sell", strike: "$150" })).toBe(
-      "You're selling a put option, but if you're wrong you buy SOL at $150"
+      "You're selling a put, and buy SOL at $150 if wrong"
     );
   });
 
   it("names a bought option's strike, what it makes if right, and that its price is all it risks", () => {
     expect(
       tradeLineText({ asset: "BTC", direction: "above", side: "buy", strike: "$61,000", premium: "\u2248$21.73", goalProfit: "+$28.27" })
-    ).toBe("You're buying a $61,000 call option that makes +$28.27 or more if you're right, risking only \u2248$21.73");
+    ).toBe("You're buying a $61,000 call to make +$28.27 or more, risking \u2248$21.73");
     expect(
       tradeLineText({ asset: "BTC", direction: "below", side: "buy", strike: "$60,000", premium: "\u2248$21.73", goalProfit: "+$128" })
-    ).toBe("You're buying a $60,000 put option that makes +$128 or more if you're right, risking only \u2248$21.73");
+    ).toBe("You're buying a $60,000 put to make +$128 or more, risking \u2248$21.73");
     // priced, but no goal to measure a profit at
     expect(tradeLineText({ asset: "BTC", direction: "above", side: "buy", strike: "$61,000", premium: "\u2248$21.73" })).toBe(
-      "You're buying a $61,000 call option, risking only \u2248$21.73"
+      "You're buying a $61,000 call, risking \u2248$21.73"
     );
     // unpriced, the same promise in words; a profit with no price to set it against is not shown
     expect(tradeLineText({ asset: "BTC", direction: "above", side: "buy", strike: "$61,000", goalProfit: "+$28.27" })).toBe(
-      "You're buying a $61,000 call option, risking only what you pay for it"
+      "You're buying a $61,000 call, risking what you pay for it"
     );
   });
 
   it("still names the option without a strike, so the line's switch is always there", () => {
-    expect(tradeLineText({ asset: "SOL", direction: "below", side: "sell", strike: null, premium: "\u2248$1.10" })).toBe("You're selling a call option");
+    expect(tradeLineText({ asset: "SOL", direction: "below", side: "sell", strike: null, premium: "\u2248$1.10" })).toBe("You're selling a call");
     expect(tradeLineText({ asset: "BTC", direction: "above", side: "buy", strike: null })).toBe(
-      "You're buying a call option, risking only what you pay for it"
+      "You're buying a call, risking what you pay for it"
     );
   });
 
@@ -148,7 +148,7 @@ describe("the sentence's second line", () => {
       verb: "buying",
       before: "a",
       strike: "$61,000",
-      rest: "call option that makes +$28.27 or more if you're right, risking only \u2248$21.73",
+      rest: "call to make +$28.27 or more, risking \u2248$21.73",
     });
     // a sell's strike is the first line's price; here it is plain text inside the rest
     const sell = tradeLine({ asset: "BTC", direction: "above", side: "sell", strike: "$60,000" });

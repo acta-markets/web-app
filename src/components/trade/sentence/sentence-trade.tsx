@@ -66,7 +66,7 @@ import {
 } from "@/lib/trade/thesis";
 import { wireAmount, type TakerSide } from "@/lib/spreads";
 import { ProfitOutlook } from "./profit-table";
-import { TICKET_CELL, TICKET_COLUMNS, TICKET_LABEL, TICKET_NOTE, TICKET_VALUE, TICKET_WHEN } from "./ticket-styles";
+import { TICKET_CELL, TICKET_COLUMNS, TICKET_LABEL, TICKET_NOTE, TICKET_NOW_CELL, TICKET_PHONE_COLUMNS, TICKET_VALUE, TICKET_WHEN } from "./ticket-styles";
 import { ChartSkeleton, TradeSkeleton } from "./trade-skeleton";
 import { ThesisSentence, ThesisMoveLine, StrikeControl } from "./thesis-sentence";
 import { ThesisChart } from "./thesis-chart";
@@ -455,6 +455,8 @@ export function SentenceTrade({
         thesis: thesisText({ asset: asset.symbol, direction, strike: strike.strike, expiryMs: expiry.expiryTs * 1000 }),
         expiryTs: expiry.expiryTs,
         lockedAprPct: side === "sell" && strike.apr != null ? strike.apr * 100 : undefined,
+        // the goal the page is headlined with, so the review can say what the trade makes there
+        goalPrice: side === "buy" ? (goal?.price ?? null) : null,
       }
     );
   }
@@ -828,6 +830,8 @@ export function SentenceTrade({
               pnl={chartPnl}
               legend={false}
               previewStrike={previewedStrike}
+              // where a buy stops losing; the chart marks it where it has room
+              breakeven={side === "buy" ? buyBreakeven : null}
               goals={goals.map((g) => g.price)}
               // what the trade makes at each of them, so the goal's tag keeps room for the longest
               goalProfits={goals.map((g) => (g.profit != null ? formatProfit(g.profit) : ""))}
@@ -898,6 +902,7 @@ export function SentenceTrade({
               hidden={ticketFolded}
               className={cn(
                 "relative grid grid-cols-2 gap-x-6 gap-y-2",
+                TICKET_PHONE_COLUMNS,
                 ticketFolded && "hidden",
                 // "Now" on the left of the chart's "now" line, the expiry's outcomes on its right
                 TICKET_COLUMNS,
@@ -921,7 +926,7 @@ export function SentenceTrade({
                 <Chevron kind="fold" className="h-4 w-4" />
               </button>
               {/* 1. what goes in */}
-              <div className={cn(TICKET_CELL, "xl:order-3")}>
+              <div className={cn(TICKET_CELL, TICKET_NOW_CELL, "xl:order-3")}>
                 {/* The cell is kept short (Tim, 28 Nov 2026): HALF and MAX stand beside the label,
                     the slider right under the input, and the wallet's balance shares the note's
                     line. The label's row is one line with or without the two buttons, so the
@@ -966,6 +971,12 @@ export function SentenceTrade({
                   onChange={(e) => {
                     const next = e.target.value.replace(",", ".");
                     if (sizePattern.test(next)) setAmountInput(next);
+                  }}
+                  // Leaving the field, a typed amount that is not on the size step becomes the
+                  // amount it locks, as it does when the trade is asked for: what the field
+                  // says is then what is traded, and the "Locks ..." note is only seen while typing.
+                  onBlur={() => {
+                    if (amountInput != null && lockedText != null && lockedText !== amountText) setAmountInput(lockedText);
                   }}
                   className={cn(TICKET_VALUE, "min-w-0 flex-1 bg-transparent py-0.5 tabular-nums text-content-primary outline-none placeholder:text-content-secondary disabled:cursor-not-allowed")}
                 />
@@ -1048,7 +1059,7 @@ export function SentenceTrade({
               </div>
 
               {/* 2. what is paid now */}
-              <div className={cn(TICKET_CELL, "xl:order-4")}>
+              <div className={cn(TICKET_CELL, TICKET_NOW_CELL, "xl:order-4")}>
                 <span className={TICKET_LABEL}>{side === "sell" ? "You earn premium" : "You pay premium"}</span>
                 <span
                   data-testid="trade-headline"
@@ -1096,6 +1107,7 @@ export function SentenceTrade({
                     breakeven={buyBreakeven}
                     premiumUsd={payUsd}
                     units={quantity != null ? quantity / 10 ** decimals : null}
+                    goalPrice={goal?.price ?? null}
                     emptyNote={ticketOutcomes.right.note}
                   />
                 ) : (
