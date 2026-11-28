@@ -41,16 +41,17 @@ describe("a buyer's goals", () => {
 describe("the goal the page opens on", () => {
   const goals = goalOptions({ direction: "above", strike: 61_000, spot: 60_449, premiumUsd: 60, units: 0.1 });
 
-  it("is the nearest one that at least doubles what was paid", () => {
-    // +$40 is under the $60 paid; +$90 clears it
-    expect(defaultGoal(goals, 60)!.price).toBe(62_500);
+  it("is a far one: the nearest that makes at least five times what was paid", () => {
+    // $60 paid, so $300: $64,500 makes +$290 and falls short, $65,000 makes +$340
+    expect(defaultGoal(goals, 60)!.price).toBe(65_000);
   });
 
-  it("is the furthest when none goes that far, and a few steps out when unpriced", () => {
+  it("is the furthest when none goes that far, and well out along the list when unpriced", () => {
     const short = goals.slice(0, 1);
     expect(defaultGoal(short, 60)!.price).toBe(62_000);
     const unpriced = goalOptions({ direction: "above", strike: 61_000, spot: 60_449, premiumUsd: null, units: null });
-    expect(defaultGoal(unpriced, null)!.price).toBe(62_500);
+    // the eleventh goal: eleven steps of $500 past the first
+    expect(defaultGoal(unpriced, null)!.price).toBe(67_000);
     expect(defaultGoal([], 60)).toBeNull();
   });
 
@@ -58,7 +59,7 @@ describe("the goal the page opens on", () => {
     expect(pickGoal(goals, 64_000, 60)!.price).toBe(64_000);
     // $61,500 no longer makes money at this price: the nearest that does takes its place
     expect(pickGoal(goals, 61_500, 60)!.price).toBe(62_000);
-    expect(pickGoal(goals, null, 60)!.price).toBe(62_500);
+    expect(pickGoal(goals, null, 60)!.price).toBe(65_000);
   });
 });
 

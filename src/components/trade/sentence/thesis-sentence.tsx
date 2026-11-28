@@ -225,14 +225,27 @@ const useIsomorphicLayoutEffect = typeof window === "undefined" ? React.useEffec
  * down just enough to fit, through `--fit`, instead of the last phrase dropping to another line
  * and pushing the chart down. Both lines take the same step, the one the wider of them needs, so
  * they stay one size. On a phone the sentence wraps by design and is left alone.
+ *
+ * The text should not move more than it has to (Tim, 28 Nov 2026), so the step is held still:
+ * - it is taken in whole percents, and
+ * - while the words stay the same and only the figures in them change (`steadyKey`: a strike
+ *   dragged, a goal picked, a size typed) and the card keeps its width, the step only ever goes
+ *   down. A longer figure may take the type down a percent; a shorter one never brings it back
+ *   up, so the line does not breathe as the figures change.
+ * The size is set at once, with no transition: a size in the middle of a transition was what
+ * the next measurement read, which left the line a little too wide every time.
  */
-function useFitLines(first: React.RefObject<HTMLElement>, second: React.RefObject<HTMLElement>, contentKey: string) {
+function useFitLines(first: React.RefObject<HTMLElement>, second: React.RefObject<HTMLElement>, contentKey: string, steadyKey: string = contentKey) {
+  const held = React.useRef<{ key: string; boxes: string; factor: number } | null>(null);
   useIsomorphicLayoutEffect(() => {
     const lines = [first.current, second.current].filter((el): el is HTMLElement => el != null);
     if (lines.length === 0) return;
     const fit = () => {
       for (const el of lines) el.style.removeProperty("--fit");
-      if (!window.matchMedia?.("(min-width: 768px)").matches) return;
+      if (!window.matchMedia?.("(min-width: 768px)").matches) {
+        held.current = null;
+        return;
+      }
       let factor = 1;
       for (const el of lines) {
         const box = el.clientWidth;
@@ -242,7 +255,13 @@ function useFitLines(first: React.RefObject<HTMLElement>, second: React.RefObjec
         el.style.whiteSpace = wrap;
         if (box > 0 && natural > box) factor = Math.min(factor, box / natural);
       }
-      if (factor < 1) for (const el of lines) el.style.setProperty("--fit", (Math.floor(factor * 1000) / 1000).toString());
+      factor = Math.floor(factor * 100) / 100;
+      // the same words in the same card: never larger than it has already been
+      const boxes = lines.map((el) => el.clientWidth).join(",");
+      const before = held.current;
+      if (before && before.key === steadyKey && before.boxes === boxes) factor = Math.min(factor, before.factor);
+      held.current = { key: steadyKey, boxes, factor };
+      if (factor < 1) for (const el of lines) el.style.setProperty("--fit", factor.toString());
     };
     fit();
     // the card's width changes with the window, and the words' width once the web font is in
@@ -260,7 +279,13 @@ function useFitLines(first: React.RefObject<HTMLElement>, second: React.RefObjec
       observer?.disconnect();
       fonts?.removeEventListener("loadingdone", fit);
     };
-  }, [first, second, contentKey]);
+  }, [first, second, contentKey, steadyKey]);
+}
+
+/** A line's words with every figure in them taken out: what stays the same while a strike is
+    dragged or a size is typed. */
+function withoutFigures(text: string): string {
+  return text.replace(/[\d.,]+/g, "#");
 }
 
 /**
@@ -344,13 +369,14 @@ export function ThesisMoveLine({
   const self = React.useRef<HTMLParagraphElement>(null);
   const fitRef = secondRef ?? self;
   const contentKey = [move.strike ?? "", move.rest].join("|");
-  useFitLines(fitRef, { current: null }, contentKey);
+  useFitLines(fitRef, { current: null }, contentKey, withoutFigures([move.lead, move.verb, move.before, move.rest].join("|")));
   return (
     <p
       ref={fitRef}
       data-testid="thesis-move"
       className={cn(
-        "font-space font-semibold tracking-[-0.03em] text-content-primary whitespace-nowrap max-md:whitespace-normal transition-[font-size] duration-200 ease-out",
+        // no transition on the size: text is not animated (Tim, 28 Nov 2026)
+        "font-space font-semibold tracking-[-0.03em] text-content-primary whitespace-nowrap max-md:whitespace-normal",
         compact ? COMPACT_LINE : "-mt-1 text-[18px] font-medium leading-[1.3] tracking-[-0.02em] max-md:mt-0 max-md:text-[15px]",
       )}
     >
@@ -443,7 +469,13 @@ export function ThesisSentence({
     options.expiries.map((o) => o.label).join(","),
     options.unavailable?.join(",") ?? "",
   ].join("|");
-  useFitLines(line, second, compact ? `${contentKey}|${goal?.label ?? ""}|${move.verb}|${move.rest}` : "");
+  useFitLines(
+    line,
+    second,
+    compact ? `${contentKey}|${goal?.label ?? ""}|${move.verb}|${move.rest}` : "",
+    // the same asset, direction and wording: a new strike, goal or amount does not let the type grow back
+    compact ? withoutFigures([asset, direction, move.verb, move.rest].join("|")) : "",
+  );
   // The strike's own control. Selling, it is the first line's price; buying, the first line's
   // price is the goal and this sits in the second line, inside the option's name.
   const strikeInSecond = goal != null && move.strike != null;
@@ -470,10 +502,7 @@ export function ThesisSentence({
     )}>
       <p
         ref={compact ? line : undefined}
-        className={cn(
-          compact ? COMPACT_LINE : "text-[clamp(26px,2.85vw,40px)] leading-[1.45]",
-          "transition-[font-size] duration-200 ease-out"
-        )}
+        className={compact ? COMPACT_LINE : "text-[clamp(26px,2.85vw,40px)] leading-[1.45]"}
       >
         <span className="whitespace-nowrap">
           {SENTENCE.lead}{" "}

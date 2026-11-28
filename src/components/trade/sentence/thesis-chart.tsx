@@ -1940,9 +1940,10 @@ export function ThesisChart({
                 section moves the strike one strike that way, as an arrow key does. Each carries
                 a small arrow beside the knot, over its hand, so the knot reads as something that
                 moves. Under the pointer a section that can move lights up in the knot's own
-                green; one that cannot (the last strike that way) shows a faint red and the
-                not-allowed cursor, and its arrow stays dim. Out of the tab order: the knot has
-                the keys. They come first, so the ticks are drawn over them. */}
+                green. One that cannot (the last strike that way) is simply disabled: no colour,
+                no change under the pointer, its arrow dim (Tim, 28 Nov 2026: not red). Out of
+                the tab order: the knot has the keys. They come first, so the ticks are drawn
+                over them. */}
             {geometry && tops && strikeSlider && railShown
               ? ([1, -1] as const).map((step) => {
                   const to = nearestStrikeIndex(strike) + step;
@@ -1960,7 +1961,7 @@ export function ThesisChart({
                       title={off ? (step > 0 ? "This is the highest strike" : "This is the lowest strike") : step > 0 ? "Higher strike" : "Lower strike"}
                       data-testid={step > 0 ? "strike-up" : "strike-down"}
                       onClick={() => stepStrike(to)}
-                      className="group absolute inset-x-0 transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-[rgba(128,201,182,0.08)] enabled:active:bg-[rgba(128,201,182,0.16)] disabled:cursor-not-allowed disabled:hover:bg-[rgba(255,51,71,0.06)]"
+                      className="group absolute inset-x-0 transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-[rgba(128,201,182,0.08)] enabled:active:bg-[rgba(128,201,182,0.16)] disabled:cursor-default"
                       style={step > 0 ? { top: 0, height: Math.max(0, tops.strike - edge) } : { top: tops.strike + edge, bottom: 0 }}
                     >
                       <Chevron
