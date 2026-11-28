@@ -321,12 +321,11 @@ const LOSS = "rgba(194,104,104,0.60)";
 
 /** The NOW tag's half height, and how far its centre sits from the live-price dot it names. */
 /** Below this pane width (a phone) the overlays switch to their compact placement. */
-/** Below this pane width a goal's tag is its price alone: with its profit as well it would
-    reach the centre column, under the NOW tag. */
-const NARROW_PANE_WIDTH = 490;
-/** From this pane width a goal's tag, in the middle of the chart's right half, has room for its
-    word and its hand as well without reaching the NOW tag. */
-const ROOMY_PANE_WIDTH = 710;
+/** A goal's tag says what the chart's right part (from the "now" line to the plot's right edge)
+    has room for. Narrower than the first, it is its price alone: with its profit as well it
+    would reach the NOW tag. From the second, beside the rail, it has its word and hand too. */
+const NARROW_RIGHT_PART = 240;
+const ROOMY_RIGHT_PART = 300;
 /** The room a goal's tag keeps for its profit, in characters: a space and "+$999,999". The tag
     is this wide whatever the profit is (Tim, 28 Nov 2026: its size must not change as the goal
     is dragged; assume a lot, for markets like BTC). */
@@ -473,6 +472,8 @@ export function scenarioEndpoints(
 type Geometry = {
   width: number;
   height: number;
+  /** the plot and the price rail together: the chart as the page sees it */
+  rowWidth: number;
   paneWidth: number;
   paneHeight: number;
   strikeY: number;
@@ -575,6 +576,17 @@ export function handleTops({
   }
   const grab = Math.min(HANDLE_GRAB, Math.max(0, (lower - upper - HANDLE_HEIGHT) / 2));
   return { strike: above ? lower : upper, goal: above ? upper : lower, grab };
+}
+
+/**
+ * How far across the plot the "now" line stands so that it is in the middle of the whole chart,
+ * the plot and the price rail together: half the chart's width, as a share of the plot's. With
+ * no rail that is one half. Never left of the plot's middle, and never past four fifths of it,
+ * so the future always keeps a part of the plot.
+ */
+export function nowSplitFor(chartWidth: number, plotWidth: number): number {
+  if (!(plotWidth > 0) || !(chartWidth > 0)) return 0.5;
+  return Math.min(0.8, Math.max(0.5, Math.round((chartWidth / (2 * plotWidth)) * 1000) / 1000));
 }
 
 /** How far the pointer travels for one step of a dragged handle, px. */
@@ -750,7 +762,7 @@ function FlipAffordance({
     <span
       aria-hidden="true"
       // dressed exactly as the NOW tag, so the chart's labels are one family
-      className="pointer-events-none absolute bottom-[calc(var(--axis,28px)+10px)] left-1/2 z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap rounded-[var(--radius)] border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] tracking-[-0.02em] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
+      className="pointer-events-none absolute bottom-[calc(var(--axis,28px)+10px)] left-[var(--centre,50%)] z-20 flex -translate-x-1/2 select-none items-center gap-1 whitespace-nowrap rounded-[var(--radius)] border border-[rgba(240,240,240,0.1)] bg-bg-primary/95 px-2 py-1 font-mono text-[12px] tracking-[-0.02em] font-semibold leading-[1.2] text-content-primary shadow-[0_1px_8px_rgba(0,0,0,0.85)] backdrop-blur-[4px]"
     >
       <span
         className="inline-block transition-transform duration-300 ease-out"
@@ -919,6 +931,10 @@ export function ThesisChart({
   /** The history the domain was last fitted to. */
   const pointsRef = useRef<Point[] | null>(null);
   const [geometry, setGeometry] = useState<Geometry | null>(null);
+  /** the plot and the rail side by side: its width is the chart's as the page sees it */
+  const rowRef = useRef<HTMLDivElement>(null);
+  /** how far across the plot the "now" line stands: half where there is no rail */
+  const [nowSplit, setNowSplit] = useState(0.5);
   /** One gentle attention pulse on the "your price" handle so its draggability reads at a glance. */
   const [pulse, setPulse] = useState(true);
   useEffect(() => {
@@ -962,9 +978,18 @@ export function ThesisChart({
     const width = el.clientWidth || 0;
     const height = el.clientHeight || CHART_HEIGHT;
     const pane = chart.paneSize?.() ?? { width, height };
+    const rowWidth = rowRef.current?.clientWidth || width;
+    // The chart's centre line is the page's (Tim, 28 Nov 2026): the "now" line stands in the
+    // middle of the plot and the rail together, not of the plot alone, so the zone labels, the
+    // NOW tag and the flip hint are over the middle of the button and the text under the
+    // chart. The rail then counts as part of the future's half. With no rail it is the plot's
+    // middle, as before.
+    const split = nowSplitFor(rowWidth, pane.width || width);
+    setNowSplit((was) => (was === split ? was : split));
     setGeometry({
       width,
       height,
+      rowWidth,
       paneWidth: pane.width || width,
       paneHeight: pane.height || height,
       strikeY: series.priceToCoordinate(strike) ?? FALLBACK_STRIKE_Y,
@@ -1236,17 +1261,22 @@ export function ThesisChart({
     if (!series || !chart) return;
     const data = seriesData(spotRef.current);
     series.setData(data);
-    if (data.length > 0) {
-      // Idempotent 50/50 history/future split: the "now" boundary sits at the pane's
-      // visual centre, derived from the bar count so repeated runs can't compound.
-      // (fitContent + readback applies asynchronously, so reading the visible range
-      // right after it returned a stale, already-extended range that grew on every re-run.)
-      const from = 0;
-      const to = data.length - 1;
-      const span = to - from;
-      chart.timeScale().setVisibleLogicalRange({ from, to: to + span });
-    }
   }, [seriesData]);
+
+  // The history / future split, idempotent: the "now" boundary sits `nowSplit` of the way
+  // across the plot (the middle of the plot and the rail together), derived from the bar count
+  // so repeated runs can't compound. (fitContent + readback applies asynchronously, so reading
+  // the visible range right after it returned a stale, already-extended range that grew on
+  // every re-run.) Runs again when the split changes: the rail appears, or its width changes.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const bars = seriesData(spotRef.current).length;
+    if (bars > 0) chart.timeScale().setVisibleLogicalRange({ from: 0, to: (bars - 1) / nowSplit });
+    afterFrame(() => {
+      if (!disposedRef.current) measureRef.current();
+    });
+  }, [seriesData, nowSplit]);
 
   // The price domain depends on the data and on the strikes on offer, not on the chosen one:
   // choosing another strike moves the line and leaves the chart where it is. Re-apply it (and
@@ -1345,18 +1375,21 @@ export function ThesisChart({
   const leftSectionCenterX = geometry
     ? nowX != null
       ? nowX / 2
-      : geometry.paneWidth * 0.25 // no history → the 50/50 split's left-half centre
+      : geometry.rowWidth * 0.25 // no history → the middle of the history half
     : 0;
 
-  // The zone labels sit in the pane's centre column, with the NOW tag and the flip hint: the
-  // right edge belongs to the strike and goal handles.
-  const narrowPane = geometry != null && geometry.paneWidth < NARROW_PANE_WIDTH;
-  const zoneChipX = geometry ? geometry.paneWidth / 2 : 0;
+  // The zone labels sit in the chart's centre column, with the NOW tag and the flip hint, on
+  // the "now" line: the middle of the plot and the rail together, which is the page's middle.
+  const centreX = geometry ? (nowX ?? geometry.rowWidth / 2) : 0;
+  const zoneChipX = centreX;
+  /** the part of the plot the price has yet to cross: from the "now" line to its right edge */
+  const rightPart = geometry ? geometry.paneWidth - centreX : 0;
+  const narrowPane = geometry != null && rightPart < NARROW_RIGHT_PART;
   const goalShown = goalLabel == null ? null : narrowPane ? goalLabel.split(" ")[0] : goalLabel;
   const strikeShown = formatStrikePrice(strike);
   // A tag in the plot says only what the pane has room for: its word and hand on a roomy pane
   // beside the rail, the profit unless the pane is narrow, on a phone the price alone.
-  const wordShown = railShown && geometry != null && geometry.paneWidth >= ROOMY_PANE_WIDTH;
+  const wordShown = railShown && geometry != null && rightPart >= ROOMY_RIGHT_PART;
   const widestStrike = strikesAsc.reduce((w, s) => (formatStrikePrice(s.strike).length > w.length ? formatStrikePrice(s.strike) : w), strikeShown);
   const widestGoal = goalsAsc.reduce((m, g) => Math.max(m, formatStrikePrice(g).length), 0);
   // The goal's tag is one width whatever it says: the widest goal on offer plus the room kept
@@ -1370,7 +1403,7 @@ export function ThesisChart({
   // stays at the plot's right edge.
   const goalX = (() => {
     if (!geometry || !railShown) return null;
-    const from = nowX ?? geometry.paneWidth / 2;
+    const from = centreX;
     const half = (GOAL_TAG_CHROME + (wordShown ? GOAL_TAG_WORD : 0) + tagMinCh * TAG_CH) / 2;
     const nowHalf = (`NOW ${formatUsdSmart(spot)}`.length * 7.9 + 18) / 2;
     const middle = (from + geometry.paneWidth) / 2;
@@ -1556,7 +1589,12 @@ export function ThesisChart({
         {` If you are right: ${right.title}. If you are wrong: ${wrong.title}.`}
       </p>
 
-      <div className="relative isolate mt-3 flex" style={{ height: CHART_HEIGHT, "--axis": `${axisHeight}px` } as React.CSSProperties}>
+      <div
+        ref={rowRef}
+        className="relative isolate mt-3 flex"
+        // `--centre` is the chart's centre line in the plot, for the flip hint
+        style={{ height: CHART_HEIGHT, "--axis": `${axisHeight}px`, ...(geometry ? { "--centre": `${centreX}px` } : null) } as React.CSSProperties}
+      >
         <div className="relative isolate min-w-0 flex-1">
         {/* The history window is a secondary, price-only control: the expiry sets the default
             range, and these buttons override just the scale without touching the date. Kept as a
